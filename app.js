@@ -24,24 +24,28 @@ window.GameLogic = {
     cafePlayers: {},
     cafeFurniture: {},
     phaserGame: null,
-    db: db // 讓 Phaser 場景可以調用資料庫
+    db: db 
 };
 let cafeUnsubscribe = null;
+
+// 將方法掛載到 window，讓 Phaser 場景可以順利呼叫
+window.switchScene = switchScene;
+window.showProfileModal = showProfileModal;
+window.leaveCafe = leaveCafe;
+window.signOut = signOut;
+window.auth = auth;
 
 // --- DOM 元素 ---
 const loginScreen = document.getElementById("login-screen");
 const gameLayoutContainer = document.getElementById("game-layout-container");
-const topBar = document.getElementById("top-bar");
-const sceneTitle = document.getElementById("game-title");
 const chatSection = document.getElementById("chat-section");
 const furniturePanel = document.getElementById("furniture-panel");
-const dropdownMenu = document.getElementById("dropdown-menu");
 const actionMenu = document.getElementById("action-menu");
 const furnitureMenu = document.getElementById("furniture-menu");
 const viewProfileModal = document.getElementById("view-profile-modal");
 
 // ==========================================
-// 1. 登入與場景切換 (Phaser Booting)
+// 1. 登入與場景切換
 // ==========================================
 document.getElementById("join-btn").addEventListener("click", () => {
     const email = document.getElementById("user-email").value;
@@ -53,8 +57,7 @@ onAuthStateChanged(auth, async (user) => {
     if (user) {
         window.GameLogic.currentUser = user;
         loginScreen.style.display = "none";
-        topBar.style.display = "flex";
-        gameLayoutContainer.style.display = "flex";
+        gameLayoutContainer.style.display = "block";
         
         const profileSnap = await get(ref(db, `users/${user.uid}`));
         if (profileSnap.exists()) window.GameLogic.myProfile = { ...window.GameLogic.myProfile, ...profileSnap.val() };
@@ -62,7 +65,6 @@ onAuthStateChanged(auth, async (user) => {
 
         onValue(ref(db, 'cafeFurniture'), snap => window.GameLogic.cafeFurniture = snap.val() || {});
 
-        // 啟動 Phaser 引擎 (若尚未啟動)
         if (!window.GameLogic.phaserGame) initPhaser();
 
         switchScene("doghouse"); 
@@ -71,31 +73,26 @@ onAuthStateChanged(auth, async (user) => {
     } else {
         window.GameLogic.currentUser = null;
         loginScreen.style.display = "block";
-        topBar.style.display = "none";
         gameLayoutContainer.style.display = "none";
-        dropdownMenu.style.display = "none";
         if (cafeUnsubscribe) cafeUnsubscribe();
     }
 });
 
-document.getElementById("nav-logout").addEventListener("click", () => { leaveCafe(); signOut(auth); });
-document.getElementById("nav-doghouse").addEventListener("click", () => switchScene("doghouse"));
-document.getElementById("nav-cafe").addEventListener("click", () => switchScene("cafe"));
-
 function switchScene(sceneName) {
     window.GameLogic.currentScene = sceneName;
-    dropdownMenu.style.display = "none";
     
     if (sceneName === "doghouse") {
-        sceneTitle.innerText = "我的狗窩";
         chatSection.style.display = "none";
         furniturePanel.style.display = "none";
         leaveCafe();
     } else if (sceneName === "cafe") {
-        sceneTitle.innerText = "洋蔥大廳";
         chatSection.style.display = "flex";
         furniturePanel.style.display = "flex";
         joinCafe();
+    } else if (sceneName === "farm") {
+        chatSection.style.display = "none";
+        furniturePanel.style.display = "none";
+        leaveCafe();
     }
 
     if (window.GameLogic.phaserGame) {
@@ -118,26 +115,23 @@ function leaveCafe() {
 }
 
 // ==========================================
-// 2. Phaser 3 引擎架構 (RPG 核心)
+// 2. Phaser 3 引擎架構
 // ==========================================
 
 class BootScene extends Phaser.Scene {
     constructor() { super('BootScene'); }
     preload() {
-        // 載入虛擬搖桿插件
         this.load.plugin('rexvirtualjoystickplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexvirtualjoystickplugin.min.js', true);
         
-        // 載入地圖與道具
         this.load.image('bgCafe', 'cafe-bg.jpg');
         this.load.image('bgDoghouse', 'doghouse-bg.jpg');
+        this.load.image('bgFarm', 'farm-bg.jpg');
         this.load.image('fridge', 'fridge.png');
         this.load.image('memory', 'memory.png');
 
-        // 將洋蔥人設為精靈圖 (為未來擴充動畫做準備，單張圖也相容)
         this.load.spritesheet('onion', 'onion-sprite.png', { frameWidth: 50, frameHeight: 50 });
     }
     create() {
-        // 預先部署動畫邏輯 (目前指向第0幀，未來替換圖檔只需更改 start/end)
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'walk-left', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
@@ -151,50 +145,71 @@ class BootScene extends Phaser.Scene {
 class UIScene extends Phaser.Scene {
     constructor() { super('UIScene'); }
     create() {
-        // 建立獨立 UI 層虛擬搖桿
+        // 虛擬搖桿 (左下角)
         this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, {
-            x: 70, y: this.cameras.main.height - 70,
-            radius: 45,
-            base: this.add.circle(0, 0, 45, 0xc5a059, 0.2).setStrokeStyle(2, 0xc5a059),
+            x: 80, y: this.cameras.main.height - 80,
+            radius: 50,
+            base: this.add.circle(0, 0, 50, 0xc5a059, 0.2).setStrokeStyle(2, 0xc5a059),
             thumb: this.add.circle(0, 0, 25, 0xc5a059, 0.8)
         });
 
-        // 建立 A 鍵 (互動)
-        this.btnA = this.add.circle(this.cameras.main.width - 60, this.cameras.main.height - 60, 30, 0xd4c5a0)
-            .setStrokeStyle(3, 0xc5a059).setInteractive();
-        this.add.text(this.btnA.x, this.btnA.y, 'A', { fontSize: '24px', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5);
+        // A 鍵與 B 鍵 (右下角)
+        this.btnA = this.add.circle(this.cameras.main.width - 60, this.cameras.main.height - 60, 30, 0xd4c5a0).setStrokeStyle(3, 0xc5a059).setInteractive();
+        this.txtA = this.add.text(this.btnA.x, this.btnA.y, 'A', { fontSize: '24px', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5);
         
-        // 建立 B 鍵 (技能)
-        this.btnB = this.add.circle(this.cameras.main.width - 130, this.cameras.main.height - 40, 25, 0xd4c5a0)
-            .setStrokeStyle(3, 0xc5a059).setInteractive();
-        this.add.text(this.btnB.x, this.btnB.y, 'B', { fontSize: '20px', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5);
+        this.btnB = this.add.circle(this.cameras.main.width - 130, this.cameras.main.height - 40, 25, 0xd4c5a0).setStrokeStyle(3, 0xc5a059).setInteractive();
+        this.txtB = this.add.text(this.btnB.x, this.btnB.y, 'B', { fontSize: '20px', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5);
 
-        // 按鍵事件發送至主要場景
+        // 地圖選單按鈕 (A/B 鍵上方)
+        this.mapBtn = this.add.circle(this.cameras.main.width - 60, this.cameras.main.height - 150, 30, 0x4a5d4e).setStrokeStyle(3, 0xc5a059).setInteractive();
+        this.mapText = this.add.text(this.mapBtn.x, this.mapBtn.y, '地圖', { fontSize: '16px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
+
+        // 地圖下拉選單容器
+        this.menuContainer = this.add.container(this.cameras.main.width - 180, this.cameras.main.height - 430).setVisible(false).setDepth(200);
+        const menuBg = this.add.graphics();
+        menuBg.fillStyle(0xf4ecd8, 0.95);
+        menuBg.lineStyle(2, 0xc5a059, 1);
+        menuBg.fillRoundedRect(0, 0, 160, 260, 10);
+        menuBg.strokeRoundedRect(0, 0, 160, 260, 10);
+        this.menuContainer.add(menuBg);
+
+        const menuOptions = [
+            { text: '🏠 我的狗窩', action: () => { window.switchScene('doghouse'); this.menuContainer.setVisible(false); } },
+            { text: '☕ 洋蔥大廳', action: () => { window.switchScene('cafe'); this.menuContainer.setVisible(false); } },
+            { text: '🌱 我的蔥田', action: () => { window.switchScene('farm'); this.menuContainer.setVisible(false); } },
+            { text: '🆔 洋蔥身分證', action: () => { window.showProfileModal(window.GameLogic.myProfile); this.menuContainer.setVisible(false); } },
+            { text: '🚪 登出大廳', action: () => { window.leaveCafe(); window.signOut(window.auth); this.menuContainer.setVisible(false); } }
+        ];
+
+        menuOptions.forEach((opt, idx) => {
+            let btn = this.add.text(80, 30 + idx * 50, opt.text, { fontSize: '18px', color: '#3e2723', fontFamily: 'Georgia', fontStyle: 'bold' }).setOrigin(0.5).setInteractive();
+            btn.on('pointerdown', opt.action);
+            this.menuContainer.add(btn);
+        });
+
+        // 按鈕事件綁定
+        this.mapBtn.on('pointerdown', () => this.menuContainer.setVisible(!this.menuContainer.visible));
+        
         this.btnA.on('pointerdown', () => { 
             this.btnA.setFillStyle(0xc5a059); 
             const mainScene = this.scene.manager.getScene('MainScene');
             if(mainScene) mainScene.events.emit('action_A');
         });
         this.btnA.on('pointerup', () => this.btnA.setFillStyle(0xd4c5a0));
-        this.btnA.on('pointerout', () => this.btnA.setFillStyle(0xd4c5a0));
-
-        this.btnB.on('pointerdown', () => { 
-            this.btnB.setFillStyle(0xc5a059); 
-            sendBubble("使用了 B 技能!"); 
-        });
-        this.btnB.on('pointerup', () => this.btnB.setFillStyle(0xd4c5a0));
-        this.btnB.on('pointerout', () => this.btnB.setFillStyle(0xd4c5a0));
         
-        // 支援視窗縮放自動重新定位 UI
+        this.btnB.on('pointerdown', () => { this.btnB.setFillStyle(0xc5a059); sendBubble("使用了 B 技能!"); });
+        this.btnB.on('pointerup', () => this.btnB.setFillStyle(0xd4c5a0));
+        
+        // 視窗縮放自動重新定位 UI
         this.scale.on('resize', (gameSize) => {
-            this.joyStick.setPosition(70, gameSize.height - 70);
+            this.joyStick.setPosition(80, gameSize.height - 80);
             this.btnA.setPosition(gameSize.width - 60, gameSize.height - 60);
+            this.txtA.setPosition(this.btnA.x, this.btnA.y);
             this.btnB.setPosition(gameSize.width - 130, gameSize.height - 40);
-            // 同步更新文字位置
-            this.children.list.forEach(c => {
-                if (c.text === 'A') c.setPosition(this.btnA.x, this.btnA.y);
-                if (c.text === 'B') c.setPosition(this.btnB.x, this.btnB.y);
-            });
+            this.txtB.setPosition(this.btnB.x, this.btnB.y);
+            this.mapBtn.setPosition(gameSize.width - 60, gameSize.height - 150);
+            this.mapText.setPosition(this.mapBtn.x, this.mapBtn.y);
+            this.menuContainer.setPosition(gameSize.width - 180, gameSize.height - 430);
         });
     }
 }
@@ -203,44 +218,41 @@ class MainScene extends Phaser.Scene {
     constructor() { super('MainScene'); }
     
     create() {
-        this.isCafe = window.GameLogic.currentScene === "cafe";
+        this.sceneName = window.GameLogic.currentScene;
+        this.isCafe = this.sceneName === "cafe";
         
-        // 大地圖設定 (2048 x 2048)
         const mapSize = this.isCafe ? 2048 : 800;
         this.physics.world.setBounds(0, 0, mapSize, mapSize);
         this.cameras.main.setBounds(0, 0, mapSize, mapSize);
 
         // 背景生成
-        if (this.isCafe) {
+        if (this.sceneName === "cafe") {
             this.add.tileSprite(0, 0, mapSize, mapSize, 'bgCafe').setOrigin(0, 0);
-        } else {
+        } else if (this.sceneName === "doghouse") {
             this.add.image(mapSize/2, mapSize/2, 'bgDoghouse').setDisplaySize(mapSize, mapSize);
+        } else if (this.sceneName === "farm") {
+            this.add.image(mapSize/2, mapSize/2, 'bgFarm').setDisplaySize(mapSize, mapSize);
         }
 
-        // 玩家實體群組
         this.otherPlayers = {};
         this.furnitureSprites = {};
 
-        // 建立本地玩家實體
         let startX = this.isCafe ? 1024 : 400;
         let startY = this.isCafe ? 1024 : 400;
         this.localPlayer = this.createPlayerEntity(startX, startY, window.GameLogic.myProfile, true);
         
-        // 鏡頭平滑跟隨
         this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
 
-        // 鍵盤綁定
         this.cursors = this.input.keyboard.createCursorKeys();
         this.wasd = this.input.keyboard.addKeys({ w: 'W', a: 'A', s: 'S', d: 'D' });
 
-        // 監聽來自 UI 場景的 A 鍵互動 (距離偵測)
         this.events.on('action_A', () => {
             if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!");
             let interacted = false;
             for (const key in this.furnitureSprites) {
                 let f = this.furnitureSprites[key];
                 let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y);
-                if (dist < 90) { // RPG 距離互動判定
+                if (dist < 90) { 
                     if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block';
                     if (key === 'memory') document.getElementById('memory-modal').style.display = 'block';
                     interacted = true; break;
@@ -249,7 +261,6 @@ class MainScene extends Phaser.Scene {
             if(!interacted) sendBubble("使用了 A 技能!");
         });
 
-        // 拖曳傢俱事件
         this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
             if (!gameObject.isLocked) {
                 gameObject.setPosition(dragX, dragY);
@@ -281,13 +292,19 @@ class MainScene extends Phaser.Scene {
             });
         }
 
-        // 名牌
         entity.nameBg = this.add.graphics().setDepth(11);
-        entity.nameText = this.add.text(x, y, pData.name || '匿名', { fontSize: '12px', fontFamily: 'Georgia', color: pData.color || '#fff' }).setOrigin(0.5).setDepth(12);
+        entity.nameText = this.add.text(x, y, pData.name || '匿名', { fontSize: '13px', fontFamily: 'Georgia', color: pData.color || '#fff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(12);
         
-        // 對話泡泡
+        // 對話氣泡設定：加入 wordWrap 實作動態縮放
         entity.bubbleBg = this.add.graphics().setDepth(13).setVisible(false);
-        entity.bubbleText = this.add.text(x, y, '', { fontSize: '13px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5).setDepth(14).setVisible(false);
+        entity.bubbleText = this.add.text(x, y, '', { 
+            fontSize: '14px', 
+            fontFamily: 'Georgia', 
+            color: '#3e2723', 
+            fontStyle: 'bold',
+            wordWrap: { width: 160, useAdvancedWrap: true },
+            align: 'center'
+        }).setOrigin(0.5).setDepth(14).setVisible(false);
 
         return entity;
     }
@@ -295,25 +312,37 @@ class MainScene extends Phaser.Scene {
     updatePlayerEntity(entity, pData) {
         let sx = entity.sprite.x; let sy = entity.sprite.y;
         
-        // 更新名牌
         entity.nameBg.clear();
         entity.nameBg.fillStyle(0x000000, 0.6);
-        entity.nameBg.fillRoundedRect(sx - 30, sy - 55, 60, 18, 4);
-        entity.nameText.setPosition(sx, sy - 46);
+        entity.nameBg.fillRoundedRect(sx - 35, sy - 55, 70, 20, 4);
+        entity.nameText.setPosition(sx, sy - 45);
         if(pData.name) entity.nameText.setText(pData.name);
         if(pData.color) entity.nameText.setColor(pData.color);
 
-        // 更新泡泡
-        if (pData.bubbleMsg && (Date.now() - pData.bubbleTime < 15000)) {
+        // 動態氣泡框計算邏輯
+        if (pData.bubbleMsg && (Date.now() - pData.bubbleTime < 10000)) { // 縮短為 10 秒
             entity.bubbleBg.setVisible(true); entity.bubbleText.setVisible(true);
+            entity.bubbleText.setText(pData.bubbleMsg);
+
+            // 取得文字目前的邊界寬高
+            const bounds = entity.bubbleText.getBounds();
+            const paddingX = 10;
+            const paddingY = 8;
+            const boxWidth = bounds.width + paddingX * 2;
+            const boxHeight = bounds.height + paddingY * 2;
+            
+            // 將氣泡定位在名牌上方
+            const boxX = sx - boxWidth / 2;
+            const boxY = sy - 65 - boxHeight; 
+
             entity.bubbleBg.clear();
             entity.bubbleBg.fillStyle(0xf4ecd8, 0.95);
             entity.bubbleBg.lineStyle(2, 0xc5a059, 1);
-            entity.bubbleBg.fillRoundedRect(sx - 60, sy - 95, 120, 30, 8);
-            entity.bubbleBg.strokeRoundedRect(sx - 60, sy - 95, 120, 30, 8);
-            entity.bubbleText.setPosition(sx, sy - 80);
-            let displayMsg = pData.bubbleMsg.length > 8 ? pData.bubbleMsg.substring(0, 8) + "..." : pData.bubbleMsg;
-            entity.bubbleText.setText(displayMsg);
+            entity.bubbleBg.fillRoundedRect(boxX, boxY, boxWidth, boxHeight, 8);
+            entity.bubbleBg.strokeRoundedRect(boxX, boxY, boxWidth, boxHeight, 8);
+            
+            // 將文字置中於計算好的背景框內
+            entity.bubbleText.setPosition(sx, boxY + boxHeight / 2);
         } else {
             entity.bubbleBg.setVisible(false); entity.bubbleText.setVisible(false);
         }
@@ -328,7 +357,7 @@ class MainScene extends Phaser.Scene {
 
         f.glow = this.add.graphics().setDepth(4);
         f.sprite.on('pointerdown', (pointer) => {
-            if (f.sprite.isLocked) { // 已鎖定，點擊開啟管理選單
+            if (f.sprite.isLocked) {
                 furnitureMenu.style.display = "flex";
                 furnitureMenu.style.left = pointer.event.pageX + "px";
                 furnitureMenu.style.top = pointer.event.pageY + "px";
@@ -343,7 +372,6 @@ class MainScene extends Phaser.Scene {
     update() {
         if (!window.GameLogic.currentUser) return;
         
-        // 1. 處理本機移動與動畫
         let vx = 0; let vy = 0; let speed = 180;
         const uiScene = this.scene.manager.getScene('UIScene');
         
@@ -355,7 +383,7 @@ class MainScene extends Phaser.Scene {
             if (this.cursors.right.isDown || this.wasd.d.isDown) vx = speed;
             if (this.cursors.up.isDown || this.wasd.w.isDown) vy = -speed;
             if (this.cursors.down.isDown || this.wasd.s.isDown) vy = speed;
-            if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; } // 修正對角線速度
+            if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; } 
         }
 
         this.localPlayer.sprite.setVelocity(vx, vy);
@@ -366,12 +394,9 @@ class MainScene extends Phaser.Scene {
         else if (vy > 0) this.localPlayer.sprite.play('walk-down', true);
         else this.localPlayer.sprite.play('idle', true);
 
-        // 同步標籤位置
         this.updatePlayerEntity(this.localPlayer, window.GameLogic.myProfile);
 
-        // 2. 多人連線同步 (洋蔥大廳專屬)
         if (this.isCafe) {
-            // 本機上傳
             if (vx !== 0 || vy !== 0) {
                 if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) {
                     update(ref(window.GameLogic.db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { x: this.localPlayer.sprite.x, y: this.localPlayer.sprite.y });
@@ -379,7 +404,6 @@ class MainScene extends Phaser.Scene {
                 }
             }
 
-            // 遠端玩家同步
             const playersData = window.GameLogic.cafePlayers;
             for (let uid in playersData) {
                 if (uid === window.GameLogic.currentUser.uid) continue;
@@ -388,11 +412,10 @@ class MainScene extends Phaser.Scene {
                     this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
                 }
                 let op = this.otherPlayers[uid];
-                op.sprite.x = Phaser.Math.Linear(op.sprite.x, pd.x, 0.2); // 平滑移動
+                op.sprite.x = Phaser.Math.Linear(op.sprite.x, pd.x, 0.2); 
                 op.sprite.y = Phaser.Math.Linear(op.sprite.y, pd.y, 0.2);
                 this.updatePlayerEntity(op, pd);
             }
-            // 清理斷線玩家
             for (let uid in this.otherPlayers) {
                 if (!playersData[uid]) {
                     this.otherPlayers[uid].sprite.destroy();
@@ -404,7 +427,6 @@ class MainScene extends Phaser.Scene {
                 }
             }
 
-            // 傢俱同步
             const furnData = window.GameLogic.cafeFurniture;
             for (let key in furnData) {
                 let fd = furnData[key];
@@ -414,12 +436,10 @@ class MainScene extends Phaser.Scene {
                 let f = this.furnitureSprites[key];
                 f.sprite.isLocked = fd.locked;
                 if (fd.locked) {
-                    // 若被其他人鎖定定點，平滑同步位置
                     f.sprite.x = Phaser.Math.Linear(f.sprite.x, fd.x, 0.3);
                     f.sprite.y = Phaser.Math.Linear(f.sprite.y, fd.y, 0.3);
                     f.glow.clear();
                 } else {
-                    // 解鎖狀態畫出發光外框提示
                     f.glow.clear();
                     f.glow.lineStyle(3, 0xffd700, 0.8);
                     f.glow.strokeRect(f.sprite.x - 28, f.sprite.y - 28, 56, 56);
@@ -435,7 +455,7 @@ function initPhaser() {
         parent: 'phaser-app',
         width: '100%',
         height: '100%',
-        backgroundColor: '#8d6e63',
+        backgroundColor: '#1a1008',
         scale: {
             mode: Phaser.Scale.RESIZE,
             autoCenter: Phaser.Scale.CENTER_BOTH
@@ -449,19 +469,16 @@ function initPhaser() {
     window.GameLogic.phaserGame = new Phaser.Game(config);
 }
 
-
 // ==========================================
-// 3. 系統 UI 事件綁定 (傢俱、設定、聊天)
+// 3. 系統 UI 事件綁定
 // ==========================================
 
-// 傢俱解除鎖定
 document.getElementById("move-furniture-btn").onclick = () => {
     let type = furnitureMenu.dataset.type;
     update(ref(window.GameLogic.db, `cafeFurniture/${type}`), { locked: false });
     furnitureMenu.style.display = "none";
 };
 
-// 傢俱生成
 document.getElementById("spawn-fridge-btn").onclick = () => {
     if (!window.GameLogic.cafeFurniture.fridge) update(ref(db, 'cafeFurniture/fridge'), { x: 1024, y: 1000, locked: false });
 };
@@ -469,7 +486,6 @@ document.getElementById("spawn-memory-btn").onclick = () => {
     if (!window.GameLogic.cafeFurniture.memory) update(ref(db, 'cafeFurniture/memory'), { x: 900, y: 1000, locked: false });
 };
 
-// 查看名牌
 document.getElementById("view-profile-btn").addEventListener("click", async () => {
     actionMenu.style.display = "none";
     const targetUid = actionMenu.dataset.uid;
@@ -480,15 +496,14 @@ document.getElementById("view-profile-btn").addEventListener("click", async () =
         else if (window.GameLogic.cafePlayers[targetUid]) showProfileModal(window.GameLogic.cafePlayers[targetUid]); 
     }
 });
+
 function showProfileModal(p) {
-    document.getElementById("vp-title").innerText = `🧅 ${p.name || '匿名'} 的名牌`;
     document.getElementById("vp-birth").innerText = p.birth || '未知';
     document.getElementById("vp-food").innerText = p.food || '無';
     document.getElementById("vp-motto").innerText = p.motto || '無';
     viewProfileModal.style.display = "block";
 }
 
-// 聊天系統
 const chatInput = document.getElementById("chat-input");
 document.getElementById("send-btn").addEventListener("click", sendChat);
 window.addEventListener("keydown", (e) => { if (e.key === "Enter" && document.activeElement === chatInput) sendChat(); });
@@ -502,6 +517,7 @@ function sendBubble(msg) {
         }
     }
 }
+
 function sendChat() {
     const msg = chatInput.value.trim();
     if (msg !== "" && window.GameLogic.currentUser) {
@@ -510,6 +526,7 @@ function sendChat() {
         chatInput.value = ""; 
     }
 }
+
 function listenToChat() {
     onValue(ref(db, 'chats'), (snapshot) => {
         const chatBox = document.getElementById("chat-box");
@@ -523,20 +540,6 @@ function listenToChat() {
         }
     });
 }
-
-// 設定與回憶錄儲存邏輯 (保留原樣)
-document.getElementById("save-settings-btn").addEventListener("click", () => {
-    let p = window.GameLogic.myProfile;
-    p.name = document.getElementById("set-name").value || "匿名";
-    p.color = document.getElementById("set-color").value;
-    p.birth = document.getElementById("set-birth").value || "未知";
-    p.food = document.getElementById("set-food").value || "無";
-    p.motto = document.getElementById("set-motto").value || "無";
-    
-    update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { name: p.name, color: p.color, birth: p.birth, food: p.food, motto: p.motto });
-    if (window.GameLogic.currentScene === "cafe") update(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { name: p.name, color: p.color });
-    document.getElementById('settings-modal').style.display = 'none';
-});
 
 document.getElementById("upload-memory-btn").onclick = () => {
     const fileInput = document.getElementById("memory-file");
@@ -563,9 +566,11 @@ document.getElementById("upload-memory-btn").onclick = () => {
     } else saveMemoryToDB("", text);
     fileInput.value = ""; textInput.value = "";
 };
+
 function saveMemoryToDB(imgBase64, text) {
     push(ref(db, 'memories'), { author: window.GameLogic.myProfile.name, img: imgBase64, text: text, time: new Date().toLocaleDateString('zh-TW') });
 }
+
 function listenToMemories() {
     onValue(ref(db, 'memories'), snap => {
         const feed = document.getElementById("memory-feed");

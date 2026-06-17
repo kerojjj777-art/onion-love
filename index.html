@@ -17,35 +17,13 @@
         }
 
         body { 
-            margin: 0; font-family: 'Georgia', 'Times New Roman', serif; 
-            background-color: #2b201a; background-image: radial-gradient(circle, #3e2a1e 0%, #1a1008 100%);
-            display: flex; flex-direction: column; align-items: center; 
+            margin: 0; padding: 0; font-family: 'Georgia', 'Times New Roman', serif; 
+            background-color: #1a1008; 
             color: var(--mucha-brown); overflow: hidden; touch-action: none; 
+            width: 100vw; height: 100vh;
         }
 
-        /* 頂部導覽列 (加入 Safe Area 適配手機瀏海) */
-        #top-bar {
-            width: 100%; 
-            padding-top: env(safe-area-inset-top);
-            height: calc(50px + env(safe-area-inset-top));
-            background: linear-gradient(to bottom, #111, #2b201a);
-            border-bottom: 2px solid var(--mucha-gold); display: none; 
-            justify-content: space-between; align-items: center; padding-left: 15px; padding-right: 15px;
-            box-sizing: border-box; box-shadow: 0 4px 8px rgba(0,0,0,0.5); z-index: 100;
-        }
-
-        #game-title { color: var(--mucha-gold); font-size: 20px; letter-spacing: 2px; }
-        #menu-btn { background: none; border: 1px solid var(--mucha-gold); color: var(--mucha-gold); font-size: 24px; cursor: pointer; border-radius: 4px; transition: 0.3s; }
-        
-        #dropdown-menu {
-            position: absolute; top: calc(55px + env(safe-area-inset-top)); right: 10px; background: var(--mucha-paper);
-            border: 2px solid var(--mucha-gold); border-radius: 8px;
-            display: none; flex-direction: column; width: 150px; z-index: 100; overflow: hidden;
-        }
-        #dropdown-menu button { background: none; border: none; border-bottom: 1px solid rgba(197, 160, 89, 0.3); padding: 12px; font-size: 16px; color: var(--mucha-brown); text-align: left; cursor: pointer; }
-        #app-version { padding: 8px; font-size: 12px; color: #888; text-align: center; background: #eaddc0; }
-
-        /* 漂浮選單 (查看這顆蔥 / 傢俱管理) */
+        /* 漂浮選單 (查看身分證 / 傢俱管理) */
         .action-menu {
             display: none; position: absolute; background: var(--mucha-paper); border: 2px solid var(--mucha-gold); 
             border-radius: 8px; z-index: 200; padding: 5px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); flex-direction: column;
@@ -55,67 +33,50 @@
         .action-menu button:not(:last-child) { border-bottom: 1px solid rgba(197, 160, 89, 0.3); }
 
         /* 登入介面 */
-        #login-screen { position: absolute; top: 20%; background: var(--mucha-paper); padding: 30px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 10; text-align: center; }
-        #login-screen input { padding: 8px; border: 1px solid var(--mucha-gold); border-radius: 4px; background: #fffdf5; margin-bottom: 10px; width: 80%;}
-        #join-btn { background: var(--mucha-gold); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 5px; font-size: 16px;}
+        #login-screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--mucha-paper); padding: 30px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 300; text-align: center; width: 80%; max-width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
+        #login-screen input { padding: 10px; border: 1px solid var(--mucha-gold); border-radius: 4px; background: #fffdf5; margin-bottom: 15px; width: 85%; font-size: 16px; }
+        #join-btn { background: var(--mucha-gold); color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; width: 95%; }
 
         /* 各類彈出視窗共用樣式 */
         .modal {
-            display: none; position: absolute; top: 10%; background: var(--mucha-paper); padding: 20px; 
-            border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 180; text-align: center; 
-            box-shadow: 0 10px 25px rgba(0,0,0,0.8); width: 80%; max-width: 320px; max-height: 75vh; overflow-y: auto;
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--mucha-paper); padding: 20px; 
+            border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 250; text-align: center; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.8); width: 85%; max-width: 320px; max-height: 80vh; overflow-y: auto;
         }
-        .modal h3 { color: var(--mucha-green); margin-top: 0; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 5px; }
+        .modal h3 { color: var(--mucha-green); margin-top: 0; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 8px; }
         .modal-btns { display: flex; justify-content: space-around; margin-top: 15px; }
-        .modal-btns button, .close-modal-btn { padding: 8px 15px; border-radius: 4px; border: none; cursor: pointer; font-family: inherit; }
+        .modal-btns button, .close-modal-btn { padding: 10px 15px; border-radius: 4px; border: none; cursor: pointer; font-family: inherit; font-size: 15px;}
         .btn-primary { background: var(--mucha-gold); color: white; }
         .btn-secondary { background: #ccc; color: #333; }
-        
-        #settings-modal input { padding: 6px; border: 1px solid var(--mucha-gold); border-radius: 4px; background: #fffdf5; margin-bottom: 10px; width: 90%; }
         
         #memory-feed { display: flex; flex-direction: column; gap: 15px; margin-top: 15px; text-align: left; }
         .memory-card { background: #fff; border: 1px solid var(--mucha-gold); border-radius: 8px; padding: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); }
         .memory-card img { width: 100%; border-radius: 4px; margin-bottom: 8px; }
         .memory-card .author { font-size: 12px; color: var(--mucha-gold); font-weight: bold; margin-bottom: 4px; }
         .memory-card .text { font-size: 14px; color: var(--mucha-brown); }
-        #memory-upload-area { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; border-top: 2px dashed var(--mucha-gold); padding-top: 10px; }
-        #memory-upload-area input[type="text"] { padding: 8px; border: 1px solid var(--mucha-gold); border-radius: 4px; }
+        #memory-upload-area { margin-top: 15px; display: flex; flex-direction: column; gap: 10px; border-top: 2px dashed var(--mucha-gold); padding-top: 15px; }
+        #memory-upload-area input[type="text"] { padding: 10px; border: 1px solid var(--mucha-gold); border-radius: 4px; }
 
-        /* 遊戲與排版區 (移除舊有操控區) */
-        #game-layout-container { display: none; flex-direction: column; width: 100%; max-width: 800px; padding: 10px; box-sizing: border-box; position: relative; height: calc(100vh - 50px - env(safe-area-inset-top)); }
+        /* 遊戲與排版區 (滿版設計) */
+        #game-layout-container { display: none; width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; }
+        #phaser-app { width: 100%; height: 100%; display: block; }
         
-        /* Phaser 畫布容器 */
-        #phaser-app { width: 100%; height: 60%; background-color: #8d6e63; border: 4px solid var(--mucha-gold); border-radius: 8px; box-shadow: 0 0 15px rgba(0,0,0,0.8); overflow: hidden; flex-shrink: 0; position: relative;}
-        
-        #furniture-panel { display: none; justify-content: center; gap: 10px; margin-top: 10px; padding: 8px; background: rgba(197, 160, 89, 0.2); border-radius: 8px; border: 1px solid var(--mucha-gold); }
-        #furniture-panel button { background: var(--mucha-paper); border: 2px solid var(--mucha-gold); padding: 5px 15px; border-radius: 6px; color: var(--mucha-brown); font-weight: bold; font-size: 14px; cursor: pointer; }
-        #furniture-panel button:active { background: var(--mucha-gold); color: white; }
+        /* 懸浮傢俱面板 (頂部中央) */
+        #furniture-panel { display: none; position: absolute; top: max(10px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); gap: 10px; padding: 8px; background: rgba(244, 236, 216, 0.85); border-radius: 8px; border: 2px solid var(--mucha-gold); z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        #furniture-panel button { background: transparent; border: none; color: var(--mucha-brown); font-weight: bold; font-size: 14px; cursor: pointer; }
 
-        /* 聊天室 */
-        #chat-section { display: none; flex-direction: column; flex-grow: 1; margin-top: 10px; min-height: 0; } 
-        #chat-box { flex-grow: 1; overflow-y: auto; background: rgba(0, 0, 0, 0.5); color: #ccc; padding: 5px 10px; border: 1px solid var(--mucha-gold); border-radius: 8px; margin-bottom: 5px; font-size: 0.85em; }
-        #chat-input-area { display: flex; height: 40px;}
-        #chat-input { flex-grow: 1; padding: 8px; border: 2px solid var(--mucha-gold); border-radius: 4px 0 0 4px; background: var(--mucha-paper); font-family: inherit;}
-        #send-btn { padding: 8px 15px; background: var(--mucha-gold); color: white; border: 2px solid var(--mucha-gold); border-radius: 0 4px 4px 0; font-family: inherit;}
+        /* 懸浮聊天室 (左上角) */
+        #chat-section { display: none; position: absolute; top: max(60px, env(safe-area-inset-top)); left: 10px; width: 250px; flex-direction: column; z-index: 100; pointer-events: none; } 
+        #chat-box { max-height: 150px; overflow-y: auto; background: rgba(0, 0, 0, 0.4); color: #fff; padding: 8px; border-radius: 8px; margin-bottom: 5px; font-size: 13px; pointer-events: auto; text-shadow: 1px 1px 2px #000; }
+        #chat-input-area { display: flex; height: 40px; pointer-events: auto; box-shadow: 0 2px 5px rgba(0,0,0,0.5); border-radius: 4px;}
+        #chat-input { flex-grow: 1; padding: 8px; border: 2px solid var(--mucha-gold); border-radius: 4px 0 0 4px; background: rgba(244, 236, 216, 0.9); font-family: inherit;}
+        #send-btn { padding: 8px 15px; background: var(--mucha-gold); color: white; border: 2px solid var(--mucha-gold); border-radius: 0 4px 4px 0; font-family: inherit; font-weight: bold; cursor: pointer;}
     </style>
 </head>
 <body>
 
-    <div id="top-bar">
-        <div id="game-title">我的狗窩</div>
-        <button id="menu-btn">☰</button>
-    </div>
-
-    <div id="dropdown-menu">
-        <button id="nav-doghouse">🏠 我的狗窩</button>
-        <button id="nav-cafe">☕ 洋蔥大廳</button>
-        <button id="nav-settings">⚙️ 角色設定</button>
-        <button id="nav-logout">🚪 登出</button>
-        <div id="app-version">版本: v.0.0.6 (Phaser RPG Edition)</div>
-    </div>
-
     <div id="action-menu" class="action-menu">
-        <button id="view-profile-btn">查看這顆蔥</button>
+        <button id="view-profile-btn">洋蔥身分證</button>
     </div>
 
     <div id="furniture-menu" class="action-menu">
@@ -124,31 +85,18 @@
     </div>
 
     <div id="login-screen">
-        <h2 style="color: var(--mucha-green); border-bottom: 1px solid var(--mucha-gold); padding-bottom: 10px;">入館登記</h2>
+        <h2 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">入館登記</h2>
         <input type="email" id="user-email" placeholder="信箱 (Email)"><br>
         <input type="password" id="user-pwd" placeholder="密碼"><br>
         <button id="join-btn">推開洋蔥世界之門</button>
     </div>
 
     <div id="view-profile-modal" class="modal">
-        <h3 id="vp-title">名牌</h3>
+        <h3 id="vp-title">洋蔥身分證</h3>
         <p style="text-align: left;">🎂 生日: <strong id="vp-birth"></strong></p>
         <p style="text-align: left;">🍛 最愛: <strong id="vp-food"></strong></p>
         <p style="text-align: left;">📜 座右銘:<br><i style="color:var(--mucha-green); font-size: 14px;">"<span id="vp-motto"></span>"</i></p>
-        <button class="close-modal-btn btn-primary" onclick="document.getElementById('view-profile-modal').style.display='none'">關閉收合</button>
-    </div>
-
-    <div id="settings-modal" class="modal">
-        <h3>角色設定</h3>
-        <label>稱呼：</label><br><input type="text" id="set-name" maxlength="10"><br>
-        <label>光環顏色：</label><br><input type="color" id="set-color"><br><br>
-        <label>生日：</label><br><input type="text" id="set-birth" placeholder="例如: 1月1日"><br>
-        <label>愛吃的食物：</label><br><input type="text" id="set-food" placeholder="例如: 咖哩飯"><br>
-        <label>座右銘：</label><br><input type="text" id="set-motto" placeholder="一句話代表你"><br>
-        <div class="modal-btns">
-            <button class="btn-secondary" onclick="document.getElementById('settings-modal').style.display='none'">取消</button>
-            <button class="btn-primary" id="save-settings-btn">儲存記錄</button>
-        </div>
+        <button class="close-modal-btn btn-primary" onclick="document.getElementById('view-profile-modal').style.display='none'">收起證件</button>
     </div>
 
     <div id="fridge-modal" class="modal">
@@ -179,20 +127,14 @@
         <div id="chat-section">
             <div id="chat-box"></div>
             <div id="chat-input-area">
-                <input type="text" id="chat-input" placeholder="在咖啡廳裡說點什麼...">
+                <input type="text" id="chat-input" placeholder="說點什麼...">
                 <button id="send-btn">發送</button>
             </div>
         </div>
     </div>
 
-    <script type="module" src="app.js?v=0.0.6"></script>
+    <script type="module" src="app.js?v=0.0.7"></script>
     <script>
-        const menuBtn = document.getElementById('menu-btn');
-        const dropdownMenu = document.getElementById('dropdown-menu');
-        menuBtn.addEventListener('click', () => {
-            dropdownMenu.style.display = dropdownMenu.style.display === 'flex' ? 'none' : 'flex';
-        });
-
         // 點擊畫面其他地方關閉浮動選單 (不影響 Phaser 點擊)
         window.addEventListener('pointerdown', (e) => {
             if (!e.target.closest('#action-menu') && !e.target.closest('#furniture-menu') && e.target.tagName !== 'CANVAS') {

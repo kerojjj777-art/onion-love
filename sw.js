@@ -1,11 +1,10 @@
-// 升級版號至 v0.0.6 (Phaser 重構版)
-const CACHE_NAME = 'onion-store-v0.0.6';
+// 升級版號至 v0.0.7 (Phaser 全螢幕地圖重構版)
+const CACHE_NAME = 'onion-store-v0.0.7';
 
-// 加上對應的網址後綴強制刷新
 const ASSETS = [
     './',
-    './index.html?v=0.0.6',
-    './app.js?v=0.0.6',
+    './index.html?v=0.0.7',
+    './app.js?v=0.0.7',
     './manifest.json',
     './icon-192.png',
     './icon-512.png',
