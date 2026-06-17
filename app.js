@@ -38,7 +38,7 @@ let canvasPointerDown = false;
 
 // --- DOM 元素 ---
 const canvas = document.getElementById("phaser-app");
-const ctx = canvas.getContext("2d");
+//const ctx = canvas.getContext("2d");
 const loginScreen = document.getElementById("login-screen");
 const gameContainer = document.getElementById("game-container");
 const topBar = document.getElementById("top-bar");
