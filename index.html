@@ -10,23 +10,21 @@
     
     <style>
         :root {
-            --mucha-gold: #c5a059;
-            --mucha-green: #4a5d4e;
-            --mucha-brown: #3e2723;
-            --mucha-paper: #f4ecd8;
+            --mucha-gold: #c5a059; --mucha-green: #4a5d4e;
+            --mucha-brown: #3e2723; --mucha-paper: #f4ecd8;
         }
 
         body { 
             margin: 0; font-family: 'Georgia', 'Times New Roman', serif; 
             background-color: #2b201a; background-image: radial-gradient(circle, #3e2a1e 0%, #1a1008 100%);
             display: flex; flex-direction: column; align-items: center; 
-            color: var(--mucha-brown); overflow: hidden; touch-action: none; /* 防止畫面跟著搖桿滑動 */
+            color: var(--mucha-brown); overflow: hidden; touch-action: none; 
         }
 
-        /* 頂部導覽列 */
+        /* 頂部導覽列 (預設隱藏，登入後顯示) */
         #top-bar {
             width: 100%; height: 50px; background: linear-gradient(to bottom, #111, #2b201a);
-            border-bottom: 2px solid var(--mucha-gold); display: flex;
+            border-bottom: 2px solid var(--mucha-gold); display: none; /* 隱藏 */
             justify-content: space-between; align-items: center; padding: 0 15px;
             box-sizing: border-box; box-shadow: 0 4px 8px rgba(0,0,0,0.5); z-index: 100;
         }
@@ -34,29 +32,47 @@
         #game-title { color: var(--mucha-gold); font-size: 20px; letter-spacing: 2px; }
         #menu-btn { background: none; border: 1px solid var(--mucha-gold); color: var(--mucha-gold); font-size: 24px; cursor: pointer; border-radius: 4px; transition: 0.3s; }
         
-        /* 展開選單 (加入版本號) */
         #dropdown-menu {
             position: absolute; top: 55px; right: 10px; background: var(--mucha-paper);
             border: 2px solid var(--mucha-gold); border-radius: 8px;
             display: none; flex-direction: column; width: 150px; z-index: 100; overflow: hidden;
         }
-        #dropdown-menu button { background: none; border: none; border-bottom: 1px solid rgba(197, 160, 89, 0.3); padding: 12px; font-size: 16px; color: var(--mucha-brown); text-align: left; }
+        #dropdown-menu button { background: none; border: none; border-bottom: 1px solid rgba(197, 160, 89, 0.3); padding: 12px; font-size: 16px; color: var(--mucha-brown); text-align: left; cursor: pointer; }
         #app-version { padding: 8px; font-size: 12px; color: #888; text-align: center; background: #eaddc0; }
 
-        /* 登入介面 */
-        #login-screen { position: absolute; top: 25%; background: var(--mucha-paper); padding: 30px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 10; text-align: center; }
-        #login-screen input { padding: 8px; border: 1px solid var(--mucha-gold); border-radius: 4px; background: #fffdf5; }
-        #join-btn { background: var(--mucha-gold); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 15px;}
+        /* 登入介面 (改為帳密) */
+        #login-screen { position: absolute; top: 20%; background: var(--mucha-paper); padding: 30px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 10; text-align: center; }
+        #login-screen input { padding: 8px; border: 1px solid var(--mucha-gold); border-radius: 4px; background: #fffdf5; margin-bottom: 10px; width: 80%;}
+        #join-btn { background: var(--mucha-gold); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 5px; font-size: 16px;}
 
-        /* 遊戲畫布 */
+        /* 角色設定彈出視窗 */
+        #settings-modal {
+            position: absolute; top: 15%; background: var(--mucha-paper); padding: 25px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 150; text-align: center; display: none; box-shadow: 0 10px 25px rgba(0,0,0,0.8);
+        }
+        #settings-modal input { padding: 6px; border: 1px solid var(--mucha-gold); border-radius: 4px; background: #fffdf5; margin-bottom: 10px; width: 90%; }
+        .modal-btns { display: flex; justify-content: space-around; margin-top: 15px; }
+        .modal-btns button { padding: 8px 15px; border-radius: 4px; border: none; cursor: pointer; }
+        #save-settings-btn { background: var(--mucha-gold); color: white; }
+        #close-settings-btn { background: #ccc; color: #333; }
+
+        /* 遊戲畫布與操作區 */
         #game-container { display: none; flex-direction: column; width: 100%; max-width: 600px; padding: 10px; box-sizing: border-box; }
-        canvas { background-color: #8d6e63; background-image: url('cafe-bg.jpg'); background-size: cover; border: 4px solid var(--mucha-gold); border-radius: 8px; box-shadow: 0 0 15px rgba(0,0,0,0.8); }
+        canvas { background-color: #8d6e63; background-size: cover; border: 4px solid var(--mucha-gold); border-radius: 8px; box-shadow: 0 0 15px rgba(0,0,0,0.8); }
         
-        /* 虛擬搖桿 (觸控升級版) */
-        #joystick-zone { width: 120px; height: 120px; background: rgba(197, 160, 89, 0.15); border: 2px solid var(--mucha-gold); border-radius: 50%; position: relative; margin: 15px auto; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
-        #joystick-knob { width: 50px; height: 50px; background: radial-gradient(circle, var(--mucha-gold), #8c6e35); border-radius: 50%; position: absolute; top: 35px; left: 35px; box-shadow: 0 4px 8px rgba(0,0,0,0.6); pointer-events: none; transition: transform 0.05s linear; }
+        /* 操控區排版 (搖桿在左，AB在右) */
+        #control-panel { display: flex; justify-content: space-between; align-items: center; margin: 15px 20px; }
+        
+        /* 虛擬搖桿 */
+        #joystick-zone { width: 100px; height: 100px; background: rgba(197, 160, 89, 0.15); border: 2px solid var(--mucha-gold); border-radius: 50%; position: relative; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); touch-action: none;}
+        #joystick-knob { width: 40px; height: 40px; background: radial-gradient(circle, var(--mucha-gold), #8c6e35); border-radius: 50%; position: absolute; top: 30px; left: 30px; box-shadow: 0 4px 8px rgba(0,0,0,0.6); pointer-events: none; transition: transform 0.05s linear; }
 
-        /* 聊天室 (縮小歷史紀錄) */
+        /* A/B 按鍵 */
+        #action-buttons { display: flex; gap: 15px; }
+        .action-btn { width: 55px; height: 55px; border-radius: 50%; background: radial-gradient(circle, var(--mucha-paper), #d4c5a0); border: 3px solid var(--mucha-gold); color: var(--mucha-brown); font-size: 22px; font-weight: bold; box-shadow: 0 6px 0 #8c6e35; cursor: pointer; user-select: none; }
+        .action-btn:active { transform: translateY(6px); box-shadow: 0 0 0 #8c6e35; background: var(--mucha-gold); color: white;}
+
+        /* 聊天室 */
+        #chat-section { display: none; flex-direction: column; } /* 只有在大廳顯示 */
         #chat-box { height: 60px; overflow-y: auto; background: rgba(0, 0, 0, 0.5); color: #ccc; padding: 5px 10px; border: 1px solid var(--mucha-gold); border-radius: 8px; margin-bottom: 5px; font-size: 0.85em; }
         #chat-input-area { display: flex; }
         #chat-input { flex-grow: 1; padding: 8px; border: 2px solid var(--mucha-gold); border-radius: 4px 0 0 4px; background: var(--mucha-paper); }
@@ -66,40 +82,61 @@
 <body>
 
     <div id="top-bar">
-        <div id="game-title">洋蔥人交誼廳</div>
+        <div id="game-title" id="scene-title">我的狗窩</div>
         <button id="menu-btn">☰</button>
     </div>
 
     <div id="dropdown-menu">
-        <button onclick="alert('進入洋蔥大廳 (開發中)')">☕ 洋蔥大廳</button>
-        <button onclick="alert('進入我的狗窩 (開發中)')">🏠 我的狗窩</button>
-        <button onclick="alert('進入我的蔥田 (開發中)')">🌱 我的蔥田</button>
-        <div id="app-version">版本: v.0.0.2</div>
+        <button id="nav-doghouse">🏠 我的狗窩</button>
+        <button id="nav-cafe">☕ 洋蔥大廳</button>
+        <button id="nav-settings">⚙️ 角色設定</button>
+        <button id="nav-logout">🚪 登出</button>
+        <div id="app-version">版本: v.0.0.3</div>
     </div>
 
     <div id="login-screen">
         <h2 style="color: var(--mucha-green); border-bottom: 1px solid var(--mucha-gold); padding-bottom: 10px;">入館登記</h2>
-        <input type="text" id="username" placeholder="輸入您的稱呼" maxlength="10"><br><br>
-        <label>光環顏色:</label>
-        <input type="color" id="usercolor" value="#c5a059"><br><br>
-        <button id="join-btn">推開咖啡廳大門</button>
+        <input type="email" id="user-email" placeholder="信箱 (Email)"><br>
+        <input type="password" id="user-pwd" placeholder="密碼"><br>
+        <button id="join-btn">推開洋蔥世界之門</button>
+    </div>
+
+    <div id="settings-modal">
+        <h3 style="color: var(--mucha-green); margin-top: 0;">角色設定</h3>
+        <label>稱呼：</label><br><input type="text" id="set-name" maxlength="10"><br>
+        <label>光環顏色：</label><br><input type="color" id="set-color"><br><br>
+        <label>生日：</label><br><input type="text" id="set-birth" placeholder="例如: 1月1日"><br>
+        <label>愛吃的食物：</label><br><input type="text" id="set-food" placeholder="例如: 咖哩飯"><br>
+        <label>座右銘：</label><br><input type="text" id="set-motto" placeholder="一句話代表你"><br>
+        <div class="modal-btns">
+            <button id="close-settings-btn">取消</button>
+            <button id="save-settings-btn">儲存記錄</button>
+        </div>
     </div>
 
     <div id="game-container">
         <canvas id="gameCanvas" width="600" height="350"></canvas>
         
-        <div id="joystick-zone">
-            <div id="joystick-knob"></div>
+        <div id="control-panel">
+            <div id="joystick-zone">
+                <div id="joystick-knob"></div>
+            </div>
+            <div id="action-buttons">
+                <button class="action-btn" id="btn-b">B</button>
+                <button class="action-btn" id="btn-a">A</button>
+            </div>
         </div>
 
-        <div id="chat-box"></div>
-        <div id="chat-input-area">
-            <input type="text" id="chat-input" placeholder="在咖啡廳裡說點什麼...">
-            <button id="send-btn">發送</button>
+        <div id="chat-section">
+            <div id="chat-box"></div>
+            <div id="chat-input-area">
+                <input type="text" id="chat-input" placeholder="在咖啡廳裡說點什麼...">
+                <button id="send-btn">發送</button>
+            </div>
         </div>
     </div>
 
-    <script type="module" src="app.js?v=0.0.1"></script>
+    <script type="module" src="app.js?v=0.0.3"></script>
     <script>
         const menuBtn = document.getElementById('menu-btn');
         const dropdownMenu = document.getElementById('dropdown-menu');
@@ -107,17 +144,13 @@
             dropdownMenu.style.display = dropdownMenu.style.display === 'flex' ? 'none' : 'flex';
         });
 
-        // PWA 自動更新偵測機制
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js').then(reg => {
                 reg.addEventListener('updatefound', () => {
                     const newWorker = reg.installing;
                     newWorker.addEventListener('statechange', () => {
-                        // 當有新版本的 Service Worker 安裝完畢時
                         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            if (confirm('發現咖啡廳有新的更新！是否立即重新載入？')) {
-                                window.location.reload();
-                            }
+                            if (confirm('發現新的更新！是否立即重新載入？')) window.location.reload();
                         }
                     });
                 });
