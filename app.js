@@ -520,3 +520,47 @@ function listenToChat() {
         }
     });
 }
+// ==========================================
+// 7. Phaser 引擎初始化與測試
+// ==========================================
+const phaserConfig = {
+    type: Phaser.AUTO,
+    parent: 'phaser-app',
+    width: 600,
+    height: 350,
+    transparent: true,
+    scene: {
+        preload: preload,
+        create: create,
+        update: update
+    }
+};
+
+const game = new Phaser.Game(phaserConfig);
+
+let testSprite;
+
+function preload() {
+    this.load.image('onion', 'onion-sprite.png');
+    this.load.image('bgDoghouse', 'doghouse-bg.jpg');
+}
+
+function create() {
+    this.add.image(300, 175, 'bgDoghouse').setAlpha(0.5); 
+    testSprite = this.add.image(myX, myY, 'onion');
+    testSprite.setDisplaySize(50, 50);
+
+    this.add.text(300, 100, 'Phaser 引擎啟動成功', { 
+        fontFamily: 'Georgia, serif', 
+        fontSize: '22px', 
+        color: '#c5a059',
+        fontStyle: 'bold'
+    }).setOrigin(0.5);
+}
+
+function update() {
+    if (testSprite) {
+        testSprite.x = myX;
+        testSprite.y = myY;
+    }
+}
