@@ -18,10 +18,11 @@ const db = getDatabase(app);
 
 // --- 系統變數 ---
 let currentUser = null;
-let currentScene = "doghouse"; // "doghouse" 或 "cafe"
-let myProfile = { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽" };
+let currentScene = "doghouse"; 
+let myProfile = { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0 };
 let myX = 300, myY = 200; 
 let cafePlayers = {};
+let cafeUnsubscribe = null;
 const speed = 4;
 
 // 操控變數
@@ -39,11 +40,13 @@ const sceneTitle = document.getElementById("game-title");
 const chatSection = document.getElementById("chat-section");
 const dropdownMenu = document.getElementById("dropdown-menu");
 const settingsModal = document.getElementById("settings-modal");
+const actionMenu = document.getElementById("action-menu");
+const viewProfileModal = document.getElementById("view-profile-modal");
 
 // --- 素材準備 ---
 const onionImg = new Image(); onionImg.src = 'onion-sprite.png'; 
 const bgCafe = new Image(); bgCafe.src = 'cafe-bg.jpg';
-const bgDoghouse = new Image(); bgDoghouse.src = 'doghouse-bg.jpg'; // 請準備這張圖
+const bgDoghouse = new Image(); bgDoghouse.src = 'doghouse-bg.jpg';
 
 // ==========================================
 // 1. 登入與 Auth 狀態管理
@@ -65,13 +68,12 @@ onAuthStateChanged(auth, async (user) => {
         // 讀取個人資料
         const profileSnap = await get(ref(db, `users/${user.uid}`));
         if (profileSnap.exists()) {
-            myProfile = profileSnap.val();
+            myProfile = { ...myProfile, ...profileSnap.val() };
         } else {
-            // 初次登入建立預設資料
-            set(ref(db, `users/${user.uid}`), myProfile);
+            set(ref(db, `users/${user.uid}`), { name: myProfile.name, color: myProfile.color, birth: myProfile.birth, food: myProfile.food, motto: myProfile.motto });
         }
 
-        switchScene("doghouse"); // 登入後預設進入狗窩
+        switchScene("doghouse"); 
         listenToChat();
         requestAnimationFrame(gameLoop);
     } else {
@@ -80,11 +82,12 @@ onAuthStateChanged(auth, async (user) => {
         topBar.style.display = "none";
         gameContainer.style.display = "none";
         dropdownMenu.style.display = "none";
+        if (cafeUnsubscribe) cafeUnsubscribe();
     }
 });
 
 document.getElementById("nav-logout").addEventListener("click", () => {
-    if (currentScene === "cafe") leaveCafe();
+    leaveCafe();
     signOut(auth);
 });
 
@@ -112,23 +115,84 @@ document.getElementById("nav-cafe").addEventListener("click", () => switchScene(
 
 function joinCafe() {
     const playerRef = ref(db, `cafePlayers/${currentUser.uid}`);
-    set(playerRef, { x: myX, y: myY, name: myProfile.name, color: myProfile.color, bubbleMsg: "", bubbleTime: 0 });
-    onDisconnect(playerRef).remove(); // 斷線自動離開
+    set(playerRef, { x: myX, y: myY, name: myProfile.name, color: myProfile.color, bubbleMsg: myProfile.bubbleMsg, bubbleTime: myProfile.bubbleTime });
+    onDisconnect(playerRef).remove(); 
     
-    onValue(ref(db, 'cafePlayers'), (snapshot) => {
+    cafeUnsubscribe = onValue(ref(db, 'cafePlayers'), (snapshot) => {
         cafePlayers = snapshot.val() || {};
     });
 }
 
 function leaveCafe() {
-    if (currentUser) {
-        set(ref(db, `cafePlayers/${currentUser.uid}`), null);
-    }
+    if (currentUser) set(ref(db, `cafePlayers/${currentUser.uid}`), null);
+    if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; }
 }
 
 // ==========================================
-// 3. 角色設定邏輯
+// 3. 角色點擊與資訊卡邏輯 (取代原本固定顯示)
 // ==========================================
+canvas.addEventListener('pointerdown', (e) => {
+    if(!currentUser) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;   // 計算畫面縮放比例
+    const scaleY = canvas.height / rect.height;
+    const clickX = (e.clientX - rect.left) * scaleX;
+    const clickY = (e.clientY - rect.top) * scaleY;
+
+    let clickedUid = null;
+
+    if (currentScene === "doghouse") {
+        if (Math.abs(clickX - myX) < 35 && Math.abs(clickY - myY) < 45) clickedUid = currentUser.uid;
+    } else if (currentScene === "cafe") {
+        for (let id in cafePlayers) {
+            let px = (id === currentUser.uid) ? myX : cafePlayers[id].x;
+            let py = (id === currentUser.uid) ? myY : cafePlayers[id].y;
+            if (Math.abs(clickX - px) < 35 && Math.abs(clickY - py) < 45) {
+                clickedUid = id;
+                break;
+            }
+        }
+    }
+
+    if (clickedUid) {
+        actionMenu.style.display = "block";
+        actionMenu.style.left = (e.pageX + 10) + "px"; // 顯示在點擊處右側
+        actionMenu.style.top = (e.pageY - 20) + "px";
+        actionMenu.dataset.uid = clickedUid;
+    } else {
+        actionMenu.style.display = "none";
+    }
+});
+
+document.getElementById("view-profile-btn").addEventListener("click", async () => {
+    actionMenu.style.display = "none";
+    const targetUid = actionMenu.dataset.uid;
+    
+    if (targetUid === currentUser.uid) {
+        showProfileModal(myProfile);
+    } else {
+        const snap = await get(ref(db, `users/${targetUid}`));
+        if (snap.exists()) {
+            showProfileModal(snap.val());
+        } else if (cafePlayers[targetUid]) {
+            showProfileModal(cafePlayers[targetUid]); // 備用方案
+        }
+    }
+});
+
+function showProfileModal(profile) {
+    document.getElementById("vp-title").innerText = `🧅 ${profile.name || '匿名'} 的名牌`;
+    document.getElementById("vp-birth").innerText = profile.birth || '未知';
+    document.getElementById("vp-food").innerText = profile.food || '無';
+    document.getElementById("vp-motto").innerText = profile.motto || '無';
+    viewProfileModal.style.display = "block";
+}
+
+document.getElementById("close-vp-btn").addEventListener("click", () => {
+    viewProfileModal.style.display = "none";
+});
+
+// 編輯個人設定
 document.getElementById("nav-settings").addEventListener("click", () => {
     dropdownMenu.style.display = "none";
     document.getElementById("set-name").value = myProfile.name;
@@ -147,81 +211,62 @@ document.getElementById("save-settings-btn").addEventListener("click", () => {
     myProfile.food = document.getElementById("set-food").value || "無";
     myProfile.motto = document.getElementById("set-motto").value || "無";
     
-    update(ref(db, `users/${currentUser.uid}`), myProfile);
-    if (currentScene === "cafe") {
-        update(ref(db, `cafePlayers/${currentUser.uid}`), { name: myProfile.name, color: myProfile.color });
-    }
+    const dbData = { name: myProfile.name, color: myProfile.color, birth: myProfile.birth, food: myProfile.food, motto: myProfile.motto };
+    update(ref(db, `users/${currentUser.uid}`), dbData);
+    if (currentScene === "cafe") update(ref(db, `cafePlayers/${currentUser.uid}`), { name: myProfile.name, color: myProfile.color });
     settingsModal.style.display = "none";
 });
 
 // ==========================================
-// 4. 控制系統 (搖桿、滑鼠、鍵盤、AB鍵)
+// 4. 控制系統 (優化搖桿 PointerEvents)
 // ==========================================
 const zone = document.getElementById('joystick-zone');
 const knob = document.getElementById('joystick-knob');
-const center = { x: 50, y: 50 };
 const maxDist = 30;
 
-// Pointer Events 支援滑鼠與觸控
-function handlePointerDown(e) { isDragging = true; knob.style.transition = 'none'; handlePointerMove(e); }
 function handlePointerMove(e) {
     if (!isDragging) return;
     const rect = zone.getBoundingClientRect();
-    let clientX = e.clientX || (e.touches && e.touches[0].clientX);
-    let clientY = e.clientY || (e.touches && e.touches[0].clientY);
-    let dx = clientX - rect.left - center.x;
-    let dy = clientY - rect.top - center.y;
+    // 計算搖桿中心點的位移 (100寬度, 中心為50)
+    let dx = e.clientX - rect.left - 50; 
+    let dy = e.clientY - rect.top - 50;
     
     const distance = Math.sqrt(dx * dx + dy * dy);
     if (distance > maxDist) { dx = (dx / distance) * maxDist; dy = (dy / distance) * maxDist; }
     knob.style.transform = `translate(${dx}px, ${dy}px)`;
     moveVector.x = dx / maxDist; moveVector.y = dy / maxDist;
 }
-function handlePointerUp() {
+
+zone.addEventListener('pointerdown', (e) => { 
+    isDragging = true; knob.style.transition = 'none'; 
+    zone.setPointerCapture(e.pointerId); // 鎖定觸控焦點在搖桿區
+    handlePointerMove(e); 
+});
+zone.addEventListener('pointermove', handlePointerMove);
+zone.addEventListener('pointerup', resetJoystick);
+zone.addEventListener('pointercancel', resetJoystick);
+
+function resetJoystick() {
     isDragging = false; moveVector = { x: 0, y: 0 };
     knob.style.transition = 'transform 0.1s linear';
     knob.style.transform = `translate(0px, 0px)`;
     if (currentScene === "cafe" && currentUser) update(ref(db, `cafePlayers/${currentUser.uid}`), { x: myX, y: myY });
 }
 
-zone.addEventListener('pointerdown', handlePointerDown);
-document.addEventListener('pointermove', handlePointerMove);
-document.addEventListener('pointerup', handlePointerUp);
-
 // 鍵盤移動
 window.addEventListener("keydown", (e) => { if(keys.hasOwnProperty(e.key)) keys[e.key] = true; checkKeyboard(); });
 window.addEventListener("keyup", (e) => { if(keys.hasOwnProperty(e.key)) keys[e.key] = false; checkKeyboard(); });
 
 function checkKeyboard() {
-    if (isDragging) return; // 搖桿優先
+    if (isDragging) return; 
     let vx = 0, vy = 0;
     if (keys.ArrowUp || keys.w) vy = -1;
     if (keys.ArrowDown || keys.s) vy = 1;
     if (keys.ArrowLeft || keys.a) vx = -1;
     if (keys.ArrowRight || keys.d) vx = 1;
     
-    // 修正斜向移動速度
     if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; }
     moveVector.x = vx; moveVector.y = vy;
-}
-
-// AB 鍵行為 (發送氣泡)
-function actionA() { sendBubble("使用了 A 技能!"); }
-function actionB() { sendBubble("按下了 B 按鈕!"); }
-document.getElementById("btn-a").addEventListener("mousedown", actionA);
-document.getElementById("btn-b").addEventListener("mousedown", actionB);
-document.getElementById("btn-a").addEventListener("touchstart", (e) => { e.preventDefault(); actionA(); });
-document.getElementById("btn-b").addEventListener("touchstart", (e) => { e.preventDefault(); actionB(); });
-window.addEventListener("keydown", (e) => {
-    if (document.activeElement.tagName === "INPUT") return; // 打字時不觸發
-    if (e.key.toLowerCase() === 'a') actionA();
-    if (e.key.toLowerCase() === 'b') actionB();
-});
-
-function sendBubble(msg) {
-    if (currentScene === "cafe" && currentUser) {
-        update(ref(db, `cafePlayers/${currentUser.uid}`), { bubbleMsg: msg, bubbleTime: Date.now() });
-    }
 }
 
 // ==========================================
@@ -238,6 +283,7 @@ function drawOnionMan(x, y, p) {
     ctx.font = "12px 'Georgia', serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText(p.name, x, y - 46);
 
+    // 頭頂講話泡泡
     if (p.bubbleMsg && (Date.now() - p.bubbleTime < 4000)) {
         ctx.fillStyle = "rgba(244, 236, 216, 0.95)"; ctx.strokeStyle = "#c5a059"; ctx.lineWidth = 2;
         ctx.beginPath();
@@ -249,26 +295,13 @@ function drawOnionMan(x, y, p) {
     }
 }
 
-function drawProfileCard() {
-    ctx.fillStyle = "rgba(244, 236, 216, 0.85)"; ctx.strokeStyle = "#c5a059"; ctx.lineWidth = 3;
-    if (ctx.roundRect) ctx.roundRect(10, 10, 200, 120, 10); else ctx.fillRect(10, 10, 200, 120);
-    ctx.fill(); ctx.stroke();
-    
-    ctx.fillStyle = "#3e2723"; ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.font = "bold 16px 'Georgia'";
-    ctx.fillText(`🧅 ${myProfile.name} 的名牌`, 20, 20);
-    ctx.font = "14px 'Georgia'";
-    ctx.fillText(`🎂 生日: ${myProfile.birth}`, 20, 45);
-    ctx.fillText(`🍛 最愛: ${myProfile.food}`, 20, 65);
-    ctx.fillText(`📜 座右銘:`, 20, 85);
-    ctx.fillStyle = "#4a5d4e"; ctx.font = "italic 13px 'Georgia'";
-    ctx.fillText(`"${myProfile.motto}"`, 30, 105);
-}
-
 function gameLoop() {
     if (!currentUser) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height); 
+    
+    // 預填底色防止圖片未載入時一片黑
+    ctx.fillStyle = "#8d6e63";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 處理移動
     if (moveVector.x !== 0 || moveVector.y !== 0) {
         let nextX = myX + moveVector.x * speed;
         let nextY = myY + moveVector.y * speed;
@@ -277,20 +310,22 @@ function gameLoop() {
     }
 
     if (currentScene === "doghouse") {
-        if(bgDoghouse.complete) ctx.drawImage(bgDoghouse, 0, 0, canvas.width, canvas.height);
+        if(bgDoghouse.complete && bgDoghouse.naturalWidth !== 0) ctx.drawImage(bgDoghouse, 0, 0, canvas.width, canvas.height);
         drawOnionMan(myX, myY, myProfile);
-        drawProfileCard();
     } else if (currentScene === "cafe") {
-        if(bgCafe.complete) ctx.drawImage(bgCafe, 0, 0, canvas.width, canvas.height);
+        if(bgCafe.complete && bgCafe.naturalWidth !== 0) ctx.drawImage(bgCafe, 0, 0, canvas.width, canvas.height);
+        
+        // 畫出大廳所有人
         Object.keys(cafePlayers).forEach(id => {
             let p = cafePlayers[id];
-            if (id === currentUser.uid) drawOnionMan(myX, myY, { ...myProfile, bubbleMsg: p.bubbleMsg, bubbleTime: p.bubbleTime });
+            // 本機端使用自己的高更新率座標與最新氣泡狀態
+            if (id === currentUser.uid) drawOnionMan(myX, myY, { ...myProfile, bubbleMsg: myProfile.bubbleMsg, bubbleTime: myProfile.bubbleTime });
             else drawOnionMan(p.x, p.y, p);
         });
     }
+    requestAnimationFrame(gameLoop);
 }
 
-// 雲端同步頻率 (僅在大廳時同步座標)
 setInterval(() => {
     if (currentScene === "cafe" && currentUser && (moveVector.x !== 0 || moveVector.y !== 0)) {
         update(ref(db, `cafePlayers/${currentUser.uid}`), { x: myX, y: myY });
@@ -298,8 +333,28 @@ setInterval(() => {
 }, 100);
 
 // ==========================================
-// 6. 聊天系統
+// 6. 聊天系統與氣泡
 // ==========================================
+function sendBubble(msg) {
+    if (currentUser) {
+        myProfile.bubbleMsg = msg; // 讓本地畫面立刻出現泡泡
+        myProfile.bubbleTime = Date.now();
+        if (currentScene === "cafe") {
+            update(ref(db, `cafePlayers/${currentUser.uid}`), { bubbleMsg: msg, bubbleTime: myProfile.bubbleTime });
+        }
+    }
+}
+
+function actionA() { sendBubble("使用了 A 技能!"); }
+function actionB() { sendBubble("按下了 B 按鈕!"); }
+document.getElementById("btn-a").addEventListener("pointerdown", actionA);
+document.getElementById("btn-b").addEventListener("pointerdown", actionB);
+window.addEventListener("keydown", (e) => {
+    if (document.activeElement.tagName === "INPUT") return; 
+    if (e.key.toLowerCase() === 'a') actionA();
+    if (e.key.toLowerCase() === 'b') actionB();
+});
+
 const chatInput = document.getElementById("chat-input");
 document.getElementById("send-btn").addEventListener("click", sendChat);
 window.addEventListener("keydown", (e) => {
