@@ -1,10 +1,11 @@
-// 這裡的版號已經幫你更新到 v0.1.0
-const CACHE_NAME = 'onion-store-v0.1.0';
+// 升級版號至 v0.0.6 (Phaser 重構版)
+const CACHE_NAME = 'onion-store-v0.0.6';
 
+// 加上對應的網址後綴強制刷新
 const ASSETS = [
     './',
-    './index.html?v=0.1.0',
-    './app.js?v=0.1.0',
+    './index.html?v=0.0.6',
+    './app.js?v=0.0.6',
     './manifest.json',
     './icon-192.png',
     './icon-512.png',
@@ -22,7 +23,9 @@ self.addEventListener('activate', (e) => {
     e.waitUntil(
         caches.keys().then((keyList) => {
             return Promise.all(keyList.map((key) => {
-                if (key !== CACHE_NAME) return caches.delete(key);
+                if (key !== CACHE_NAME) {
+                    return caches.delete(key);
+                }
             }));
         })
     );

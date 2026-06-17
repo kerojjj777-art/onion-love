@@ -1,38 +1,36 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getDatabase, ref, set, onValue, push, onDisconnect, update, get, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getDatabase, ref, set, onValue, push, onDisconnect, update, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
 const firebaseConfig = {
-    apiKey: "AIzaSyC266DIMj81hWMk83GEmqSbBl85VY3tTcE",
-    authDomain: "onion-love.firebaseapp.com",
-    databaseURL: "https://onion-love-default-rtdb.firebaseio.com",
-    projectId: "onion-love",
-    storageBucket: "onion-love.firebasestorage.app",
-    messagingSenderId: "431036248901",
-    appId: "1:431036248901:web:533465a08cfa8410f7c42c"
+  apiKey: "AIzaSyC266DIMj81hWMk83GEmqSbBl85VY3tTcE",
+  authDomain: "onion-love.firebaseapp.com",
+  databaseURL: "https://onion-love-default-rtdb.firebaseio.com",
+  projectId: "onion-love",
+  storageBucket: "onion-love.firebasestorage.app",
+  messagingSenderId: "431036248901",
+  appId: "1:431036248901:web:533465a08cfa8410f7c42c"
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);         
 
-// --- 系統狀態與變數 ---
-let currentUser = null;
-let currentScene = "doghouse"; 
-let myProfile = { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0 };
-let myX = 400, myY = 300; // 起始位置調到大一點的地圖中央
-let cafePlayersData = {};
-let cafeFurnitureData = {}; 
+// --- 系統變數 ---
+window.GameLogic = {
+    currentUser: null,
+    currentScene: "doghouse",
+    myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0 },
+    cafePlayers: {},
+    cafeFurniture: {},
+    phaserGame: null,
+    db: db // 讓 Phaser 場景可以調用資料庫
+};
 let cafeUnsubscribe = null;
-const speed = 4;
-
-let isDraggingJoystick = false;
-let moveVector = { x: 0, y: 0 };
-let keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, w: false, a: false, s: false, d: false };
 
 // --- DOM 元素 ---
 const loginScreen = document.getElementById("login-screen");
-const uiLayer = document.getElementById("ui-layer");
+const gameLayoutContainer = document.getElementById("game-layout-container");
 const topBar = document.getElementById("top-bar");
 const sceneTitle = document.getElementById("game-title");
 const chatSection = document.getElementById("chat-section");
@@ -43,260 +41,8 @@ const furnitureMenu = document.getElementById("furniture-menu");
 const viewProfileModal = document.getElementById("view-profile-modal");
 
 // ==========================================
-// 1. Phaser 遊戲場景設定
+// 1. 登入與場景切換 (Phaser Booting)
 // ==========================================
-class OnionScene extends Phaser.Scene {
-    constructor() { super({ key: 'OnionScene' }); }
-
-    preload() {
-        // 載入所有圖片素材
-        this.load.image('onion', 'onion-sprite.png');
-        this.load.image('bg-cafe', 'cafe-bg.jpg');
-        this.load.image('bg-doghouse', 'doghouse-bg.jpg');
-        this.load.image('fridge', 'fridge.png');
-        this.load.image('memory', 'memory.png');
-    }
-
-    create() {
-        // 1. 設定大地圖邊界與背景 (假設背景圖是 1200 x 800)
-        this.cameras.main.setBounds(0, 0, 1200, 800);
-        this.physics.world.setBounds(0, 0, 1200, 800);
-
-        this.bgDoghouse = this.add.image(0, 0, 'bg-doghouse').setOrigin(0, 0);
-        this.bgCafe = this.add.image(0, 0, 'bg-cafe').setOrigin(0, 0);
-        this.bgCafe.setVisible(false); // 預設顯示狗窩
-
-        // 2. 建立儲存玩家與傢俱的群組
-        this.otherPlayers = {};
-        this.furnitureGroup = {};
-
-        // 3. 建立自己的洋蔥人 (使用 Container 打包圖片與文字)
-        this.myPlayer = this.createPlayerContainer(myX, myY, myProfile, true);
-        this.cameras.main.startFollow(this.myPlayer, true, 0.05, 0.05);
-
-        // 4. 滑鼠點擊背景關閉 UI
-        this.input.on('pointerdown', () => {
-            actionMenu.style.display = 'none';
-            furnitureMenu.style.display = 'none';
-        });
-    }
-
-    update() {
-        if (!currentUser) return;
-
-        // 根據虛擬搖桿或鍵盤移動
-        if (moveVector.x !== 0 || moveVector.y !== 0) {
-            let nextX = this.myPlayer.x + moveVector.x * speed;
-            let nextY = this.myPlayer.y + moveVector.y * speed;
-            
-            // 邊界碰撞檢測
-            if (nextX > 20 && nextX < 1180) this.myPlayer.x = nextX;
-            if (nextY > 40 && nextY < 760) this.myPlayer.y = nextY;
-            
-            myX = this.myPlayer.x;
-            myY = this.myPlayer.y;
-
-            // 自己的圖層隨時保持在最上面
-            this.myPlayer.setDepth(this.myPlayer.y);
-        }
-
-        // 定期更新自己的對話泡泡狀態
-        this.updateBubble(this.myPlayer, myProfile);
-        
-        // 更新其他玩家的深度與泡泡
-        for (let uid in this.otherPlayers) {
-            let pContainer = this.otherPlayers[uid];
-            pContainer.setDepth(pContainer.y);
-            this.updateBubble(pContainer, cafePlayersData[uid]);
-        }
-    }
-
-    // 建立角色容器的共用函數
-    createPlayerContainer(x, y, pData, isMe = false) {
-        let container = this.add.container(x, y);
-        
-        // 洋蔥本體
-        let sprite = this.add.image(0, -20, 'onion').setScale(1.2);
-        if (!isMe) {
-            sprite.setInteractive({ cursor: 'pointer' });
-            sprite.on('pointerdown', (pointer) => this.showActionMenu(pointer, pData.uid));
-        }
-
-        // 名字底色標籤
-        let nameBg = this.add.graphics();
-        nameBg.fillStyle(0x000000, 0.6);
-        nameBg.fillRoundedRect(-30, -55, 60, 18, 4);
-
-        // 名字文字
-        let nameText = this.add.text(0, -46, pData.name, { 
-            fontFamily: 'Georgia', fontSize: '12px', fill: pData.color 
-        }).setOrigin(0.5);
-
-        // 泡泡容器 (預設隱藏)
-        let bubble = this.add.container(0, -90);
-        let bubbleBg = this.add.graphics();
-        bubbleBg.fillStyle(0xf4ecd8, 0.95);
-        bubbleBg.lineStyle(2, 0xc5a059);
-        bubbleBg.fillRoundedRect(-60, -15, 120, 30, 8);
-        bubbleBg.strokeRoundedRect(-60, -15, 120, 30, 8);
-        let bubbleText = this.add.text(0, 0, "", { 
-            fontFamily: 'Georgia', fontSize: '13px', fill: '#3e2723', fontStyle: 'bold' 
-        }).setOrigin(0.5);
-        bubble.add([bubbleBg, bubbleText]);
-        bubble.setVisible(false);
-
-        container.add([sprite, nameBg, nameText, bubble]);
-        
-        // 綁定屬性方便後續更新
-        container.nameText = nameText;
-        container.bubble = bubble;
-        container.bubbleText = bubbleText;
-        container.uid = isMe ? currentUser.uid : pData.uid;
-
-        return container;
-    }
-
-    updateBubble(container, pData) {
-        if (!pData) return;
-        const now = Date.now();
-        if (pData.bubbleMsg && (now - pData.bubbleTime < 15000)) {
-            let displayMsg = pData.bubbleMsg.length > 8 ? pData.bubbleMsg.substring(0, 8) + "..." : pData.bubbleMsg;
-            container.bubbleText.setText(displayMsg);
-            container.bubble.setVisible(true);
-        } else {
-            container.bubble.setVisible(false);
-        }
-    }
-
-    // 處理 Firebase 傳來的其他玩家資料
-    syncPlayers() {
-        if (currentScene !== 'cafe') return;
-        
-        // 移除已經離線的玩家
-        for (let uid in this.otherPlayers) {
-            if (!cafePlayersData[uid] || uid === currentUser.uid) {
-                this.otherPlayers[uid].destroy();
-                delete this.otherPlayers[uid];
-            }
-        }
-
-        // 新增或更新線上玩家
-        for (let uid in cafePlayersData) {
-            if (uid === currentUser.uid) continue; // 跳過自己
-            let pData = cafePlayersData[uid];
-            pData.uid = uid;
-
-            if (!this.otherPlayers[uid]) {
-                // 產生新玩家
-                this.otherPlayers[uid] = this.createPlayerContainer(pData.x, pData.y, pData);
-            } else {
-                // 平滑移動玩家
-                let pContainer = this.otherPlayers[uid];
-                this.tweens.add({
-                    targets: pContainer, x: pData.x, y: pData.y, duration: 100
-                });
-                pContainer.nameText.setText(pData.name).setColor(pData.color);
-            }
-        }
-    }
-
-    // 處理 Firebase 傳來的傢俱資料
-    syncFurniture() {
-        if (currentScene !== 'cafe') return;
-
-        for (let key in cafeFurnitureData) {
-            let fData = cafeFurnitureData[key];
-            
-            if (!this.furnitureGroup[key]) {
-                // 建立新傢俱
-                let sprite = this.add.sprite(fData.x, fData.y, key).setInteractive();
-                this.furnitureGroup[key] = sprite;
-
-                // 註冊拖曳事件
-                this.input.setDraggable(sprite);
-                sprite.on('drag', (pointer, dragX, dragY) => {
-                    if (!cafeFurnitureData[key].locked) {
-                        sprite.x = dragX; sprite.y = dragY;
-                    }
-                });
-                sprite.on('dragend', () => {
-                    if (!cafeFurnitureData[key].locked) {
-                        update(ref(db, `cafeFurniture/${key}`), { x: sprite.x, y: sprite.y, locked: true });
-                    }
-                });
-
-                // 單擊/長按事件判定
-                sprite.on('pointerdown', (pointer) => {
-                    sprite.clickStartTime = Date.now();
-                });
-                sprite.on('pointerup', (pointer) => {
-                    let holdTime = Date.now() - sprite.clickStartTime;
-                    if (cafeFurnitureData[key].locked) {
-                        if (holdTime > 500) {
-                            // 長按解鎖選單
-                            this.showFurnitureMenu(pointer, key);
-                        } else {
-                            // 單擊觸發功能
-                            if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block';
-                            if (key === 'memory') document.getElementById('memory-modal').style.display = 'block';
-                        }
-                    }
-                });
-
-            } else {
-                // 更新位置與鎖定狀態的發光效果
-                let sprite = this.furnitureGroup[key];
-                sprite.setPosition(fData.x, fData.y);
-                sprite.setDepth(sprite.y - 10); // 讓洋蔥人可以走在傢俱前後
-                if (!fData.locked) sprite.setTint(0xffeb3b); // 解鎖狀態給黃色提示
-                else sprite.clearTint();
-            }
-        }
-    }
-
-    switchSceneMode(sceneName) {
-        if (sceneName === 'doghouse') {
-            this.bgDoghouse.setVisible(true);
-            this.bgCafe.setVisible(false);
-            // 隱藏大廳的人與傢俱
-            for (let uid in this.otherPlayers) this.otherPlayers[uid].setVisible(false);
-            for (let key in this.furnitureGroup) this.furnitureGroup[key].setVisible(false);
-        } else {
-            this.bgDoghouse.setVisible(false);
-            this.bgCafe.setVisible(true);
-            for (let uid in this.otherPlayers) this.otherPlayers[uid].setVisible(true);
-            for (let key in this.furnitureGroup) this.furnitureGroup[key].setVisible(true);
-        }
-    }
-
-    showActionMenu(pointer, targetUid) {
-        actionMenu.style.display = "flex";
-        actionMenu.style.left = (pointer.event.pageX + 10) + "px";
-        actionMenu.style.top = (pointer.event.pageY - 20) + "px";
-        actionMenu.dataset.uid = targetUid;
-    }
-
-    showFurnitureMenu(pointer, type) {
-        furnitureMenu.style.display = "flex";
-        furnitureMenu.style.left = (pointer.event.pageX + 10) + "px";
-        furnitureMenu.style.top = (pointer.event.pageY - 20) + "px";
-        furnitureMenu.dataset.type = type;
-    }
-}
-
-// ==========================================
-// 2. 啟動機制與 Firebase 驗證
-// ==========================================
-let game; 
-const phaserConfig = {
-    type: Phaser.AUTO,
-    parent: 'phaser-app',
-    scale: { mode: Phaser.Scale.RESIZE, width: '100%', height: '100%' },
-    transparent: true,
-    physics: { default: 'arcade' },
-    scene: [OnionScene]
-};
-
 document.getElementById("join-btn").addEventListener("click", () => {
     const email = document.getElementById("user-email").value;
     const pwd = document.getElementById("user-pwd").value;
@@ -305,158 +51,433 @@ document.getElementById("join-btn").addEventListener("click", () => {
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        currentUser = user;
+        window.GameLogic.currentUser = user;
         loginScreen.style.display = "none";
         topBar.style.display = "flex";
-        uiLayer.style.display = "block";
+        gameLayoutContainer.style.display = "flex";
         
         const profileSnap = await get(ref(db, `users/${user.uid}`));
-        if (profileSnap.exists()) myProfile = { ...myProfile, ...profileSnap.val() };
-        else set(ref(db, `users/${user.uid}`), { name: myProfile.name, color: myProfile.color, birth: myProfile.birth, food: myProfile.food, motto: myProfile.motto });
+        if (profileSnap.exists()) window.GameLogic.myProfile = { ...window.GameLogic.myProfile, ...profileSnap.val() };
+        else set(ref(db, `users/${user.uid}`), { name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, birth: window.GameLogic.myProfile.birth, food: window.GameLogic.myProfile.food, motto: window.GameLogic.myProfile.motto });
 
-        // 啟動 Phaser
-        if (!game) game = new Phaser.Game(phaserConfig);
+        onValue(ref(db, 'cafeFurniture'), snap => window.GameLogic.cafeFurniture = snap.val() || {});
 
-        // 讀取大廳傢俱
-        onValue(ref(db, 'cafeFurniture'), snap => {
-            cafeFurnitureData = snap.val() || {};
-            if(game && game.scene.keys.OnionScene) game.scene.keys.OnionScene.syncFurniture();
-        });
+        // 啟動 Phaser 引擎 (若尚未啟動)
+        if (!window.GameLogic.phaserGame) initPhaser();
 
         switchScene("doghouse"); 
         listenToChat();
         listenToMemories();
     } else {
-        currentUser = null;
+        window.GameLogic.currentUser = null;
         loginScreen.style.display = "block";
         topBar.style.display = "none";
-        uiLayer.style.display = "none";
+        gameLayoutContainer.style.display = "none";
         dropdownMenu.style.display = "none";
         if (cafeUnsubscribe) cafeUnsubscribe();
     }
 });
 
 document.getElementById("nav-logout").addEventListener("click", () => { leaveCafe(); signOut(auth); });
+document.getElementById("nav-doghouse").addEventListener("click", () => switchScene("doghouse"));
+document.getElementById("nav-cafe").addEventListener("click", () => switchScene("cafe"));
 
-// ==========================================
-// 3. 場景切換與同步邏輯
-// ==========================================
-function switchScene(scene) {
-    currentScene = scene;
+function switchScene(sceneName) {
+    window.GameLogic.currentScene = sceneName;
     dropdownMenu.style.display = "none";
     
-    if (scene === "doghouse") {
+    if (sceneName === "doghouse") {
         sceneTitle.innerText = "我的狗窩";
         chatSection.style.display = "none";
         furniturePanel.style.display = "none";
         leaveCafe();
-    } else if (scene === "cafe") {
+    } else if (sceneName === "cafe") {
         sceneTitle.innerText = "洋蔥大廳";
         chatSection.style.display = "flex";
         furniturePanel.style.display = "flex";
         joinCafe();
     }
 
-    if(game && game.scene.keys.OnionScene) game.scene.keys.OnionScene.switchSceneMode(scene);
+    if (window.GameLogic.phaserGame) {
+        const game = window.GameLogic.phaserGame;
+        game.scene.stop('MainScene');
+        game.scene.start('MainScene'); 
+    }
 }
 
-document.getElementById("nav-doghouse").addEventListener("click", () => switchScene("doghouse"));
-document.getElementById("nav-cafe").addEventListener("click", () => switchScene("cafe"));
-
 function joinCafe() {
-    const playerRef = ref(db, `cafePlayers/${currentUser.uid}`);
-    set(playerRef, { x: myX, y: myY, name: myProfile.name, color: myProfile.color, bubbleMsg: myProfile.bubbleMsg, bubbleTime: myProfile.bubbleTime });
+    const playerRef = ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`);
+    set(playerRef, { x: 1024, y: 1024, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, bubbleMsg: window.GameLogic.myProfile.bubbleMsg, bubbleTime: window.GameLogic.myProfile.bubbleTime });
     onDisconnect(playerRef).remove(); 
-    
-    cafeUnsubscribe = onValue(ref(db, 'cafePlayers'), (snapshot) => {
-        cafePlayersData = snapshot.val() || {};
-        if(game && game.scene.keys.OnionScene) game.scene.keys.OnionScene.syncPlayers();
-    });
+    cafeUnsubscribe = onValue(ref(db, 'cafePlayers'), (snapshot) => window.GameLogic.cafePlayers = snapshot.val() || {});
 }
 
 function leaveCafe() {
-    if (currentUser) remove(ref(db, `cafePlayers/${currentUser.uid}`));
+    if (window.GameLogic.currentUser) set(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), null);
     if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; }
 }
 
-// 每 100ms 同步一次位置給伺服器 (避免洗頻)
-setInterval(() => {
-    if (currentScene === "cafe" && currentUser && (moveVector.x !== 0 || moveVector.y !== 0)) {
-        update(ref(db, `cafePlayers/${currentUser.uid}`), { x: Math.round(myX), y: Math.round(myY) });
+// ==========================================
+// 2. Phaser 3 引擎架構 (RPG 核心)
+// ==========================================
+
+class BootScene extends Phaser.Scene {
+    constructor() { super('BootScene'); }
+    preload() {
+        // 載入虛擬搖桿插件
+        this.load.plugin('rexvirtualjoystickplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexvirtualjoystickplugin.min.js', true);
+        
+        // 載入地圖與道具
+        this.load.image('bgCafe', 'cafe-bg.jpg');
+        this.load.image('bgDoghouse', 'doghouse-bg.jpg');
+        this.load.image('fridge', 'fridge.png');
+        this.load.image('memory', 'memory.png');
+
+        // 將洋蔥人設為精靈圖 (為未來擴充動畫做準備，單張圖也相容)
+        this.load.spritesheet('onion', 'onion-sprite.png', { frameWidth: 50, frameHeight: 50 });
     }
-}, 100);
+    create() {
+        // 預先部署動畫邏輯 (目前指向第0幀，未來替換圖檔只需更改 start/end)
+        this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'walk-left', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'walk-right', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'idle', frames: [{ key: 'onion', frame: 0 }], frameRate: 10 });
+        
+        this.scene.launch('UIScene');
+    }
+}
 
-// ==========================================
-// 4. 控制搖桿系統 (DOM 端點)
-// ==========================================
-const zone = document.getElementById('joystick-zone');
-const knob = document.getElementById('joystick-knob');
-const maxDist = 27;
+class UIScene extends Phaser.Scene {
+    constructor() { super('UIScene'); }
+    create() {
+        // 建立獨立 UI 層虛擬搖桿
+        this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, {
+            x: 70, y: this.cameras.main.height - 70,
+            radius: 45,
+            base: this.add.circle(0, 0, 45, 0xc5a059, 0.2).setStrokeStyle(2, 0xc5a059),
+            thumb: this.add.circle(0, 0, 25, 0xc5a059, 0.8)
+        });
 
-function handleJoystickMove(e) {
-    if (!isDraggingJoystick) return;
-    const rect = zone.getBoundingClientRect();
-    let dx = e.clientX - rect.left - 45; 
-    let dy = e.clientY - rect.top - 45;
+        // 建立 A 鍵 (互動)
+        this.btnA = this.add.circle(this.cameras.main.width - 60, this.cameras.main.height - 60, 30, 0xd4c5a0)
+            .setStrokeStyle(3, 0xc5a059).setInteractive();
+        this.add.text(this.btnA.x, this.btnA.y, 'A', { fontSize: '24px', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5);
+        
+        // 建立 B 鍵 (技能)
+        this.btnB = this.add.circle(this.cameras.main.width - 130, this.cameras.main.height - 40, 25, 0xd4c5a0)
+            .setStrokeStyle(3, 0xc5a059).setInteractive();
+        this.add.text(this.btnB.x, this.btnB.y, 'B', { fontSize: '20px', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5);
+
+        // 按鍵事件發送至主要場景
+        this.btnA.on('pointerdown', () => { 
+            this.btnA.setFillStyle(0xc5a059); 
+            const mainScene = this.scene.manager.getScene('MainScene');
+            if(mainScene) mainScene.events.emit('action_A');
+        });
+        this.btnA.on('pointerup', () => this.btnA.setFillStyle(0xd4c5a0));
+        this.btnA.on('pointerout', () => this.btnA.setFillStyle(0xd4c5a0));
+
+        this.btnB.on('pointerdown', () => { 
+            this.btnB.setFillStyle(0xc5a059); 
+            sendBubble("使用了 B 技能!"); 
+        });
+        this.btnB.on('pointerup', () => this.btnB.setFillStyle(0xd4c5a0));
+        this.btnB.on('pointerout', () => this.btnB.setFillStyle(0xd4c5a0));
+        
+        // 支援視窗縮放自動重新定位 UI
+        this.scale.on('resize', (gameSize) => {
+            this.joyStick.setPosition(70, gameSize.height - 70);
+            this.btnA.setPosition(gameSize.width - 60, gameSize.height - 60);
+            this.btnB.setPosition(gameSize.width - 130, gameSize.height - 40);
+            // 同步更新文字位置
+            this.children.list.forEach(c => {
+                if (c.text === 'A') c.setPosition(this.btnA.x, this.btnA.y);
+                if (c.text === 'B') c.setPosition(this.btnB.x, this.btnB.y);
+            });
+        });
+    }
+}
+
+class MainScene extends Phaser.Scene {
+    constructor() { super('MainScene'); }
     
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    if (distance > maxDist) { dx = (dx / distance) * maxDist; dy = (dy / distance) * maxDist; }
-    knob.style.transform = `translate(${dx}px, ${dy}px)`;
-    moveVector.x = dx / maxDist; moveVector.y = dy / maxDist;
+    create() {
+        this.isCafe = window.GameLogic.currentScene === "cafe";
+        
+        // 大地圖設定 (2048 x 2048)
+        const mapSize = this.isCafe ? 2048 : 800;
+        this.physics.world.setBounds(0, 0, mapSize, mapSize);
+        this.cameras.main.setBounds(0, 0, mapSize, mapSize);
+
+        // 背景生成
+        if (this.isCafe) {
+            this.add.tileSprite(0, 0, mapSize, mapSize, 'bgCafe').setOrigin(0, 0);
+        } else {
+            this.add.image(mapSize/2, mapSize/2, 'bgDoghouse').setDisplaySize(mapSize, mapSize);
+        }
+
+        // 玩家實體群組
+        this.otherPlayers = {};
+        this.furnitureSprites = {};
+
+        // 建立本地玩家實體
+        let startX = this.isCafe ? 1024 : 400;
+        let startY = this.isCafe ? 1024 : 400;
+        this.localPlayer = this.createPlayerEntity(startX, startY, window.GameLogic.myProfile, true);
+        
+        // 鏡頭平滑跟隨
+        this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
+
+        // 鍵盤綁定
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.wasd = this.input.keyboard.addKeys({ w: 'W', a: 'A', s: 'S', d: 'D' });
+
+        // 監聽來自 UI 場景的 A 鍵互動 (距離偵測)
+        this.events.on('action_A', () => {
+            if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!");
+            let interacted = false;
+            for (const key in this.furnitureSprites) {
+                let f = this.furnitureSprites[key];
+                let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y);
+                if (dist < 90) { // RPG 距離互動判定
+                    if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block';
+                    if (key === 'memory') document.getElementById('memory-modal').style.display = 'block';
+                    interacted = true; break;
+                }
+            }
+            if(!interacted) sendBubble("使用了 A 技能!");
+        });
+
+        // 拖曳傢俱事件
+        this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
+            if (!gameObject.isLocked) {
+                gameObject.setPosition(dragX, dragY);
+                if(gameObject.glow) gameObject.glow.setPosition(dragX, dragY);
+            }
+        });
+        this.input.on('dragend', (pointer, gameObject) => {
+            if (!gameObject.isLocked) {
+                update(ref(window.GameLogic.db, `cafeFurniture/${gameObject.furnitureKey}`), { 
+                    x: gameObject.x, y: gameObject.y, locked: true 
+                });
+            }
+        });
+    }
+
+    createPlayerEntity(x, y, pData, isLocal = false) {
+        let entity = {};
+        entity.sprite = this.physics.add.sprite(x, y, 'onion');
+        entity.sprite.setCollideWorldBounds(true);
+        entity.sprite.setDepth(10);
+        
+        if (!isLocal) {
+            entity.sprite.setInteractive();
+            entity.sprite.on('pointerdown', (pointer) => {
+                actionMenu.style.display = "flex";
+                actionMenu.style.left = pointer.event.pageX + "px";
+                actionMenu.style.top = pointer.event.pageY + "px";
+                actionMenu.dataset.uid = pData.uid;
+            });
+        }
+
+        // 名牌
+        entity.nameBg = this.add.graphics().setDepth(11);
+        entity.nameText = this.add.text(x, y, pData.name || '匿名', { fontSize: '12px', fontFamily: 'Georgia', color: pData.color || '#fff' }).setOrigin(0.5).setDepth(12);
+        
+        // 對話泡泡
+        entity.bubbleBg = this.add.graphics().setDepth(13).setVisible(false);
+        entity.bubbleText = this.add.text(x, y, '', { fontSize: '13px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5).setDepth(14).setVisible(false);
+
+        return entity;
+    }
+
+    updatePlayerEntity(entity, pData) {
+        let sx = entity.sprite.x; let sy = entity.sprite.y;
+        
+        // 更新名牌
+        entity.nameBg.clear();
+        entity.nameBg.fillStyle(0x000000, 0.6);
+        entity.nameBg.fillRoundedRect(sx - 30, sy - 55, 60, 18, 4);
+        entity.nameText.setPosition(sx, sy - 46);
+        if(pData.name) entity.nameText.setText(pData.name);
+        if(pData.color) entity.nameText.setColor(pData.color);
+
+        // 更新泡泡
+        if (pData.bubbleMsg && (Date.now() - pData.bubbleTime < 15000)) {
+            entity.bubbleBg.setVisible(true); entity.bubbleText.setVisible(true);
+            entity.bubbleBg.clear();
+            entity.bubbleBg.fillStyle(0xf4ecd8, 0.95);
+            entity.bubbleBg.lineStyle(2, 0xc5a059, 1);
+            entity.bubbleBg.fillRoundedRect(sx - 60, sy - 95, 120, 30, 8);
+            entity.bubbleBg.strokeRoundedRect(sx - 60, sy - 95, 120, 30, 8);
+            entity.bubbleText.setPosition(sx, sy - 80);
+            let displayMsg = pData.bubbleMsg.length > 8 ? pData.bubbleMsg.substring(0, 8) + "..." : pData.bubbleMsg;
+            entity.bubbleText.setText(displayMsg);
+        } else {
+            entity.bubbleBg.setVisible(false); entity.bubbleText.setVisible(false);
+        }
+    }
+
+    createFurniture(key, data) {
+        let f = { sprite: null, glow: null, isLocked: data.locked, furnitureKey: key };
+        let imgKey = key === 'fridge' ? 'fridge' : 'memory';
+        f.sprite = this.add.sprite(data.x, data.y, imgKey).setInteractive({ draggable: true }).setDepth(5);
+        f.sprite.furnitureKey = key;
+        f.sprite.isLocked = data.locked;
+
+        f.glow = this.add.graphics().setDepth(4);
+        f.sprite.on('pointerdown', (pointer) => {
+            if (f.sprite.isLocked) { // 已鎖定，點擊開啟管理選單
+                furnitureMenu.style.display = "flex";
+                furnitureMenu.style.left = pointer.event.pageX + "px";
+                furnitureMenu.style.top = pointer.event.pageY + "px";
+                furnitureMenu.dataset.type = key;
+            }
+        });
+        
+        this.input.setDraggable(f.sprite);
+        return f;
+    }
+
+    update() {
+        if (!window.GameLogic.currentUser) return;
+        
+        // 1. 處理本機移動與動畫
+        let vx = 0; let vy = 0; let speed = 180;
+        const uiScene = this.scene.manager.getScene('UIScene');
+        
+        if (uiScene && uiScene.joyStick && uiScene.joyStick.force > 0) {
+            vx = Math.cos(uiScene.joyStick.angle * Math.PI / 180) * speed;
+            vy = Math.sin(uiScene.joyStick.angle * Math.PI / 180) * speed;
+        } else {
+            if (this.cursors.left.isDown || this.wasd.a.isDown) vx = -speed;
+            if (this.cursors.right.isDown || this.wasd.d.isDown) vx = speed;
+            if (this.cursors.up.isDown || this.wasd.w.isDown) vy = -speed;
+            if (this.cursors.down.isDown || this.wasd.s.isDown) vy = speed;
+            if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; } // 修正對角線速度
+        }
+
+        this.localPlayer.sprite.setVelocity(vx, vy);
+
+        if (vx < 0) this.localPlayer.sprite.play('walk-left', true);
+        else if (vx > 0) this.localPlayer.sprite.play('walk-right', true);
+        else if (vy < 0) this.localPlayer.sprite.play('walk-up', true);
+        else if (vy > 0) this.localPlayer.sprite.play('walk-down', true);
+        else this.localPlayer.sprite.play('idle', true);
+
+        // 同步標籤位置
+        this.updatePlayerEntity(this.localPlayer, window.GameLogic.myProfile);
+
+        // 2. 多人連線同步 (洋蔥大廳專屬)
+        if (this.isCafe) {
+            // 本機上傳
+            if (vx !== 0 || vy !== 0) {
+                if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) {
+                    update(ref(window.GameLogic.db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { x: this.localPlayer.sprite.x, y: this.localPlayer.sprite.y });
+                    this.lastSyncTime = Date.now();
+                }
+            }
+
+            // 遠端玩家同步
+            const playersData = window.GameLogic.cafePlayers;
+            for (let uid in playersData) {
+                if (uid === window.GameLogic.currentUser.uid) continue;
+                let pd = playersData[uid]; pd.uid = uid;
+                if (!this.otherPlayers[uid]) {
+                    this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
+                }
+                let op = this.otherPlayers[uid];
+                op.sprite.x = Phaser.Math.Linear(op.sprite.x, pd.x, 0.2); // 平滑移動
+                op.sprite.y = Phaser.Math.Linear(op.sprite.y, pd.y, 0.2);
+                this.updatePlayerEntity(op, pd);
+            }
+            // 清理斷線玩家
+            for (let uid in this.otherPlayers) {
+                if (!playersData[uid]) {
+                    this.otherPlayers[uid].sprite.destroy();
+                    this.otherPlayers[uid].nameBg.destroy();
+                    this.otherPlayers[uid].nameText.destroy();
+                    this.otherPlayers[uid].bubbleBg.destroy();
+                    this.otherPlayers[uid].bubbleText.destroy();
+                    delete this.otherPlayers[uid];
+                }
+            }
+
+            // 傢俱同步
+            const furnData = window.GameLogic.cafeFurniture;
+            for (let key in furnData) {
+                let fd = furnData[key];
+                if (!this.furnitureSprites[key]) {
+                    this.furnitureSprites[key] = this.createFurniture(key, fd);
+                }
+                let f = this.furnitureSprites[key];
+                f.sprite.isLocked = fd.locked;
+                if (fd.locked) {
+                    // 若被其他人鎖定定點，平滑同步位置
+                    f.sprite.x = Phaser.Math.Linear(f.sprite.x, fd.x, 0.3);
+                    f.sprite.y = Phaser.Math.Linear(f.sprite.y, fd.y, 0.3);
+                    f.glow.clear();
+                } else {
+                    // 解鎖狀態畫出發光外框提示
+                    f.glow.clear();
+                    f.glow.lineStyle(3, 0xffd700, 0.8);
+                    f.glow.strokeRect(f.sprite.x - 28, f.sprite.y - 28, 56, 56);
+                }
+            }
+        }
+    }
 }
 
-zone.addEventListener('pointerdown', (e) => { 
-    isDraggingJoystick = true; knob.style.transition = 'none'; 
-    zone.setPointerCapture(e.pointerId); 
-    handleJoystickMove(e); 
-});
-zone.addEventListener('pointermove', handleJoystickMove);
-const stopJoystick = () => {
-    isDraggingJoystick = false; moveVector = { x: 0, y: 0 };
-    knob.style.transition = 'transform 0.1s linear'; knob.style.transform = `translate(0px, 0px)`;
-    if (currentScene === "cafe" && currentUser) update(ref(db, `cafePlayers/${currentUser.uid}`), { x: Math.round(myX), y: Math.round(myY) });
-};
-zone.addEventListener('pointerup', stopJoystick);
-zone.addEventListener('pointercancel', stopJoystick);
-
-window.addEventListener("keydown", (e) => { if(keys.hasOwnProperty(e.key)) keys[e.key] = true; checkKeyboard(); });
-window.addEventListener("keyup", (e) => { if(keys.hasOwnProperty(e.key)) keys[e.key] = false; checkKeyboard(); });
-
-function checkKeyboard() {
-    if (isDraggingJoystick || document.activeElement.tagName === "INPUT") return; 
-    let vx = 0, vy = 0;
-    if (keys.ArrowUp || keys.w) vy = -1;
-    if (keys.ArrowDown || keys.s) vy = 1;
-    if (keys.ArrowLeft || keys.a) vx = -1;
-    if (keys.ArrowRight || keys.d) vx = 1;
-    if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; }
-    moveVector.x = vx; moveVector.y = vy;
+function initPhaser() {
+    const config = {
+        type: Phaser.AUTO,
+        parent: 'phaser-app',
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#8d6e63',
+        scale: {
+            mode: Phaser.Scale.RESIZE,
+            autoCenter: Phaser.Scale.CENTER_BOTH
+        },
+        physics: {
+            default: 'arcade',
+            arcade: { debug: false }
+        },
+        scene: [ BootScene, MainScene, UIScene ]
+    };
+    window.GameLogic.phaserGame = new Phaser.Game(config);
 }
 
+
 // ==========================================
-// 5. 其他 UI 邏輯 (傢俱面板、相簿、設定)
+// 3. 系統 UI 事件綁定 (傢俱、設定、聊天)
 // ==========================================
-document.getElementById("spawn-fridge-btn").onclick = () => {
-    if (!cafeFurnitureData.fridge) update(ref(db, 'cafeFurniture/fridge'), { x: myX, y: myY + 50, locked: false });
-};
-document.getElementById("spawn-memory-btn").onclick = () => {
-    if (!cafeFurnitureData.memory) update(ref(db, 'cafeFurniture/memory'), { x: myX + 50, y: myY, locked: false });
-};
+
+// 傢俱解除鎖定
 document.getElementById("move-furniture-btn").onclick = () => {
     let type = furnitureMenu.dataset.type;
-    update(ref(db, `cafeFurniture/${type}`), { locked: false });
+    update(ref(window.GameLogic.db, `cafeFurniture/${type}`), { locked: false });
     furnitureMenu.style.display = "none";
 };
 
-// 查看名牌視窗
+// 傢俱生成
+document.getElementById("spawn-fridge-btn").onclick = () => {
+    if (!window.GameLogic.cafeFurniture.fridge) update(ref(db, 'cafeFurniture/fridge'), { x: 1024, y: 1000, locked: false });
+};
+document.getElementById("spawn-memory-btn").onclick = () => {
+    if (!window.GameLogic.cafeFurniture.memory) update(ref(db, 'cafeFurniture/memory'), { x: 900, y: 1000, locked: false });
+};
+
+// 查看名牌
 document.getElementById("view-profile-btn").addEventListener("click", async () => {
     actionMenu.style.display = "none";
     const targetUid = actionMenu.dataset.uid;
-    if (targetUid === currentUser.uid) showProfileModal(myProfile);
+    if (targetUid === window.GameLogic.currentUser.uid) showProfileModal(window.GameLogic.myProfile);
     else {
         const snap = await get(ref(db, `users/${targetUid}`));
         if (snap.exists()) showProfileModal(snap.val());
-        else if (cafePlayersData[targetUid]) showProfileModal(cafePlayersData[targetUid]); 
+        else if (window.GameLogic.cafePlayers[targetUid]) showProfileModal(window.GameLogic.cafePlayers[targetUid]); 
     }
 });
 function showProfileModal(p) {
@@ -467,7 +488,56 @@ function showProfileModal(p) {
     viewProfileModal.style.display = "block";
 }
 
-// 相簿回憶錄邏輯
+// 聊天系統
+const chatInput = document.getElementById("chat-input");
+document.getElementById("send-btn").addEventListener("click", sendChat);
+window.addEventListener("keydown", (e) => { if (e.key === "Enter" && document.activeElement === chatInput) sendChat(); });
+
+function sendBubble(msg) {
+    if (window.GameLogic.currentUser) {
+        window.GameLogic.myProfile.bubbleMsg = msg; 
+        window.GameLogic.myProfile.bubbleTime = Date.now();
+        if (window.GameLogic.currentScene === "cafe") {
+            update(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { bubbleMsg: msg, bubbleTime: window.GameLogic.myProfile.bubbleTime });
+        }
+    }
+}
+function sendChat() {
+    const msg = chatInput.value.trim();
+    if (msg !== "" && window.GameLogic.currentUser) {
+        push(ref(db, 'chats'), { name: window.GameLogic.myProfile.name, msg: msg, time: new Date().toLocaleTimeString('zh-TW', { hour12: false }) });
+        sendBubble(msg);
+        chatInput.value = ""; 
+    }
+}
+function listenToChat() {
+    onValue(ref(db, 'chats'), (snapshot) => {
+        const chatBox = document.getElementById("chat-box");
+        chatBox.innerHTML = "";
+        const chats = snapshot.val();
+        if (chats) {
+            Object.values(chats).forEach(c => {
+                chatBox.innerHTML += `<div><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg}</div>`;
+            });
+            setTimeout(() => { chatBox.scrollTop = chatBox.scrollHeight; }, 50);
+        }
+    });
+}
+
+// 設定與回憶錄儲存邏輯 (保留原樣)
+document.getElementById("save-settings-btn").addEventListener("click", () => {
+    let p = window.GameLogic.myProfile;
+    p.name = document.getElementById("set-name").value || "匿名";
+    p.color = document.getElementById("set-color").value;
+    p.birth = document.getElementById("set-birth").value || "未知";
+    p.food = document.getElementById("set-food").value || "無";
+    p.motto = document.getElementById("set-motto").value || "無";
+    
+    update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { name: p.name, color: p.color, birth: p.birth, food: p.food, motto: p.motto });
+    if (window.GameLogic.currentScene === "cafe") update(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { name: p.name, color: p.color });
+    document.getElementById('settings-modal').style.display = 'none';
+});
+
 document.getElementById("upload-memory-btn").onclick = () => {
     const fileInput = document.getElementById("memory-file");
     const textInput = document.getElementById("memory-text");
@@ -485,90 +555,26 @@ document.getElementById("upload-memory-btn").onclick = () => {
                 if (w > 300) { h *= 300 / w; w = 300; }
                 cvs.width = w; cvs.height = h;
                 cvs.getContext('2d').drawImage(img, 0, 0, w, h);
-                push(ref(db, 'memories'), { author: myProfile.name, img: cvs.toDataURL('image/jpeg', 0.7), text: text, time: new Date().toLocaleDateString('zh-TW') });
+                saveMemoryToDB(cvs.toDataURL('image/jpeg', 0.7), text);
             };
             img.src = e.target.result;
         };
         reader.readAsDataURL(file);
-    } else {
-        push(ref(db, 'memories'), { author: myProfile.name, img: "", text: text, time: new Date().toLocaleDateString('zh-TW') });
-    }
+    } else saveMemoryToDB("", text);
     fileInput.value = ""; textInput.value = "";
 };
-
+function saveMemoryToDB(imgBase64, text) {
+    push(ref(db, 'memories'), { author: window.GameLogic.myProfile.name, img: imgBase64, text: text, time: new Date().toLocaleDateString('zh-TW') });
+}
 function listenToMemories() {
     onValue(ref(db, 'memories'), snap => {
         const feed = document.getElementById("memory-feed");
         feed.innerHTML = "";
         const data = snap.val();
         if (data) {
-            Object.values(data).reverse().forEach(m => { 
+            Object.values(data).reverse().forEach(m => {
                 feed.innerHTML += `<div class="memory-card"><div class="author">${m.author} - ${m.time}</div>${m.img ? `<img src="${m.img}" alt="回憶照片">` : ''}${m.text ? `<div class="text">${m.text}</div>` : ''}</div>`;
             });
-        }
-    });
-}
-
-// 儲存設定檔
-document.getElementById("save-settings-btn").addEventListener("click", () => {
-    myProfile.name = document.getElementById("set-name").value || "匿名";
-    myProfile.color = document.getElementById("set-color").value;
-    myProfile.birth = document.getElementById("set-birth").value || "未知";
-    myProfile.food = document.getElementById("set-food").value || "無";
-    myProfile.motto = document.getElementById("set-motto").value || "無";
-    
-    update(ref(db, `users/${currentUser.uid}`), { name: myProfile.name, color: myProfile.color, birth: myProfile.birth, food: myProfile.food, motto: myProfile.motto });
-    if (currentScene === "cafe") update(ref(db, `cafePlayers/${currentUser.uid}`), { name: myProfile.name, color: myProfile.color });
-    document.getElementById('settings-modal').style.display = 'none';
-    
-    // 即時更新畫布上的自己的名字
-    if(game && game.scene.keys.OnionScene) {
-        game.scene.keys.OnionScene.myPlayer.nameText.setText(myProfile.name).setColor(myProfile.color);
-    }
-});
-
-// 聊天與泡泡系統
-function sendBubble(msg) {
-    if (currentUser) {
-        myProfile.bubbleMsg = msg; 
-        myProfile.bubbleTime = Date.now();
-        if (currentScene === "cafe") update(ref(db, `cafePlayers/${currentUser.uid}`), { bubbleMsg: msg, bubbleTime: myProfile.bubbleTime });
-    }
-}
-
-function actionA() { sendBubble("使用了 A 技能!"); }
-function actionB() { sendBubble("按下了 B 按鈕!"); }
-document.getElementById("btn-a").addEventListener("pointerdown", actionA);
-document.getElementById("btn-b").addEventListener("pointerdown", actionB);
-window.addEventListener("keydown", (e) => {
-    if (document.activeElement.tagName === "INPUT") return; 
-    if (e.key.toLowerCase() === 'a') actionA();
-    if (e.key.toLowerCase() === 'b') actionB();
-});
-
-const chatInput = document.getElementById("chat-input");
-document.getElementById("send-btn").addEventListener("click", sendChat);
-window.addEventListener("keydown", (e) => { if (e.key === "Enter" && document.activeElement === chatInput) sendChat(); });
-
-function sendChat() {
-    const msg = chatInput.value.trim();
-    if (msg !== "" && currentUser) {
-        push(ref(db, 'chats'), { name: myProfile.name, msg: msg, time: new Date().toLocaleTimeString('zh-TW', { hour12: false }) });
-        sendBubble(msg);
-        chatInput.value = ""; 
-    }
-}
-
-function listenToChat() {
-    onValue(ref(db, 'chats'), (snapshot) => {
-        const chatBox = document.getElementById("chat-box");
-        chatBox.innerHTML = "";
-        const chats = snapshot.val();
-        if (chats) {
-            Object.values(chats).forEach(c => {
-                chatBox.innerHTML += `<div><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg}</div>`;
-            });
-            setTimeout(() => { chatBox.scrollTop = chatBox.scrollHeight; }, 50);
         }
     });
 }
