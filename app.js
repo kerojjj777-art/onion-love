@@ -60,27 +60,36 @@ document.getElementById("join-btn").addEventListener("click", () => {
     gameLoop();
 });
 
-// --- 繪製洋蔥人 ---
+// --- 準備圖片素材 (新增這兩行，負責把圖片載入進來) ---
+const onionImg = new Image();
+onionImg.src = 'onion-sprite.png'; // 記得把你的洋蔥人去背圖檔取名為這個
+
+// --- 繪製洋蔥人 (圖片升級版) ---
 function drawOnionMan(x, y, color, name) {
-    // 身體
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(x, y, 20, 0, Math.PI * 2); 
-    ctx.fill();
-    
-    // 頭上綠色小芽
-    ctx.fillStyle = "#4caf50";
-    ctx.beginPath();
-    ctx.moveTo(x, y - 20);
-    ctx.lineTo(x - 5, y - 35);
-    ctx.lineTo(x + 5, y - 35);
+    // 1. 繪製角色圖片
+    if (onionImg.complete) {
+        ctx.drawImage(onionImg, x - 25, y - 40, 50, 50); 
+    } else {
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(x - 25, y - 40, 50, 50);
+    }
+
+    // 2. 繪製玩家名字背景 (半透明黑底)
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    if (ctx.roundRect) {
+        ctx.roundRect(x - 30, y - 55, 60, 18, 4);
+    } else {
+        ctx.fillRect(x - 30, y - 55, 60, 18);
+    }
     ctx.fill();
 
-    // 名字標籤
-    ctx.fillStyle = "#000";
-    ctx.font = "14px Arial";
+    // 3. 繪製玩家名字與選擇的光環顏色
+    ctx.fillStyle = color; 
+    ctx.font = "12px 'Georgia', serif";
     ctx.textAlign = "center";
-    ctx.fillText(name, x, y - 40);
+    ctx.textBaseline = "middle";
+    ctx.fillText(name, x, y - 46);
+}
 }
 
 // --- 遊戲渲染迴圈 (每秒更新約 60 次畫面) ---
