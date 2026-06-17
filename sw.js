@@ -1,5 +1,5 @@
 // 定義當前版本號，每次更新程式碼時，請修改這裡的版號 (例如變成 v0.0.2)
-const CACHE_NAME = 'onion-store-v0.0.5';
+const CACHE_NAME = 'onion-store-v0.0.6';
 
 // 加上 ?v=0.0.1 可以強制瀏覽器向伺服器拉取最新檔案，避免死守舊快取
 const ASSETS = [
