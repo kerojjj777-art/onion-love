@@ -23,12 +23,14 @@ window.GameLogic = {
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0 },
     cafePlayers: {},
     cafeFurniture: {},
+    placingFurnitureKey: null, // 用於記錄目前正在擺放的家俱
     phaserGame: null,
     db: db 
 };
 let cafeUnsubscribe = null;
+let profileViewingUid = null;
 
-// 將方法掛載到 window，讓 Phaser 場景可以順利呼叫
+// 掛載方法
 window.switchScene = switchScene;
 window.showProfileModal = showProfileModal;
 window.leaveCafe = leaveCafe;
@@ -39,9 +41,7 @@ window.auth = auth;
 const loginScreen = document.getElementById("login-screen");
 const gameLayoutContainer = document.getElementById("game-layout-container");
 const chatSection = document.getElementById("chat-section");
-const furniturePanel = document.getElementById("furniture-panel");
 const actionMenu = document.getElementById("action-menu");
-const furnitureMenu = document.getElementById("furniture-menu");
 const viewProfileModal = document.getElementById("view-profile-modal");
 
 // ==========================================
@@ -80,19 +80,14 @@ onAuthStateChanged(auth, async (user) => {
 
 function switchScene(sceneName) {
     window.GameLogic.currentScene = sceneName;
+    window.GameLogic.placingFurnitureKey = null; // 切換場景取消擺放
     
-    if (sceneName === "doghouse") {
+    if (sceneName === "doghouse" || sceneName === "farm") {
         chatSection.style.display = "none";
-        furniturePanel.style.display = "none";
         leaveCafe();
     } else if (sceneName === "cafe") {
         chatSection.style.display = "flex";
-        furniturePanel.style.display = "flex";
         joinCafe();
-    } else if (sceneName === "farm") {
-        chatSection.style.display = "none";
-        furniturePanel.style.display = "none";
-        leaveCafe();
     }
 
     if (window.GameLogic.phaserGame) {
@@ -117,18 +112,15 @@ function leaveCafe() {
 // ==========================================
 // 2. Phaser 3 引擎架構
 // ==========================================
-
 class BootScene extends Phaser.Scene {
     constructor() { super('BootScene'); }
     preload() {
         this.load.plugin('rexvirtualjoystickplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexvirtualjoystickplugin.min.js', true);
-        
         this.load.image('bgCafe', 'cafe-bg.jpg');
         this.load.image('bgDoghouse', 'doghouse-bg.jpg');
         this.load.image('bgFarm', 'farm-bg.jpg');
         this.load.image('fridge', 'fridge.png');
         this.load.image('memory', 'memory.png');
-
         this.load.spritesheet('onion', 'onion-sprite.png', { frameWidth: 50, frameHeight: 50 });
     }
     create() {
@@ -137,7 +129,6 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'walk-left', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'walk-right', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'idle', frames: [{ key: 'onion', frame: 0 }], frameRate: 10 });
-        
         this.scene.launch('UIScene');
     }
 }
@@ -145,39 +136,42 @@ class BootScene extends Phaser.Scene {
 class UIScene extends Phaser.Scene {
     constructor() { super('UIScene'); }
     create() {
-        // 虛擬搖桿 (左下角)
+        // 防止 PWA 裁切，縮減位置並調整大小
+        const safeMargin = 100;
+
         this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, {
-            x: 80, y: this.cameras.main.height - 80,
-            radius: 50,
-            base: this.add.circle(0, 0, 50, 0xc5a059, 0.2).setStrokeStyle(2, 0xc5a059),
-            thumb: this.add.circle(0, 0, 25, 0xc5a059, 0.8)
+            x: safeMargin, y: this.cameras.main.height - safeMargin,
+            radius: 40,
+            base: this.add.circle(0, 0, 40, 0xc5a059, 0.2).setStrokeStyle(2, 0xc5a059),
+            thumb: this.add.circle(0, 0, 20, 0xc5a059, 0.8)
         });
 
-        // A 鍵與 B 鍵 (右下角)
-        this.btnA = this.add.circle(this.cameras.main.width - 60, this.cameras.main.height - 60, 30, 0xd4c5a0).setStrokeStyle(3, 0xc5a059).setInteractive();
+        this.btnA = this.add.circle(this.cameras.main.width - safeMargin, this.cameras.main.height - safeMargin, 30, 0xd4c5a0).setStrokeStyle(3, 0xc5a059).setInteractive();
         this.txtA = this.add.text(this.btnA.x, this.btnA.y, 'A', { fontSize: '24px', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5);
         
-        this.btnB = this.add.circle(this.cameras.main.width - 130, this.cameras.main.height - 40, 25, 0xd4c5a0).setStrokeStyle(3, 0xc5a059).setInteractive();
+        this.btnB = this.add.circle(this.cameras.main.width - safeMargin - 70, this.cameras.main.height - safeMargin + 20, 25, 0xd4c5a0).setStrokeStyle(3, 0xc5a059).setInteractive();
         this.txtB = this.add.text(this.btnB.x, this.btnB.y, 'B', { fontSize: '20px', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5);
 
-        // 地圖選單按鈕 (A/B 鍵上方)
-        this.mapBtn = this.add.circle(this.cameras.main.width - 60, this.cameras.main.height - 150, 30, 0x4a5d4e).setStrokeStyle(3, 0xc5a059).setInteractive();
-        this.mapText = this.add.text(this.mapBtn.x, this.mapBtn.y, '地圖', { fontSize: '16px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
+        // 地圖選單按鈕
+        this.mapBtn = this.add.circle(this.cameras.main.width - safeMargin, this.cameras.main.height - safeMargin - 90, 25, 0x4a5d4e).setStrokeStyle(3, 0xc5a059).setInteractive();
+        this.mapText = this.add.text(this.mapBtn.x, this.mapBtn.y, '地圖', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
+
+        // 家俱按鈕 (位於地圖上方)
+        this.furnBtn = this.add.circle(this.cameras.main.width - safeMargin, this.cameras.main.height - safeMargin - 160, 25, 0x8b5a2b).setStrokeStyle(3, 0xc5a059).setInteractive();
+        this.furnText = this.add.text(this.furnBtn.x, this.furnBtn.y, '家俱', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
 
         // 地圖下拉選單容器
-        this.menuContainer = this.add.container(this.cameras.main.width - 180, this.cameras.main.height - 430).setVisible(false).setDepth(200);
+        this.menuContainer = this.add.container(this.cameras.main.width - 200, this.cameras.main.height - 450).setVisible(false).setDepth(200);
         const menuBg = this.add.graphics();
-        menuBg.fillStyle(0xf4ecd8, 0.95);
-        menuBg.lineStyle(2, 0xc5a059, 1);
-        menuBg.fillRoundedRect(0, 0, 160, 260, 10);
-        menuBg.strokeRoundedRect(0, 0, 160, 260, 10);
+        menuBg.fillStyle(0xf4ecd8, 0.95); menuBg.lineStyle(2, 0xc5a059, 1);
+        menuBg.fillRoundedRect(0, 0, 160, 260, 10); menuBg.strokeRoundedRect(0, 0, 160, 260, 10);
         this.menuContainer.add(menuBg);
 
         const menuOptions = [
             { text: '🏠 我的狗窩', action: () => { window.switchScene('doghouse'); this.menuContainer.setVisible(false); } },
             { text: '☕ 洋蔥大廳', action: () => { window.switchScene('cafe'); this.menuContainer.setVisible(false); } },
             { text: '🌱 我的蔥田', action: () => { window.switchScene('farm'); this.menuContainer.setVisible(false); } },
-            { text: '🆔 洋蔥身分證', action: () => { window.showProfileModal(window.GameLogic.myProfile); this.menuContainer.setVisible(false); } },
+            { text: '🆔 洋蔥身分證', action: () => { window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); this.menuContainer.setVisible(false); } },
             { text: '🚪 登出大廳', action: () => { window.leaveCafe(); window.signOut(window.auth); this.menuContainer.setVisible(false); } }
         ];
 
@@ -188,28 +182,52 @@ class UIScene extends Phaser.Scene {
         });
 
         // 按鈕事件綁定
-        this.mapBtn.on('pointerdown', () => this.menuContainer.setVisible(!this.menuContainer.visible));
-        
+        this.mapBtn.on('pointerdown', () => {
+            this.menuContainer.setVisible(!this.menuContainer.visible);
+            document.getElementById('furniture-catalog-modal').style.display = 'none';
+        });
+
+        this.furnBtn.on('pointerdown', () => {
+            if(window.GameLogic.currentScene !== 'cafe') {
+                alert("家俱只能在洋蔥大廳擺放喔！"); return;
+            }
+            this.menuContainer.setVisible(false);
+            const furnModal = document.getElementById('furniture-catalog-modal');
+            furnModal.style.display = furnModal.style.display === 'block' ? 'none' : 'block';
+        });
+
+        // A 鍵長按判定
+        this.aPressTime = 0;
         this.btnA.on('pointerdown', () => { 
             this.btnA.setFillStyle(0xc5a059); 
-            const mainScene = this.scene.manager.getScene('MainScene');
-            if(mainScene) mainScene.events.emit('action_A');
+            this.aPressTime = Date.now();
         });
-        this.btnA.on('pointerup', () => this.btnA.setFillStyle(0xd4c5a0));
+        this.btnA.on('pointerup', () => { 
+            this.btnA.setFillStyle(0xd4c5a0);
+            let duration = Date.now() - this.aPressTime;
+            const mainScene = this.scene.manager.getScene('MainScene');
+            if(mainScene) {
+                if (window.GameLogic.placingFurnitureKey) mainScene.events.emit('action_A_place');
+                else if (duration > 500) mainScene.events.emit('action_A_long');
+                else mainScene.events.emit('action_A_short');
+            }
+        });
         
         this.btnB.on('pointerdown', () => { this.btnB.setFillStyle(0xc5a059); sendBubble("使用了 B 技能!"); });
         this.btnB.on('pointerup', () => this.btnB.setFillStyle(0xd4c5a0));
         
         // 視窗縮放自動重新定位 UI
         this.scale.on('resize', (gameSize) => {
-            this.joyStick.setPosition(80, gameSize.height - 80);
-            this.btnA.setPosition(gameSize.width - 60, gameSize.height - 60);
+            this.joyStick.setPosition(safeMargin, gameSize.height - safeMargin);
+            this.btnA.setPosition(gameSize.width - safeMargin, gameSize.height - safeMargin);
             this.txtA.setPosition(this.btnA.x, this.btnA.y);
-            this.btnB.setPosition(gameSize.width - 130, gameSize.height - 40);
+            this.btnB.setPosition(gameSize.width - safeMargin - 70, gameSize.height - safeMargin + 20);
             this.txtB.setPosition(this.btnB.x, this.btnB.y);
-            this.mapBtn.setPosition(gameSize.width - 60, gameSize.height - 150);
+            this.mapBtn.setPosition(gameSize.width - safeMargin, gameSize.height - safeMargin - 90);
             this.mapText.setPosition(this.mapBtn.x, this.mapBtn.y);
-            this.menuContainer.setPosition(gameSize.width - 180, gameSize.height - 430);
+            this.furnBtn.setPosition(gameSize.width - safeMargin, gameSize.height - safeMargin - 160);
+            this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
+            this.menuContainer.setPosition(gameSize.width - 200, gameSize.height - 450);
         });
     }
 }
@@ -221,36 +239,59 @@ class MainScene extends Phaser.Scene {
         this.sceneName = window.GameLogic.currentScene;
         this.isCafe = this.sceneName === "cafe";
         
-        const mapSize = this.isCafe ? 2048 : 800;
-        this.physics.world.setBounds(0, 0, mapSize, mapSize);
-        this.cameras.main.setBounds(0, 0, mapSize, mapSize);
+        // 依據場景設定地圖尺寸
+        const mapW = this.isCafe ? 2048 : 1280;
+        const mapH = this.isCafe ? 2048 : 720;
+        
+        this.physics.world.setBounds(0, 0, mapW, mapH);
+        this.cameras.main.setBounds(0, 0, mapW, mapH);
 
         // 背景生成
-        if (this.sceneName === "cafe") {
-            this.add.tileSprite(0, 0, mapSize, mapSize, 'bgCafe').setOrigin(0, 0);
+        if (this.isCafe) {
+            this.add.tileSprite(0, 0, mapW, mapH, 'bgCafe').setOrigin(0, 0);
         } else if (this.sceneName === "doghouse") {
-            this.add.image(mapSize/2, mapSize/2, 'bgDoghouse').setDisplaySize(mapSize, mapSize);
+            this.add.image(mapW/2, mapH/2, 'bgDoghouse').setDisplaySize(mapW, mapH);
         } else if (this.sceneName === "farm") {
-            this.add.image(mapSize/2, mapSize/2, 'bgFarm').setDisplaySize(mapSize, mapSize);
+            this.add.image(mapW/2, mapH/2, 'bgFarm').setDisplaySize(mapW, mapH);
         }
 
         this.otherPlayers = {};
         this.furnitureSprites = {};
 
-        let startX = this.isCafe ? 1024 : 400;
-        let startY = this.isCafe ? 1024 : 400;
+        let startX = mapW / 2;
+        let startY = mapH / 2;
         this.localPlayer = this.createPlayerEntity(startX, startY, window.GameLogic.myProfile, true);
         
         this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
 
+        // 洋蔥精靈擺放提示文字
+        this.placePrompt = this.add.text(0, 0, '洋蔥精靈: 按A確定擺放', { 
+            fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', 
+            color: '#fff', backgroundColor: 'rgba(74, 93, 78, 0.8)', padding: {x:8, y:4} 
+        }).setOrigin(0.5).setDepth(20).setVisible(false);
+
         this.cursors = this.input.keyboard.createCursorKeys();
         this.wasd = this.input.keyboard.addKeys({ w: 'W', a: 'A', s: 'S', d: 'D' });
 
-        this.events.on('action_A', () => {
+        // A鍵事件：擺放
+        this.events.on('action_A_place', () => {
+            let key = window.GameLogic.placingFurnitureKey;
+            if(key && this.furnitureSprites[key]) {
+                let f = this.furnitureSprites[key];
+                update(ref(window.GameLogic.db, `cafeFurniture/${key}`), { 
+                    locked: true, x: f.sprite.x, y: f.sprite.y 
+                });
+                window.GameLogic.placingFurnitureKey = null;
+            }
+        });
+
+        // A鍵事件：短按 (互動)
+        this.events.on('action_A_short', () => {
             if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!");
             let interacted = false;
             for (const key in this.furnitureSprites) {
                 let f = this.furnitureSprites[key];
+                if (!f.sprite.isLocked) continue;
                 let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y);
                 if (dist < 90) { 
                     if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block';
@@ -261,18 +302,22 @@ class MainScene extends Phaser.Scene {
             if(!interacted) sendBubble("使用了 A 技能!");
         });
 
-        this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
-            if (!gameObject.isLocked) {
-                gameObject.setPosition(dragX, dragY);
-                if(gameObject.glow) gameObject.glow.setPosition(dragX, dragY);
+        // A鍵事件：長按 (收回)
+        this.events.on('action_A_long', () => {
+            if(!this.isCafe) return sendBubble("使用了集氣 A 技能!");
+            let interacted = false;
+            for (const key in this.furnitureSprites) {
+                let f = this.furnitureSprites[key];
+                if (!f.sprite.isLocked) continue;
+                let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y);
+                if (dist < 90) { 
+                    if(confirm("洋蔥精靈：是否收回這件家俱？")) {
+                        set(ref(window.GameLogic.db, `cafeFurniture/${key}`), null);
+                    }
+                    interacted = true; break;
+                }
             }
-        });
-        this.input.on('dragend', (pointer, gameObject) => {
-            if (!gameObject.isLocked) {
-                update(ref(window.GameLogic.db, `cafeFurniture/${gameObject.furnitureKey}`), { 
-                    x: gameObject.x, y: gameObject.y, locked: true 
-                });
-            }
+            if(!interacted) sendBubble("使用了集氣 A 技能!");
         });
     }
 
@@ -295,15 +340,10 @@ class MainScene extends Phaser.Scene {
         entity.nameBg = this.add.graphics().setDepth(11);
         entity.nameText = this.add.text(x, y, pData.name || '匿名', { fontSize: '13px', fontFamily: 'Georgia', color: pData.color || '#fff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(12);
         
-        // 對話氣泡設定：加入 wordWrap 實作動態縮放
         entity.bubbleBg = this.add.graphics().setDepth(13).setVisible(false);
         entity.bubbleText = this.add.text(x, y, '', { 
-            fontSize: '14px', 
-            fontFamily: 'Georgia', 
-            color: '#3e2723', 
-            fontStyle: 'bold',
-            wordWrap: { width: 160, useAdvancedWrap: true },
-            align: 'center'
+            fontSize: '14px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold',
+            wordWrap: { width: 160, useAdvancedWrap: true }, align: 'center'
         }).setOrigin(0.5).setDepth(14).setVisible(false);
 
         return entity;
@@ -319,19 +359,14 @@ class MainScene extends Phaser.Scene {
         if(pData.name) entity.nameText.setText(pData.name);
         if(pData.color) entity.nameText.setColor(pData.color);
 
-        // 動態氣泡框計算邏輯
-        if (pData.bubbleMsg && (Date.now() - pData.bubbleTime < 10000)) { // 縮短為 10 秒
+        if (pData.bubbleMsg && (Date.now() - pData.bubbleTime < 10000)) { 
             entity.bubbleBg.setVisible(true); entity.bubbleText.setVisible(true);
             entity.bubbleText.setText(pData.bubbleMsg);
 
-            // 取得文字目前的邊界寬高
             const bounds = entity.bubbleText.getBounds();
-            const paddingX = 10;
-            const paddingY = 8;
+            const paddingX = 10, paddingY = 8;
             const boxWidth = bounds.width + paddingX * 2;
             const boxHeight = bounds.height + paddingY * 2;
-            
-            // 將氣泡定位在名牌上方
             const boxX = sx - boxWidth / 2;
             const boxY = sy - 65 - boxHeight; 
 
@@ -340,8 +375,6 @@ class MainScene extends Phaser.Scene {
             entity.bubbleBg.lineStyle(2, 0xc5a059, 1);
             entity.bubbleBg.fillRoundedRect(boxX, boxY, boxWidth, boxHeight, 8);
             entity.bubbleBg.strokeRoundedRect(boxX, boxY, boxWidth, boxHeight, 8);
-            
-            // 將文字置中於計算好的背景框內
             entity.bubbleText.setPosition(sx, boxY + boxHeight / 2);
         } else {
             entity.bubbleBg.setVisible(false); entity.bubbleText.setVisible(false);
@@ -349,23 +382,12 @@ class MainScene extends Phaser.Scene {
     }
 
     createFurniture(key, data) {
-        let f = { sprite: null, glow: null, isLocked: data.locked, furnitureKey: key };
+        let f = { sprite: null, isLocked: data.locked, furnitureKey: key };
         let imgKey = key === 'fridge' ? 'fridge' : 'memory';
-        f.sprite = this.add.sprite(data.x, data.y, imgKey).setInteractive({ draggable: true }).setDepth(5);
+        // 改為有物理剛體以利搖桿操作
+        f.sprite = this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true);
         f.sprite.furnitureKey = key;
         f.sprite.isLocked = data.locked;
-
-        f.glow = this.add.graphics().setDepth(4);
-        f.sprite.on('pointerdown', (pointer) => {
-            if (f.sprite.isLocked) {
-                furnitureMenu.style.display = "flex";
-                furnitureMenu.style.left = pointer.event.pageX + "px";
-                furnitureMenu.style.top = pointer.event.pageY + "px";
-                furnitureMenu.dataset.type = key;
-            }
-        });
-        
-        this.input.setDraggable(f.sprite);
         return f;
     }
 
@@ -386,24 +408,49 @@ class MainScene extends Phaser.Scene {
             if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; } 
         }
 
-        this.localPlayer.sprite.setVelocity(vx, vy);
+        let isPlacing = window.GameLogic.placingFurnitureKey !== null && this.isCafe;
 
-        if (vx < 0) this.localPlayer.sprite.play('walk-left', true);
-        else if (vx > 0) this.localPlayer.sprite.play('walk-right', true);
-        else if (vy < 0) this.localPlayer.sprite.play('walk-up', true);
-        else if (vy > 0) this.localPlayer.sprite.play('walk-down', true);
-        else this.localPlayer.sprite.play('idle', true);
-
-        this.updatePlayerEntity(this.localPlayer, window.GameLogic.myProfile);
-
-        if (this.isCafe) {
-            if (vx !== 0 || vy !== 0) {
+        if (isPlacing) {
+            // 控制家俱
+            this.localPlayer.sprite.setVelocity(0, 0);
+            this.localPlayer.sprite.play('idle', true);
+            let f = this.furnitureSprites[window.GameLogic.placingFurnitureKey];
+            if (f) {
+                f.sprite.setVelocity(vx, vy);
+                this.cameras.main.startFollow(f.sprite, true, 0.1, 0.1);
+                this.placePrompt.setPosition(f.sprite.x, f.sprite.y - 80).setVisible(true);
+                
+                if (vx !== 0 || vy !== 0) {
+                    if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) {
+                        update(ref(window.GameLogic.db, `cafeFurniture/${window.GameLogic.placingFurnitureKey}`), { x: f.sprite.x, y: f.sprite.y });
+                        this.lastSyncTime = Date.now();
+                    }
+                }
+            }
+        } else {
+            // 控制玩家
+            this.placePrompt.setVisible(false);
+            this.localPlayer.sprite.setVelocity(vx, vy);
+            this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
+            
+            if (vx < 0) this.localPlayer.sprite.play('walk-left', true);
+            else if (vx > 0) this.localPlayer.sprite.play('walk-right', true);
+            else if (vy < 0) this.localPlayer.sprite.play('walk-up', true);
+            else if (vy > 0) this.localPlayer.sprite.play('walk-down', true);
+            else this.localPlayer.sprite.play('idle', true);
+            
+            if (this.isCafe && (vx !== 0 || vy !== 0)) {
                 if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) {
                     update(ref(window.GameLogic.db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { x: this.localPlayer.sprite.x, y: this.localPlayer.sprite.y });
                     this.lastSyncTime = Date.now();
                 }
             }
+        }
 
+        this.updatePlayerEntity(this.localPlayer, window.GameLogic.myProfile);
+
+        if (this.isCafe) {
+            // 更新其他玩家
             const playersData = window.GameLogic.cafePlayers;
             for (let uid in playersData) {
                 if (uid === window.GameLogic.currentUser.uid) continue;
@@ -427,6 +474,7 @@ class MainScene extends Phaser.Scene {
                 }
             }
 
+            // 更新家俱
             const furnData = window.GameLogic.cafeFurniture;
             for (let key in furnData) {
                 let fd = furnData[key];
@@ -435,14 +483,23 @@ class MainScene extends Phaser.Scene {
                 }
                 let f = this.furnitureSprites[key];
                 f.sprite.isLocked = fd.locked;
-                if (fd.locked) {
+                
+                // 如果不是自己正在操作的家俱，平滑同步位置
+                if(window.GameLogic.placingFurnitureKey !== key) {
                     f.sprite.x = Phaser.Math.Linear(f.sprite.x, fd.x, 0.3);
                     f.sprite.y = Phaser.Math.Linear(f.sprite.y, fd.y, 0.3);
-                    f.glow.clear();
-                } else {
-                    f.glow.clear();
-                    f.glow.lineStyle(3, 0xffd700, 0.8);
-                    f.glow.strokeRect(f.sprite.x - 28, f.sprite.y - 28, 56, 56);
+                }
+                
+                // 鎖定狀態加入透明度變化示意
+                if(!fd.locked) f.sprite.setAlpha(0.6);
+                else f.sprite.setAlpha(1);
+            }
+            
+            // 清理被收回的家俱
+            for (let key in this.furnitureSprites) {
+                if (!furnData[key]) {
+                    this.furnitureSprites[key].sprite.destroy();
+                    delete this.furnitureSprites[key];
                 }
             }
         }
@@ -453,17 +510,10 @@ function initPhaser() {
     const config = {
         type: Phaser.AUTO,
         parent: 'phaser-app',
-        width: '100%',
-        height: '100%',
+        width: '100%', height: '100%',
         backgroundColor: '#1a1008',
-        scale: {
-            mode: Phaser.Scale.RESIZE,
-            autoCenter: Phaser.Scale.CENTER_BOTH
-        },
-        physics: {
-            default: 'arcade',
-            arcade: { debug: false }
-        },
+        scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
+        physics: { default: 'arcade', arcade: { debug: false } },
         scene: [ BootScene, MainScene, UIScene ]
     };
     window.GameLogic.phaserGame = new Phaser.Game(config);
@@ -473,36 +523,83 @@ function initPhaser() {
 // 3. 系統 UI 事件綁定
 // ==========================================
 
-document.getElementById("move-furniture-btn").onclick = () => {
-    let type = furnitureMenu.dataset.type;
-    update(ref(window.GameLogic.db, `cafeFurniture/${type}`), { locked: false });
-    furnitureMenu.style.display = "none";
-};
+// 家俱目錄選擇
+document.querySelectorAll('.catalog-item').forEach(item => {
+    item.addEventListener('click', () => {
+        let key = item.dataset.key;
+        document.getElementById('furniture-catalog-modal').style.display = 'none';
+        
+        let pX = 1024, pY = 1024; // 預設中間
+        if(window.GameLogic.phaserGame) {
+            let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
+            if(scene && scene.localPlayer) {
+                pX = scene.localPlayer.sprite.x;
+                pY = scene.localPlayer.sprite.y - 80; // 出現在角色上方
+            }
+        }
 
-document.getElementById("spawn-fridge-btn").onclick = () => {
-    if (!window.GameLogic.cafeFurniture.fridge) update(ref(db, 'cafeFurniture/fridge'), { x: 1024, y: 1000, locked: false });
-};
-document.getElementById("spawn-memory-btn").onclick = () => {
-    if (!window.GameLogic.cafeFurniture.memory) update(ref(db, 'cafeFurniture/memory'), { x: 900, y: 1000, locked: false });
-};
+        update(ref(db, `cafeFurniture/${key}`), { x: pX, y: pY, locked: false });
+        window.GameLogic.placingFurnitureKey = key;
+    });
+});
 
 document.getElementById("view-profile-btn").addEventListener("click", async () => {
     actionMenu.style.display = "none";
     const targetUid = actionMenu.dataset.uid;
-    if (targetUid === window.GameLogic.currentUser.uid) showProfileModal(window.GameLogic.myProfile);
+    if (targetUid === window.GameLogic.currentUser.uid) showProfileModal(window.GameLogic.myProfile, targetUid);
     else {
         const snap = await get(ref(db, `users/${targetUid}`));
-        if (snap.exists()) showProfileModal(snap.val());
-        else if (window.GameLogic.cafePlayers[targetUid]) showProfileModal(window.GameLogic.cafePlayers[targetUid]); 
+        if (snap.exists()) showProfileModal(snap.val(), targetUid);
+        else if (window.GameLogic.cafePlayers[targetUid]) showProfileModal(window.GameLogic.cafePlayers[targetUid], targetUid); 
     }
 });
 
-function showProfileModal(p) {
+function showProfileModal(p, uid) {
+    profileViewingUid = uid;
     document.getElementById("vp-birth").innerText = p.birth || '未知';
     document.getElementById("vp-food").innerText = p.food || '無';
     document.getElementById("vp-motto").innerText = p.motto || '無';
+    
+    // 隱藏編輯框，顯示文字
+    ['birth', 'food', 'motto'].forEach(k => {
+        document.getElementById(`vp-${k}`).style.display = 'inline';
+        document.getElementById(`edit-${k}`).style.display = 'none';
+    });
+
+    const isMe = uid === window.GameLogic.currentUser.uid;
+    document.getElementById("start-edit-btn").style.display = isMe ? "inline-block" : "none";
+    document.getElementById("save-edit-btn").style.display = "none";
+    
     viewProfileModal.style.display = "block";
 }
+
+// 身分證編輯功能
+document.getElementById("start-edit-btn").addEventListener("click", () => {
+    document.getElementById("start-edit-btn").style.display = "none";
+    document.getElementById("save-edit-btn").style.display = "inline-block";
+    
+    ['birth', 'food', 'motto'].forEach(k => {
+        let textNode = document.getElementById(`vp-${k}`);
+        let inputNode = document.getElementById(`edit-${k}`);
+        inputNode.value = textNode.innerText === '未知' || textNode.innerText === '無' ? '' : textNode.innerText;
+        textNode.style.display = 'none';
+        inputNode.style.display = 'inline-block';
+    });
+});
+
+document.getElementById("save-edit-btn").addEventListener("click", () => {
+    let newData = {
+        birth: document.getElementById("edit-birth").value.trim() || '未知',
+        food: document.getElementById("edit-food").value.trim() || '無',
+        motto: document.getElementById("edit-motto").value.trim() || '無'
+    };
+    
+    update(ref(db, `users/${window.GameLogic.currentUser.uid}`), newData).then(() => {
+        window.GameLogic.myProfile = { ...window.GameLogic.myProfile, ...newData };
+        showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid);
+    });
+});
+
 
 const chatInput = document.getElementById("chat-input");
 document.getElementById("send-btn").addEventListener("click", sendChat);
@@ -521,7 +618,13 @@ function sendBubble(msg) {
 function sendChat() {
     const msg = chatInput.value.trim();
     if (msg !== "" && window.GameLogic.currentUser) {
-        push(ref(db, 'chats'), { name: window.GameLogic.myProfile.name, msg: msg, time: new Date().toLocaleTimeString('zh-TW', { hour12: false }) });
+        const now = new Date();
+        push(ref(db, 'chats'), { 
+            name: window.GameLogic.myProfile.name, 
+            msg: msg, 
+            date: now.toLocaleDateString('zh-TW', {month: '2-digit', day: '2-digit'}),
+            time: now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute:'2-digit' }) 
+        });
         sendBubble(msg);
         chatInput.value = ""; 
     }
@@ -534,7 +637,8 @@ function listenToChat() {
         const chats = snapshot.val();
         if (chats) {
             Object.values(chats).forEach(c => {
-                chatBox.innerHTML += `<div><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg}</div>`;
+                let timeStr = `<span style="font-size:10px; color:#bbb; margin-left:8px;">${c.date || ''} ${c.time || ''}</span>`;
+                chatBox.innerHTML += `<div style="margin-bottom: 4px;"><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg} ${timeStr}</div>`;
             });
             setTimeout(() => { chatBox.scrollTop = chatBox.scrollHeight; }, 50);
         }

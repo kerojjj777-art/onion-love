@@ -23,7 +23,7 @@
             width: 100vw; height: 100vh;
         }
 
-        /* 漂浮選單 (查看身分證 / 傢俱管理) */
+        /* 漂浮選單 */
         .action-menu {
             display: none; position: absolute; background: var(--mucha-paper); border: 2px solid var(--mucha-gold); 
             border-radius: 8px; z-index: 200; padding: 5px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); flex-direction: column;
@@ -45,10 +45,14 @@
         }
         .modal h3 { color: var(--mucha-green); margin-top: 0; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 8px; }
         .modal-btns { display: flex; justify-content: space-around; margin-top: 15px; }
-        .modal-btns button, .close-modal-btn { padding: 10px 15px; border-radius: 4px; border: none; cursor: pointer; font-family: inherit; font-size: 15px;}
+        .modal-btns button, .close-modal-btn { padding: 10px 15px; border-radius: 4px; border: none; cursor: pointer; font-family: inherit; font-size: 15px; margin: 5px;}
         .btn-primary { background: var(--mucha-gold); color: white; }
         .btn-secondary { background: #ccc; color: #333; }
-        
+        .btn-edit { background: var(--mucha-green); color: white; }
+
+        .profile-line { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; border-bottom: 1px dashed #ccc; padding-bottom: 5px;}
+        .profile-line input { width: 60%; padding: 5px; border: 1px solid var(--mucha-gold); border-radius: 4px; font-family: inherit;}
+
         #memory-feed { display: flex; flex-direction: column; gap: 15px; margin-top: 15px; text-align: left; }
         .memory-card { background: #fff; border: 1px solid var(--mucha-gold); border-radius: 8px; padding: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); }
         .memory-card img { width: 100%; border-radius: 4px; margin-bottom: 8px; }
@@ -57,31 +61,30 @@
         #memory-upload-area { margin-top: 15px; display: flex; flex-direction: column; gap: 10px; border-top: 2px dashed var(--mucha-gold); padding-top: 15px; }
         #memory-upload-area input[type="text"] { padding: 10px; border: 1px solid var(--mucha-gold); border-radius: 4px; }
 
-        /* 遊戲與排版區 (滿版設計) */
+        /* 家俱目錄 */
+        .catalog-item { padding: 10px; border: 1px solid var(--mucha-gold); border-radius: 8px; margin-bottom: 10px; background: #fff; cursor: pointer; font-weight: bold;}
+        .catalog-item:hover { background: rgba(197, 160, 89, 0.2); }
+
+        /* 遊戲與排版區 */
         #game-layout-container { display: none; width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; }
         #phaser-app { width: 100%; height: 100%; display: block; }
-        
-        /* 懸浮傢俱面板 (頂部中央) */
-        #furniture-panel { display: none; position: absolute; top: max(10px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); gap: 10px; padding: 8px; background: rgba(244, 236, 216, 0.85); border-radius: 8px; border: 2px solid var(--mucha-gold); z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        #furniture-panel button { background: transparent; border: none; color: var(--mucha-brown); font-weight: bold; font-size: 14px; cursor: pointer; }
 
-        /* 懸浮聊天室 (左上角) */
-        #chat-section { display: none; position: absolute; top: max(60px, env(safe-area-inset-top)); left: 10px; width: 250px; flex-direction: column; z-index: 100; pointer-events: none; } 
-        #chat-box { max-height: 150px; overflow-y: auto; background: rgba(0, 0, 0, 0.4); color: #fff; padding: 8px; border-radius: 8px; margin-bottom: 5px; font-size: 13px; pointer-events: auto; text-shadow: 1px 1px 2px #000; }
-        #chat-input-area { display: flex; height: 40px; pointer-events: auto; box-shadow: 0 2px 5px rgba(0,0,0,0.5); border-radius: 4px;}
-        #chat-input { flex-grow: 1; padding: 8px; border: 2px solid var(--mucha-gold); border-radius: 4px 0 0 4px; background: rgba(244, 236, 216, 0.9); font-family: inherit;}
+        /* 左下角懸浮聊天室 */
+        #chat-section { display: none; position: absolute; bottom: 20px; left: 20px; width: 280px; flex-direction: column; z-index: 100; pointer-events: none; } 
+        #chat-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 4px 4px 0 0; padding: 5px 10px; width: fit-content; cursor: pointer; font-size: 12px; font-weight: bold;}
+        #chat-content { pointer-events: auto; transition: max-height 0.3s ease-in-out; overflow: hidden; display: flex; flex-direction: column; }
+        #chat-box { max-height: 180px; overflow-y: auto; background: rgba(0, 0, 0, 0.5); color: #fff; padding: 8px; border-radius: 0 8px 0 0; margin-bottom: 5px; font-size: 13px; text-shadow: 1px 1px 2px #000; }
+        #chat-input-area { display: flex; height: 40px; box-shadow: 0 2px 5px rgba(0,0,0,0.5); border-radius: 4px;}
+        #chat-input { flex-grow: 1; padding: 8px; border: 2px solid var(--mucha-gold); border-radius: 4px 0 0 4px; background: rgba(244, 236, 216, 0.95); font-family: inherit;}
         #send-btn { padding: 8px 15px; background: var(--mucha-gold); color: white; border: 2px solid var(--mucha-gold); border-radius: 0 4px 4px 0; font-family: inherit; font-weight: bold; cursor: pointer;}
+        
+        .chat-collapsed #chat-content { max-height: 0px !important; }
     </style>
 </head>
 <body>
 
     <div id="action-menu" class="action-menu">
         <button id="view-profile-btn">洋蔥身分證</button>
-    </div>
-
-    <div id="furniture-menu" class="action-menu">
-        <button id="move-furniture-btn">更改位置</button>
-        <button onclick="alert('外觀系統開發中！敬請期待')">更改外觀</button>
     </div>
 
     <div id="login-screen">
@@ -93,10 +96,35 @@
 
     <div id="view-profile-modal" class="modal">
         <h3 id="vp-title">洋蔥身分證</h3>
-        <p style="text-align: left;">🎂 生日: <strong id="vp-birth"></strong></p>
-        <p style="text-align: left;">🍛 最愛: <strong id="vp-food"></strong></p>
-        <p style="text-align: left;">📜 座右銘:<br><i style="color:var(--mucha-green); font-size: 14px;">"<span id="vp-motto"></span>"</i></p>
-        <button class="close-modal-btn btn-primary" onclick="document.getElementById('view-profile-modal').style.display='none'">收起證件</button>
+        <div class="profile-line">
+            <span>🎂 生日:</span>
+            <strong id="vp-birth"></strong>
+            <input type="text" id="edit-birth" style="display:none;">
+        </div>
+        <div class="profile-line">
+            <span>🍛 最愛:</span>
+            <strong id="vp-food"></strong>
+            <input type="text" id="edit-food" style="display:none;">
+        </div>
+        <div class="profile-line" style="flex-direction: column; align-items: flex-start;">
+            <span>📜 座右銘:</span>
+            <i style="color:var(--mucha-green); font-size: 14px; margin-top:5px; width: 100%; text-align: center;">"<span id="vp-motto"></span>"</i>
+            <input type="text" id="edit-motto" style="display:none; width: 95%; margin-top:5px;">
+        </div>
+        <div class="modal-btns">
+            <button id="start-edit-btn" class="btn-edit" style="display:none;">編輯</button>
+            <button id="save-edit-btn" class="btn-primary" style="display:none;">儲存</button>
+            <button class="close-modal-btn btn-secondary" onclick="document.getElementById('view-profile-modal').style.display='none'">收起證件</button>
+        </div>
+    </div>
+
+    <div id="furniture-catalog-modal" class="modal">
+        <h3>📦 家俱倉庫目錄</h3>
+        <div id="catalog-list">
+            <div class="catalog-item" data-key="fridge">🧊 公用大冰箱</div>
+            <div class="catalog-item" data-key="memory">📖 咖啡廳回憶錄</div>
+        </div>
+        <button class="close-modal-btn btn-secondary" onclick="document.getElementById('furniture-catalog-modal').style.display='none'">關閉目錄</button>
     </div>
 
     <div id="fridge-modal" class="modal">
@@ -119,27 +147,37 @@
     <div id="game-layout-container">
         <div id="phaser-app"></div>
         
-        <div id="furniture-panel">
-            <button id="spawn-fridge-btn">🧊 擺放冰箱</button>
-            <button id="spawn-memory-btn">📖 擺放回憶錄</button>
-        </div>
-
         <div id="chat-section">
-            <div id="chat-box"></div>
-            <div id="chat-input-area">
-                <input type="text" id="chat-input" placeholder="說點什麼...">
-                <button id="send-btn">發送</button>
+            <button id="chat-toggle-btn">收起對話 ▲</button>
+            <div id="chat-content">
+                <div id="chat-box"></div>
+                <div id="chat-input-area">
+                    <input type="text" id="chat-input" placeholder="說點什麼...">
+                    <button id="send-btn">發送</button>
+                </div>
             </div>
         </div>
     </div>
 
-    <script type="module" src="app.js?v=0.0.7"></script>
+    <script type="module" src="app.js?v=0.0.8"></script>
     <script>
-        // 點擊畫面其他地方關閉浮動選單 (不影響 Phaser 點擊)
+        // 點擊畫面其他地方關閉浮動選單
         window.addEventListener('pointerdown', (e) => {
-            if (!e.target.closest('#action-menu') && !e.target.closest('#furniture-menu') && e.target.tagName !== 'CANVAS') {
+            if (!e.target.closest('#action-menu') && e.target.tagName !== 'CANVAS') {
                 document.getElementById('action-menu').style.display = 'none';
-                document.getElementById('furniture-menu').style.display = 'none';
+            }
+        });
+        
+        // 聊天室收合功能
+        document.getElementById('chat-toggle-btn').addEventListener('click', function() {
+            const chatSec = document.getElementById('chat-section');
+            chatSec.classList.toggle('chat-collapsed');
+            if (chatSec.classList.contains('chat-collapsed')) {
+                this.innerText = '展開對話 ▼';
+            } else {
+                this.innerText = '收起對話 ▲';
+                const chatBox = document.getElementById("chat-box");
+                chatBox.scrollTop = chatBox.scrollHeight;
             }
         });
 
