@@ -149,11 +149,16 @@ document.getElementById("spawn-memory-btn").onclick = () => {
 };
 
 // 畫面點擊、長按與拖曳判定
-canvas.addEventListener('pointerdown', (e) => {
+const gameWrapper = document.getElementById("phaser-app");
+
+gameWrapper.addEventListener('pointerdown', (e) => {
     if (!currentUser) return;
-    const rect = canvas.getBoundingClientRect();
-    const clickX = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const clickY = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const canvasEl = gameWrapper.querySelector('canvas');
+    if (!canvasEl) return;
+
+    const rect = canvasEl.getBoundingClientRect();
+    const clickX = (e.clientX - rect.left) * (canvasEl.width / rect.width);
+    const clickY = (e.clientY - rect.top) * (canvasEl.height / rect.height);
     
     clickStart = { x: clickX, y: clickY };
     canvasPointerDown = true;
@@ -214,9 +219,11 @@ document.getElementById("move-furniture-btn").onclick = () => {
 };
 
 window.addEventListener('pointermove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const moveX = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const moveY = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const canvasEl = gameWrapper.querySelector('canvas');
+    if (!canvasEl) return;
+    const rect = canvasEl.getBoundingClientRect();
+    const moveX = (e.clientX - rect.left) * (canvasEl.width / rect.width);
+    const moveY = (e.clientY - rect.top) * (canvasEl.height / rect.height);
 
     if (draggingFurniture && currentScene === "cafe") {
         // 本地預覽拖曳
@@ -245,9 +252,14 @@ window.addEventListener('pointerup', (e) => {
         draggingFurniture = null;
     } else if (canvasPointerDown) {
         // 是一次快速的單擊
-        const rect = canvas.getBoundingClientRect();
-        const endX = (e.clientX - rect.left) * (canvas.width / rect.width);
-        const endY = (e.clientY - rect.top) * (canvas.height / rect.height);
+        const canvasEl = gameWrapper.querySelector('canvas');
+        if (!canvasEl) {
+            canvasPointerDown = false;
+            return;
+        }
+        const rect = canvasEl.getBoundingClientRect();
+        const endX = (e.clientX - rect.left) * (canvasEl.width / rect.width);
+        const endY = (e.clientY - rect.top) * (canvasEl.height / rect.height);
         
         if (Math.abs(endX - clickStart.x) < 10 && Math.abs(endY - clickStart.y) < 10 && currentScene === "cafe") {
             for (let key in cafeFurniture) {
