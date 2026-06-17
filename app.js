@@ -26,6 +26,11 @@ let cafeFurniture = {};
 let cafeUnsubscribe = null;
 const speed = 4;
 
+// Phaser 相關變數
+let game = null;
+let testSprite = null;
+let otherPlayerSprites = {}; 
+
 // 操控與點擊變數
 let isDraggingJoystick = false;
 let moveVector = { x: 0, y: 0 };
@@ -37,8 +42,6 @@ let clickStart = { x: 0, y: 0 };
 let canvasPointerDown = false;
 
 // --- DOM 元素 ---
-const canvas = document.getElementById("phaser-app");
-//const ctx = canvas.getContext("2d");
 const loginScreen = document.getElementById("login-screen");
 const gameContainer = document.getElementById("game-container");
 const topBar = document.getElementById("top-bar");
@@ -49,14 +52,6 @@ const dropdownMenu = document.getElementById("dropdown-menu");
 const actionMenu = document.getElementById("action-menu");
 const furnitureMenu = document.getElementById("furniture-menu");
 const viewProfileModal = document.getElementById("view-profile-modal");
-
-// --- 素材準備 ---
-const onionImg = new Image(); onionImg.src = 'onion-sprite.png'; 
-const bgCafe = new Image(); bgCafe.src = 'cafe-bg.jpg';
-const bgDoghouse = new Image(); bgDoghouse.src = 'doghouse-bg.jpg';
-// 準備兩張傢俱圖片，請上傳至同資料夾
-const fridgeImg = new Image(); fridgeImg.src = 'fridge.png'; 
-const memoryImg = new Image(); memoryImg.src = 'memory.png'; 
 
 // ==========================================
 // 1. 登入與場景切換
@@ -72,9 +67,8 @@ onAuthStateChanged(auth, async (user) => {
         currentUser = user;
         loginScreen.style.display = "none";
         topBar.style.display = "flex";
-        gameContainer.style.display = "flex"; // 容器顯示了！
+        gameContainer.style.display = "flex"; 
         
-        // 【新增這行】確保容器有實際尺寸後，再啟動 Phaser
         initPhaserEngine(); 
 
         const profileSnap = await get(ref(db, `users/${user.uid}`));
@@ -86,7 +80,6 @@ onAuthStateChanged(auth, async (user) => {
         switchScene("doghouse"); 
         listenToChat();
         listenToMemories();
-        // requestAnimationFrame(gameLoop);
     } else {
         currentUser = null;
         loginScreen.style.display = "block";
@@ -139,8 +132,6 @@ function leaveCafe() {
 // ==========================================
 // 2. 傢俱系統與點擊互動 (長按、單擊)
 // ==========================================
-
-// 傢俱面板按鈕
 document.getElementById("spawn-fridge-btn").onclick = () => {
     if (!cafeFurniture.fridge) update(ref(db, 'cafeFurniture/fridge'), { x: 300, y: 150, locked: false });
 };
@@ -148,7 +139,6 @@ document.getElementById("spawn-memory-btn").onclick = () => {
     if (!cafeFurniture.memory) update(ref(db, 'cafeFurniture/memory'), { x: 200, y: 150, locked: false });
 };
 
-// 畫面點擊、長按與拖曳判定
 const gameWrapper = document.getElementById("phaser-app");
 
 gameWrapper.addEventListener('pointerdown', (e) => {
@@ -177,21 +167,19 @@ gameWrapper.addEventListener('pointerdown', (e) => {
 
     if (hitFurniture) {
         if (!cafeFurniture[hitFurniture].locked) {
-            draggingFurniture = hitFurniture; // 可移動狀態，開始拖曳
+            draggingFurniture = hitFurniture; 
         } else {
-            // 已鎖定，開啟長按計時器 (600ms)
             longPressTimer = setTimeout(() => {
-                canvasPointerDown = false; // 取消單擊行為
+                canvasPointerDown = false; 
                 furnitureMenu.style.display = "flex";
                 furnitureMenu.style.left = (e.pageX + 10) + "px";
                 furnitureMenu.style.top = (e.pageY - 20) + "px";
                 furnitureMenu.dataset.type = hitFurniture;
             }, 600);
         }
-        return; // 點到傢俱就不再判定點到玩家
+        return; 
     }
 
-    // 判定是否點擊玩家名牌
     let clickedUid = null;
     if (currentScene === "doghouse") {
         if (Math.abs(clickX - myX) < 35 && Math.abs(clickY - myY) < 45) clickedUid = currentUser.uid;
@@ -211,7 +199,6 @@ gameWrapper.addEventListener('pointerdown', (e) => {
     }
 });
 
-// 傢俱解除鎖定 (更改位置)
 document.getElementById("move-furniture-btn").onclick = () => {
     let type = furnitureMenu.dataset.type;
     update(ref(db, `cafeFurniture/${type}`), { locked: false });
@@ -226,13 +213,11 @@ window.addEventListener('pointermove', (e) => {
     const moveY = (e.clientY - rect.top) * (canvasEl.height / rect.height);
 
     if (draggingFurniture && currentScene === "cafe") {
-        // 本地預覽拖曳
         cafeFurniture[draggingFurniture].x = moveX;
         cafeFurniture[draggingFurniture].y = moveY;
     }
 
     if (canvasPointerDown) {
-        // 如果手指滑動超過 10px，取消長按判定
         if (Math.abs(moveX - clickStart.x) > 10 || Math.abs(moveY - clickStart.y) > 10) {
             clearTimeout(longPressTimer); longPressTimer = null;
         }
@@ -243,7 +228,6 @@ window.addEventListener('pointerup', (e) => {
     if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
     
     if (draggingFurniture) {
-        // 拖曳結束，定格並鎖定，同步到雲端
         update(ref(db, `cafeFurniture/${draggingFurniture}`), { 
             x: cafeFurniture[draggingFurniture].x, 
             y: cafeFurniture[draggingFurniture].y, 
@@ -251,7 +235,6 @@ window.addEventListener('pointerup', (e) => {
         });
         draggingFurniture = null;
     } else if (canvasPointerDown) {
-        // 是一次快速的單擊
         const canvasEl = gameWrapper.querySelector('canvas');
         if (!canvasEl) {
             canvasPointerDown = false;
@@ -294,7 +277,7 @@ function showProfileModal(p) {
 }
 
 // ==========================================
-// 3. 相簿回憶錄邏輯 (壓縮圖片與存取)
+// 3. 相簿回憶錄邏輯
 // ==========================================
 document.getElementById("upload-memory-btn").onclick = () => {
     const fileInput = document.getElementById("memory-file");
@@ -305,14 +288,13 @@ document.getElementById("upload-memory-btn").onclick = () => {
     if (!file && !text) return alert("請上傳圖片或填寫文字！");
     
     if (file) {
-        // 壓縮圖片為 Base64 避免塞爆資料庫
         const reader = new FileReader();
         reader.onload = e => {
             const img = new Image();
             img.onload = () => {
                 const cvs = document.createElement('canvas');
                 let w = img.width, h = img.height;
-                if (w > 300) { h *= 300 / w; w = 300; } // 限制最大寬度 300px
+                if (w > 300) { h *= 300 / w; w = 300; } 
                 cvs.width = w; cvs.height = h;
                 cvs.getContext('2d').drawImage(img, 0, 0, w, h);
                 saveMemoryToDB(cvs.toDataURL('image/jpeg', 0.7), text);
@@ -341,7 +323,7 @@ function listenToMemories() {
         feed.innerHTML = "";
         const data = snap.val();
         if (data) {
-            Object.values(data).reverse().forEach(m => { // 最新在前
+            Object.values(data).reverse().forEach(m => { 
                 feed.innerHTML += `
                     <div class="memory-card">
                         <div class="author">${m.author} - ${m.time}</div>
@@ -413,77 +395,7 @@ function checkKeyboard() {
     moveVector.x = vx; moveVector.y = vy;
 }
 
-// ==========================================
-// 5. 繪圖與遊戲迴圈 (修復黑邊與泡泡)
-// ==========================================
-function drawOnionMan(x, y, p) {
-    if (onionImg.complete) ctx.drawImage(onionImg, x - 25, y - 40, 50, 50); 
-    else { ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(x - 25, y - 40, 50, 50); }
-
-    // 1. 修復渲染 Bug，加入 beginPath() 防止畫布被全黑覆蓋
-    ctx.beginPath();
-    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-    if (ctx.roundRect) ctx.roundRect(x - 30, y - 55, 60, 18, 4); else ctx.fillRect(x - 30, y - 55, 60, 18);
-    ctx.fill();
-
-    ctx.fillStyle = p.color; 
-    ctx.font = "12px 'Georgia', serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(p.name, x, y - 46);
-
-    // 2. 泡泡條件：有內容 且 發出時間未超過 15秒 (15000毫秒)
-    if (p.bubbleMsg && p.bubbleMsg.trim() !== "" && (Date.now() - p.bubbleTime < 15000)) {
-        ctx.beginPath();
-        ctx.fillStyle = "rgba(244, 236, 216, 0.95)"; ctx.strokeStyle = "#c5a059"; ctx.lineWidth = 2;
-        if (ctx.roundRect) ctx.roundRect(x - 60, y - 95, 120, 30, 8); else ctx.fillRect(x - 60, y - 95, 120, 30);
-        ctx.fill(); ctx.stroke();
-        ctx.fillStyle = "#3e2723"; ctx.font = "bold 13px 'Georgia'";
-        let displayMsg = p.bubbleMsg.length > 8 ? p.bubbleMsg.substring(0, 8) + "..." : p.bubbleMsg;
-        ctx.fillText(displayMsg, x, y - 80);
-    }
-}
-
-function gameLoop() {
-    /*if (!currentUser) return;
-    
-    ctx.fillStyle = "#8d6e63";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    if (moveVector.x !== 0 || moveVector.y !== 0) {
-        let nextX = myX + moveVector.x * speed;
-        let nextY = myY + moveVector.y * speed;
-        if(nextX > 20 && nextX < canvas.width - 20) myX = nextX;
-        if(nextY > 40 && nextY < canvas.height - 20) myY = nextY;
-    }
-
-    if (currentScene === "doghouse") {
-        if(bgDoghouse.complete && bgDoghouse.naturalWidth !== 0) ctx.drawImage(bgDoghouse, 0, 0, canvas.width, canvas.height);
-        drawOnionMan(myX, myY, myProfile);
-    } else if (currentScene === "cafe") {
-        if(bgCafe.complete && bgCafe.naturalWidth !== 0) ctx.drawImage(bgCafe, 0, 0, canvas.width, canvas.height);
-        
-        // 繪製傢俱系統
-        for (let key in cafeFurniture) {
-            let f = cafeFurniture[key];
-            let img = key === 'fridge' ? fridgeImg : memoryImg;
-            if (img.complete && img.naturalWidth !== 0) ctx.drawImage(img, f.x - 25, f.y - 25, 50, 50);
-            else { ctx.fillStyle = "rgba(255, 255, 255, 0.8)"; ctx.fillRect(f.x - 20, f.y - 20, 40, 40); }
-            
-            // 尚未鎖定時(拖曳模式)，繪製發光邊框提示
-            if (!f.locked) {
-                ctx.strokeStyle = "rgba(255, 215, 0, 0.8)"; ctx.lineWidth = 3; ctx.strokeRect(f.x - 28, f.y - 28, 56, 56);
-            }
-        }
-
-        // 繪製大廳玩家
-        Object.keys(cafePlayers).forEach(id => {
-            let p = cafePlayers[id];
-            if (id === currentUser.uid) drawOnionMan(myX, myY, { ...myProfile, bubbleMsg: myProfile.bubbleMsg, bubbleTime: myProfile.bubbleTime });
-            else drawOnionMan(p.x, p.y, p);
-        });
-    }
-    requestAnimationFrame(gameLoop);
-}
-*/
+// 網路同步
 setInterval(() => {
     if (currentScene === "cafe" && currentUser && (moveVector.x !== 0 || moveVector.y !== 0)) {
         update(ref(db, `cafePlayers/${currentUser.uid}`), { x: myX, y: myY });
@@ -491,7 +403,7 @@ setInterval(() => {
 }, 100);
 
 // ==========================================
-// 6. 聊天系統與最新留言追蹤
+// 6. 聊天系統
 // ==========================================
 function sendBubble(msg) {
     if (currentUser) {
@@ -533,35 +445,16 @@ function listenToChat() {
             Object.values(chats).forEach(c => {
                 chatBox.innerHTML += `<div><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg}</div>`;
             });
-            // 3. 修復對話停留：強制將滾動條拉到最新發言底部
             setTimeout(() => { chatBox.scrollTop = chatBox.scrollHeight; }, 50);
         }
     });
 }
-// ==========================================
-// 7. Phaser 引擎初始化與測試
-// ==========================================
-const phaserConfig = {
-    type: Phaser.AUTO,
-    parent: 'phaser-app',
-    width: 600,
-    height: 350,
-    transparent: true,
-    scene: {
-        preload: preload,
-        create: create,
-        update: update
-    }
-};
 
-// 在 app.js 的全域變數區宣告 (可放在 const speed = 4; 下方)
-let game = null;
-let mySprite = null;
-let otherPlayerSprites = {}; // 準備用來裝其他玩家的 Sprite
-
-// 移到腳本底部的 Phaser 初始化函數
+// ==========================================
+// 7. Phaser 引擎初始化 (解決了命名衝突)
+// ==========================================
 function initPhaserEngine() {
-    if (game) return; // 確保只啟動一次
+    if (game) return; 
     
     const phaserConfig = {
         type: Phaser.AUTO,
@@ -570,22 +463,21 @@ function initPhaserEngine() {
         height: 350,
         transparent: true,
         scene: {
-            preload: preload,
-            create: create,
-            update: update
+            // 注意：這裡改名了！
+            preload: phaserPreload,
+            create: phaserCreate,
+            update: phaserUpdate
         }
     };
     game = new Phaser.Game(phaserConfig);
 }
 
-let testSprite;
-
-function preload() {
+function phaserPreload() {
     this.load.image('onion', 'onion-sprite.png');
     this.load.image('bgDoghouse', 'doghouse-bg.jpg');
 }
 
-function create() {
+function phaserCreate() {
     this.add.image(300, 175, 'bgDoghouse').setAlpha(0.5); 
     testSprite = this.add.image(myX, myY, 'onion');
     testSprite.setDisplaySize(50, 50);
@@ -598,7 +490,17 @@ function create() {
     }).setOrigin(0.5);
 }
 
-function update() {
+function phaserUpdate() {
+    // 將舊版 gameLoop 裡面的移動計算搬移到這裡
+    if (moveVector.x !== 0 || moveVector.y !== 0) {
+        let nextX = myX + moveVector.x * speed;
+        let nextY = myY + moveVector.y * speed;
+        
+        // 邊界判定 (Phaser 畫布寬度 600，高度 350)
+        if(nextX > 20 && nextX < 600 - 20) myX = nextX;
+        if(nextY > 40 && nextY < 350 - 20) myY = nextY;
+    }
+
     if (testSprite) {
         testSprite.x = myX;
         testSprite.y = myY;
