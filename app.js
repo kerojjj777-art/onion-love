@@ -23,7 +23,7 @@ window.GameLogic = {
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0 },
     cafePlayers: {},
     cafeFurniture: {},
-    placingFurnitureKey: null, // 用於記錄目前正在擺放的家俱
+    placingFurnitureKey: null, 
     phaserGame: null,
     db: db 
 };
@@ -37,12 +37,137 @@ window.leaveCafe = leaveCafe;
 window.signOut = signOut;
 window.auth = auth;
 
-// --- DOM 元素 ---
+// ==========================================
+// 動態生成系統 UI 介面
+// ==========================================
+function createSystemUI() {
+    const appContainer = document.getElementById('app-container');
+    if (!appContainer) return;
+
+    appContainer.innerHTML = `
+        <div id="action-menu" class="action-menu">
+            <button id="view-profile-btn">洋蔥身分證</button>
+        </div>
+
+        <div id="login-screen">
+            <h2 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">入館登記</h2>
+            <input type="email" id="user-email" placeholder="信箱 Email"><br>
+            <input type="password" id="user-pwd" placeholder="密碼"><br>
+            <button id="join-btn">推開洋蔥世界之門</button>
+        </div>
+
+        <div id="view-profile-modal" class="modal">
+            <h3 id="vp-title">洋蔥身分證</h3>
+            <div class="profile-line">
+                <span>🎂 生日:</span>
+                <strong id="vp-birth"></strong>
+                <input type="text" id="edit-birth" style="display:none;">
+            </div>
+            <div class="profile-line">
+                <span>🍛 最愛:</span>
+                <strong id="vp-food"></strong>
+                <input type="text" id="edit-food" style="display:none;">
+            </div>
+            <div class="profile-line" style="flex-direction: column; align-items: flex-start;">
+                <span>📜 座右銘:</span>
+                <i style="color:var(--mucha-green); font-size: 14px; margin-top:5px; width: 100%; text-align: center;">"<span id="vp-motto"></span>"</i>
+                <input type="text" id="edit-motto" style="display:none; width: 95%; margin-top:5px;">
+            </div>
+            <div class="modal-btns">
+                <button id="start-edit-btn" class="btn-edit" style="display:none;">編輯</button>
+                <button id="save-edit-btn" class="btn-primary" style="display:none;">儲存</button>
+                <button class="close-modal-btn btn-secondary" onclick="document.getElementById('view-profile-modal').style.display='none'">收起證件</button>
+            </div>
+        </div>
+
+        <div id="furniture-catalog-modal" class="modal">
+            <h3>📦 家俱倉庫目錄</h3>
+            <div id="catalog-list">
+                <div class="catalog-item" data-key="fridge">🧊 公用大冰箱</div>
+                <div class="catalog-item" data-key="memory">📖 咖啡廳回憶錄</div>
+            </div>
+            <button class="close-modal-btn btn-secondary" onclick="document.getElementById('furniture-catalog-modal').style.display='none'">關閉目錄</button>
+        </div>
+
+        <div id="fridge-modal" class="modal">
+            <h3>❄️ 公用大冰箱</h3>
+            <p style="color:#888; font-size: 14px;">冰箱目前空空如也... 等待下次採買中</p>
+            <button class="close-modal-btn btn-primary" onclick="document.getElementById('fridge-modal').style.display='none'">關上冰箱</button>
+        </div>
+
+        <div id="memory-modal" class="modal">
+            <h3>📖 咖啡廳回憶錄</h3>
+            <div id="memory-feed"></div>
+            <div id="memory-upload-area">
+                <input type="file" id="memory-file" accept="image/*">
+                <input type="text" id="memory-text" placeholder="寫下這張照片的回憶筆記...">
+                <button class="btn-primary" id="upload-memory-btn">留存回憶</button>
+            </div>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('memory-modal').style.display='none'">闔上回憶錄</button>
+        </div>
+
+        <div id="game-layout-container">
+            <div id="phaser-app"></div>
+            
+            <div id="chat-section">
+                <button id="chat-toggle-btn">收起對話 ▲</button>
+                <div id="chat-content">
+                    <div id="chat-box"></div>
+                    <div id="chat-input-area">
+                        <input type="text" id="chat-input" placeholder="說點什麼...">
+                        <button id="send-btn">發送</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// 執行 UI 初始化
+createSystemUI();
+
+// --- DOM 元素 (須在 UI 生成後才能綁定) ---
 const loginScreen = document.getElementById("login-screen");
 const gameLayoutContainer = document.getElementById("game-layout-container");
 const chatSection = document.getElementById("chat-section");
 const actionMenu = document.getElementById("action-menu");
 const viewProfileModal = document.getElementById("view-profile-modal");
+const chatInput = document.getElementById("chat-input");
+
+// ==========================================
+// PWA 與 系統基礎事件綁定
+// ==========================================
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+        reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    if (confirm('發現新的更新！是否立即重新載入？')) window.location.reload();
+                }
+            });
+        });
+    });
+}
+
+// 點擊畫面其他地方關閉浮動選單
+window.addEventListener('pointerdown', (e) => {
+    if (!e.target.closest('#action-menu') && e.target.tagName !== 'CANVAS') {
+        actionMenu.style.display = 'none';
+    }
+});
+
+// 聊天室收合功能
+document.getElementById('chat-toggle-btn').addEventListener('click', function() {
+    chatSection.classList.toggle('chat-collapsed');
+    if (chatSection.classList.contains('chat-collapsed')) {
+        this.innerText = '展開對話 ▼';
+    } else {
+        this.innerText = '收起對話 ▲';
+        const chatBox = document.getElementById("chat-box");
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+});
 
 // ==========================================
 // 1. 登入與場景切換
@@ -136,7 +261,6 @@ class BootScene extends Phaser.Scene {
 class UIScene extends Phaser.Scene {
     constructor() { super('UIScene'); }
     create() {
-        // 防止 PWA 裁切，縮減位置並調整大小
         const safeMargin = 100;
 
         this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, {
@@ -152,15 +276,12 @@ class UIScene extends Phaser.Scene {
         this.btnB = this.add.circle(this.cameras.main.width - safeMargin - 70, this.cameras.main.height - safeMargin + 20, 25, 0xd4c5a0).setStrokeStyle(3, 0xc5a059).setInteractive();
         this.txtB = this.add.text(this.btnB.x, this.btnB.y, 'B', { fontSize: '20px', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5);
 
-        // 地圖選單按鈕
         this.mapBtn = this.add.circle(this.cameras.main.width - safeMargin, this.cameras.main.height - safeMargin - 90, 25, 0x4a5d4e).setStrokeStyle(3, 0xc5a059).setInteractive();
         this.mapText = this.add.text(this.mapBtn.x, this.mapBtn.y, '地圖', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
 
-        // 家俱按鈕 (位於地圖上方)
         this.furnBtn = this.add.circle(this.cameras.main.width - safeMargin, this.cameras.main.height - safeMargin - 160, 25, 0x8b5a2b).setStrokeStyle(3, 0xc5a059).setInteractive();
         this.furnText = this.add.text(this.furnBtn.x, this.furnBtn.y, '家俱', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
 
-        // 地圖下拉選單容器
         this.menuContainer = this.add.container(this.cameras.main.width - 200, this.cameras.main.height - 450).setVisible(false).setDepth(200);
         const menuBg = this.add.graphics();
         menuBg.fillStyle(0xf4ecd8, 0.95); menuBg.lineStyle(2, 0xc5a059, 1);
@@ -181,7 +302,6 @@ class UIScene extends Phaser.Scene {
             this.menuContainer.add(btn);
         });
 
-        // 按鈕事件綁定
         this.mapBtn.on('pointerdown', () => {
             this.menuContainer.setVisible(!this.menuContainer.visible);
             document.getElementById('furniture-catalog-modal').style.display = 'none';
@@ -196,7 +316,6 @@ class UIScene extends Phaser.Scene {
             furnModal.style.display = furnModal.style.display === 'block' ? 'none' : 'block';
         });
 
-        // A 鍵長按判定
         this.aPressTime = 0;
         this.btnA.on('pointerdown', () => { 
             this.btnA.setFillStyle(0xc5a059); 
@@ -216,7 +335,6 @@ class UIScene extends Phaser.Scene {
         this.btnB.on('pointerdown', () => { this.btnB.setFillStyle(0xc5a059); sendBubble("使用了 B 技能!"); });
         this.btnB.on('pointerup', () => this.btnB.setFillStyle(0xd4c5a0));
         
-        // 視窗縮放自動重新定位 UI
         this.scale.on('resize', (gameSize) => {
             this.joyStick.setPosition(safeMargin, gameSize.height - safeMargin);
             this.btnA.setPosition(gameSize.width - safeMargin, gameSize.height - safeMargin);
@@ -239,14 +357,12 @@ class MainScene extends Phaser.Scene {
         this.sceneName = window.GameLogic.currentScene;
         this.isCafe = this.sceneName === "cafe";
         
-        // 依據場景設定地圖尺寸
         const mapW = this.isCafe ? 2048 : 1280;
         const mapH = this.isCafe ? 2048 : 720;
         
         this.physics.world.setBounds(0, 0, mapW, mapH);
         this.cameras.main.setBounds(0, 0, mapW, mapH);
 
-        // 背景生成
         if (this.isCafe) {
             this.add.tileSprite(0, 0, mapW, mapH, 'bgCafe').setOrigin(0, 0);
         } else if (this.sceneName === "doghouse") {
@@ -264,7 +380,6 @@ class MainScene extends Phaser.Scene {
         
         this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
 
-        // 洋蔥精靈擺放提示文字
         this.placePrompt = this.add.text(0, 0, '洋蔥精靈: 按A確定擺放', { 
             fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', 
             color: '#fff', backgroundColor: 'rgba(74, 93, 78, 0.8)', padding: {x:8, y:4} 
@@ -273,7 +388,6 @@ class MainScene extends Phaser.Scene {
         this.cursors = this.input.keyboard.createCursorKeys();
         this.wasd = this.input.keyboard.addKeys({ w: 'W', a: 'A', s: 'S', d: 'D' });
 
-        // A鍵事件：擺放
         this.events.on('action_A_place', () => {
             let key = window.GameLogic.placingFurnitureKey;
             if(key && this.furnitureSprites[key]) {
@@ -285,7 +399,6 @@ class MainScene extends Phaser.Scene {
             }
         });
 
-        // A鍵事件：短按 (互動)
         this.events.on('action_A_short', () => {
             if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!");
             let interacted = false;
@@ -302,7 +415,6 @@ class MainScene extends Phaser.Scene {
             if(!interacted) sendBubble("使用了 A 技能!");
         });
 
-        // A鍵事件：長按 (收回)
         this.events.on('action_A_long', () => {
             if(!this.isCafe) return sendBubble("使用了集氣 A 技能!");
             let interacted = false;
@@ -384,7 +496,6 @@ class MainScene extends Phaser.Scene {
     createFurniture(key, data) {
         let f = { sprite: null, isLocked: data.locked, furnitureKey: key };
         let imgKey = key === 'fridge' ? 'fridge' : 'memory';
-        // 改為有物理剛體以利搖桿操作
         f.sprite = this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true);
         f.sprite.furnitureKey = key;
         f.sprite.isLocked = data.locked;
@@ -411,7 +522,6 @@ class MainScene extends Phaser.Scene {
         let isPlacing = window.GameLogic.placingFurnitureKey !== null && this.isCafe;
 
         if (isPlacing) {
-            // 控制家俱
             this.localPlayer.sprite.setVelocity(0, 0);
             this.localPlayer.sprite.play('idle', true);
             let f = this.furnitureSprites[window.GameLogic.placingFurnitureKey];
@@ -428,7 +538,6 @@ class MainScene extends Phaser.Scene {
                 }
             }
         } else {
-            // 控制玩家
             this.placePrompt.setVisible(false);
             this.localPlayer.sprite.setVelocity(vx, vy);
             this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
@@ -450,7 +559,6 @@ class MainScene extends Phaser.Scene {
         this.updatePlayerEntity(this.localPlayer, window.GameLogic.myProfile);
 
         if (this.isCafe) {
-            // 更新其他玩家
             const playersData = window.GameLogic.cafePlayers;
             for (let uid in playersData) {
                 if (uid === window.GameLogic.currentUser.uid) continue;
@@ -474,7 +582,6 @@ class MainScene extends Phaser.Scene {
                 }
             }
 
-            // 更新家俱
             const furnData = window.GameLogic.cafeFurniture;
             for (let key in furnData) {
                 let fd = furnData[key];
@@ -484,18 +591,15 @@ class MainScene extends Phaser.Scene {
                 let f = this.furnitureSprites[key];
                 f.sprite.isLocked = fd.locked;
                 
-                // 如果不是自己正在操作的家俱，平滑同步位置
                 if(window.GameLogic.placingFurnitureKey !== key) {
                     f.sprite.x = Phaser.Math.Linear(f.sprite.x, fd.x, 0.3);
                     f.sprite.y = Phaser.Math.Linear(f.sprite.y, fd.y, 0.3);
                 }
                 
-                // 鎖定狀態加入透明度變化示意
                 if(!fd.locked) f.sprite.setAlpha(0.6);
                 else f.sprite.setAlpha(1);
             }
             
-            // 清理被收回的家俱
             for (let key in this.furnitureSprites) {
                 if (!furnData[key]) {
                     this.furnitureSprites[key].sprite.destroy();
@@ -523,18 +627,17 @@ function initPhaser() {
 // 3. 系統 UI 事件綁定
 // ==========================================
 
-// 家俱目錄選擇
 document.querySelectorAll('.catalog-item').forEach(item => {
     item.addEventListener('click', () => {
         let key = item.dataset.key;
         document.getElementById('furniture-catalog-modal').style.display = 'none';
         
-        let pX = 1024, pY = 1024; // 預設中間
+        let pX = 1024, pY = 1024; 
         if(window.GameLogic.phaserGame) {
             let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
             if(scene && scene.localPlayer) {
                 pX = scene.localPlayer.sprite.x;
-                pY = scene.localPlayer.sprite.y - 80; // 出現在角色上方
+                pY = scene.localPlayer.sprite.y - 80; 
             }
         }
 
@@ -560,7 +663,6 @@ function showProfileModal(p, uid) {
     document.getElementById("vp-food").innerText = p.food || '無';
     document.getElementById("vp-motto").innerText = p.motto || '無';
     
-    // 隱藏編輯框，顯示文字
     ['birth', 'food', 'motto'].forEach(k => {
         document.getElementById(`vp-${k}`).style.display = 'inline';
         document.getElementById(`edit-${k}`).style.display = 'none';
@@ -573,7 +675,6 @@ function showProfileModal(p, uid) {
     viewProfileModal.style.display = "block";
 }
 
-// 身分證編輯功能
 document.getElementById("start-edit-btn").addEventListener("click", () => {
     document.getElementById("start-edit-btn").style.display = "none";
     document.getElementById("save-edit-btn").style.display = "inline-block";
@@ -600,8 +701,6 @@ document.getElementById("save-edit-btn").addEventListener("click", () => {
     });
 });
 
-
-const chatInput = document.getElementById("chat-input");
 document.getElementById("send-btn").addEventListener("click", sendChat);
 window.addEventListener("keydown", (e) => { if (e.key === "Enter" && document.activeElement === chatInput) sendChat(); });
 
