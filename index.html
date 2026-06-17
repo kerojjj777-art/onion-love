@@ -21,10 +21,10 @@
             color: var(--mucha-brown); overflow: hidden; touch-action: none; 
         }
 
-        /* 頂部導覽列 (預設隱藏，登入後顯示) */
+        /* 頂部導覽列 */
         #top-bar {
             width: 100%; height: 50px; background: linear-gradient(to bottom, #111, #2b201a);
-            border-bottom: 2px solid var(--mucha-gold); display: none; /* 隱藏 */
+            border-bottom: 2px solid var(--mucha-gold); display: none; 
             justify-content: space-between; align-items: center; padding: 0 15px;
             box-sizing: border-box; box-shadow: 0 4px 8px rgba(0,0,0,0.5); z-index: 100;
         }
@@ -40,12 +40,12 @@
         #dropdown-menu button { background: none; border: none; border-bottom: 1px solid rgba(197, 160, 89, 0.3); padding: 12px; font-size: 16px; color: var(--mucha-brown); text-align: left; cursor: pointer; }
         #app-version { padding: 8px; font-size: 12px; color: #888; text-align: center; background: #eaddc0; }
 
-        /* 登入介面 (改為帳密) */
+        /* 登入介面 */
         #login-screen { position: absolute; top: 20%; background: var(--mucha-paper); padding: 30px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 10; text-align: center; }
         #login-screen input { padding: 8px; border: 1px solid var(--mucha-gold); border-radius: 4px; background: #fffdf5; margin-bottom: 10px; width: 80%;}
         #join-btn { background: var(--mucha-gold); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 5px; font-size: 16px;}
 
-        /* 角色設定彈出視窗 */
+        /* 本人角色設定彈出視窗 */
         #settings-modal {
             position: absolute; top: 15%; background: var(--mucha-paper); padding: 25px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 150; text-align: center; display: none; box-shadow: 0 10px 25px rgba(0,0,0,0.8);
         }
@@ -55,11 +55,27 @@
         #save-settings-btn { background: var(--mucha-gold); color: white; }
         #close-settings-btn { background: #ccc; color: #333; }
 
+        /* 漂浮選單 (查看這顆蔥) */
+        #action-menu {
+            display: none; position: absolute; background: var(--mucha-paper); border: 2px solid var(--mucha-gold); 
+            border-radius: 8px; z-index: 200; padding: 5px; box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+        }
+        #view-profile-btn { background: none; border: none; cursor: pointer; font-family: inherit; font-size: 14px; color: var(--mucha-brown); padding: 8px 12px; }
+
+        /* 查看他人/自己 名牌視窗 */
+        #view-profile-modal {
+            display: none; position: absolute; top: 25%; background: var(--mucha-paper); padding: 20px 25px; 
+            border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 180; text-align: center; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.8); width: 220px;
+        }
+        #view-profile-modal p { text-align: left; margin: 8px 0; font-size: 15px; }
+        #close-vp-btn { margin-top: 15px; padding: 8px 15px; background: var(--mucha-gold); color: white; border: none; border-radius: 4px; cursor: pointer; }
+
         /* 遊戲畫布與操作區 */
-        #game-container { display: none; flex-direction: column; width: 100%; max-width: 600px; padding: 10px; box-sizing: border-box; }
-        canvas { background-color: #8d6e63; background-size: cover; border: 4px solid var(--mucha-gold); border-radius: 8px; box-shadow: 0 0 15px rgba(0,0,0,0.8); }
+        #game-container { display: none; flex-direction: column; width: 100%; max-width: 600px; padding: 10px; box-sizing: border-box; position: relative; }
+        canvas { background-color: #8d6e63; border: 4px solid var(--mucha-gold); border-radius: 8px; box-shadow: 0 0 15px rgba(0,0,0,0.8); width: 100%; height: auto; }
         
-        /* 操控區排版 (搖桿在左，AB在右) */
+        /* 操控區排版 */
         #control-panel { display: flex; justify-content: space-between; align-items: center; margin: 15px 20px; }
         
         /* 虛擬搖桿 */
@@ -72,17 +88,17 @@
         .action-btn:active { transform: translateY(6px); box-shadow: 0 0 0 #8c6e35; background: var(--mucha-gold); color: white;}
 
         /* 聊天室 */
-        #chat-section { display: none; flex-direction: column; } /* 只有在大廳顯示 */
+        #chat-section { display: none; flex-direction: column; } 
         #chat-box { height: 60px; overflow-y: auto; background: rgba(0, 0, 0, 0.5); color: #ccc; padding: 5px 10px; border: 1px solid var(--mucha-gold); border-radius: 8px; margin-bottom: 5px; font-size: 0.85em; }
         #chat-input-area { display: flex; }
-        #chat-input { flex-grow: 1; padding: 8px; border: 2px solid var(--mucha-gold); border-radius: 4px 0 0 4px; background: var(--mucha-paper); }
-        #send-btn { padding: 8px 15px; background: var(--mucha-gold); color: white; border: 2px solid var(--mucha-gold); border-radius: 0 4px 4px 0; }
+        #chat-input { flex-grow: 1; padding: 8px; border: 2px solid var(--mucha-gold); border-radius: 4px 0 0 4px; background: var(--mucha-paper); font-family: inherit;}
+        #send-btn { padding: 8px 15px; background: var(--mucha-gold); color: white; border: 2px solid var(--mucha-gold); border-radius: 0 4px 4px 0; font-family: inherit;}
     </style>
 </head>
 <body>
 
     <div id="top-bar">
-        <div id="game-title" id="scene-title">我的狗窩</div>
+        <div id="game-title">我的狗窩</div>
         <button id="menu-btn">☰</button>
     </div>
 
@@ -91,7 +107,19 @@
         <button id="nav-cafe">☕ 洋蔥大廳</button>
         <button id="nav-settings">⚙️ 角色設定</button>
         <button id="nav-logout">🚪 登出</button>
-        <div id="app-version">版本: v.0.0.3</div>
+        <div id="app-version">版本: v.0.0.4</div>
+    </div>
+
+    <div id="action-menu">
+        <button id="view-profile-btn">查看這顆蔥</button>
+    </div>
+
+    <div id="view-profile-modal">
+        <h3 style="color: var(--mucha-green); margin-top: 0; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 5px;" id="vp-title">名牌</h3>
+        <p>🎂 生日: <strong id="vp-birth"></strong></p>
+        <p>🍛 最愛: <strong id="vp-food"></strong></p>
+        <p>📜 座右銘:<br><i style="color:var(--mucha-green); font-size: 14px;">"<span id="vp-motto"></span>"</i></p>
+        <button id="close-vp-btn">關閉收合</button>
     </div>
 
     <div id="login-screen">
@@ -136,12 +164,19 @@
         </div>
     </div>
 
-    <script type="module" src="app.js?v=0.0.3"></script>
+    <script type="module" src="app.js?v=0.0.4"></script>
     <script>
         const menuBtn = document.getElementById('menu-btn');
         const dropdownMenu = document.getElementById('dropdown-menu');
         menuBtn.addEventListener('click', () => {
             dropdownMenu.style.display = dropdownMenu.style.display === 'flex' ? 'none' : 'flex';
+        });
+
+        // 點擊畫面其他地方關閉浮動選單
+        window.addEventListener('pointerdown', (e) => {
+            if (e.target.id !== 'gameCanvas' && e.target.id !== 'view-profile-btn') {
+                document.getElementById('action-menu').style.display = 'none';
+            }
         });
 
         if ('serviceWorker' in navigator) {
