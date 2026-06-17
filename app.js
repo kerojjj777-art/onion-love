@@ -72,13 +72,15 @@ onAuthStateChanged(auth, async (user) => {
         currentUser = user;
         loginScreen.style.display = "none";
         topBar.style.display = "flex";
-        gameContainer.style.display = "flex";
+        gameContainer.style.display = "flex"; // 容器顯示了！
         
+        // 【新增這行】確保容器有實際尺寸後，再啟動 Phaser
+        initPhaserEngine(); 
+
         const profileSnap = await get(ref(db, `users/${user.uid}`));
         if (profileSnap.exists()) myProfile = { ...myProfile, ...profileSnap.val() };
         else set(ref(db, `users/${user.uid}`), { name: myProfile.name, color: myProfile.color, birth: myProfile.birth, food: myProfile.food, motto: myProfile.motto });
 
-        // 讀取大廳傢俱位置
         onValue(ref(db, 'cafeFurniture'), snap => cafeFurniture = snap.val() || {});
 
         switchScene("doghouse"); 
@@ -92,6 +94,10 @@ onAuthStateChanged(auth, async (user) => {
         gameContainer.style.display = "none";
         dropdownMenu.style.display = "none";
         if (cafeUnsubscribe) cafeUnsubscribe();
+        if (game) {
+            game.destroy(true); 
+            game = null;
+        }
     }
 });
 
@@ -536,7 +542,29 @@ const phaserConfig = {
     }
 };
 
-const game = new Phaser.Game(phaserConfig);
+// 在 app.js 的全域變數區宣告 (可放在 const speed = 4; 下方)
+let game = null;
+let mySprite = null;
+let otherPlayerSprites = {}; // 準備用來裝其他玩家的 Sprite
+
+// 移到腳本底部的 Phaser 初始化函數
+function initPhaserEngine() {
+    if (game) return; // 確保只啟動一次
+    
+    const phaserConfig = {
+        type: Phaser.AUTO,
+        parent: 'phaser-app',
+        width: 600,
+        height: 350,
+        transparent: true,
+        scene: {
+            preload: preload,
+            create: create,
+            update: update
+        }
+    };
+    game = new Phaser.Game(phaserConfig);
+}
 
 let testSprite;
 
