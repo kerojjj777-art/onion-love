@@ -1,9 +1,7 @@
-// 1. 從 Firebase CDN 載入所需的模組 (替換原本的 bare imports)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js";
-import { getDatabase, ref, set, onValue, push, onDisconnect, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getDatabase, ref, set, onValue, push, onDisconnect, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-// 2. 你的專屬 Firebase 設定檔
 const firebaseConfig = {
   apiKey: "AIzaSyC266DIMj81hWMk83GEmqSbBl85VY3tTcE",
   authDomain: "onion-love.firebaseapp.com",
@@ -15,23 +13,28 @@ const firebaseConfig = {
   measurementId: "G-PBLP6XH2VY"
 };
 
-// 3. 初始化 Firebase 服務
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app); // 啟用 Google 分析 (可選)
-const db = getDatabase(app);         // 啟用即時資料庫
-
-// ==========================================
-// 下方是「洋蔥人交誼廳」的遊戲核心邏輯
-// ==========================================
+const analytics = getAnalytics(app); 
+const db = getDatabase(app);         
 
 // 遊戲變數
 let myId = `user_${Math.floor(Math.random() * 10000)}`;
 let myName = "";
 let myColor = "";
 let players = {};
-const speed = 10;
+let myX = 300, myY = 200; // 本地玩家座標
+const speed = 4; // 搖桿移動速度
 
-// DOM 元素取得
+// 搖桿變數
+let isDragging = false;
+let moveVector = { x: 0, y: 0 };
+
+// 碰撞牆壁設定 (定義一個中央吧檯作為無法穿透的區域)
+// {x, y, w, h} 代表矩形的左上角座標與寬高
+const walls = [
+    { x: 220, y: 150, w: 160, h: 60 } 
+];
+
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 const loginScreen = document.getElementById("login-screen");
@@ -39,7 +42,11 @@ const gameContainer = document.getElementById("game-container");
 const chatBox = document.getElementById("chat-box");
 const chatInput = document.getElementById("chat-input");
 
-// --- 登入與初始化 ---
+// --- 圖片素材 ---
+const onionImg = new Image();
+onionImg.src = 'onion-sprite.png'; 
+
+// --- 登入 ---
 document.getElementById("join-btn").addEventListener("click", () => {
     myName = document.getElementById("username").value || "匿名洋蔥";
     myColor = document.getElementById("usercolor").value;
@@ -47,26 +54,21 @@ document.getElementById("join-btn").addEventListener("click", () => {
     loginScreen.style.display = "none";
     gameContainer.style.display = "flex";
 
-    // 在 Firebase 建立玩家資料 (預設在畫布中間 300, 200)
     const playerRef = ref(db, `players/${myId}`);
-    set(playerRef, { x: 300, y: 200, name: myName, color: myColor });
-    
-    // 當使用者關閉視窗或斷線時，自動從資料庫移除該角色
+    set(playerRef, { x: myX, y: myY, name: myName, color: myColor, bubbleMsg: "", bubbleTime: 0 });
     onDisconnect(playerRef).remove();
 
-    // 啟動監聽與遊戲迴圈
     listenToPlayers();
     listenToChat();
     gameLoop();
 });
 
-// --- 準備圖片素材 (新增這兩行，負責把圖片載入進來) ---
-const onionImg = new Image();
-onionImg.src = 'onion-sprite.png'; // 記得把你的洋蔥人去背圖檔取名為這個
+// --- 繪製 ---
+function drawOnionMan(p) {
+    let x = p.x;
+    let y = p.y;
 
-// --- 繪製洋蔥人 (圖片升級版) ---
-function drawOnionMan(x, y, color, name) {
-    // 1. 繪製角色圖片
+    // 1. 畫角色圖
     if (onionImg.complete) {
         ctx.drawImage(onionImg, x - 25, y - 40, 50, 50); 
     } else {
@@ -74,78 +76,154 @@ function drawOnionMan(x, y, color, name) {
         ctx.fillRect(x - 25, y - 40, 50, 50);
     }
 
-    // 2. 繪製玩家名字背景 (半透明黑底)
+    // 2. 畫名字
     ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-    if (ctx.roundRect) {
-        ctx.roundRect(x - 30, y - 55, 60, 18, 4);
-    } else {
-        ctx.fillRect(x - 30, y - 55, 60, 18);
-    }
+    if (ctx.roundRect) ctx.roundRect(x - 30, y - 55, 60, 18, 4);
+    else ctx.fillRect(x - 30, y - 55, 60, 18);
     ctx.fill();
-
-    // 3. 繪製玩家名字與選擇的光環顏色
-    ctx.fillStyle = color; 
+    ctx.fillStyle = p.color; 
     ctx.font = "12px 'Georgia', serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(name, x, y - 46);
-}
+    ctx.fillText(p.name, x, y - 46);
+
+    // 3. 畫對話泡泡 (如果訊息發出不到 5 秒)
+    if (p.bubbleMsg && (Date.now() - p.bubbleTime < 5000)) {
+        ctx.fillStyle = "rgba(244, 236, 216, 0.95)"; // 羊皮紙底色
+        ctx.strokeStyle = "#c5a059";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x - 60, y - 95, 120, 30, 8);
+        else ctx.fillRect(x - 60, y - 95, 120, 30);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#3e2723"; // 文字顏色
+        ctx.font = "bold 13px 'Georgia'";
+        
+        // 限制對話泡泡長度
+        let displayMsg = p.bubbleMsg.length > 8 ? p.bubbleMsg.substring(0, 8) + "..." : p.bubbleMsg;
+        ctx.fillText(displayMsg, x, y - 80);
+    }
 }
 
-// --- 遊戲渲染迴圈 (每秒更新約 60 次畫面) ---
-function gameLoop() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height); // 清空舊畫布
+// 碰撞偵測邏輯
+function canMoveTo(newX, newY) {
+    const r = 20; // 角色的虛擬碰撞半徑
     
-    // 畫出包含自己在內的所有在線玩家
+    // 檢查畫布邊界
+    if(newX < r || newX > canvas.width - r || newY < 40 || newY > canvas.height - r) {
+        return false;
+    }
+
+    // 檢查牆壁障礙物
+    for (let wall of walls) {
+        if (newX + r > wall.x && newX - r < wall.x + wall.w &&
+            newY + r > wall.y && newY - r < wall.y + wall.h) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// 遊戲渲染迴圈
+function gameLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height); 
+    
+    // 畫出障礙物 (吧檯) 讓你稍微看得到邊界
+    ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+    walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
+
+    // 處理本地玩家移動
+    if (isDragging && (moveVector.x !== 0 || moveVector.y !== 0)) {
+        let nextX = myX + moveVector.x * speed;
+        let nextY = myY + moveVector.y * speed;
+        
+        // 分別測試 X 與 Y 軸，讓玩家可以貼著牆壁滑動
+        if (canMoveTo(nextX, myY)) myX = nextX;
+        if (canMoveTo(myX, nextY)) myY = nextY;
+    }
+
+    // 畫出所有玩家
     Object.keys(players).forEach(id => {
-        const p = players[id];
-        drawOnionMan(p.x, p.y, p.color, p.name);
+        // 如果是自己，採用本地高幀率座標渲染，否則採用雲端座標
+        let p = players[id];
+        if (id === myId) {
+            p.x = myX;
+            p.y = myY;
+        }
+        drawOnionMan(p);
     });
     
     requestAnimationFrame(gameLoop);
 }
 
-// --- 虛擬搖桿移動控制 ---
-function movePlayer(dx, dy) {
-    if (!players[myId]) return;
-    let newX = players[myId].x + dx;
-    let newY = players[myId].y + dy;
-    
-    // 簡單的邊界碰撞偵測 (不讓角色跑出畫布)
-    if(newX < 20) newX = 20; 
-    if(newX > canvas.width - 20) newX = canvas.width - 20;
-    if(newY < 40) newY = 40; 
-    if(newY > canvas.height - 20) newY = canvas.height - 20;
+// 每 100 毫秒將自己的座標同步到 Firebase，節省頻寬
+setInterval(() => {
+    if (isDragging) {
+        update(ref(db, `players/${myId}`), { x: myX, y: myY });
+    }
+}, 100);
 
-    // 將新座標更新到 Firebase (這會自動觸發所有人畫面的更新)
-    set(ref(db, `players/${myId}`), {
-        x: newX, y: newY, name: myName, color: myColor
-    });
+// --- 觸控虛擬搖桿邏輯 ---
+const zone = document.getElementById('joystick-zone');
+const knob = document.getElementById('joystick-knob');
+const center = { x: 60, y: 60 }; // zone 的中心點
+const maxDist = 35; // 搖桿最大推動距離
+
+function handleTouch(e) {
+    e.preventDefault(); // 阻止螢幕跟著滾動
+    isDragging = true;
+    const rect = zone.getBoundingClientRect();
+    const touch = e.touches[0];
+    
+    let dx = touch.clientX - rect.left - center.x;
+    let dy = touch.clientY - rect.top - center.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if (distance > maxDist) {
+        dx = (dx / distance) * maxDist;
+        dy = (dy / distance) * maxDist;
+    }
+    
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    moveVector.x = dx / maxDist;
+    moveVector.y = dy / maxDist;
 }
 
-// 綁定搖桿按鈕
-document.getElementById("btn-up").onclick = () => movePlayer(0, -speed);
-document.getElementById("btn-down").onclick = () => movePlayer(0, speed);
-document.getElementById("btn-left").onclick = () => movePlayer(-speed, 0);
-document.getElementById("btn-right").onclick = () => movePlayer(speed, 0);
+zone.addEventListener('touchstart', handleTouch, {passive: false});
+zone.addEventListener('touchmove', handleTouch, {passive: false});
+zone.addEventListener('touchend', () => {
+    isDragging = false;
+    moveVector = { x: 0, y: 0 };
+    knob.style.transform = `translate(0px, 0px)`;
+    // 停止時發送最後一次位置確保對齊
+    update(ref(db, `players/${myId}`), { x: myX, y: myY }); 
+});
 
-// --- 即時資料同步 (監聽別人移動) ---
+// --- 即時資料與聊天 ---
 function listenToPlayers() {
     onValue(ref(db, 'players'), (snapshot) => {
         players = snapshot.val() || {};
     });
 }
 
-// --- 聊天室功能 ---
 document.getElementById("send-btn").addEventListener("click", () => {
-    if (chatInput.value.trim() !== "") {
-        // push 會自動產生一組不重複的 ID 來新增對話
+    const msgText = chatInput.value.trim();
+    if (msgText !== "") {
+        // 1. 新增到歷史對話紀錄
         push(ref(db, 'chats'), {
-            name: myName,
-            msg: chatInput.value,
+            name: myName, msg: msgText,
             time: new Date().toLocaleTimeString('zh-TW', { hour12: false })
         });
-        chatInput.value = ""; // 清空輸入框
+        
+        // 2. 更新到自己角色的頭頂泡泡
+        update(ref(db, `players/${myId}`), {
+            bubbleMsg: msgText,
+            bubbleTime: Date.now()
+        });
+        
+        chatInput.value = ""; 
     }
 });
 
@@ -155,9 +233,8 @@ function listenToChat() {
         const chats = snapshot.val();
         if (chats) {
             Object.values(chats).forEach(c => {
-                chatBox.innerHTML += `<div><strong style="color:#2e7d32;">${c.name}</strong> <span style="font-size:0.8em;color:#888;">[${c.time}]</span>: ${c.msg}</div>`;
+                chatBox.innerHTML += `<div><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg}</div>`;
             });
-            // 自動捲動到最新訊息
             chatBox.scrollTop = chatBox.scrollHeight;
         }
     });
