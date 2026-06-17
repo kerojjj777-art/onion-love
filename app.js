@@ -1,16 +1,28 @@
+// 1. 從 Firebase CDN 載入所需的模組 (替換原本的 bare imports)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js";
 import { getDatabase, ref, set, onValue, push, onDisconnect, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-// 替換成你的 Firebase 設定
+// 2. 你的專屬 Firebase 設定檔
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-    projectId: "YOUR_PROJECT_ID",
+  apiKey: "AIzaSyC266DIMj81hWMk83GEmqSbBl85VY3tTcE",
+  authDomain: "onion-love.firebaseapp.com",
+  databaseURL: "https://onion-love-default-rtdb.firebaseio.com",
+  projectId: "onion-love",
+  storageBucket: "onion-love.firebasestorage.app",
+  messagingSenderId: "431036248901",
+  appId: "1:431036248901:web:533465a08cfa8410f7c42c",
+  measurementId: "G-PBLP6XH2VY"
 };
 
+// 3. 初始化 Firebase 服務
 const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+const analytics = getAnalytics(app); // 啟用 Google 分析 (可選)
+const db = getDatabase(app);         // 啟用即時資料庫
+
+// ==========================================
+// 下方是「洋蔥人交誼廳」的遊戲核心邏輯
+// ==========================================
 
 // 遊戲變數
 let myId = `user_${Math.floor(Math.random() * 10000)}`;
@@ -19,7 +31,7 @@ let myColor = "";
 let players = {};
 const speed = 10;
 
-// DOM 元素
+// DOM 元素取得
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 const loginScreen = document.getElementById("login-screen");
@@ -27,7 +39,7 @@ const gameContainer = document.getElementById("game-container");
 const chatBox = document.getElementById("chat-box");
 const chatInput = document.getElementById("chat-input");
 
-// --- 1. 登入與初始化 ---
+// --- 登入與初始化 ---
 document.getElementById("join-btn").addEventListener("click", () => {
     myName = document.getElementById("username").value || "匿名洋蔥";
     myColor = document.getElementById("usercolor").value;
@@ -35,27 +47,28 @@ document.getElementById("join-btn").addEventListener("click", () => {
     loginScreen.style.display = "none";
     gameContainer.style.display = "flex";
 
-    // 在 Firebase 建立玩家資料
+    // 在 Firebase 建立玩家資料 (預設在畫布中間 300, 200)
     const playerRef = ref(db, `players/${myId}`);
     set(playerRef, { x: 300, y: 200, name: myName, color: myColor });
     
-    // 當使用者關閉視窗時，自動從資料庫移除
+    // 當使用者關閉視窗或斷線時，自動從資料庫移除該角色
     onDisconnect(playerRef).remove();
 
+    // 啟動監聽與遊戲迴圈
     listenToPlayers();
     listenToChat();
     gameLoop();
 });
 
-// --- 2. 繪製洋蔥人 ---
+// --- 繪製洋蔥人 ---
 function drawOnionMan(x, y, color, name) {
+    // 身體
     ctx.fillStyle = color;
     ctx.beginPath();
-    // 簡單的洋蔥形狀 (圓形底部加上尖頭)
     ctx.arc(x, y, 20, 0, Math.PI * 2); 
     ctx.fill();
     
-    // 洋蔥上的綠色小芽
+    // 頭上綠色小芽
     ctx.fillStyle = "#4caf50";
     ctx.beginPath();
     ctx.moveTo(x, y - 20);
@@ -70,11 +83,11 @@ function drawOnionMan(x, y, color, name) {
     ctx.fillText(name, x, y - 40);
 }
 
-// 遊戲渲染迴圈
+// --- 遊戲渲染迴圈 (每秒更新約 60 次畫面) ---
 function gameLoop() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height); // 清空畫布
+    ctx.clearRect(0, 0, canvas.width, canvas.height); // 清空舊畫布
     
-    // 畫出所有玩家
+    // 畫出包含自己在內的所有在線玩家
     Object.keys(players).forEach(id => {
         const p = players[id];
         drawOnionMan(p.x, p.y, p.color, p.name);
@@ -83,43 +96,47 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
-// --- 3. 虛擬搖桿移動控制 ---
+// --- 虛擬搖桿移動控制 ---
 function movePlayer(dx, dy) {
     if (!players[myId]) return;
     let newX = players[myId].x + dx;
     let newY = players[myId].y + dy;
     
-    // 邊界限制
-    if(newX < 20) newX = 20; if(newX > canvas.width - 20) newX = canvas.width - 20;
-    if(newY < 40) newY = 40; if(newY > canvas.height - 20) newY = canvas.height - 20;
+    // 簡單的邊界碰撞偵測 (不讓角色跑出畫布)
+    if(newX < 20) newX = 20; 
+    if(newX > canvas.width - 20) newX = canvas.width - 20;
+    if(newY < 40) newY = 40; 
+    if(newY > canvas.height - 20) newY = canvas.height - 20;
 
-    // 更新 Firebase (這會觸發 onValue，更新所有人畫面)
+    // 將新座標更新到 Firebase (這會自動觸發所有人畫面的更新)
     set(ref(db, `players/${myId}`), {
         x: newX, y: newY, name: myName, color: myColor
     });
 }
 
+// 綁定搖桿按鈕
 document.getElementById("btn-up").onclick = () => movePlayer(0, -speed);
 document.getElementById("btn-down").onclick = () => movePlayer(0, speed);
 document.getElementById("btn-left").onclick = () => movePlayer(-speed, 0);
 document.getElementById("btn-right").onclick = () => movePlayer(speed, 0);
 
-// --- 4. 即時資料同步 ---
+// --- 即時資料同步 (監聽別人移動) ---
 function listenToPlayers() {
     onValue(ref(db, 'players'), (snapshot) => {
         players = snapshot.val() || {};
     });
 }
 
-// --- 5. 聊天室功能 ---
+// --- 聊天室功能 ---
 document.getElementById("send-btn").addEventListener("click", () => {
     if (chatInput.value.trim() !== "") {
+        // push 會自動產生一組不重複的 ID 來新增對話
         push(ref(db, 'chats'), {
             name: myName,
             msg: chatInput.value,
-            time: new Date().toLocaleTimeString()
+            time: new Date().toLocaleTimeString('zh-TW', { hour12: false })
         });
-        chatInput.value = "";
+        chatInput.value = ""; // 清空輸入框
     }
 });
 
@@ -129,8 +146,9 @@ function listenToChat() {
         const chats = snapshot.val();
         if (chats) {
             Object.values(chats).forEach(c => {
-                chatBox.innerHTML += `<div><strong>${c.name}</strong> [${c.time}]: ${c.msg}</div>`;
+                chatBox.innerHTML += `<div><strong style="color:#2e7d32;">${c.name}</strong> <span style="font-size:0.8em;color:#888;">[${c.time}]</span>: ${c.msg}</div>`;
             });
+            // 自動捲動到最新訊息
             chatBox.scrollTop = chatBox.scrollHeight;
         }
     });
