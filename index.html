@@ -5,12 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>洋蔥人交誼廳</title>
     <link rel="manifest" href="manifest.json">
-
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
     
     <style>
-        /* 慕夏風格色調與字體 (古典、大地色、金色點綴) */
         :root {
             --mucha-gold: #c5a059;
             --mucha-green: #4a5d4e;
@@ -19,188 +17,50 @@
         }
 
         body { 
-            margin: 0; 
-            font-family: 'Georgia', 'Times New Roman', serif; /* 古典字體 */
-            background-color: #2b201a; /* 深木紋色背景 */
-            background-image: radial-gradient(circle, #3e2a1e 0%, #1a1008 100%);
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            color: var(--mucha-brown);
-            overflow: hidden;
+            margin: 0; font-family: 'Georgia', 'Times New Roman', serif; 
+            background-color: #2b201a; background-image: radial-gradient(circle, #3e2a1e 0%, #1a1008 100%);
+            display: flex; flex-direction: column; align-items: center; 
+            color: var(--mucha-brown); overflow: hidden; touch-action: none; /* 防止畫面跟著搖桿滑動 */
         }
 
-        /* 頂部導覽列與選單 */
+        /* 頂部導覽列 */
         #top-bar {
-            width: 100%;
-            height: 50px;
-            background: linear-gradient(to bottom, #111, #2b201a);
-            border-bottom: 2px solid var(--mucha-gold);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0 15px;
-            box-sizing: border-box;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
-            z-index: 100;
+            width: 100%; height: 50px; background: linear-gradient(to bottom, #111, #2b201a);
+            border-bottom: 2px solid var(--mucha-gold); display: flex;
+            justify-content: space-between; align-items: center; padding: 0 15px;
+            box-sizing: border-box; box-shadow: 0 4px 8px rgba(0,0,0,0.5); z-index: 100;
         }
 
-        #game-title {
-            color: var(--mucha-gold);
-            font-size: 20px;
-            letter-spacing: 2px;
-            text-shadow: 1px 1px 2px black;
-        }
-
-        /* 右上角漢堡選單按鈕 */
-        #menu-btn {
-            background: none;
-            border: 1px solid var(--mucha-gold);
-            color: var(--mucha-gold);
-            font-size: 24px;
-            cursor: pointer;
-            border-radius: 4px;
-            padding: 2px 8px;
-            transition: 0.3s;
-        }
-        #menu-btn:hover { background: rgba(197, 160, 89, 0.2); }
-
-        /* 展開選單 */
+        #game-title { color: var(--mucha-gold); font-size: 20px; letter-spacing: 2px; }
+        #menu-btn { background: none; border: 1px solid var(--mucha-gold); color: var(--mucha-gold); font-size: 24px; cursor: pointer; border-radius: 4px; transition: 0.3s; }
+        
+        /* 展開選單 (加入版本號) */
         #dropdown-menu {
-            position: absolute;
-            top: 55px;
-            right: 10px;
-            background: var(--mucha-paper);
-            border: 2px solid var(--mucha-gold);
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.7);
-            display: none; /* 預設隱藏 */
-            flex-direction: column;
-            width: 150px;
-            z-index: 100;
-            overflow: hidden;
+            position: absolute; top: 55px; right: 10px; background: var(--mucha-paper);
+            border: 2px solid var(--mucha-gold); border-radius: 8px;
+            display: none; flex-direction: column; width: 150px; z-index: 100; overflow: hidden;
         }
-        #dropdown-menu button {
-            background: none;
-            border: none;
-            border-bottom: 1px solid rgba(197, 160, 89, 0.3);
-            padding: 12px;
-            font-family: inherit;
-            font-size: 16px;
-            color: var(--mucha-brown);
-            cursor: pointer;
-            text-align: left;
-            transition: 0.2s;
-        }
-        #dropdown-menu button:hover { background: rgba(197, 160, 89, 0.2); }
-        #dropdown-menu button:last-child { border-bottom: none; }
+        #dropdown-menu button { background: none; border: none; border-bottom: 1px solid rgba(197, 160, 89, 0.3); padding: 12px; font-size: 16px; color: var(--mucha-brown); text-align: left; }
+        #app-version { padding: 8px; font-size: 12px; color: #888; text-align: center; background: #eaddc0; }
 
-        /* 登入介面 (羊皮紙風格) */
-        #login-screen { 
-            position: absolute; 
-            top: 25%; 
-            background: var(--mucha-paper); 
-            padding: 30px; 
-            border: 3px solid var(--mucha-gold);
-            border-radius: 12px; 
-            box-shadow: inset 0 0 15px rgba(0,0,0,0.1), 0 10px 20px rgba(0,0,0,0.5); 
-            z-index: 10; 
-            text-align: center;
-        }
-        #login-screen input {
-            padding: 8px;
-            border: 1px solid var(--mucha-gold);
-            border-radius: 4px;
-            background: #fffdf5;
-            font-family: inherit;
-        }
-        #join-btn {
-            background: var(--mucha-gold);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            font-size: 16px;
-            cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-        }
+        /* 登入介面 */
+        #login-screen { position: absolute; top: 25%; background: var(--mucha-paper); padding: 30px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 10; text-align: center; }
+        #login-screen input { padding: 8px; border: 1px solid var(--mucha-gold); border-radius: 4px; background: #fffdf5; }
+        #join-btn { background: var(--mucha-gold); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 15px;}
 
-        /* 遊戲主體與畫布 (咖啡廳背景) */
-        #game-container { 
-            display: none; 
-            flex-direction: column; 
-            width: 100%; 
-            max-width: 600px; 
-            padding: 10px;
-            box-sizing: border-box;
-        }
+        /* 遊戲畫布 */
+        #game-container { display: none; flex-direction: column; width: 100%; max-width: 600px; padding: 10px; box-sizing: border-box; }
+        canvas { background-color: #8d6e63; background-image: url('cafe-bg.jpg'); background-size: cover; border: 4px solid var(--mucha-gold); border-radius: 8px; box-shadow: 0 0 15px rgba(0,0,0,0.8); }
         
-        canvas { 
-            /* 這裡設定咖啡廳背景圖片 */
-            background-color: #8d6e63; /* 如果沒有圖片先用咖啡色墊底 */
-            background-image: url('cafe-bg.jpg'); /* 請準備一張咖啡廳背景圖命名為 cafe-bg.jpg */
-            background-size: cover;
-            background-position: center;
-            border: 4px solid var(--mucha-gold); 
-            border-radius: 8px; 
-            box-shadow: 0 0 15px rgba(0,0,0,0.8);
-        }
-        
-        /* 虛擬搖桿 (古典羅盤風) */
-        .controls { 
-            display: grid; 
-            grid-template-columns: 50px 50px 50px; 
-            gap: 10px; 
-            justify-content: center; 
-            margin: 15px 0; 
-        }
-        .controls button { 
-            width: 50px; 
-            height: 50px; 
-            font-size: 20px; 
-            background: var(--mucha-paper); 
-            color: var(--mucha-brown);
-            border: 2px solid var(--mucha-gold); 
-            border-radius: 50%; /* 圓形按鈕 */
-            box-shadow: 0 4px 0 var(--mucha-brown);
-            touch-action: manipulation; 
-        }
-        .controls button:active { 
-            transform: translateY(4px);
-            box-shadow: 0 0 0 var(--mucha-brown);
-        }
-        .up { grid-column: 2; } .left { grid-column: 1; } .right { grid-column: 3; } .down { grid-column: 2; }
-        
-        /* 聊天室 (RPG 對話框風格) */
-        #chat-box { 
-            height: 120px; 
-            overflow-y: auto; 
-            background: rgba(0, 0, 0, 0.7); /* 半透明黑底 */
-            color: #f4ecd8; /* 淺色文字 */
-            padding: 10px; 
-            border: 2px solid var(--mucha-gold); 
-            border-radius: 8px; 
-            margin-bottom: 5px; 
-            font-family: inherit;
-        }
+        /* 虛擬搖桿 (觸控升級版) */
+        #joystick-zone { width: 120px; height: 120px; background: rgba(197, 160, 89, 0.15); border: 2px solid var(--mucha-gold); border-radius: 50%; position: relative; margin: 15px auto; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
+        #joystick-knob { width: 50px; height: 50px; background: radial-gradient(circle, var(--mucha-gold), #8c6e35); border-radius: 50%; position: absolute; top: 35px; left: 35px; box-shadow: 0 4px 8px rgba(0,0,0,0.6); pointer-events: none; transition: transform 0.05s linear; }
+
+        /* 聊天室 (縮小歷史紀錄) */
+        #chat-box { height: 60px; overflow-y: auto; background: rgba(0, 0, 0, 0.5); color: #ccc; padding: 5px 10px; border: 1px solid var(--mucha-gold); border-radius: 8px; margin-bottom: 5px; font-size: 0.85em; }
         #chat-input-area { display: flex; }
-        #chat-input { 
-            flex-grow: 1; 
-            padding: 8px; 
-            border: 2px solid var(--mucha-gold); 
-            border-radius: 4px 0 0 4px; 
-            background: var(--mucha-paper);
-            font-family: inherit;
-        }
-        #send-btn { 
-            padding: 8px 15px; 
-            background: var(--mucha-gold); 
-            color: white; 
-            border: 2px solid var(--mucha-gold); 
-            border-radius: 0 4px 4px 0; 
-            cursor: pointer;
-            font-family: inherit;
-        }
+        #chat-input { flex-grow: 1; padding: 8px; border: 2px solid var(--mucha-gold); border-radius: 4px 0 0 4px; background: var(--mucha-paper); }
+        #send-btn { padding: 8px 15px; background: var(--mucha-gold); color: white; border: 2px solid var(--mucha-gold); border-radius: 0 4px 4px 0; }
     </style>
 </head>
 <body>
@@ -214,6 +74,7 @@
         <button onclick="alert('進入洋蔥大廳 (開發中)')">☕ 洋蔥大廳</button>
         <button onclick="alert('進入我的狗窩 (開發中)')">🏠 我的狗窩</button>
         <button onclick="alert('進入我的蔥田 (開發中)')">🌱 我的蔥田</button>
+        <div id="app-version">版本: v.0.0.1</div>
     </div>
 
     <div id="login-screen">
@@ -227,11 +88,8 @@
     <div id="game-container">
         <canvas id="gameCanvas" width="600" height="350"></canvas>
         
-        <div class="controls">
-            <button class="up" id="btn-up">▲</button>
-            <button class="left" id="btn-left">◀</button>
-            <button class="right" id="btn-right">▶</button>
-            <button class="down" id="btn-down">▼</button>
+        <div id="joystick-zone">
+            <div id="joystick-knob"></div>
         </div>
 
         <div id="chat-box"></div>
@@ -241,18 +99,29 @@
         </div>
     </div>
 
-    <script type="module" src="app.js"></script>
+    <script type="module" src="app.js?v=0.0.1"></script>
     <script>
-        // 選單開關邏輯
         const menuBtn = document.getElementById('menu-btn');
         const dropdownMenu = document.getElementById('dropdown-menu');
         menuBtn.addEventListener('click', () => {
             dropdownMenu.style.display = dropdownMenu.style.display === 'flex' ? 'none' : 'flex';
         });
 
-        // 註冊 PWA
+        // PWA 自動更新偵測機制
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js');
+            navigator.serviceWorker.register('sw.js').then(reg => {
+                reg.addEventListener('updatefound', () => {
+                    const newWorker = reg.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        // 當有新版本的 Service Worker 安裝完畢時
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            if (confirm('發現咖啡廳有新的更新！是否立即重新載入？')) {
+                                window.location.reload();
+                            }
+                        }
+                    });
+                });
+            });
         }
     </script>
 </body>
