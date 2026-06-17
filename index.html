@@ -8,6 +8,7 @@
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/phaser3-rex-plugins@1.1.89/dist/rexvirtualjoystickplugin.min.js"></script>
     
     <style>
         :root {
@@ -156,19 +157,10 @@
         <button id="join-btn">推開洋蔥世界之門</button>
     </div>
 
-    <div id="ui-layer">
+  <div id="game-container">
         <div id="furniture-panel">
-            <button id="spawn-fridge-btn">🧊 放冰箱</button>
-            <button id="spawn-memory-btn">📖 放回憶錄</button>
-        </div>
-
-        <div id="joystick-zone">
-            <div id="joystick-knob"></div>
-        </div>
-        
-        <div id="action-buttons">
-            <button class="action-btn" id="btn-b">B</button>
-            <button class="action-btn" id="btn-a">A</button>
+            <button id="spawn-fridge-btn">🧊 擺放冰箱</button>
+            <button id="spawn-memory-btn">📖 擺放回憶錄</button>
         </div>
 
         <div id="chat-section">
