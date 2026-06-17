@@ -37,7 +37,7 @@ let clickStart = { x: 0, y: 0 };
 let canvasPointerDown = false;
 
 // --- DOM 元素 ---
-const canvas = document.getElementById("gameCanvas");
+const canvas = document.getElementById("phaser-app");
 const ctx = canvas.getContext("2d");
 const loginScreen = document.getElementById("login-screen");
 const gameContainer = document.getElementById("game-container");
@@ -84,7 +84,7 @@ onAuthStateChanged(auth, async (user) => {
         switchScene("doghouse"); 
         listenToChat();
         listenToMemories();
-        requestAnimationFrame(gameLoop);
+        // requestAnimationFrame(gameLoop);
     } else {
         currentUser = null;
         loginScreen.style.display = "block";
@@ -425,7 +425,7 @@ function drawOnionMan(x, y, p) {
 }
 
 function gameLoop() {
-    if (!currentUser) return;
+    /*if (!currentUser) return;
     
     ctx.fillStyle = "#8d6e63";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -465,7 +465,7 @@ function gameLoop() {
     }
     requestAnimationFrame(gameLoop);
 }
-
+*/
 setInterval(() => {
     if (currentScene === "cafe" && currentUser && (moveVector.x !== 0 || moveVector.y !== 0)) {
         update(ref(db, `cafePlayers/${currentUser.uid}`), { x: myX, y: myY });
