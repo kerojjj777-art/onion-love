@@ -838,8 +838,9 @@ class MainScene extends Phaser.Scene {
             if (window.GameLogic.armedItem === '水球') {
                 let targetUid = null;
                 let targetSprite = null;
-                let targetType = null; // 標記打到的是玩家還是假人
-                let minDist = 75;
+                let targetType = null; 
+                // 【修正 1】：將判定半徑從 75 放寬到 150，確保貼身或稍微走位錯開時也能精準命中
+                let minDist = 150;
 
                 // 優先找玩家
                 for (let uid in this.otherPlayers) {
@@ -884,6 +885,17 @@ class MainScene extends Phaser.Scene {
                                 update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                             } else if (targetType === 'dummy') {
                                 update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                
+                                // 【修正 2】：假人沒有真實客戶端，被砸中時由「攻擊方」負責廣播掉落的馬德幣
+                                for (let i = 0; i < 3; i++) {
+                                    let cx = targetSprite.x + Phaser.Math.Between(-40, 40);
+                                    let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
+                                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                                        module.push(module.ref(window.GameLogic.db, 'droppedCoins'), {
+                                            x: cx, y: cy, amount: 5
+                                        });
+                                    });
+                                }
                             }
                         }
                     });
@@ -980,6 +992,33 @@ class MainScene extends Phaser.Scene {
                 remove(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`)); // 吸收事件
             }
         });
+
+         this.dummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/dummyHits'), (snap) => {
+            let hits = snap.val() || {};
+            for (let key in hits) {
+                let data = hits[key];
+                // 確保事件是最近 2 秒內發生的，並且場景中確實存在這個假人
+                if (data && data.time && (Date.now() - data.time < 2000) && this.dummySprites[key]) {
+                    let dummy = this.dummySprites[key];
+                    
+                    // 避免重複觸發，確保動畫順利播完
+                    if (!dummy.isStunned) {
+                        dummy.isStunned = true;
+                        dummy.play('dummy-hit', true); // 播放濕透動畫
+                        
+                        // 1.5 秒後假人恢復原狀
+                        this.time.delayedCall(1500, () => { 
+                            if (this.dummySprites[key]) {
+                                dummy.isStunned = false; 
+                                dummy.anims.stop();
+                                dummy.setTexture('dummy');
+                            }
+                        });
+                    }
+                }
+            }
+        });
+      
     }
 
     spawnTrash() {
