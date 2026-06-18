@@ -102,6 +102,17 @@ function createSystemUI() {
                 <div>💰 <strong id="vp-coins" style="color:#d4af37;">0</strong> 馬德幣</div>
             </div>
             <div class="profile-line"><span>🧹 掃皮王:</span> <strong id="vp-sweeps">0</strong> 次</div>
+            
+            <div class="profile-line">
+                <span>👤 暱稱:</span> 
+                <strong id="vp-name"></strong>
+                <input type="text" id="edit-name" style="display:none; width:50%;">
+            </div>
+            <div class="profile-line">
+                <span>🎨 代表色:</span> 
+                <span id="vp-color" style="display:inline-block; width:20px; height:20px; border-radius:50%; border:2px solid var(--mucha-gold);"></span>
+                <input type="color" id="edit-color" style="display:none; width:40px; height:30px; border:none; padding:0; background:none;">
+            </div>
             <div class="profile-line"><span>🎂 生日:</span> <strong id="vp-birth"></strong><input type="text" id="edit-birth" style="display:none;"></div>
             <div class="profile-line"><span>🍛 最愛:</span> <strong id="vp-food"></strong><input type="text" id="edit-food" style="display:none;"></div>
             <div class="profile-line" style="flex-direction: column; align-items: flex-start;">
