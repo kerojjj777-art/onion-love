@@ -886,11 +886,18 @@ function showProfileModal(p, uid) {
     document.getElementById("vp-exp").innerText = p.exp || 0;
     document.getElementById("vp-coins").innerText = p.coins || 0;
     document.getElementById("vp-sweeps").innerText = p.sweeps || 0;
+    
+    // 【修改點】綁定姓名與顏色的顯示
+    document.getElementById("vp-name").innerText = p.name || '匿名';
+    document.getElementById("vp-color").style.backgroundColor = p.color || '#c5a059';
     document.getElementById("vp-birth").innerText = p.birth || '未知';
     document.getElementById("vp-food").innerText = p.food || '無';
     document.getElementById("vp-motto").innerText = p.motto || '無';
     
-    ['birth', 'food', 'motto'].forEach(k => { document.getElementById(`vp-${k}`).style.display = 'inline'; document.getElementById(`edit-${k}`).style.display = 'none'; });
+    ['name', 'color', 'birth', 'food', 'motto'].forEach(k => { 
+        document.getElementById(`vp-${k}`).style.display = k === 'color' ? 'inline-block' : 'inline'; 
+        document.getElementById(`edit-${k}`).style.display = 'none'; 
+    });
 
     const isMe = uid === window.GameLogic.currentUser.uid;
     document.getElementById("start-edit-btn").style.display = isMe ? "inline-block" : "none";
@@ -902,17 +909,40 @@ function showProfileModal(p, uid) {
 document.getElementById("start-edit-btn").addEventListener("click", () => {
     document.getElementById("start-edit-btn").style.display = "none";
     document.getElementById("save-edit-btn").style.display = "inline-block";
-    ['birth', 'food', 'motto'].forEach(k => {
-        let t = document.getElementById(`vp-${k}`); let i = document.getElementById(`edit-${k}`);
-        i.value = t.innerText === '未知' || t.innerText === '無' ? '' : t.innerText;
-        t.style.display = 'none'; i.style.display = 'inline-block';
+    ['name', 'color', 'birth', 'food', 'motto'].forEach(k => {
+        let t = document.getElementById(`vp-${k}`); 
+        let i = document.getElementById(`edit-${k}`);
+        
+        // 【修改點】針對不同欄位給予預設編輯值
+        if (k === 'color') {
+            i.value = window.GameLogic.myProfile.color || '#c5a059';
+        } else if (k === 'name') {
+            i.value = window.GameLogic.myProfile.name || '匿名';
+        } else {
+            i.value = t.innerText === '未知' || t.innerText === '無' ? '' : t.innerText;
+        }
+        t.style.display = 'none'; 
+        i.style.display = 'inline-block';
     });
 });
 
 document.getElementById("save-edit-btn").addEventListener("click", () => {
-    let newData = { birth: document.getElementById("edit-birth").value.trim() || '未知', food: document.getElementById("edit-food").value.trim() || '無', motto: document.getElementById("edit-motto").value.trim() || '無' };
+    // 【修改點】打包 Name 與 Color 送進資料庫
+    let newData = { 
+        name: document.getElementById("edit-name").value.trim() || '匿名',
+        color: document.getElementById("edit-color").value || '#c5a059',
+        birth: document.getElementById("edit-birth").value.trim() || '未知', 
+        food: document.getElementById("edit-food").value.trim() || '無', 
+        motto: document.getElementById("edit-motto").value.trim() || '無' 
+    };
+    
     update(ref(db, `users/${window.GameLogic.currentUser.uid}`), newData).then(() => {
         window.GameLogic.myProfile = { ...window.GameLogic.myProfile, ...newData };
+        
+        // 若使用者在大廳中，同步更新大廳中的玩家名稱與顏色
+        if (window.GameLogic.currentScene === "cafe") {
+            update(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { name: newData.name, color: newData.color });
+        }
         showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid);
     });
 });
