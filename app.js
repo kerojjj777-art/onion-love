@@ -733,22 +733,26 @@ updatePlayerEntity(entity, pData) {
                 this.localPlayer.sprite.setVelocity(vx, vy);
                 this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
                 
-                if (vx < 0) {
-                    this.localPlayer.sprite.setFlipX(true);
-                    this.localPlayer.sprite.play('walk', true);
-                }
-                else if (vx > 0) {
-                    this.localPlayer.sprite.setFlipX(false);
-                    this.localPlayer.sprite.play('walk', true);
-                }
-                else if (vy < 0) {
-                    this.localPlayer.sprite.play('walk-up', true);
-                }
-                else if (vy > 0) {
-                    this.localPlayer.sprite.play('walk-down', true);
-                }
-                else {
+// 【修正點】：加入浮點數死區過濾誤差，並比較主要移動軸
+                let absX = Math.abs(vx);
+                let absY = Math.abs(vy);
+
+                if (absX < 1) vx = 0; // 過濾掉極小的浮點數
+                if (absY < 1) vy = 0;
+
+                if (vx === 0 && vy === 0) {
                     this.localPlayer.sprite.play('idle', true);
+                } else if (absX >= absY) {
+                    // 當橫向移動大於或等於縱向時，以左右動畫為主
+                    this.localPlayer.sprite.setFlipX(vx < 0);
+                    this.localPlayer.sprite.play('walk', true);
+                } else {
+                    // 當縱向移動較大時，以上下動畫為主
+                    if (vy < 0) {
+                        this.localPlayer.sprite.play('walk-up', true);
+                    } else {
+                        this.localPlayer.sprite.play('walk-down', true);
+                    }
                 }
                 
                 if (this.isCafe && (vx !== 0 || vy !== 0)) {
