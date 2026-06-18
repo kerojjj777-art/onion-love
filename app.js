@@ -283,7 +283,15 @@ function switchScene(sceneName) {
 
 function joinCafe() {
     const playerRef = ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`);
-    set(playerRef, { x: window.GameLogic.myProfile.lastX || 1024, y: window.GameLogic.myProfile.lastY || 1024, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, bubbleMsg: window.GameLogic.myProfile.bubbleMsg, bubbleTime: window.GameLogic.myProfile.bubbleTime });
+    set(playerRef, { 
+        x: window.GameLogic.myProfile.lastX || 1024, 
+        y: window.GameLogic.myProfile.lastY || 1024, 
+        name: window.GameLogic.myProfile.name, 
+        color: window.GameLogic.myProfile.color, 
+        level: window.GameLogic.myProfile.level || 1, // 【新增此行】廣播等級資訊
+        bubbleMsg: window.GameLogic.myProfile.bubbleMsg, 
+        bubbleTime: window.GameLogic.myProfile.bubbleTime 
+    });
     onDisconnect(playerRef).remove(); 
     cafeUnsubscribe = onValue(ref(db, 'cafePlayers'), (snapshot) => window.GameLogic.cafePlayers = snapshot.val() || {});
 }
