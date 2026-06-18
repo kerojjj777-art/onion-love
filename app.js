@@ -191,11 +191,14 @@ function createSystemUI() {
                 <h3 style="margin-top:0; border:none; color:var(--mucha-brown);">🏪 7-EONION 便利商店</h3>
                 <div id="store-list" class="catalog-grid">
                     <div class="catalog-item" onclick="window.openPurchaseModal('水球', 20)">
-                        <span style="font-size:30px;">🎈</span>
+                        <div class="sprite-waterball"></div>
                         <span style="margin-top:5px;">水球</span>
                         <span style="color:#d4af37; font-size:12px; font-weight:bold;">20 馬德幣</span>
                     </div>
                 </div>
+                <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('store-modal').style.display='none'; window.GameLogic.isShopping = false;">離開商店</button>
+            </div>
+        </div>
                 <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('store-modal').style.display='none'; window.GameLogic.isShopping = false;">離開商店</button>
             </div>
         </div>
@@ -276,9 +279,22 @@ window.openInventoryModal = function() {
         list.innerHTML = "<div style='grid-column:span 2; text-align:center; color:#888; padding: 20px;'>背包空空如也...</div>";
     } else {
         keys.forEach(k => {
-            let icon = k === '水球' ? '🎈' : '📦';
-            // 將原本的純 alert 替換成呼叫 window.useItem
-            list.innerHTML += `<div class="catalog-item"><span style="font-size:24px;">${icon}</span><span style="margin:5px 0;">${k} x${inv[k]}</span><button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.useItem('${k}')">使用</button></div>`;
+            // 判斷：如果是水球就用動畫 div，其他道具則維持原本或使用預設符號
+            let iconHtml = "";
+            if (k === '水球') {
+                iconHtml = '<div class="sprite-waterball"></div>';
+            } else if (k === '假人洋蔥') {
+                iconHtml = '<img src="dummy.png" style="width:50px; height:50px; margin-bottom:5px;">';
+            } else {
+                iconHtml = '<span style="font-size:24px; margin-bottom:5px;">📦</span>';
+            }
+            
+            list.innerHTML += `
+                <div class="catalog-item">
+                    ${iconHtml}
+                    <span style="margin:5px 0;">${k} x${inv[k]}</span>
+                    <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.useItem('${k}')">使用</button>
+                </div>`;
         });
     }
     document.getElementById('inventory-modal').style.display = 'block';
