@@ -220,7 +220,6 @@ onAuthStateChanged(auth, async (user) => {
             }
         });
 
-        // 解決黑屏破圖的競速條件，確保 Phaser 載入完畢再切換場景
         if (!window.GameLogic.phaserGame) {
             window.GameLogic.pendingScene = window.GameLogic.myProfile.lastScene || "doghouse";
             initPhaser();
@@ -266,6 +265,8 @@ function switchScene(sceneName) {
         const game = window.GameLogic.phaserGame;
         game.scene.stop('MainScene');
         game.scene.start('MainScene'); 
+        // 修正: 確保切換場景後，UI 圖層永遠保持在最上層，不會被覆蓋
+        game.scene.bringToTop('UIScene');
     }
 }
 
@@ -305,7 +306,9 @@ function gainRewards(coins, exp) {
 class BootScene extends Phaser.Scene {
     constructor() { super('BootScene'); }
     preload() {
-        this.load.plugin('rexvirtualjoystickplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexvirtualjoystickplugin.min.js', true);
+        // 修正: GitHub raw 會阻擋 JS 執行，改用 jsDelivr CDN 確保不會在 Github Pages 上死機
+        this.load.plugin('rexvirtualjoystickplugin', 'https://cdn.jsdelivr.net/gh/rexrainbow/phaser3-rex-notes@master/dist/rexvirtualjoystickplugin.min.js', true);
+        
         this.load.image('bgCafe', 'cafe-bg.jpg');
         this.load.image('bgDoghouse', 'doghouse-bg.jpg');
         this.load.image('bgFarm', 'farm-bg.jpg');
@@ -321,7 +324,6 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('onion-idle', 'onion-idle.png', { frameWidth: 50, frameHeight: 50 });
     }
     create() {
-        // 更新為直接抓取各自方向圖檔的動畫設定
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('onion-up'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'walk', frames: this.anims.generateFrameNumbers('onion-walk', { start: 0, end: 5 }), frameRate: 10, repeat: -1 });
@@ -329,6 +331,7 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'skin-anim', frames: this.anims.generateFrameNumbers('onion-skin', { start: 0, end: 3 }), frameRate: 5, repeat: -1 });
         
         this.scene.launch('UIScene');
+        this.scene.bringToTop('UIScene'); // 確保剛載入時 UI 在最頂
         
         window.GameLogic.phaserLoaded = true;
         if (window.GameLogic.pendingScene) {
@@ -412,6 +415,7 @@ class UIScene extends Phaser.Scene {
     }
 
     resizeUI(gameSize) {
+        if (!this.joyStick) return;
         const safeMargin = 80;
         const isPortrait = gameSize.height > gameSize.width;
         const bottomOffset = isPortrait ? 120 : 20; 
@@ -447,7 +451,6 @@ class MainScene extends Phaser.Scene {
 
         if (this.isCafe) {
             this.add.tileSprite(0, 0, mapW, mapH, 'bgCafe').setOrigin(0, 0);
-            // 縮短檢測週期至 2 秒，加快遊戲內垃圾生成體感
             this.time.addEvent({ delay: 2000, callback: this.spawnTrash, callbackScope: this, loop: true });
 
             const mapSize = 120; const margin = 20;
@@ -507,12 +510,12 @@ class MainScene extends Phaser.Scene {
             let key = window.GameLogic.placingFurnitureKey;
             if(key && this.furnitureSprites[key]) {
                 let f = this.furnitureSprites[key];
-                f.sprite.setVelocity(0, 0); // 防範殘留速度
+                f.sprite.setVelocity(0, 0); 
                 update(ref(window.GameLogic.db, `cafeFurniture/${key}`), { 
                     locked: true, x: f.sprite.x, y: f.sprite.y, ownerUid: window.GameLogic.currentUser.uid 
                 });
                 window.GameLogic.placingFurnitureKey = null;
-                this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); // 確保鏡頭回歸
+                this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); 
             }
         });
 
@@ -564,9 +567,8 @@ class MainScene extends Phaser.Scene {
         if (!this.isCafe) return;
         let playerCount = Object.keys(window.GameLogic.cafePlayers || {}).length || 1;
         
-        // 單人上限為10，每多一人增加 2.5 個上限，最高 20 個
         let maxTrash = Math.floor(Math.min(10 + Math.max(0, playerCount - 1) * 2.5, 20));
-        let spawnChance = 0.3 + (playerCount * 0.05); // 提高基礎生成機率
+        let spawnChance = 0.3 + (playerCount * 0.05); 
         
         if (Math.random() < spawnChance && this.trashes.length < maxTrash) { 
             let tx = Phaser.Math.Between(150, 1898); 
@@ -685,7 +687,6 @@ class MainScene extends Phaser.Scene {
             if (isPlacing) {
                 this.localPlayer.sprite.setVelocity(0, 0).play('idle', true);
                 let f = this.furnitureSprites[window.GameLogic.placingFurnitureKey];
-                // 防呆機制：若家俱實體被砍掉但仍在擺設狀態，跳脫放置狀態並回歸原鏡頭
                 if (f && f.sprite && f.sprite.active) {
                     f.sprite.setVelocity(vx, vy);
                     this.cameras.main.startFollow(f.sprite, true, 0.1, 0.1);
