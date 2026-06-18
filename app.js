@@ -316,12 +316,19 @@ class BootScene extends Phaser.Scene {
         // 將洋蔥皮更改為精靈圖
         this.load.spritesheet('onion-skin', 'onion-skin-sprite.png', { frameWidth: 50, frameHeight: 50 });
         this.load.spritesheet('onion', 'onion-sprite.png', { frameWidth: 50, frameHeight: 50 });
+        this.load.spritesheet('onion-down', 'onion-down.png', { frameWidth: 50, frameHeight: 50 });
+        this.load.spritesheet('onion-up', 'onion-up.png', { frameWidth: 50, frameHeight: 50 });
+        this.load.spritesheet('onion-walk', 'onion-right.png', { frameWidth: 181, frameHeight: 362 });
+        this.load.spritesheet('onion-idle', 'onion-idle.png', { frameWidth: 50, frameHeight: 50 });
     }
     create() {
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'walk-left', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'walk-right', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'walk', frames: this.anims.generateFrameNumbers('onion-walk', { start: 0, end: 5 }), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'walk-up-left', frames: this.anims.generateFrameNumbers('onion', { start: 16, end: 19 }), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'walk-up-right', frames: this.anims.generateFrameNumbers('onion', { start: 20, end: 23 }), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'walk-down-left', frames: this.anims.generateFrameNumbers('onion', { start: 24, end: 27 }), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'walk-down-right', frames: this.anims.generateFrameNumbers('onion', { start: 28, end: 31 }), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'idle', frames: [{ key: 'onion', frame: 0 }], frameRate: 10 });
         this.anims.create({ key: 'skin-anim', frames: this.anims.generateFrameNumbers('onion-skin', { start: 0, end: 3 }), frameRate: 5, repeat: -1 });
         
@@ -663,9 +670,20 @@ class MainScene extends Phaser.Scene {
                 vx = Math.cos(uiScene.joyStick.angle * Math.PI / 180) * speed; vy = Math.sin(uiScene.joyStick.angle * Math.PI / 180) * speed;
             } else {
                 if (document.activeElement.tagName !== 'INPUT') {
-                    if (this.cursors.left.isDown) vx = -speed; if (this.cursors.right.isDown) vx = speed;
+                    if (this.cursors.left.isDown) {
+                        this.localPlayer.sprite.setVelocityX(-180); // 給予向左的速度
+                        this.localPlayer.sprite.setFlipX(true);     // ⭐️ 關鍵：啟動水平鏡像（變成向左看）
+                        this.localPlayer.sprite.play('walk', true); // 播放剛剛定義好的 walk 動畫
+                    } // 偵測是否按下「右鍵」
+                    else if (this.cursors.right.isDown) {
+                        this.localPlayer.sprite.setVelocityX(180);  // 給予向右的速度
+                        this.localPlayer.sprite.setFlipX(false);    // ⭐️ 關鍵：關閉水平鏡像（恢復原本向右看）
+                        this.localPlayer.sprite.play('walk', true); // 播放 walk 動畫
                     if (this.cursors.up.isDown) vy = -speed; if (this.cursors.down.isDown) vy = speed;
-                }
+                    }
+                    // 如果都沒按（停留在原地）
+                    else {
+                        this.localPlayer.sprite.setVelocityX(0);    // 速度歸零
                 if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; } 
             }
 
