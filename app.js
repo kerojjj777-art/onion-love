@@ -214,29 +214,41 @@ window.useItem = function(itemName) {
     let inv = window.GameLogic.myProfile.inventory || {};
     if (inv[itemName] && inv[itemName] > 0) {
         if (itemName === '水球') {
-            // 不立刻扣除數量，改為切換成「裝備狀態」
             window.GameLogic.armedItem = '水球';
             document.getElementById('inventory-modal').style.display = 'none';
-            alert("💦 已準備水球！請靠近其他玩家 (75像素內) 並按 A 鍵投擲！");
+            alert("💦 已準備水球！請靠近其他玩家或假人 (75像素內) 並按 A 鍵投擲！");
             return; 
         }
-        
-        inv[itemName] -= 1; // 其他道具直接扣除數量
-        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-            module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { 
-                inventory: inv
+
+        if (itemName === '假人洋蔥') {
+            if (window.GameLogic.currentScene !== "cafe") {
+                alert("假人洋蔥只能在大廳放置喔！");
+                return;
+            }
+            inv[itemName] -= 1;
+            
+            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
+                // 放置於玩家右側稍微偏移的位置，避免與玩家完全重疊
+                let px = window.GameLogic.myProfile.lastX || 1024;
+                let py = window.GameLogic.myProfile.lastY || 1024;
+                module.push(module.ref(window.GameLogic.db, 'cafeDummies'), {
+                    x: px + 40,
+                    y: py,
+                    ownerUid: window.GameLogic.currentUser.uid
+                });
             });
+            
+            document.getElementById('inventory-modal').style.display = 'none';
+            alert("已成功放置假人洋蔥！");
+            return;
+        }
+        
+        inv[itemName] -= 1; 
+        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+            module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
         });
-        
         alert(`你成功使用了 ${itemName}！`);
-        window.openInventoryModal();
-    }
-};
-        
-        // 若需更多互動，未來可在這裡加入放水球特效
-        alert(`你成功使用了 ${itemName}！`);
-        
-        // 重新渲染背包介面
         window.openInventoryModal();
     }
 };
@@ -494,6 +506,8 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('water-ball-blast', 'water-ball-blast.png', { frameWidth: 50, frameHeight: 50 });
         this.load.spritesheet('onion-wet', 'onion-wet.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('made-coin', 'made-coin.png', { frameWidth: 50, frameHeight: 50 });
+        this.load.image('dummy', 'dummy.png');
+        this.load.spritesheet('dummy-wet', 'dummy-wet.png', { frameWidth: 75, frameHeight: 75 });
     }
     create() {
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 });
@@ -502,10 +516,11 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'idle', frames: this.anims.generateFrameNumbers('onion-idle'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'skin-anim', frames: this.anims.generateFrameNumbers('onion-skin', { start: 0, end: 3 }), frameRate: 5, repeat: -1 });
         this.anims.create({ key: 'clean', frames: this.anims.generateFrameNumbers('onion-clean'), frameRate: 10, repeat: -1 });
-       this.anims.create({ key: 'throw', frames: this.anims.generateFrameNumbers('onion-throw'), frameRate: 10, repeat: 0 });
+        this.anims.create({ key: 'throw', frames: this.anims.generateFrameNumbers('onion-throw'), frameRate: 10, repeat: 0 });
         this.anims.create({ key: 'wb-blast', frames: this.anims.generateFrameNumbers('water-ball-blast'), frameRate: 15, repeat: -1 });
         this.anims.create({ key: 'wet', frames: this.anims.generateFrameNumbers('onion-wet'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'coin-anim', frames: this.anims.generateFrameNumbers('made-coin'), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'dummy-hit', frames: this.anims.generateFrameNumbers('dummy-wet'), frameRate: 10, repeat: -1 });
       
         this.scene.launch('UIScene');
         this.scene.bringToTop('UIScene'); // 確保剛載入時 UI 在最頂
@@ -771,20 +786,63 @@ class MainScene extends Phaser.Scene {
         });
 
         this.events.on('action_A_short', () => {
-        if (window.GameLogic.armedItem === '水球') {
+if (window.GameLogic.armedItem === '水球') {
             let targetUid = null;
             let targetSprite = null;
-            let minDist = 75; // 判定範圍 75 像素
+            let targetType = null; // 標記打到的是玩家還是假人
+            let minDist = 75;
 
+            // 優先找玩家
             for (let uid in this.otherPlayers) {
                 let op = this.otherPlayers[uid].sprite;
                 let d = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, op.x, op.y);
                 if (d < minDist) {
-                    minDist = d;
-                    targetUid = uid;
-                    targetSprite = op;
+                    minDist = d; targetUid = uid; targetSprite = op; targetType = 'player';
                 }
             }
+
+            // 同時找假人 (若假人更近，則改鎖定假人)
+            for (let key in this.dummySprites) {
+                let dummy = this.dummySprites[key];
+                let d = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, dummy.x, dummy.y);
+                if (d < minDist) {
+                    minDist = d; targetUid = key; targetSprite = dummy; targetType = 'dummy';
+                }
+            }
+
+            let inv = window.GameLogic.myProfile.inventory || {};
+            inv['水球'] = Math.max(0, (inv['水球'] || 0) - 1);
+            update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
+            window.GameLogic.armedItem = null; 
+            
+            if (targetSprite) {
+                this.localPlayer.sprite.setFlipX(targetSprite.x < this.localPlayer.sprite.x);
+            }
+
+            this.localPlayer.sprite.play('throw', true);
+            this.localPlayer.isThrowing = true;
+            this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
+
+            if (targetUid && targetSprite) {
+                let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15);
+                wb.play('wb-blast', true);
+                
+                this.tweens.add({
+                    targets: wb, x: targetSprite.x, y: targetSprite.y, duration: 200,
+                    onComplete: () => {
+                        wb.destroy();
+                        if (targetType === 'player') {
+                            update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                        } else if (targetType === 'dummy') {
+                            update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                        }
+                    }
+                });
+            } else {
+                sendBubble("把水球砸向了空地...");
+            }
+            return; 
+        }
 
             // 扣除背包水球
             let inv = window.GameLogic.myProfile.inventory || {};
