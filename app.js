@@ -301,7 +301,7 @@ function switchScene(sceneName) {
     window.GameLogic.currentScene = sceneName;
     window.GameLogic.placingFurnitureKey = null; 
     
-    if (sceneName === "doghouse" || sceneName === "farm" || sceneName === "shrine") {
+    if (sceneName === "doghouse" || sceneName === "farm" || sceneName === "shrine" || sceneName === "7eonion") {
         chatSection.style.display = "none";
         leaveCafe();
     } else if (sceneName === "cafe") {
