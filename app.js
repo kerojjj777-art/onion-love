@@ -126,7 +126,7 @@ function createSystemUI() {
 // 執行 UI 初始化
 createSystemUI();
 
-// --- DOM 元素 (須在 UI 生成後才能綁定) ---
+// --- DOM 元素 ---
 const loginScreen = document.getElementById("login-screen");
 const gameLayoutContainer = document.getElementById("game-layout-container");
 const chatSection = document.getElementById("chat-section");
@@ -150,14 +150,12 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// 點擊畫面其他地方關閉浮動選單
 window.addEventListener('pointerdown', (e) => {
     if (!e.target.closest('#action-menu') && e.target.tagName !== 'CANVAS') {
         actionMenu.style.display = 'none';
     }
 });
 
-// 聊天室收合功能
 document.getElementById('chat-toggle-btn').addEventListener('click', function() {
     chatSection.classList.toggle('chat-collapsed');
     if (chatSection.classList.contains('chat-collapsed')) {
@@ -205,7 +203,7 @@ onAuthStateChanged(auth, async (user) => {
 
 function switchScene(sceneName) {
     window.GameLogic.currentScene = sceneName;
-    window.GameLogic.placingFurnitureKey = null; // 切換場景取消擺放
+    window.GameLogic.placingFurnitureKey = null; 
     
     if (sceneName === "doghouse" || sceneName === "farm") {
         chatSection.style.display = "none";
@@ -235,7 +233,7 @@ function leaveCafe() {
 }
 
 // ==========================================
-// 2. Phaser 3 引擎架構 (升級整合版)
+// 2. Phaser 3 引擎架構
 // ==========================================
 class BootScene extends Phaser.Scene {
     constructor() { super('BootScene'); }
@@ -246,7 +244,7 @@ class BootScene extends Phaser.Scene {
         this.load.image('bgFarm', 'farm-bg.jpg');
         this.load.image('fridge', 'fridge.png');
         this.load.image('memory', 'memory.png');
-        this.load.image('onion-skin', 'onion-skin.png'); // 新增：洋蔥皮素材
+        this.load.image('onion-skin', 'onion-skin.png'); 
         this.load.spritesheet('onion', 'onion-sprite.png', { frameWidth: 50, frameHeight: 50 });
     }
     create() {
@@ -272,7 +270,7 @@ class UIScene extends Phaser.Scene {
             thumb: this.add.circle(0, 0, 20, 0xc5a059, 0.8)
         });
 
-        // 升級一：操作區塊分離 (全數移至右下角)
+        // 介面按鈕 (右下角)
         this.btnA = this.add.circle(this.cameras.main.width - safeMargin, this.cameras.main.height - safeMargin, 30, 0xd4c5a0).setStrokeStyle(3, 0xc5a059).setInteractive();
         this.txtA = this.add.text(this.btnA.x, this.btnA.y, 'A', { fontSize: '24px', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5);
         
@@ -280,12 +278,13 @@ class UIScene extends Phaser.Scene {
         this.txtB = this.add.text(this.btnB.x, this.btnB.y, 'B', { fontSize: '20px', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5);
 
         this.mapBtn = this.add.circle(this.cameras.main.width - safeMargin, this.cameras.main.height - safeMargin - 70, 25, 0x4a5d4e).setStrokeStyle(3, 0xc5a059).setInteractive();
-        this.mapText = this.add.text(this.mapBtn.x, this.mapBtn.y, '地圖', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
+        // 將原本的"地圖"文字改為"選單"，避免與真的小地圖混淆
+        this.mapText = this.add.text(this.mapBtn.x, this.mapBtn.y, '選單', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
 
         this.furnBtn = this.add.circle(this.cameras.main.width - safeMargin - 70, this.cameras.main.height - safeMargin - 70, 25, 0x8b5a2b).setStrokeStyle(3, 0xc5a059).setInteractive();
         this.furnText = this.add.text(this.furnBtn.x, this.furnBtn.y, '家俱', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
 
-        // 升級一：選單防擋修正 (移至更左上方)
+        // 選單
         this.menuContainer = this.add.container(this.cameras.main.width - 240, this.cameras.main.height - 380).setVisible(false).setDepth(200);
         const menuBg = this.add.graphics();
         menuBg.fillStyle(0xf4ecd8, 0.95); menuBg.lineStyle(2, 0xc5a059, 1);
@@ -305,13 +304,6 @@ class UIScene extends Phaser.Scene {
             btn.on('pointerdown', opt.action);
             this.menuContainer.add(btn);
         });
-
-        // 升級四：橫向溫度計進度條 (QTE 專用)
-        this.qteContainer = this.add.container(this.cameras.main.width / 2, 80).setVisible(false).setDepth(300);
-        const qteBg = this.add.graphics().fillStyle(0x3e2723, 0.8).fillRoundedRect(-104, -14, 208, 28, 14).lineStyle(3, 0xc5a059).strokeRoundedRect(-104, -14, 208, 28, 14);
-        this.qteBar = this.add.graphics();
-        const qteLabel = this.add.text(0, -35, '打掃進度', { fontSize: '16px', color: '#c5a059', fontStyle: 'bold' }).setOrigin(0.5);
-        this.qteContainer.add([qteBg, this.qteBar, qteLabel]);
 
         this.mapBtn.on('pointerdown', () => {
             this.menuContainer.setVisible(!this.menuContainer.visible);
@@ -364,15 +356,7 @@ class UIScene extends Phaser.Scene {
             this.furnBtn.setPosition(gameSize.width - safeMargin - 70, gameSize.height - safeMargin - 70);
             this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
             this.menuContainer.setPosition(gameSize.width - 240, gameSize.height - 380);
-            this.qteContainer.setPosition(gameSize.width / 2, 80);
         });
-    }
-
-    updateQTEBar(progress) {
-        this.qteBar.clear();
-        let width = Math.min(200, (progress / 100) * 200);
-        this.qteBar.fillStyle(0xd9534f, 1);
-        this.qteBar.fillRoundedRect(-100, -10, width, 20, 10);
     }
 }
 
@@ -391,6 +375,28 @@ class MainScene extends Phaser.Scene {
 
         if (this.isCafe) {
             this.add.tileSprite(0, 0, mapW, mapH, 'bgCafe').setOrigin(0, 0);
+            
+            // 洋蔥皮隨機生成機制
+            this.time.addEvent({
+                delay: 5000, 
+                callback: this.spawnTrash,
+                callbackScope: this,
+                loop: true
+            });
+
+            // 實裝洋蔥大廳小地圖 (右上角)
+            const mapSize = 120;
+            const margin = 20;
+            this.minimap = this.cameras.add(this.cameras.main.width - mapSize - margin, margin, mapSize, mapSize)
+                .setZoom(mapSize / 2048) 
+                .setName('minimap');
+            this.minimap.setBackgroundColor('rgba(26, 16, 8, 0.7)');
+            this.minimap.scrollX = 1024;
+            this.minimap.scrollY = 1024;
+
+            this.scale.on('resize', (gameSize) => {
+                if (this.minimap) this.minimap.setPosition(gameSize.width - mapSize - margin, margin);
+            });
         } else if (this.sceneName === "doghouse") {
             this.add.image(mapW/2, mapH/2, 'bgDoghouse').setDisplaySize(mapW, mapH);
         } else if (this.sceneName === "farm") {
@@ -406,12 +412,6 @@ class MainScene extends Phaser.Scene {
         this.furnitureSprites = {};
         this.trashes = []; 
 
-        if (this.sceneName === "doghouse") {
-            let skin = this.physics.add.sprite(mapW/2 + 150, mapH/2, 'onion-skin').setDepth(4);
-            skin.type = 'onion-skin';
-            this.trashes.push(skin);
-        }
-
         let startX = mapW / 2;
         let startY = mapH / 2;
         this.localPlayer = this.createPlayerEntity(startX, startY, window.GameLogic.myProfile, true);
@@ -426,10 +426,47 @@ class MainScene extends Phaser.Scene {
             fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', 
             color: '#4a5d4e' 
         }).setOrigin(0.5).setDepth(101).setVisible(false);
+        
+        // 確保小地圖不會顯示提示框
+        if (this.minimap) this.minimap.ignore([this.smartPromptBg, this.smartPromptText]);
 
+        // ==========================
+        // 鍵盤重構 (去除 WASD，新增 Space/Shift)
+        // ==========================
         this.cursors = this.input.keyboard.createCursorKeys();
-        this.wasd = this.input.keyboard.addKeys({ w: 'W', a: 'A', s: 'S', d: 'D' });
+        this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+        this.shiftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
 
+        this.spacePressTime = 0;
+        this.spaceKey.on('down', (e) => {
+            if (e.repeat || document.activeElement.tagName === 'INPUT') return;
+            this.spacePressTime = Date.now();
+        });
+        
+        this.spaceKey.on('up', () => {
+            if (document.activeElement.tagName === 'INPUT') return;
+            let duration = Date.now() - this.spacePressTime;
+            if (window.GameLogic.placingFurnitureKey) this.events.emit('action_A_place');
+            else if (duration > 500) this.events.emit('action_A_long');
+            else this.events.emit('action_A_short');
+        });
+
+        this.shiftKey.on('down', (e) => {
+            if (e.repeat || document.activeElement.tagName === 'INPUT') return;
+            this.events.emit('action_B');
+        });
+
+        // ==========================
+        // 打掃進度條 (改至 MainScene，隨時定位在垃圾下方)
+        // ==========================
+        this.qteContainer = this.add.container(0, 0).setVisible(false).setDepth(300);
+        const qteBg = this.add.graphics().fillStyle(0x3e2723, 0.8).fillRoundedRect(-52, -10, 104, 20, 10).lineStyle(2, 0xc5a059).strokeRoundedRect(-52, -10, 104, 20, 10);
+        this.qteBar = this.add.graphics();
+        const qteLabel = this.add.text(0, -25, '打掃進度', { fontSize: '14px', color: '#c5a059', fontStyle: 'bold' }).setOrigin(0.5);
+        this.qteContainer.add([qteBg, this.qteBar, qteLabel]);
+        if (this.minimap) this.minimap.ignore([qteBg, this.qteBar, qteLabel, this.qteContainer]);
+
+        // A/B 按鍵功能綁定
         this.events.on('action_A_place', () => {
             let key = window.GameLogic.placingFurnitureKey;
             if(key && this.furnitureSprites[key]) {
@@ -443,7 +480,7 @@ class MainScene extends Phaser.Scene {
 
         this.events.on('action_A_short', () => {
             if (this.localPlayer.isSweeping) {
-                this.qteProgress += 15; 
+                this.qteProgress += 20; // 提升難度，需按5下滿100
                 if (this.qteProgress >= 100) {
                     this.qteProgress = 100;
                     this.finishSweeping(true);
@@ -470,7 +507,7 @@ class MainScene extends Phaser.Scene {
             if (!this.localPlayer.isSweeping && this.closestTrash) {
                 this.localPlayer.isSweeping = true;
                 this.qteProgress = 0;
-                if (uiScene) uiScene.qteContainer.setVisible(true);
+                this.qteContainer.setVisible(true);
             } else if (!this.localPlayer.isSweeping) {
                 sendBubble("使用了 B 技能!");
             }
@@ -480,6 +517,31 @@ class MainScene extends Phaser.Scene {
             fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', 
             color: '#fff', backgroundColor: 'rgba(74, 93, 78, 0.8)', padding: {x:8, y:4} 
         }).setOrigin(0.5).setDepth(20).setVisible(false);
+        if (this.minimap) this.minimap.ignore(this.placePrompt);
+    }
+
+    // 隨機生成洋蔥皮邏輯
+    spawnTrash() {
+        if (!this.isCafe) return;
+        let playerCount = Object.keys(window.GameLogic.cafePlayers || {}).length;
+        if (playerCount === 0) playerCount = 1;
+        
+        let spawnChance = 0.1 + (playerCount * 0.05); // 隨人數增加出現機率
+        
+        if (Math.random() < spawnChance && this.trashes.length < 5) { 
+            let tx = Phaser.Math.Between(150, 1898); 
+            let ty = Phaser.Math.Between(150, 1898);
+            let skin = this.physics.add.sprite(tx, ty, 'onion-skin').setDepth(4);
+            skin.type = 'onion-skin';
+            this.trashes.push(skin);
+        }
+    }
+
+    updateQTEBar(progress) {
+        this.qteBar.clear();
+        let width = Math.min(100, (progress / 100) * 100);
+        this.qteBar.fillStyle(0xd9534f, 1);
+        this.qteBar.fillRoundedRect(-50, -8, width, 16, 8);
     }
 
     createPlayerEntity(x, y, pData, isLocal = false) {
@@ -507,6 +569,11 @@ class MainScene extends Phaser.Scene {
             fontSize: '14px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold',
             wordWrap: { width: 160, useAdvancedWrap: true }, align: 'center'
         }).setOrigin(0.5).setDepth(14).setVisible(false);
+
+        // 小地圖中忽略文字與對話框，保持整潔
+        if (this.minimap) {
+            this.minimap.ignore([entity.nameBg, entity.nameText, entity.bubbleBg, entity.bubbleText]);
+        }
 
         return entity;
     }
@@ -554,21 +621,28 @@ class MainScene extends Phaser.Scene {
 
     finishSweeping(success) {
         this.localPlayer.isSweeping = false;
-        const uiScene = this.scene.manager.getScene('UIScene');
-        if (uiScene) uiScene.qteContainer.setVisible(false);
+        this.qteContainer.setVisible(false);
 
         if (success && this.closestTrash) {
-            let tx = this.closestTrash.x; let ty = this.closestTrash.y;
+            let px = this.localPlayer.sprite.x;
+            let py = this.localPlayer.sprite.y - 40; // 從頭部上升
+            
             this.closestTrash.destroy();
             this.trashes = this.trashes.filter(t => t !== this.closestTrash);
             this.closestTrash = null;
             
-            let successText = this.add.text(tx, ty - 30, '✨ 打掃成功 ✨', { 
+            let successText = this.add.text(px, py, '✨ 打掃成功 ✨', { 
                 fontSize: '20px', color: '#c5a059', fontStyle: 'bold', stroke: '#fff', strokeThickness: 4 
             }).setOrigin(0.5).setDepth(200);
+            if (this.minimap) this.minimap.ignore(successText);
 
             this.tweens.add({
-                targets: successText, y: ty - 70, alpha: 0, duration: 1500, ease: 'Power2',
+                targets: successText,
+                y: py - 60,       // 緩緩上升
+                alpha: { getStart: () => 1, getEnd: () => 0 }, 
+                delay: 1000,      // 過 1 秒後才開始漸出
+                duration: 1500, 
+                ease: 'Power2',
                 onComplete: () => successText.destroy()
             });
         }
@@ -586,9 +660,13 @@ class MainScene extends Phaser.Scene {
             this.localPlayer.sprite.setVelocity(0, 0);
             this.localPlayer.sprite.play('walk-down', true); 
             
-            this.qteProgress -= (delta * 0.04); 
+            this.qteProgress -= (delta * 0.02); // 微幅衰減
             if (this.qteProgress < 0) this.qteProgress = 0;
-            if (uiScene) uiScene.updateQTEBar(this.qteProgress);
+            
+            this.updateQTEBar(this.qteProgress);
+            if (this.closestTrash) {
+                this.qteContainer.setPosition(this.closestTrash.x, this.closestTrash.y + 40);
+            }
             
             this.smartPromptBg.setVisible(false);
             this.smartPromptText.setVisible(false);
@@ -597,10 +675,13 @@ class MainScene extends Phaser.Scene {
                 vx = Math.cos(uiScene.joyStick.angle * Math.PI / 180) * speed;
                 vy = Math.sin(uiScene.joyStick.angle * Math.PI / 180) * speed;
             } else {
-                if (this.cursors.left.isDown || this.wasd.a.isDown) vx = -speed;
-                if (this.cursors.right.isDown || this.wasd.d.isDown) vx = speed;
-                if (this.cursors.up.isDown || this.wasd.w.isDown) vy = -speed;
-                if (this.cursors.down.isDown || this.wasd.s.isDown) vy = speed;
+                // 確保使用者沒在打字時才觸發方向鍵移動
+                if (document.activeElement.tagName !== 'INPUT') {
+                    if (this.cursors.left.isDown) vx = -speed;
+                    if (this.cursors.right.isDown) vx = speed;
+                    if (this.cursors.up.isDown) vy = -speed;
+                    if (this.cursors.down.isDown) vy = speed;
+                }
                 if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; } 
             }
 
