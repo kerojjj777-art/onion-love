@@ -624,13 +624,20 @@ class MainScene extends Phaser.Scene {
         return entity;
     }
 
-    updatePlayerEntity(entity, pData) {
+updatePlayerEntity(entity, pData) {
         let sx = entity.sprite.x; let sy = entity.sprite.y;
-        entity.nameBg.clear().fillStyle(0x000000, 0.6).fillRoundedRect(sx - 35, sy - 55, 70, 20, 4);
-        entity.nameText.setPosition(sx, sy - 45);
-        if(pData.name) entity.nameText.setText(pData.name);
+        
+        // 【修改點】組合暱稱與等級字串
+        let displayName = `${pData.name || '匿名'} (Lv.${pData.level || 1})`;
+        entity.nameText.setText(displayName);
         if(pData.color) entity.nameText.setColor(pData.color);
 
+        // 【修改點】讓背景黑框根據文字長度動態調整寬度
+        const nameBounds = entity.nameText.getBounds();
+        const bgWidth = nameBounds.width + 16; 
+        entity.nameBg.clear().fillStyle(0x000000, 0.6).fillRoundedRect(sx - bgWidth / 2, sy - 55, bgWidth, 20, 4);
+        entity.nameText.setPosition(sx, sy - 45);
+        // --- (以下氣泡框 bubbleMsg 的邏輯保留原本的即可) ---
         if (pData.bubbleMsg && (Date.now() - pData.bubbleTime < 10000)) { 
             entity.bubbleBg.setVisible(true); entity.bubbleText.setVisible(true).setText(pData.bubbleMsg);
             const bounds = entity.bubbleText.getBounds(); const boxWidth = bounds.width + 20, boxHeight = bounds.height + 16, boxX = sx - boxWidth / 2, boxY = sy - 65 - boxHeight; 
