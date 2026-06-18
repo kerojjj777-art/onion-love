@@ -16,30 +16,30 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);         
 
-// --- 系統變數 ---
 window.GameLogic = {
     currentUser: null,
     currentScene: "doghouse",
-    myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0 },
+    myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0 },
     cafePlayers: {},
     cafeFurniture: {},
+    cafeTrash: {},
     placingFurnitureKey: null, 
+    isCleaning: false,
+    cleaningTarget: null,
+    cleaningClicks: 0,
+    cleaningReq: 0,
     phaserGame: null,
     db: db 
 };
 let cafeUnsubscribe = null;
 let profileViewingUid = null;
 
-// 掛載方法
 window.switchScene = switchScene;
 window.showProfileModal = showProfileModal;
 window.leaveCafe = leaveCafe;
 window.signOut = signOut;
 window.auth = auth;
 
-// ==========================================
-// 動態生成系統 UI 介面
-// ==========================================
 function createSystemUI() {
     const appContainer = document.getElementById('app-container');
     if (!appContainer) return;
@@ -58,6 +58,14 @@ function createSystemUI() {
 
         <div id="view-profile-modal" class="modal">
             <h3 id="vp-title">洋蔥身分證</h3>
+            <div class="profile-line">
+                <span>⭐ 等級:</span>
+                <strong id="vp-level"></strong>
+            </div>
+            <div class="profile-line">
+                <span>💰 馬德幣:</span>
+                <strong id="vp-coins"></strong>
+            </div>
             <div class="profile-line">
                 <span>🎂 生日:</span>
                 <strong id="vp-birth"></strong>
@@ -91,7 +99,7 @@ function createSystemUI() {
 
         <div id="fridge-modal" class="modal">
             <h3>❄️ 公用大冰箱</h3>
-            <p style="color:#888; font-size: 14px;">冰箱目前空空如也... 等待下次採買中</p>
+            <p style="color:#888; font-size: 14px;">冰箱目前空空如也 等待下次採買中</p>
             <button class="close-modal-btn btn-primary" onclick="document.getElementById('fridge-modal').style.display='none'">關上冰箱</button>
         </div>
 
@@ -100,7 +108,7 @@ function createSystemUI() {
             <div id="memory-feed"></div>
             <div id="memory-upload-area">
                 <input type="file" id="memory-file" accept="image/*">
-                <input type="text" id="memory-text" placeholder="寫下這張照片的回憶筆記...">
+                <input type="text" id="memory-text" placeholder="寫下這張照片的回憶筆記">
                 <button class="btn-primary" id="upload-memory-btn">留存回憶</button>
             </div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('memory-modal').style.display='none'">闔上回憶錄</button>
@@ -114,7 +122,7 @@ function createSystemUI() {
                 <div id="chat-content">
                     <div id="chat-box"></div>
                     <div id="chat-input-area">
-                        <input type="text" id="chat-input" placeholder="說點什麼...">
+                        <input type="text" id="chat-input" placeholder="說點什麼">
                         <button id="send-btn">發送</button>
                     </div>
                 </div>
@@ -123,10 +131,8 @@ function createSystemUI() {
     `;
 }
 
-// 執行 UI 初始化
 createSystemUI();
 
-// --- DOM 元素 (須在 UI 生成後才能綁定) ---
 const loginScreen = document.getElementById("login-screen");
 const gameLayoutContainer = document.getElementById("game-layout-container");
 const chatSection = document.getElementById("chat-section");
@@ -134,30 +140,25 @@ const actionMenu = document.getElementById("action-menu");
 const viewProfileModal = document.getElementById("view-profile-modal");
 const chatInput = document.getElementById("chat-input");
 
-// ==========================================
-// PWA 與 系統基礎事件綁定
-// ==========================================
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').then(reg => {
         reg.addEventListener('updatefound', () => {
             const newWorker = reg.installing;
             newWorker.addEventListener('statechange', () => {
                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    if (confirm('發現新的更新！是否立即重新載入？')) window.location.reload();
+                    if (confirm('發現新的更新 是否立即重新載入')) window.location.reload();
                 }
             });
         });
     });
 }
 
-// 點擊畫面其他地方關閉浮動選單
 window.addEventListener('pointerdown', (e) => {
     if (!e.target.closest('#action-menu') && e.target.tagName !== 'CANVAS') {
         actionMenu.style.display = 'none';
     }
 });
 
-// 聊天室收合功能
 document.getElementById('chat-toggle-btn').addEventListener('click', function() {
     chatSection.classList.toggle('chat-collapsed');
     if (chatSection.classList.contains('chat-collapsed')) {
@@ -169,9 +170,6 @@ document.getElementById('chat-toggle-btn').addEventListener('click', function() 
     }
 });
 
-// ==========================================
-// 1. 登入與場景切換
-// ==========================================
 document.getElementById("join-btn").addEventListener("click", () => {
     const email = document.getElementById("user-email").value;
     const pwd = document.getElementById("user-pwd").value;
@@ -185,10 +183,14 @@ onAuthStateChanged(auth, async (user) => {
         gameLayoutContainer.style.display = "block";
         
         const profileSnap = await get(ref(db, `users/${user.uid}`));
-        if (profileSnap.exists()) window.GameLogic.myProfile = { ...window.GameLogic.myProfile, ...profileSnap.val() };
-        else set(ref(db, `users/${user.uid}`), { name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, birth: window.GameLogic.myProfile.birth, food: window.GameLogic.myProfile.food, motto: window.GameLogic.myProfile.motto });
+        if (profileSnap.exists()) {
+            window.GameLogic.myProfile = { ...window.GameLogic.myProfile, ...profileSnap.val() };
+        } else {
+            set(ref(db, `users/${user.uid}`), { name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, birth: window.GameLogic.myProfile.birth, food: window.GameLogic.myProfile.food, motto: window.GameLogic.myProfile.motto, level: 1, exp: 0, coins: 0 });
+        }
 
         onValue(ref(db, 'cafeFurniture'), snap => window.GameLogic.cafeFurniture = snap.val() || {});
+        onValue(ref(db, 'cafeTrash'), snap => window.GameLogic.cafeTrash = snap.val() || {});
 
         if (!window.GameLogic.phaserGame) initPhaser();
 
@@ -205,7 +207,8 @@ onAuthStateChanged(auth, async (user) => {
 
 function switchScene(sceneName) {
     window.GameLogic.currentScene = sceneName;
-    window.GameLogic.placingFurnitureKey = null; // 切換場景取消擺放
+    window.GameLogic.placingFurnitureKey = null; 
+    window.GameLogic.isCleaning = false;
     
     if (sceneName === "doghouse" || sceneName === "farm") {
         chatSection.style.display = "none";
@@ -234,9 +237,6 @@ function leaveCafe() {
     if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; }
 }
 
-// ==========================================
-// 2. Phaser 3 引擎架構
-// ==========================================
 class BootScene extends Phaser.Scene {
     constructor() { super('BootScene'); }
     preload() {
@@ -254,6 +254,14 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'walk-left', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'walk-right', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'idle', frames: [{ key: 'onion', frame: 0 }], frameRate: 10 });
+        
+        let g = this.make.graphics({x:0, y:0, add:false});
+        g.fillStyle(0x4a5d4e, 1);
+        g.fillCircle(12, 12, 10);
+        g.fillStyle(0x8b5a2b, 1);
+        g.fillCircle(8, 8, 5);
+        g.generateTexture('trash', 24, 24);
+
         this.scene.launch('UIScene');
     }
 }
@@ -261,7 +269,7 @@ class BootScene extends Phaser.Scene {
 class UIScene extends Phaser.Scene {
     constructor() { super('UIScene'); }
     create() {
-        const safeMargin = 100;
+        const safeMargin = 160; 
 
         this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, {
             x: safeMargin, y: this.cameras.main.height - safeMargin,
@@ -282,7 +290,7 @@ class UIScene extends Phaser.Scene {
         this.furnBtn = this.add.circle(this.cameras.main.width - safeMargin, this.cameras.main.height - safeMargin - 160, 25, 0x8b5a2b).setStrokeStyle(3, 0xc5a059).setInteractive();
         this.furnText = this.add.text(this.furnBtn.x, this.furnBtn.y, '家俱', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
 
-        this.menuContainer = this.add.container(this.cameras.main.width - 200, this.cameras.main.height - 450).setVisible(false).setDepth(200);
+        this.menuContainer = this.add.container(this.cameras.main.width - 200, this.cameras.main.height - 480).setVisible(false).setDepth(200);
         const menuBg = this.add.graphics();
         menuBg.fillStyle(0xf4ecd8, 0.95); menuBg.lineStyle(2, 0xc5a059, 1);
         menuBg.fillRoundedRect(0, 0, 160, 260, 10); menuBg.strokeRoundedRect(0, 0, 160, 260, 10);
@@ -302,6 +310,10 @@ class UIScene extends Phaser.Scene {
             this.menuContainer.add(btn);
         });
 
+        // 動態迷你地圖背景
+        this.minimapBg = this.add.graphics().setDepth(150);
+        this.minimapBg.setVisible(false); 
+
         this.mapBtn.on('pointerdown', () => {
             this.menuContainer.setVisible(!this.menuContainer.visible);
             document.getElementById('furniture-catalog-modal').style.display = 'none';
@@ -309,7 +321,7 @@ class UIScene extends Phaser.Scene {
 
         this.furnBtn.on('pointerdown', () => {
             if(window.GameLogic.currentScene !== 'cafe') {
-                alert("家俱只能在洋蔥大廳擺放喔！"); return;
+                alert("家俱只能在洋蔥大廳擺放喔"); return;
             }
             this.menuContainer.setVisible(false);
             const furnModal = document.getElementById('furniture-catalog-modal');
@@ -332,8 +344,18 @@ class UIScene extends Phaser.Scene {
             }
         });
         
-        this.btnB.on('pointerdown', () => { this.btnB.setFillStyle(0xc5a059); sendBubble("使用了 B 技能!"); });
+        this.btnB.on('pointerdown', () => { 
+            this.btnB.setFillStyle(0xc5a059); 
+            const mainScene = this.scene.manager.getScene('MainScene');
+            if(mainScene) mainScene.events.emit('action_B');
+        });
         this.btnB.on('pointerup', () => this.btnB.setFillStyle(0xd4c5a0));
+
+        // PC 鍵盤映射更新：空白鍵對應 A 鍵，Shift 對應 B 鍵
+        this.input.keyboard.on('keydown-SPACE', () => this.btnA.emit('pointerdown'));
+        this.input.keyboard.on('keyup-SPACE', () => this.btnA.emit('pointerup'));
+        this.input.keyboard.on('keydown-SHIFT', () => this.btnB.emit('pointerdown'));
+        this.input.keyboard.on('keyup-SHIFT', () => this.btnB.emit('pointerup'));
         
         this.scale.on('resize', (gameSize) => {
             this.joyStick.setPosition(safeMargin, gameSize.height - safeMargin);
@@ -345,7 +367,33 @@ class UIScene extends Phaser.Scene {
             this.mapText.setPosition(this.mapBtn.x, this.mapBtn.y);
             this.furnBtn.setPosition(gameSize.width - safeMargin, gameSize.height - safeMargin - 160);
             this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
-            this.menuContainer.setPosition(gameSize.width - 200, gameSize.height - 450);
+            this.menuContainer.setPosition(gameSize.width - 200, gameSize.height - 480);
+        });
+
+        this.events.on('update_minimap', (players) => {
+            if(window.GameLogic.currentScene !== 'cafe') {
+                this.minimapBg.setVisible(false);
+                return;
+            }
+            this.minimapBg.setVisible(true);
+            this.minimapBg.clear();
+            this.minimapBg.fillStyle(0x000000, 0.6);
+            this.minimapBg.lineStyle(2, 0xc5a059, 1);
+            let mapX = 320; let mapY = 20; let mapS = 120;
+            this.minimapBg.fillRect(mapX, mapY, mapS, mapS);
+            this.minimapBg.strokeRect(mapX, mapY, mapS, mapS);
+
+            let keys = Object.keys(players).slice(0, 5);
+            keys.forEach(uid => {
+                let p = players[uid];
+                let mx = mapX + (p.x / 2048) * mapS;
+                let my = mapY + (p.y / 2048) * mapS;
+                let colorHex = parseInt((p.color || '#ffffff').replace('#', '0x'));
+                this.minimapBg.fillStyle(colorHex, 1);
+                this.minimapBg.fillCircle(mx, my, 4);
+                this.minimapBg.lineStyle(1, 0xffffff, 0.8);
+                this.minimapBg.strokeCircle(mx, my, 4);
+            });
         });
     }
 }
@@ -373,6 +421,7 @@ class MainScene extends Phaser.Scene {
 
         this.otherPlayers = {};
         this.furnitureSprites = {};
+        this.trashSprites = {};
 
         let startX = mapW / 2;
         let startY = mapH / 2;
@@ -385,8 +434,25 @@ class MainScene extends Phaser.Scene {
             color: '#fff', backgroundColor: 'rgba(74, 93, 78, 0.8)', padding: {x:8, y:4} 
         }).setOrigin(0.5).setDepth(20).setVisible(false);
 
+        // 僅保留上下左右方向鍵移動
         this.cursors = this.input.keyboard.createCursorKeys();
-        this.wasd = this.input.keyboard.addKeys({ w: 'W', a: 'A', s: 'S', d: 'D' });
+
+        // 洋蔥皮隨機生成機制
+        this.time.addEvent({
+            delay: 8000,
+            loop: true,
+            callback: () => {
+                if (!this.isCafe) return;
+                let playersCount = Object.keys(window.GameLogic.cafePlayers).length || 1;
+                let spawnChance = 0.15 * playersCount;
+                if (Math.random() < spawnChance) {
+                    push(ref(db, 'cafeTrash'), {
+                        x: Phaser.Math.Between(200, 1848),
+                        y: Phaser.Math.Between(200, 1848)
+                    });
+                }
+            }
+        });
 
         this.events.on('action_A_place', () => {
             let key = window.GameLogic.placingFurnitureKey;
@@ -399,8 +465,42 @@ class MainScene extends Phaser.Scene {
             }
         });
 
+        this.events.on('action_B', () => {
+            if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手");
+            if(window.GameLogic.isCleaning) return;
+            
+            let interacted = false;
+            for (let key in this.trashSprites) {
+                let t = this.trashSprites[key];
+                let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, t.x, t.y);
+                if (dist < 70) {
+                    window.GameLogic.isCleaning = true;
+                    window.GameLogic.cleaningTarget = key;
+                    window.GameLogic.cleaningClicks = 0;
+                    window.GameLogic.cleaningReq = Phaser.Math.Between(4, 7);
+                    sendBubble("發現洋蔥皮 趕快連按 A 鍵打掃");
+                    interacted = true;
+                    break;
+                }
+            }
+            if(!interacted) sendBubble("使用了 B 技能");
+        });
+
         this.events.on('action_A_short', () => {
-            if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!");
+            if(!this.isCafe) return sendBubble("使用了 A 技能");
+
+            if (window.GameLogic.isCleaning) {
+                window.GameLogic.cleaningClicks++;
+                sendBubble("打掃中進度 " + window.GameLogic.cleaningClicks + " 刷");
+                if (window.GameLogic.cleaningClicks >= window.GameLogic.cleaningReq) {
+                    set(ref(db, `cafeTrash/${window.GameLogic.cleaningTarget}`), null);
+                    window.GameLogic.isCleaning = false;
+                    window.GameLogic.cleaningTarget = null;
+                    this.giveRewards();
+                }
+                return;
+            }
+
             let interacted = false;
             for (const key in this.furnitureSprites) {
                 let f = this.furnitureSprites[key];
@@ -412,24 +512,55 @@ class MainScene extends Phaser.Scene {
                     interacted = true; break;
                 }
             }
-            if(!interacted) sendBubble("使用了 A 技能!");
+            if(!interacted) sendBubble("使用了 A 技能");
         });
 
         this.events.on('action_A_long', () => {
-            if(!this.isCafe) return sendBubble("使用了集氣 A 技能!");
+            if(!this.isCafe) return sendBubble("使用了集氣 A 技能");
+            if (window.GameLogic.isCleaning) return;
             let interacted = false;
             for (const key in this.furnitureSprites) {
                 let f = this.furnitureSprites[key];
                 if (!f.sprite.isLocked) continue;
                 let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y);
                 if (dist < 90) { 
-                    if(confirm("洋蔥精靈：是否收回這件家俱？")) {
+                    if(confirm("洋蔥精靈：是否收回這件家俱")) {
                         set(ref(window.GameLogic.db, `cafeFurniture/${key}`), null);
                     }
                     interacted = true; break;
                 }
             }
-            if(!interacted) sendBubble("使用了集氣 A 技能!");
+            if(!interacted) sendBubble("使用了集氣 A 技能");
+        });
+    }
+
+    giveRewards() {
+        let earnedCoins = Phaser.Math.Between(1, 5);
+        let earnedExp = 15;
+        let p = window.GameLogic.myProfile;
+        p.coins = (p.coins || 0) + earnedCoins;
+        p.exp = (p.exp || 0) + earnedExp;
+        
+        let currentLevel = p.level || 1;
+        let nextLvlExp = currentLevel * 30; // 緩坡升級制
+
+        if (p.exp >= nextLvlExp) {
+            p.level = currentLevel + 1;
+            p.exp -= nextLvlExp;
+            
+            push(ref(db, 'chats'), {
+                name: "✨系統廣播✨",
+                msg: "恭喜 " + p.name + " 突破極限 榮耀升級至等級 " + p.level + " 啦",
+                date: new Date().toLocaleDateString('zh-TW', {month: '2-digit', day: '2-digit'}),
+                time: new Date().toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute:'2-digit' })
+            });
+            sendBubble("耀眼升級 等級 " + p.level);
+        } else {
+            sendBubble("打掃完成 獲得 " + earnedCoins + " 枚馬德幣");
+        }
+        
+        update(ref(db, `users/${window.GameLogic.currentUser.uid}`), {
+            level: p.level, exp: p.exp, coins: p.coins
         });
     }
 
@@ -508,14 +639,16 @@ class MainScene extends Phaser.Scene {
         let vx = 0; let vy = 0; let speed = 180;
         const uiScene = this.scene.manager.getScene('UIScene');
         
-        if (uiScene && uiScene.joyStick && uiScene.joyStick.force > 0) {
+        if (window.GameLogic.isCleaning) {
+            vx = 0; vy = 0;
+        } else if (uiScene && uiScene.joyStick && uiScene.joyStick.force > 0) {
             vx = Math.cos(uiScene.joyStick.angle * Math.PI / 180) * speed;
             vy = Math.sin(uiScene.joyStick.angle * Math.PI / 180) * speed;
         } else {
-            if (this.cursors.left.isDown || this.wasd.a.isDown) vx = -speed;
-            if (this.cursors.right.isDown || this.wasd.d.isDown) vx = speed;
-            if (this.cursors.up.isDown || this.wasd.w.isDown) vy = -speed;
-            if (this.cursors.down.isDown || this.wasd.s.isDown) vy = speed;
+            if (this.cursors.left.isDown) vx = -speed;
+            if (this.cursors.right.isDown) vx = speed;
+            if (this.cursors.up.isDown) vy = -speed;
+            if (this.cursors.down.isDown) vy = speed;
             if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; } 
         }
 
@@ -559,6 +692,8 @@ class MainScene extends Phaser.Scene {
         this.updatePlayerEntity(this.localPlayer, window.GameLogic.myProfile);
 
         if (this.isCafe) {
+            if (uiScene) uiScene.events.emit('update_minimap', window.GameLogic.cafePlayers);
+
             const playersData = window.GameLogic.cafePlayers;
             for (let uid in playersData) {
                 if (uid === window.GameLogic.currentUser.uid) continue;
@@ -599,11 +734,24 @@ class MainScene extends Phaser.Scene {
                 if(!fd.locked) f.sprite.setAlpha(0.6);
                 else f.sprite.setAlpha(1);
             }
-            
             for (let key in this.furnitureSprites) {
                 if (!furnData[key]) {
                     this.furnitureSprites[key].sprite.destroy();
                     delete this.furnitureSprites[key];
+                }
+            }
+
+            const trashData = window.GameLogic.cafeTrash;
+            for (let key in trashData) {
+                let td = trashData[key];
+                if (!this.trashSprites[key]) {
+                    this.trashSprites[key] = this.physics.add.sprite(td.x, td.y, 'trash').setDepth(4);
+                }
+            }
+            for (let key in this.trashSprites) {
+                if (!trashData[key]) {
+                    this.trashSprites[key].destroy();
+                    delete this.trashSprites[key];
                 }
             }
         }
@@ -622,10 +770,6 @@ function initPhaser() {
     };
     window.GameLogic.phaserGame = new Phaser.Game(config);
 }
-
-// ==========================================
-// 3. 系統 UI 事件綁定
-// ==========================================
 
 document.querySelectorAll('.catalog-item').forEach(item => {
     item.addEventListener('click', () => {
@@ -659,6 +803,8 @@ document.getElementById("view-profile-btn").addEventListener("click", async () =
 
 function showProfileModal(p, uid) {
     profileViewingUid = uid;
+    document.getElementById("vp-level").innerText = p.level || 1;
+    document.getElementById("vp-coins").innerText = p.coins || 0;
     document.getElementById("vp-birth").innerText = p.birth || '未知';
     document.getElementById("vp-food").innerText = p.food || '無';
     document.getElementById("vp-motto").innerText = p.motto || '無';
@@ -750,7 +896,7 @@ document.getElementById("upload-memory-btn").onclick = () => {
     const file = fileInput.files[0];
     const text = textInput.value.trim();
 
-    if (!file && !text) return alert("請上傳圖片或填寫文字！");
+    if (!file && !text) return alert("請上傳圖片或填寫文字");
     if (file) {
         const reader = new FileReader();
         reader.onload = e => {
