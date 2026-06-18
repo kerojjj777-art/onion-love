@@ -163,6 +163,43 @@ function createSystemUI() {
                 </div>
             </div>
         </div>
+        <div id="inventory-modal" class="modal">
+            <h3>🎒 我的給西</h3>
+            <div id="inventory-list" class="catalog-grid"></div>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('inventory-modal').style.display='none'">關閉</button>
+        </div>
+
+        <div id="store-modal" class="modal" style="padding:0; overflow:hidden; z-index: 250;">
+            <div style="background:#2a1b12; text-align:center; position:relative; border-bottom: 2px solid var(--mucha-gold);">
+                <img src="store-manager-talking.png" style="width:100%; display:block;" alt="老闆">
+                <div style="position:absolute; bottom:5px; right:5px; background:rgba(0,0,0,0.8); color:var(--mucha-gold); padding:4px 8px; border-radius:4px; font-size:12px; border:1px solid var(--mucha-gold); font-weight:bold;">德骨拉完叻</div>
+            </div>
+            <div style="padding:15px;">
+                <h3 style="margin-top:0; border:none; color:var(--mucha-brown);">🏪 7-EONION 便利商店</h3>
+                <div id="store-list" class="catalog-grid">
+                    <div class="catalog-item" onclick="window.openPurchaseModal('水球', 20)">
+                        <span style="font-size:30px;">🎈</span>
+                        <span style="margin-top:5px;">水球</span>
+                        <span style="color:#d4af37; font-size:12px; font-weight:bold;">20 馬德幣</span>
+                    </div>
+                </div>
+                <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('store-modal').style.display='none'; window.GameLogic.isShopping = false;">離開商店</button>
+            </div>
+        </div>
+
+        <div id="purchase-modal" class="modal" style="z-index: 260;">
+            <h3 id="purchase-title" style="color:var(--mucha-green);">購買</h3>
+            <div style="display:flex; justify-content:center; align-items:center; gap:20px; margin: 15px 0;">
+                <button class="btn-secondary" style="font-size:18px; padding:5px 15px;" onclick="window.adjustPurchaseQty(-1)">-</button>
+                <span id="purchase-qty" style="font-size:24px; font-weight:bold; color:var(--mucha-brown);">1</span>
+                <button class="btn-secondary" style="font-size:18px; padding:5px 15px;" onclick="window.adjustPurchaseQty(1)">+</button>
+            </div>
+            <div style="margin-bottom:15px; font-size:16px;">總計: <strong id="purchase-total" style="color:#d4af37; font-size:18px;">20</strong> 馬德幣</div>
+            <div class="modal-btns">
+                <button class="btn-primary" onclick="window.confirmPurchase()">結帳</button>
+                <button class="btn-secondary" onclick="document.getElementById('purchase-modal').style.display='none'">取消</button>
+            </div>
+        </div>
     `;
 }
 
