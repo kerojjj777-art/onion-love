@@ -731,7 +731,7 @@ class MainScene extends Phaser.Scene {
           // 新增: A鍵觸發購物對話
             if (this.sceneName === '7eonion' && this.storeManager) {
                 let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.storeManager.x, this.storeManager.y);
-                if (dist < 150) {
+                if (dist < 250) {
                     window.GameLogic.isShopping = true;
                     document.getElementById('store-modal').style.display = 'block';
                     return;
@@ -972,7 +972,7 @@ updatePlayerEntity(entity, pData) {
               // 新增: 接近老闆時的浮動提示
                 if (this.sceneName === '7eonion' && this.storeManager && !window.GameLogic.isShopping) {
                 let d = Phaser.Math.Distance.Between(px, py, this.storeManager.x, this.storeManager.y);
-                if (d < 150) {
+                if (d < 250) {
                     minDist = d; promptTarget = this.storeManager; promptMsg = "按A對話購物";
                 }
             }
