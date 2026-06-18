@@ -737,34 +737,11 @@ class MainScene extends Phaser.Scene {
 
         this.otherPlayers = {}; this.furnitureSprites = {}; this.trashes = []; this.dummySprites = {};
 
-      this.coinSprites = {};
-        // 監聽全域畫面上掉落的馬德幣
+        this.coinSprites = {};
+        
+        // 1. 獨立監聽全域畫面上掉落的馬德幣
         this.coinsListener = onValue(ref(window.GameLogic.db, 'droppedCoins'), (snap) => {
             let data = snap.val() || {};
-
-        // --- 新增：監聽假人洋蔥的放置狀態 ---
-        this.dummiesListener = onValue(ref(window.GameLogic.db, 'cafeDummies'), (snap) => {
-            let data = snap.val() || {};
-            
-            // 1. 產生新放置的假人
-            for (let key in data) {
-                if (!this.dummySprites[key]) {
-                    let dData = data[key];
-                    // 建立假人精靈圖，並設定圖層高度 (Depth) 確保不會被背景蓋住
-                    let dummySprite = this.physics.add.sprite(dData.x, dData.y, 'dummy').setDepth(8);
-                    this.dummySprites[key] = dummySprite;
-                }
-            }
-            
-            // 2. 移除被收回或資料庫中消失的假人
-            for (let key in this.dummySprites) {
-                if (!data[key]) {
-                    this.dummySprites[key].destroy();
-                    delete this.dummySprites[key];
-                }
-            }
-        });
-          
             // 產生地面上新出現的金幣
             for (let key in data) {
                 if (!this.coinSprites[key]) {
@@ -775,12 +752,31 @@ class MainScene extends Phaser.Scene {
                     this.coinSprites[key] = coinSprite;
                 }
             }
-            
             // 移除已被其他玩家撿走的金幣
             for (let key in this.coinSprites) {
                 if (!data[key]) {
                     this.coinSprites[key].destroy();
                     delete this.coinSprites[key];
+                }
+            }
+        });
+
+        // 2. 獨立監聽假人洋蔥的放置狀態 (已從 coinsListener 移出，避免互相干擾)
+        this.dummiesListener = onValue(ref(window.GameLogic.db, 'cafeDummies'), (snap) => {
+            let data = snap.val() || {};
+            // 產生新放置的假人
+            for (let key in data) {
+                if (!this.dummySprites[key]) {
+                    let dData = data[key];
+                    let dummySprite = this.physics.add.sprite(dData.x, dData.y, 'dummy').setDepth(8);
+                    this.dummySprites[key] = dummySprite;
+                }
+            }
+            // 移除被收回或消失的假人
+            for (let key in this.dummySprites) {
+                if (!data[key]) {
+                    this.dummySprites[key].destroy();
+                    delete this.dummySprites[key];
                 }
             }
         });
@@ -875,18 +871,24 @@ class MainScene extends Phaser.Scene {
 
                 if (targetUid && targetSprite) {
                     let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15);
-                    wb.play('wb-blast', true);
+                    // 【修正】：飛行期間不播放爆裂動畫，將精靈圖固定在第 0 幀（水球狀態）
+                    wb.setFrame(0); 
                     
                     this.tweens.add({
                         targets: wb, x: targetSprite.x, y: targetSprite.y, duration: 200,
                         onComplete: () => {
-                            wb.destroy();
+                            // 【修正】：到達目標後才播放水球爆裂 (wb-blast) 精靈圖
+                            wb.play('wb-blast', true); 
+                            
+                            // 【修正】：延遲 300 毫秒後再銷毀，讓爆裂動畫有時間完整播完
+                            this.time.delayedCall(300, () => { wb.destroy(); });
+                            
                             if (targetType === 'player') {
                                 update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                             } else if (targetType === 'dummy') {
                                 update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                                 
-                                // 【修正 2】：假人沒有真實客戶端，被砸中時由「攻擊方」負責廣播掉落的馬德幣
+                                // 假人被砸中時由「攻擊方」負責廣播掉落的馬德幣
                                 for (let i = 0; i < 3; i++) {
                                     let cx = targetSprite.x + Phaser.Math.Between(-40, 40);
                                     let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
