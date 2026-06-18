@@ -663,6 +663,13 @@ class MainScene extends Phaser.Scene {
             this.add.image(mapW/2, mapH/2, 'bg7Eonion').setDisplaySize(mapW, mapH);
             // 產生無法穿越的老闆，放置於地圖中央
             this.storeManager = this.physics.add.staticSprite(mapW/2, mapH/2, 'storeManager').setDepth(5);
+            
+            // 【關鍵修正】手動縮小老闆的「隱形碰撞框」！
+            // 把實際會阻擋角色的實體範圍縮小為 120x120，讓洋蔥人可以無視透明邊緣，直接走到插圖旁
+            let imgW = this.storeManager.width;
+            let imgH = this.storeManager.height;
+            this.storeManager.body.setSize(120, 120); 
+            this.storeManager.body.setOffset((imgW - 120) / 2, (imgH - 120) / 2); // 讓碰撞框精準對齊圖片正中央
         }
 
         const uiScene = this.scene.manager.getScene('UIScene');
@@ -731,7 +738,7 @@ class MainScene extends Phaser.Scene {
           // 新增: A鍵觸發購物對話
             if (this.sceneName === '7eonion' && this.storeManager) {
                 let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.storeManager.x, this.storeManager.y);
-                if (dist < 250) {
+                if (dist < 150) {
                     window.GameLogic.isShopping = true;
                     document.getElementById('store-modal').style.display = 'block';
                     return;
@@ -972,7 +979,7 @@ updatePlayerEntity(entity, pData) {
               // 新增: 接近老闆時的浮動提示
                 if (this.sceneName === '7eonion' && this.storeManager && !window.GameLogic.isShopping) {
                 let d = Phaser.Math.Distance.Between(px, py, this.storeManager.x, this.storeManager.y);
-                if (d < 250) {
+                if (d < 150) {
                     minDist = d; promptTarget = this.storeManager; promptMsg = "按A對話購物";
                 }
             }
