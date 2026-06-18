@@ -209,6 +209,27 @@ window.currentPurchaseItem = null;
 window.currentPurchasePrice = 0;
 window.currentPurchaseQty = 1;
 
+// --- 新增全域道具使用邏輯 ---
+window.useItem = function(itemName) {
+    let inv = window.GameLogic.myProfile.inventory || {};
+    if (inv[itemName] && inv[itemName] > 0) {
+        inv[itemName] -= 1; // 扣除數量
+        
+        // 更新資料庫中的背包資料
+        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+            module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { 
+                inventory: inv
+            });
+        });
+        
+        // 若需更多互動，未來可在這裡加入放水球特效
+        alert(`你成功使用了 ${itemName}！`);
+        
+        // 重新渲染背包介面
+        window.openInventoryModal();
+    }
+};
+
 window.openInventoryModal = function() {
     const list = document.getElementById('inventory-list');
     list.innerHTML = '';
@@ -220,7 +241,8 @@ window.openInventoryModal = function() {
     } else {
         keys.forEach(k => {
             let icon = k === '水球' ? '🎈' : '📦';
-            list.innerHTML += `<div class="catalog-item"><span style="font-size:24px;">${icon}</span><span style="margin:5px 0;">${k} x${inv[k]}</span><button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="alert('你使用了 ${k}！')">使用</button></div>`;
+            // 將原本的純 alert 替換成呼叫 window.useItem
+            list.innerHTML += `<div class="catalog-item"><span style="font-size:24px;">${icon}</span><span style="margin:5px 0;">${k} x${inv[k]}</span><button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.useItem('${k}')">使用</button></div>`;
         });
     }
     document.getElementById('inventory-modal').style.display = 'block';
@@ -508,7 +530,7 @@ class UIScene extends Phaser.Scene {
         this.menuContainer = this.add.container(0, 0).setVisible(false).setDepth(200);
         const menuBg = this.add.graphics();
         menuBg.fillStyle(0xf4ecd8, 0.95); menuBg.lineStyle(2, 0xc5a059, 1);
-        menuBg.fillRoundedRect(0, 0, 160, 260, 10); menuBg.strokeRoundedRect(0, 0, 160, 260, 10);
+        menuBg.fillRoundedRect(0, 0, 160, 320, 10); menuBg.strokeRoundedRect(0, 0, 160, 320, 10);
         this.menuContainer.add(menuBg);
 
         // 替換 menuOptions 定義
@@ -597,8 +619,8 @@ class UIScene extends Phaser.Scene {
         this.itemText.setPosition(this.itemBtn.x, this.itemBtn.y);
 
         // 選單放置於畫面正中央
-        this.menuContainer.setPosition(gameSize.width / 2 - 80, gameSize.height / 2 - 130);
-        if(this.menuBgOverlay) this.menuBgOverlay.setPosition(gameSize.width / 2, gameSize.height / 2);
+      this.menuContainer.setPosition(gameSize.width / 2 - 80, gameSize.height / 2 - 200);
+      if(this.menuBgOverlay) this.menuBgOverlay.setPosition(gameSize.width / 2, gameSize.height / 2);
     }
 }
 
@@ -709,7 +731,7 @@ class MainScene extends Phaser.Scene {
           // 新增: A鍵觸發購物對話
             if (this.sceneName === '7eonion' && this.storeManager) {
                 let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.storeManager.x, this.storeManager.y);
-                if (dist < 100) {
+                if (dist < 150) {
                     window.GameLogic.isShopping = true;
                     document.getElementById('store-modal').style.display = 'block';
                     return;
@@ -950,7 +972,7 @@ updatePlayerEntity(entity, pData) {
               // 新增: 接近老闆時的浮動提示
                 if (this.sceneName === '7eonion' && this.storeManager && !window.GameLogic.isShopping) {
                 let d = Phaser.Math.Distance.Between(px, py, this.storeManager.x, this.storeManager.y);
-                if (d < 100) {
+                if (d < 150) {
                     minDist = d; promptTarget = this.storeManager; promptMsg = "按A對話購物";
                 }
             }
