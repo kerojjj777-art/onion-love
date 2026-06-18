@@ -199,9 +199,6 @@ function createSystemUI() {
                 <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('store-modal').style.display='none'; window.GameLogic.isShopping = false;">離開商店</button>
             </div>
         </div>
-                <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('store-modal').style.display='none'; window.GameLogic.isShopping = false;">離開商店</button>
-            </div>
-        </div>
 
         <div id="purchase-modal" class="modal" style="z-index: 260;">
             <h3 id="purchase-title" style="color:var(--mucha-green);">購買</h3>
@@ -815,100 +812,67 @@ class MainScene extends Phaser.Scene {
         });
 
         this.events.on('action_A_short', () => {
-if (window.GameLogic.armedItem === '水球') {
-            let targetUid = null;
-            let targetSprite = null;
-            let targetType = null; // 標記打到的是玩家還是假人
-            let minDist = 75;
+this.events.on('action_A_short', () => {
+            if (window.GameLogic.armedItem === '水球') {
+                let targetUid = null;
+                let targetSprite = null;
+                let targetType = null; // 標記打到的是玩家還是假人
+                let minDist = 75;
 
-            // 優先找玩家
-            for (let uid in this.otherPlayers) {
-                let op = this.otherPlayers[uid].sprite;
-                let d = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, op.x, op.y);
-                if (d < minDist) {
-                    minDist = d; targetUid = uid; targetSprite = op; targetType = 'player';
+                // 優先找玩家
+                for (let uid in this.otherPlayers) {
+                    let op = this.otherPlayers[uid].sprite;
+                    let d = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, op.x, op.y);
+                    if (d < minDist) {
+                        minDist = d; targetUid = uid; targetSprite = op; targetType = 'player';
+                    }
                 }
-            }
 
-            // 同時找假人 (若假人更近，則改鎖定假人)
-            for (let key in this.dummySprites) {
-                let dummy = this.dummySprites[key];
-                let d = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, dummy.x, dummy.y);
-                if (d < minDist) {
-                    minDist = d; targetUid = key; targetSprite = dummy; targetType = 'dummy';
+                // 同時找假人 (若假人更近，則改鎖定假人)
+                for (let key in this.dummySprites) {
+                    let dummy = this.dummySprites[key];
+                    let d = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, dummy.x, dummy.y);
+                    if (d < minDist) {
+                        minDist = d; targetUid = key; targetSprite = dummy; targetType = 'dummy';
+                    }
                 }
-            }
 
-            let inv = window.GameLogic.myProfile.inventory || {};
-            inv['水球'] = Math.max(0, (inv['水球'] || 0) - 1);
-            update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
-            window.GameLogic.armedItem = null; 
-            
-            if (targetSprite) {
-                this.localPlayer.sprite.setFlipX(targetSprite.x < this.localPlayer.sprite.x);
-            }
-
-            this.localPlayer.sprite.play('throw', true);
-            this.localPlayer.isThrowing = true;
-            this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
-
-            if (targetUid && targetSprite) {
-                let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15);
-                wb.play('wb-blast', true);
+                let inv = window.GameLogic.myProfile.inventory || {};
+                inv['水球'] = Math.max(0, (inv['水球'] || 0) - 1);
+                update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
+                window.GameLogic.armedItem = null; 
                 
-                this.tweens.add({
-                    targets: wb, x: targetSprite.x, y: targetSprite.y, duration: 200,
-                    onComplete: () => {
-                        wb.destroy();
-                        if (targetType === 'player') {
-                            update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
-                        } else if (targetType === 'dummy') {
-                            update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                if (targetSprite) {
+                    this.localPlayer.sprite.setFlipX(targetSprite.x < this.localPlayer.sprite.x);
+                }
+
+                this.localPlayer.sprite.play('throw', true);
+                this.localPlayer.isThrowing = true;
+                this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
+
+                if (targetUid && targetSprite) {
+                    let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15);
+                    wb.play('wb-blast', true);
+                    
+                    this.tweens.add({
+                        targets: wb, x: targetSprite.x, y: targetSprite.y, duration: 200,
+                        onComplete: () => {
+                            wb.destroy();
+                            if (targetType === 'player') {
+                                update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                            } else if (targetType === 'dummy') {
+                                update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                            }
                         }
-                    }
-                });
-            } else {
-                sendBubble("把水球砸向了空地...");
+                    });
+                } else {
+                    sendBubble("把水球砸向了空地...");
+                }
+                return; 
             }
-            return; 
-        }
 
-            // 扣除背包水球
-            let inv = window.GameLogic.myProfile.inventory || {};
-            inv['水球'] = Math.max(0, (inv['水球'] || 0) - 1);
-            update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
-            
-            window.GameLogic.armedItem = null; // 解除裝備
-            
-            // 【新增：自動轉向邏輯】
-            if (targetSprite) {
-                // 如果有鎖定目標，判斷目標在左邊還是右邊，並強制轉向目標
-                this.localPlayer.sprite.setFlipX(targetSprite.x < this.localPlayer.sprite.x);
-            }
-            // (若沒有目標，則會自動維持最後走路停止時的面向)
-
-            // 投擲動畫與角色短暫僵直
-            this.localPlayer.sprite.play('throw', true);
-            this.localPlayer.isThrowing = true;
-            this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
-
-            if (targetUid && targetSprite) {
-                let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15);
-                wb.play('wb-blast', true);
-                
-                this.tweens.add({
-                    targets: wb, x: targetSprite.x, y: targetSprite.y, duration: 200,
-                    onComplete: () => {
-                        wb.destroy();
-                        update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
-                    }
-                });
-            } else {
-                sendBubble("把水球砸向了空地...");
-            }
-            return; // 攔截原本的 A 鍵邏輯
-        }
             if (this.localPlayer.isSweeping) {
+                // ... (保留原本的掃地邏輯)
                 this.qteProgress += (100 / this.qteTotalClicks);
                 if (this.qteProgress >= 100) {
                     this.qteProgress = 100;
