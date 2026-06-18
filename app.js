@@ -1049,7 +1049,8 @@ updatePlayerEntity(entity, pData) {
     }
 
     createFurniture(key, data) {
-        let imgKey = key.includes('fridge') ? 'fridge' : (key.includes('shrine') ? 'shrine' : 'memory');
+        // 加入 dummy 的圖片判定，避免它被錯誤渲染成回憶錄
+        let imgKey = key.includes('fridge') ? 'fridge' : (key.includes('shrine') ? 'shrine' : (key.includes('dummy') ? 'dummy' : 'memory'));
         let f = { sprite: this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true) };
         f.sprite.isLocked = data.locked;
         return f;
@@ -1179,6 +1180,7 @@ updatePlayerEntity(entity, pData) {
                     minDist = d; promptTarget = f.sprite; 
                     if (key.includes('fridge')) promptMsg = "按A打開冰箱";
                     else if (key.includes('shrine')) promptMsg = "按A參拜神龕";
+                    else if (key.includes('dummy')) promptMsg = "假人洋蔥 (裝飾中)"; // 攔截假人洋蔥的專屬提示
                     else promptMsg = "按A打開回憶錄"; 
                 }
             }
@@ -1335,11 +1337,12 @@ function openFurnitureCatalog() {
 
     if (isCafe) {
         title.innerText = "📦 大廳家俱目錄";
-        const items = [
-            { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' },
-            { key: 'memory', name: '📖 咖啡廳回憶錄', img: 'memory.png' },
-            { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' }
-        ];
+            const items = [
+                { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' },
+                { key: 'memory', name: '📖 咖啡廳回憶錄', img: 'memory.png' },
+                { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' },
+                { key: 'dummy', name: '🧍 假人洋蔥', img: 'dummy.png' } // 新增假人洋蔥
+            ];
 
         items.forEach(item => {
             let div = document.createElement('div'); div.className = 'catalog-item';
