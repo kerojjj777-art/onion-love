@@ -313,7 +313,6 @@ class BootScene extends Phaser.Scene {
         this.load.image('fridge', 'fridge.png');
         this.load.image('memory', 'memory.png');
         this.load.image('shrine', 'shrine.png'); 
-        // 將洋蔥皮更改為精靈圖
         this.load.spritesheet('onion-skin', 'onion-skin-sprite.png', { frameWidth: 50, frameHeight: 50 });
         this.load.spritesheet('onion', 'onion-sprite.png', { frameWidth: 50, frameHeight: 50 });
         this.load.spritesheet('onion-down', 'onion-down.png', { frameWidth: 50, frameHeight: 50 });
@@ -322,14 +321,11 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('onion-idle', 'onion-idle.png', { frameWidth: 50, frameHeight: 50 });
     }
     create() {
-        this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
+        // 更新為直接抓取各自方向圖檔的動畫設定
+        this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('onion-up'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'walk', frames: this.anims.generateFrameNumbers('onion-walk', { start: 0, end: 5 }), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'walk-up-left', frames: this.anims.generateFrameNumbers('onion', { start: 16, end: 19 }), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'walk-up-right', frames: this.anims.generateFrameNumbers('onion', { start: 20, end: 23 }), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'walk-down-left', frames: this.anims.generateFrameNumbers('onion', { start: 24, end: 27 }), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'walk-down-right', frames: this.anims.generateFrameNumbers('onion', { start: 28, end: 31 }), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'idle', frames: [{ key: 'onion', frame: 0 }], frameRate: 10 });
+        this.anims.create({ key: 'idle', frames: this.anims.generateFrameNumbers('onion-idle'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'skin-anim', frames: this.anims.generateFrameNumbers('onion-skin', { start: 0, end: 3 }), frameRate: 5, repeat: -1 });
         
         this.scene.launch('UIScene');
@@ -439,7 +435,7 @@ class MainScene extends Phaser.Scene {
     constructor() { super('MainScene'); }
     
     create() {
-        this.cameras.main.setBackgroundColor('#1a1008'); // 確保底色正常
+        this.cameras.main.setBackgroundColor('#1a1008');
         this.sceneName = window.GameLogic.currentScene;
         this.isCafe = this.sceneName === "cafe";
         
@@ -451,13 +447,14 @@ class MainScene extends Phaser.Scene {
 
         if (this.isCafe) {
             this.add.tileSprite(0, 0, mapW, mapH, 'bgCafe').setOrigin(0, 0);
-            this.time.addEvent({ delay: 5000, callback: this.spawnTrash, callbackScope: this, loop: true });
+            // 縮短檢測週期至 2 秒，加快遊戲內垃圾生成體感
+            this.time.addEvent({ delay: 2000, callback: this.spawnTrash, callbackScope: this, loop: true });
 
             const mapSize = 120; const margin = 20;
             this.minimap = this.cameras.add(this.cameras.main.width - mapSize - margin, margin, mapSize, mapSize)
                 .setZoom(mapSize / 2048).setName('minimap');
             this.minimap.setBackgroundColor('rgba(26, 16, 8, 0.7)');
-            this.minimap.centerOn(1024, 1024); // 小地圖將固定顯示整張地圖
+            this.minimap.centerOn(1024, 1024);
 
             this.scale.on('resize', (gameSize) => { if (this.minimap) this.minimap.setPosition(gameSize.width - mapSize - margin, margin); });
         } else if (this.sceneName === "doghouse") {
@@ -510,10 +507,12 @@ class MainScene extends Phaser.Scene {
             let key = window.GameLogic.placingFurnitureKey;
             if(key && this.furnitureSprites[key]) {
                 let f = this.furnitureSprites[key];
+                f.sprite.setVelocity(0, 0); // 防範殘留速度
                 update(ref(window.GameLogic.db, `cafeFurniture/${key}`), { 
                     locked: true, x: f.sprite.x, y: f.sprite.y, ownerUid: window.GameLogic.currentUser.uid 
                 });
                 window.GameLogic.placingFurnitureKey = null;
+                this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); // 確保鏡頭回歸
             }
         });
 
@@ -565,8 +564,9 @@ class MainScene extends Phaser.Scene {
         if (!this.isCafe) return;
         let playerCount = Object.keys(window.GameLogic.cafePlayers || {}).length || 1;
         
-        let spawnChance = 0.1 + (playerCount * 0.05); 
-        let maxTrash = Math.min(10 + playerCount * 2, 20); 
+        // 單人上限為10，每多一人增加 2.5 個上限，最高 20 個
+        let maxTrash = Math.floor(Math.min(10 + Math.max(0, playerCount - 1) * 2.5, 20));
+        let spawnChance = 0.3 + (playerCount * 0.05); // 提高基礎生成機率
         
         if (Math.random() < spawnChance && this.trashes.length < maxTrash) { 
             let tx = Phaser.Math.Between(150, 1898); 
@@ -666,12 +666,10 @@ class MainScene extends Phaser.Scene {
             if (this.closestTrash) this.qteContainer.setPosition(this.closestTrash.x, this.closestTrash.y + 40);
             this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
         } else {
-            // 搖桿偵測
             if (uiScene && uiScene.joyStick && uiScene.joyStick.force > 0) {
                 vx = Math.cos(uiScene.joyStick.angle * Math.PI / 180) * speed; 
                 vy = Math.sin(uiScene.joyStick.angle * Math.PI / 180) * speed;
             } else {
-                // 鍵盤偵測 (已修復括號問題，並純粹處理數值賦值)
                 if (document.activeElement.tagName !== 'INPUT') {
                     if (this.cursors.left.isDown) vx = -speed;
                     else if (this.cursors.right.isDown) vx = speed;
@@ -679,8 +677,6 @@ class MainScene extends Phaser.Scene {
                     if (this.cursors.up.isDown) vy = -speed;
                     else if (this.cursors.down.isDown) vy = speed;
                 }
-                
-                // 避免對角線移動過快
                 if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; } 
             }
 
@@ -689,7 +685,8 @@ class MainScene extends Phaser.Scene {
             if (isPlacing) {
                 this.localPlayer.sprite.setVelocity(0, 0).play('idle', true);
                 let f = this.furnitureSprites[window.GameLogic.placingFurnitureKey];
-                if (f) {
+                // 防呆機制：若家俱實體被砍掉但仍在擺設狀態，跳脫放置狀態並回歸原鏡頭
+                if (f && f.sprite && f.sprite.active) {
                     f.sprite.setVelocity(vx, vy);
                     this.cameras.main.startFollow(f.sprite, true, 0.1, 0.1);
                     this.placePrompt.setPosition(f.sprite.x, f.sprite.y - 80).setVisible(true);
@@ -699,13 +696,15 @@ class MainScene extends Phaser.Scene {
                             this.lastSyncTime = Date.now();
                         }
                     }
+                } else {
+                    window.GameLogic.placingFurnitureKey = null;
+                    this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
                 }
             } else {
                 this.placePrompt.setVisible(false);
                 this.localPlayer.sprite.setVelocity(vx, vy);
                 this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
                 
-                // 動畫與方向判定 (合併你寫的左右翻轉邏輯)
                 if (vx < 0) {
                     this.localPlayer.sprite.setFlipX(true);
                     this.localPlayer.sprite.play('walk', true);
@@ -724,7 +723,6 @@ class MainScene extends Phaser.Scene {
                     this.localPlayer.sprite.play('idle', true);
                 }
                 
-                // Firebase 座標同步
                 if (this.isCafe && (vx !== 0 || vy !== 0)) {
                     if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) {
                         update(ref(window.GameLogic.db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { x: this.localPlayer.sprite.x, y: this.localPlayer.sprite.y });
@@ -783,7 +781,14 @@ class MainScene extends Phaser.Scene {
                 f.sprite.setAlpha(!fd.locked ? 0.6 : 1);
             }
             for (let key in this.furnitureSprites) {
-                if (!furnData[key]) { this.furnitureSprites[key].sprite.destroy(); delete this.furnitureSprites[key]; }
+                if (!furnData[key]) {
+                    if (window.GameLogic.placingFurnitureKey === key) {
+                        window.GameLogic.placingFurnitureKey = null;
+                        this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
+                    }
+                    this.furnitureSprites[key].sprite.destroy(); 
+                    delete this.furnitureSprites[key]; 
+                }
             }
         }
     }
@@ -820,6 +825,13 @@ function openFurnitureCatalog() {
                 let fData = window.GameLogic.cafeFurniture[item.key];
                 if (fData && fData.locked) {
                     remove(ref(db, `cafeFurniture/${item.key}`));
+                    window.GameLogic.placingFurnitureKey = null;
+                    if(window.GameLogic.phaserGame) {
+                        let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
+                        if(scene && scene.localPlayer) {
+                            scene.cameras.main.startFollow(scene.localPlayer.sprite, true, 0.08, 0.08);
+                        }
+                    }
                     sendBubble("傢俱收起來了!");
                 } else {
                     let pX = 1024, pY = 1024; 
