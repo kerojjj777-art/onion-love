@@ -735,7 +735,7 @@ class MainScene extends Phaser.Scene {
         const uiScene = this.scene.manager.getScene('UIScene');
         if (uiScene && uiScene.furnText) uiScene.furnText.setText(this.sceneName === 'farm' ? '農具' : '家俱');
 
-        this.otherPlayers = {}; this.furnitureSprites = {}; this.trashes = []; 
+        this.otherPlayers = {}; this.furnitureSprites = {}; this.trashes = []; this.dummySprites = {};
 
       this.coinSprites = {};
         // 監聽全域畫面上掉落的馬德幣
@@ -812,7 +812,6 @@ class MainScene extends Phaser.Scene {
         });
 
         this.events.on('action_A_short', () => {
-this.events.on('action_A_short', () => {
             if (window.GameLogic.armedItem === '水球') {
                 let targetUid = null;
                 let targetSprite = null;
