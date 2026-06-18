@@ -83,6 +83,19 @@ function createSystemUI() {
             #send-btn { padding: 8px 15px; background: var(--mucha-gold); color: white; border: 2px solid var(--mucha-gold); border-radius: 0 4px 4px 0; font-family: inherit; font-weight: bold; cursor: pointer;}
             .chat-collapsed #chat-content { max-height: 0px !important; }
             #top-notification-bar { position: absolute; top: 0; left: 0; width: 100%; padding: 8px 0; background: rgba(0, 0, 0, 0.6); color: #fff; text-align: center; font-size: 14px; z-index: 500; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 1px 1px 2px #000; letter-spacing: 1px; }
+       
+            /* --- 新增：商品精靈圖動畫 --- */
+            .sprite-waterball {
+                width: 50px;  /* 單格的寬度 */
+                height: 50px; /* 單格的高度 */
+                background: url('shop-water-ball.png') left center;
+                animation: play-waterball 0.8s steps(4) infinite; /* steps(4) 代表這張圖有4格分解動作 */
+                margin-bottom: 5px;
+            }
+            @keyframes play-waterball {
+                100% { background-position: -200px; } /* -200px 是這張圖的總寬度 (50px * 4格) */
+            }
+        
         </style>
         
         <div id="top-notification-bar">系統通知：歡迎來到洋蔥交誼廳！</div>
