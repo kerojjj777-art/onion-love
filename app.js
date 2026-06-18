@@ -20,12 +20,13 @@ const db = getDatabase(app);
 window.GameLogic = {
     currentUser: null,
     currentScene: "doghouse",
-    // 新增：等級、經驗值、馬德幣、掃地次數、上次登出位置
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse" },
     cafePlayers: {},
     cafeFurniture: {},
     placingFurnitureKey: null, 
     phaserGame: null,
+    phaserLoaded: false,
+    pendingScene: null,
     db: db 
 };
 let cafeUnsubscribe = null;
@@ -47,7 +48,6 @@ function createSystemUI() {
 
     appContainer.innerHTML = `
         <style>
-            /* 基礎 UI 樣式定義 */
             .action-menu { display: none; position: absolute; background: var(--mucha-paper); border: 2px solid var(--mucha-gold); border-radius: 8px; z-index: 200; padding: 5px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); flex-direction: column; }
             .action-menu button { background: none; border: none; cursor: pointer; font-family: inherit; font-size: 14px; color: var(--mucha-brown); padding: 8px 12px; }
             .action-menu button:hover { background: rgba(197, 160, 89, 0.2); }
@@ -71,7 +71,6 @@ function createSystemUI() {
             #memory-upload-area { margin-top: 15px; display: flex; flex-direction: column; gap: 10px; border-top: 2px dashed var(--mucha-gold); padding-top: 15px; }
             #memory-upload-area input[type="text"] { padding: 10px; border: 1px solid var(--mucha-gold); border-radius: 4px; }
             
-            /* 家俱目錄網格化 */
             .catalog-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
             .catalog-item { padding: 15px 5px; border: 1px solid var(--mucha-gold); border-radius: 8px; background: #fff; cursor: pointer; font-weight: bold; display: flex; flex-direction: column; align-items: center; }
             .catalog-item:hover { background: rgba(197, 160, 89, 0.2); }
@@ -169,7 +168,7 @@ const chatInput = document.getElementById("chat-input");
 // PWA 與 系統基礎事件綁定
 // ==========================================
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(()=>{}); // 靜默處理
+    navigator.serviceWorker.register('sw.js').catch(()=>{}); 
 }
 
 window.addEventListener('pointerdown', (e) => {
@@ -211,10 +210,24 @@ onAuthStateChanged(auth, async (user) => {
 
         onValue(ref(db, 'cafeFurniture'), snap => window.GameLogic.cafeFurniture = snap.val() || {});
 
-        if (!window.GameLogic.phaserGame) initPhaser();
+        // 監聽全域的神龕傳送事件
+        onValue(ref(db, 'serverEvents/teleport'), snap => {
+            let data = snap.val();
+            if (data && data.target === 'shrine' && (Date.now() - data.time < 5000)) {
+                if (window.GameLogic.currentScene === 'cafe') {
+                    switchScene('shrine');
+                }
+            }
+        });
 
-        // 讀取上次位置進入遊戲
-        switchScene(window.GameLogic.myProfile.lastScene || "doghouse"); 
+        // 解決黑屏破圖的競速條件，確保 Phaser 載入完畢再切換場景
+        if (!window.GameLogic.phaserGame) {
+            window.GameLogic.pendingScene = window.GameLogic.myProfile.lastScene || "doghouse";
+            initPhaser();
+        } else {
+            switchScene(window.GameLogic.myProfile.lastScene || "doghouse");
+        }
+
         listenToChat();
         listenToMemories();
     } else {
@@ -226,8 +239,7 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 function switchScene(sceneName) {
-    // 儲存離開前的場景與位置
-    if (window.GameLogic.currentUser && window.GameLogic.phaserGame) {
+    if (window.GameLogic.currentUser && window.GameLogic.phaserGame && window.GameLogic.phaserLoaded) {
         let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
         if (scene && scene.localPlayer) {
             update(ref(db, `users/${window.GameLogic.currentUser.uid}`), {
@@ -242,7 +254,7 @@ function switchScene(sceneName) {
     window.GameLogic.currentScene = sceneName;
     window.GameLogic.placingFurnitureKey = null; 
     
-    if (sceneName === "doghouse" || sceneName === "farm") {
+    if (sceneName === "doghouse" || sceneName === "farm" || sceneName === "shrine") {
         chatSection.style.display = "none";
         leaveCafe();
     } else if (sceneName === "cafe") {
@@ -250,7 +262,7 @@ function switchScene(sceneName) {
         joinCafe();
     }
 
-    if (window.GameLogic.phaserGame) {
+    if (window.GameLogic.phaserGame && window.GameLogic.phaserLoaded) {
         const game = window.GameLogic.phaserGame;
         game.scene.stop('MainScene');
         game.scene.start('MainScene'); 
@@ -269,7 +281,6 @@ function leaveCafe() {
     if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; }
 }
 
-// 儲存進度 (馬德幣與經驗值)
 function gainRewards(coins, exp) {
     let p = window.GameLogic.myProfile;
     p.coins = (p.coins || 0) + coins;
@@ -298,9 +309,12 @@ class BootScene extends Phaser.Scene {
         this.load.image('bgCafe', 'cafe-bg.jpg');
         this.load.image('bgDoghouse', 'doghouse-bg.jpg');
         this.load.image('bgFarm', 'farm-bg.jpg');
+        this.load.image('bgShrine', 'shrine-bg.jpg'); 
         this.load.image('fridge', 'fridge.png');
         this.load.image('memory', 'memory.png');
-        this.load.image('onion-skin', 'onion-skin.png'); 
+        this.load.image('shrine', 'shrine.png'); 
+        // 將洋蔥皮更改為精靈圖
+        this.load.spritesheet('onion-skin', 'onion-skin-sprite.png', { frameWidth: 50, frameHeight: 50 });
         this.load.spritesheet('onion', 'onion-sprite.png', { frameWidth: 50, frameHeight: 50 });
     }
     create() {
@@ -309,15 +323,21 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'walk-left', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'walk-right', frames: this.anims.generateFrameNumbers('onion', { start: 0, end: 0 }), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'idle', frames: [{ key: 'onion', frame: 0 }], frameRate: 10 });
+        this.anims.create({ key: 'skin-anim', frames: this.anims.generateFrameNumbers('onion-skin', { start: 0, end: 3 }), frameRate: 5, repeat: -1 });
+        
         this.scene.launch('UIScene');
+        
+        window.GameLogic.phaserLoaded = true;
+        if (window.GameLogic.pendingScene) {
+            window.switchScene(window.GameLogic.pendingScene);
+            window.GameLogic.pendingScene = null;
+        }
     }
 }
 
 class UIScene extends Phaser.Scene {
     constructor() { super('UIScene'); }
     create() {
-        const safeMargin = 80;
-        
         this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, {
             radius: 40,
             base: this.add.circle(0, 0, 40, 0xc5a059, 0.2).setStrokeStyle(2, 0xc5a059),
@@ -390,7 +410,6 @@ class UIScene extends Phaser.Scene {
 
     resizeUI(gameSize) {
         const safeMargin = 80;
-        // 針對直式手機介面，將虛擬按鍵整體往上抬升，避免卡在底端
         const isPortrait = gameSize.height > gameSize.width;
         const bottomOffset = isPortrait ? 120 : 20; 
 
@@ -413,11 +432,12 @@ class MainScene extends Phaser.Scene {
     constructor() { super('MainScene'); }
     
     create() {
+        this.cameras.main.setBackgroundColor('#1a1008'); // 確保底色正常
         this.sceneName = window.GameLogic.currentScene;
         this.isCafe = this.sceneName === "cafe";
         
-        const mapW = this.isCafe ? 2048 : 1280;
-        const mapH = this.isCafe ? 2048 : 720;
+        const mapW = this.isCafe ? 2048 : (this.sceneName === "shrine" ? 1280 : 1280);
+        const mapH = this.isCafe ? 2048 : (this.sceneName === "shrine" ? 720 : 720);
         
         this.physics.world.setBounds(0, 0, mapW, mapH);
         this.cameras.main.setBounds(0, 0, mapW, mapH);
@@ -430,11 +450,15 @@ class MainScene extends Phaser.Scene {
             this.minimap = this.cameras.add(this.cameras.main.width - mapSize - margin, margin, mapSize, mapSize)
                 .setZoom(mapSize / 2048).setName('minimap');
             this.minimap.setBackgroundColor('rgba(26, 16, 8, 0.7)');
+            this.minimap.centerOn(1024, 1024); // 小地圖將固定顯示整張地圖
+
             this.scale.on('resize', (gameSize) => { if (this.minimap) this.minimap.setPosition(gameSize.width - mapSize - margin, margin); });
         } else if (this.sceneName === "doghouse") {
             this.add.image(mapW/2, mapH/2, 'bgDoghouse').setDisplaySize(mapW, mapH);
         } else if (this.sceneName === "farm") {
             this.add.image(mapW/2, mapH/2, 'bgFarm').setDisplaySize(mapW, mapH);
+        } else if (this.sceneName === "shrine") {
+            this.add.image(mapW/2, mapH/2, 'bgShrine').setDisplaySize(mapW, mapH);
         }
 
         const uiScene = this.scene.manager.getScene('UIScene');
@@ -442,7 +466,6 @@ class MainScene extends Phaser.Scene {
 
         this.otherPlayers = {}; this.furnitureSprites = {}; this.trashes = []; 
 
-        // 使用最後紀錄的位置
         let startX = window.GameLogic.myProfile.lastX || mapW / 2;
         let startY = window.GameLogic.myProfile.lastY || mapH / 2;
         
@@ -489,7 +512,6 @@ class MainScene extends Phaser.Scene {
 
         this.events.on('action_A_short', () => {
             if (this.localPlayer.isSweeping) {
-                // 打掃難度提升，隨機 5-10 次
                 this.qteProgress += (100 / this.qteTotalClicks);
                 if (this.qteProgress >= 100) {
                     this.qteProgress = 100;
@@ -507,6 +529,10 @@ class MainScene extends Phaser.Scene {
                 if (dist < 90) { 
                     if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block';
                     if (key.startsWith('memory')) document.getElementById('memory-modal').style.display = 'block';
+                    if (key === 'shrine') {
+                        update(ref(window.GameLogic.db, 'serverEvents/teleport'), { target: 'shrine', time: Date.now() });
+                        sendBubble("神龕發出耀眼的光芒...");
+                    }
                     interacted = true; break;
                 }
             }
@@ -517,7 +543,7 @@ class MainScene extends Phaser.Scene {
             if (!this.localPlayer.isSweeping && this.closestTrash) {
                 this.localPlayer.isSweeping = true;
                 this.qteProgress = 0;
-                this.qteTotalClicks = Phaser.Math.Between(5, 10); // 隨機 5-10 次打掃
+                this.qteTotalClicks = Phaser.Math.Between(5, 10); 
                 this.qteContainer.setVisible(true);
             } else if (!this.localPlayer.isSweeping) {
                 sendBubble("使用了 B 技能!");
@@ -533,13 +559,13 @@ class MainScene extends Phaser.Scene {
         let playerCount = Object.keys(window.GameLogic.cafePlayers || {}).length || 1;
         
         let spawnChance = 0.1 + (playerCount * 0.05); 
-        // 隨上線人數增加上限，最多20個
         let maxTrash = Math.min(10 + playerCount * 2, 20); 
         
         if (Math.random() < spawnChance && this.trashes.length < maxTrash) { 
             let tx = Phaser.Math.Between(150, 1898); 
             let ty = Phaser.Math.Between(150, 1898);
             let skin = this.physics.add.sprite(tx, ty, 'onion-skin').setDepth(4);
+            skin.play('skin-anim');
             skin.type = 'onion-skin';
             this.trashes.push(skin);
         }
@@ -588,7 +614,7 @@ class MainScene extends Phaser.Scene {
     }
 
     createFurniture(key, data) {
-        let imgKey = key.includes('fridge') ? 'fridge' : 'memory';
+        let imgKey = key.includes('fridge') ? 'fridge' : (key.includes('shrine') ? 'shrine' : 'memory');
         let f = { sprite: this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true) };
         f.sprite.isLocked = data.locked;
         return f;
@@ -605,7 +631,6 @@ class MainScene extends Phaser.Scene {
             this.trashes = this.trashes.filter(t => t !== this.closestTrash);
             this.closestTrash = null;
             
-            // 獲得獎勵
             let coinsEarned = Phaser.Math.Between(3, 5);
             let leveledUp = gainRewards(coinsEarned, 10);
             
@@ -684,7 +709,12 @@ class MainScene extends Phaser.Scene {
             for (let key in this.furnitureSprites) {
                 let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue;
                 let d = Phaser.Math.Distance.Between(px, py, f.sprite.x, f.sprite.y);
-                if (d < minDist) { minDist = d; promptTarget = f.sprite; promptMsg = key.includes('fridge') ? "按A打開冰箱" : "按A打開回憶錄"; }
+                if (d < minDist) { 
+                    minDist = d; promptTarget = f.sprite; 
+                    if (key.includes('fridge')) promptMsg = "按A打開冰箱";
+                    else if (key.includes('shrine')) promptMsg = "按A參拜神龕";
+                    else promptMsg = "按A打開回憶錄"; 
+                }
             }
             for (let t of this.trashes) {
                 if (!t.active) continue;
@@ -747,10 +777,10 @@ function openFurnitureCatalog() {
 
     if (isCafe) {
         title.innerText = "📦 大廳家俱目錄";
-        // 大廳可擺放公用傢俱
         const items = [
             { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' },
-            { key: 'memory', name: '📖 咖啡廳回憶錄', img: 'memory.png' }
+            { key: 'memory', name: '📖 咖啡廳回憶錄', img: 'memory.png' },
+            { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' }
         ];
 
         items.forEach(item => {
@@ -759,12 +789,10 @@ function openFurnitureCatalog() {
             div.onclick = () => {
                 modal.style.display = 'none';
                 let fData = window.GameLogic.cafeFurniture[item.key];
-                // 如果已經存在大廳且是我放的，就收回
-                if (fData && fData.ownerUid === window.GameLogic.currentUser.uid && fData.locked) {
+                if (fData && fData.locked) {
                     remove(ref(db, `cafeFurniture/${item.key}`));
                     sendBubble("傢俱收起來了!");
-                } else if (!fData || !fData.locked) {
-                    // 放置傢俱
+                } else {
                     let pX = 1024, pY = 1024; 
                     if(window.GameLogic.phaserGame) {
                         let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
@@ -772,8 +800,6 @@ function openFurnitureCatalog() {
                     }
                     update(ref(db, `cafeFurniture/${item.key}`), { x: pX, y: pY, locked: false, ownerUid: window.GameLogic.currentUser.uid });
                     window.GameLogic.placingFurnitureKey = item.key;
-                } else {
-                    alert("這個傢俱已經被別人擺放了喔！");
                 }
             };
             list.appendChild(div);
@@ -889,8 +915,13 @@ function saveMemoryToDB(imgBase64, text) {
     push(ref(db, 'memories'), { uid: window.GameLogic.currentUser.uid, author: window.GameLogic.myProfile.name, img: imgBase64, text: text, time: new Date().toLocaleDateString('zh-TW') });
 }
 
-window.deleteMemory = function(key) {
-    if (confirm("確定要刪除這條回憶嗎？")) remove(ref(db, `memories/${key}`));
+window.deleteMemory = async function(key) {
+    const snap = await get(ref(db, `memories/${key}`));
+    if (snap.exists() && snap.val().uid === window.GameLogic.currentUser.uid) {
+        if (confirm("確定要刪除這條回憶嗎？")) remove(ref(db, `memories/${key}`));
+    } else {
+        alert("您沒有權限刪除這篇回憶喔！");
+    }
 }
 
 function listenToMemories() {
