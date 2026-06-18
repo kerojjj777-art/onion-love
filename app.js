@@ -89,11 +89,11 @@ function createSystemUI() {
                 width: 50px;  /* 單格的寬度 */
                 height: 50px; /* 單格的高度 */
                 background: url('shop-water-ball.png') left center;
-                animation: play-waterball 0.8s steps(4) infinite; /* steps(4) 代表這張圖有4格分解動作 */
+                animation: play-waterball 0.8s steps(8) infinite; /* steps(4) 代表這張圖有8格分解動作 */
                 margin-bottom: 5px;
             }
             @keyframes play-waterball {
-                100% { background-position: -200px; } /* -200px 是這張圖的總寬度 (50px * 4格) */
+                100% { background-position: -400px; } /* -200px 是這張圖的總寬度 (50px * 8格) */
             }
         
         </style>
