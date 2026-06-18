@@ -741,7 +741,30 @@ class MainScene extends Phaser.Scene {
         // 監聽全域畫面上掉落的馬德幣
         this.coinsListener = onValue(ref(window.GameLogic.db, 'droppedCoins'), (snap) => {
             let data = snap.val() || {};
+
+        // --- 新增：監聽假人洋蔥的放置狀態 ---
+        this.dummiesListener = onValue(ref(window.GameLogic.db, 'cafeDummies'), (snap) => {
+            let data = snap.val() || {};
             
+            // 1. 產生新放置的假人
+            for (let key in data) {
+                if (!this.dummySprites[key]) {
+                    let dData = data[key];
+                    // 建立假人精靈圖，並設定圖層高度 (Depth) 確保不會被背景蓋住
+                    let dummySprite = this.physics.add.sprite(dData.x, dData.y, 'dummy').setDepth(8);
+                    this.dummySprites[key] = dummySprite;
+                }
+            }
+            
+            // 2. 移除被收回或資料庫中消失的假人
+            for (let key in this.dummySprites) {
+                if (!data[key]) {
+                    this.dummySprites[key].destroy();
+                    delete this.dummySprites[key];
+                }
+            }
+        });
+          
             // 產生地面上新出現的金幣
             for (let key in data) {
                 if (!this.coinSprites[key]) {
