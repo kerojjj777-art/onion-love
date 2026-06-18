@@ -723,7 +723,8 @@ updatePlayerEntity(entity, pData) {
                             this.lastSyncTime = Date.now();
                         }
                     }
-                } else {
+            } else if (!window.GameLogic.cafeFurniture[window.GameLogic.placingFurnitureKey]) {
+                    // 修正：只有當這件家俱真的不存在(或被收起)時，才取消選取狀態，避免因精靈圖尚未生成的 1 幀落差導致取消
                     window.GameLogic.placingFurnitureKey = null;
                     this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
                 }
@@ -1020,10 +1021,16 @@ function saveMemoryToDB(imgBase64, text) {
 
 window.deleteMemory = async function(key) {
     const snap = await get(ref(db, `memories/${key}`));
-    if (snap.exists() && snap.val().uid === window.GameLogic.currentUser.uid) {
-        if (confirm("確定要刪除這條回憶嗎？")) remove(ref(db, `memories/${key}`));
-    } else {
-        alert("您沒有權限刪除這篇回憶喔！");
+    if (snap.exists()) {
+        let m = snap.val();
+        // 【修正】兼容舊資料沒有 uid 的情況，加上暱稱的比對
+        let isMine = (m.uid === window.GameLogic.currentUser.uid) || (m.author === window.GameLogic.myProfile.name);
+        
+        if (isMine) {
+            if (confirm("確定要刪除這條回憶嗎？")) remove(ref(db, `memories/${key}`));
+        } else {
+            alert("您沒有權限刪除這篇回憶喔！");
+        }
     }
 }
 
@@ -1034,7 +1041,8 @@ function listenToMemories() {
         if (data) {
             Object.keys(data).reverse().forEach(key => {
                 let m = data[key];
-                let isMine = m.uid === window.GameLogic.currentUser.uid;
+                // 【修正】兼容舊資料沒有 uid 的情況，加上暱稱的比對
+                let isMine = (m.uid === window.GameLogic.currentUser.uid) || (m.author === window.GameLogic.myProfile.name);
                 let delBtnHtml = isMine ? `<button class="del-btn" onclick="window.deleteMemory('${key}')">刪除</button>` : '';
                 feed.innerHTML += `<div class="memory-card">${delBtnHtml}<div class="author">${m.author} - ${m.time}</div>${m.img ? `<img src="${m.img}" alt="回憶照片">` : ''}${m.text ? `<div class="text">${m.text}</div>` : ''}</div>`;
             });
