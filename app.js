@@ -666,24 +666,21 @@ class MainScene extends Phaser.Scene {
             if (this.closestTrash) this.qteContainer.setPosition(this.closestTrash.x, this.closestTrash.y + 40);
             this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
         } else {
+            // 搖桿偵測
             if (uiScene && uiScene.joyStick && uiScene.joyStick.force > 0) {
-                vx = Math.cos(uiScene.joyStick.angle * Math.PI / 180) * speed; vy = Math.sin(uiScene.joyStick.angle * Math.PI / 180) * speed;
+                vx = Math.cos(uiScene.joyStick.angle * Math.PI / 180) * speed; 
+                vy = Math.sin(uiScene.joyStick.angle * Math.PI / 180) * speed;
             } else {
+                // 鍵盤偵測 (已修復括號問題，並純粹處理數值賦值)
                 if (document.activeElement.tagName !== 'INPUT') {
-                    if (this.cursors.left.isDown) {
-                        this.localPlayer.sprite.setVelocityX(-180); // 給予向左的速度
-                        this.localPlayer.sprite.setFlipX(true);     // ⭐️ 關鍵：啟動水平鏡像（變成向左看）
-                        this.localPlayer.sprite.play('walk', true); // 播放剛剛定義好的 walk 動畫
-                    } // 偵測是否按下「右鍵」
-                    else if (this.cursors.right.isDown) {
-                        this.localPlayer.sprite.setVelocityX(180);  // 給予向右的速度
-                        this.localPlayer.sprite.setFlipX(false);    // ⭐️ 關鍵：關閉水平鏡像（恢復原本向右看）
-                        this.localPlayer.sprite.play('walk', true); // 播放 walk 動畫
-                    if (this.cursors.up.isDown) vy = -speed; if (this.cursors.down.isDown) vy = speed;
-                    }
-                    // 如果都沒按（停留在原地）
-                    else {
-                        this.localPlayer.sprite.setVelocityX(0);    // 速度歸零
+                    if (this.cursors.left.isDown) vx = -speed;
+                    else if (this.cursors.right.isDown) vx = speed;
+                    
+                    if (this.cursors.up.isDown) vy = -speed;
+                    else if (this.cursors.down.isDown) vy = speed;
+                }
+                
+                // 避免對角線移動過快
                 if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; } 
             }
 
@@ -708,12 +705,26 @@ class MainScene extends Phaser.Scene {
                 this.localPlayer.sprite.setVelocity(vx, vy);
                 this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
                 
-                if (vx < 0) this.localPlayer.sprite.play('walk-left', true);
-                else if (vx > 0) this.localPlayer.sprite.play('walk-right', true);
-                else if (vy < 0) this.localPlayer.sprite.play('walk-up', true);
-                else if (vy > 0) this.localPlayer.sprite.play('walk-down', true);
-                else this.localPlayer.sprite.play('idle', true);
+                // 動畫與方向判定 (合併你寫的左右翻轉邏輯)
+                if (vx < 0) {
+                    this.localPlayer.sprite.setFlipX(true);
+                    this.localPlayer.sprite.play('walk', true);
+                }
+                else if (vx > 0) {
+                    this.localPlayer.sprite.setFlipX(false);
+                    this.localPlayer.sprite.play('walk', true);
+                }
+                else if (vy < 0) {
+                    this.localPlayer.sprite.play('walk-up', true);
+                }
+                else if (vy > 0) {
+                    this.localPlayer.sprite.play('walk-down', true);
+                }
+                else {
+                    this.localPlayer.sprite.play('idle', true);
+                }
                 
+                // Firebase 座標同步
                 if (this.isCafe && (vx !== 0 || vy !== 0)) {
                     if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) {
                         update(ref(window.GameLogic.db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { x: this.localPlayer.sprite.x, y: this.localPlayer.sprite.y });
