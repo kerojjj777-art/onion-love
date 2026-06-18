@@ -378,6 +378,10 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('onion-up', 'onion-up.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('onion-walk', 'onion-right.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('onion-idle', 'onion-idle.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.audio('bgm', 'Sweet-Onion.mp3');
+        this.load.spritesheet('onion-clean', 'onion-clean.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.image('bg7Eonion', '7eonion-bg.jpg'); 
+        this.load.image('storeManager', 'store-manager.png');
     }
     create() {
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 });
@@ -385,7 +389,8 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'walk', frames: this.anims.generateFrameNumbers('onion-walk', { start: 0, end: 5 }), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'idle', frames: this.anims.generateFrameNumbers('onion-idle'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'skin-anim', frames: this.anims.generateFrameNumbers('onion-skin', { start: 0, end: 3 }), frameRate: 5, repeat: -1 });
-        
+        this.anims.create({ key: 'clean', frames: this.anims.generateFrameNumbers('onion-clean'), frameRate: 10, repeat: -1 });
+      
         this.scene.launch('UIScene');
         this.scene.bringToTop('UIScene'); // 確保剛載入時 UI 在最頂
         
@@ -414,6 +419,16 @@ class UIScene extends Phaser.Scene {
         this.mapText = this.add.text(0, 0, '選單', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
         this.furnBtn = this.add.circle(0, 0, 25, 0x8b5a2b).setStrokeStyle(3, 0xc5a059).setInteractive();
         this.furnText = this.add.text(0, 0, '家俱', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
+        // 新增: 給西按鈕
+        this.itemBtn = this.add.circle(0, 0, 25, 0x607d8b).setStrokeStyle(3, 0xc5a059).setInteractive();
+        this.itemText = this.add.text(0, 0, '給西', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
+
+        // 新增: 用於點擊空白處關閉選單的透明遮罩
+        this.menuBgOverlay = this.add.rectangle(0, 0, 4000, 4000, 0x000000, 0).setInteractive().setDepth(199).setVisible(false);
+        this.menuBgOverlay.on('pointerdown', () => {
+            this.menuContainer.setVisible(false);
+            this.menuBgOverlay.setVisible(false);
+        });
 
         this.menuContainer = this.add.container(0, 0).setVisible(false).setDepth(200);
         const menuBg = this.add.graphics();
@@ -421,12 +436,14 @@ class UIScene extends Phaser.Scene {
         menuBg.fillRoundedRect(0, 0, 160, 260, 10); menuBg.strokeRoundedRect(0, 0, 160, 260, 10);
         this.menuContainer.add(menuBg);
 
+        // 替換 menuOptions 定義
         const menuOptions = [
-            { text: '🏠 我的狗窩', action: () => { window.switchScene('doghouse'); this.menuContainer.setVisible(false); } },
-            { text: '☕ 洋蔥大廳', action: () => { window.switchScene('cafe'); this.menuContainer.setVisible(false); } },
-            { text: '🌱 我的蔥田', action: () => { window.switchScene('farm'); this.menuContainer.setVisible(false); } },
-            { text: '🆔 洋蔥身分證', action: () => { window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); this.menuContainer.setVisible(false); } },
-            { text: '🚪 登出大廳', action: () => { window.leaveCafe(); window.signOut(window.auth); this.menuContainer.setVisible(false); } }
+            { text: '🏠 我的狗窩', action: () => { window.switchScene('doghouse'); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
+            { text: '☕ 洋蔥大廳', action: () => { window.switchScene('cafe'); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
+            { text: '🌱 我的蔥田', action: () => { window.switchScene('farm'); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
+            { text: '🏪 7-EONION', action: () => { window.switchScene('7eonion'); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
+            { text: '🆔 洋蔥身分證', action: () => { window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
+            { text: '🚪 登出大廳', action: () => { window.leaveCafe(); window.signOut(window.auth); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } }
         ];
 
         menuOptions.forEach((opt, idx) => {
@@ -435,11 +452,20 @@ class UIScene extends Phaser.Scene {
             this.menuContainer.add(btn);
         });
 
+        // 替換這段
         this.mapBtn.on('pointerdown', () => {
-            this.menuContainer.setVisible(!this.menuContainer.visible);
+            let isVis = !this.menuContainer.visible;
+            this.menuContainer.setVisible(isVis);
+            this.menuBgOverlay.setVisible(isVis);
             document.getElementById('furniture-catalog-modal').style.display = 'none';
         });
 
+        // 新增給西點擊
+        this.itemBtn.on('pointerdown', () => {
+            this.menuContainer.setVisible(false);
+            if(this.menuBgOverlay) this.menuBgOverlay.setVisible(false);
+            window.openInventoryModal();
+        });
         this.furnBtn.on('pointerdown', () => {
             if (this.furnText.text === '農具') return alert("農具選單尚未開放！");
             this.menuContainer.setVisible(false);
@@ -481,13 +507,23 @@ class UIScene extends Phaser.Scene {
         this.txtA.setPosition(this.btnA.x, this.btnA.y);
         this.btnB.setPosition(gameSize.width - safeMargin - 70, gameSize.height - safeMargin - bottomOffset + 20);
         this.txtB.setPosition(this.btnB.x, this.btnB.y);
-        
-        this.mapBtn.setPosition(gameSize.width - safeMargin, gameSize.height - safeMargin - 70 - bottomOffset + 20);
+
+        // 三角形排列: 右下(選單) / 左下(家俱) / 中上(給西)
+        let clusterX = gameSize.width - safeMargin - 35;
+        let clusterY = gameSize.height - safeMargin - 70 - bottomOffset + 20;
+
+        this.mapBtn.setPosition(clusterX + 35, clusterY + 15);
         this.mapText.setPosition(this.mapBtn.x, this.mapBtn.y);
-        this.furnBtn.setPosition(gameSize.width - safeMargin - 70, gameSize.height - safeMargin - 70 - bottomOffset + 20);
+
+        this.furnBtn.setPosition(clusterX - 35, clusterY + 15);
         this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
-        
-        this.menuContainer.setPosition(gameSize.width - 240, gameSize.height - 380 - bottomOffset);
+
+        this.itemBtn.setPosition(clusterX, clusterY - 30);
+        this.itemText.setPosition(this.itemBtn.x, this.itemBtn.y);
+
+        // 選單放置於畫面正中央
+        this.menuContainer.setPosition(gameSize.width / 2 - 80, gameSize.height / 2 - 130);
+        if(this.menuBgOverlay) this.menuBgOverlay.setPosition(gameSize.width / 2, gameSize.height / 2);
     }
 }
 
@@ -495,6 +531,10 @@ class MainScene extends Phaser.Scene {
     constructor() { super('MainScene'); }
     
     create() {
+      // 播放背景音樂
+        if (!this.sound.get('bgm')) {
+            this.sound.play('bgm', { loop: true, volume: 0.5 });
+        }
         this.cameras.main.setBackgroundColor('#1a1008');
         this.sceneName = window.GameLogic.currentScene;
         this.isCafe = this.sceneName === "cafe";
@@ -522,6 +562,10 @@ class MainScene extends Phaser.Scene {
             this.add.image(mapW/2, mapH/2, 'bgFarm').setDisplaySize(mapW, mapH);
         } else if (this.sceneName === "shrine") {
             this.add.image(mapW/2, mapH/2, 'bgShrine').setDisplaySize(mapW, mapH);
+        } else if (this.sceneName === "7eonion") {
+            this.add.image(mapW/2, mapH/2, 'bg7Eonion').setDisplaySize(mapW, mapH);
+            // 產生無法穿越的老闆，放置於地圖中央
+            this.storeManager = this.physics.add.staticSprite(mapW/2, mapH/2, 'storeManager').setDepth(5);
         }
 
         const uiScene = this.scene.manager.getScene('UIScene');
@@ -534,6 +578,9 @@ class MainScene extends Phaser.Scene {
         
         this.localPlayer = this.createPlayerEntity(startX, startY, window.GameLogic.myProfile, true);
         this.localPlayer.isSweeping = false;
+        if (this.sceneName === "7eonion" && this.storeManager) {
+            this.physics.add.collider(this.localPlayer.sprite, this.storeManager);
+        }
         
         this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
 
@@ -584,7 +631,16 @@ class MainScene extends Phaser.Scene {
                 }
                 return;
             }
-
+          // 新增: A鍵觸發購物對話
+            if (this.sceneName === '7eonion' && this.storeManager) {
+                let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.storeManager.x, this.storeManager.y);
+                if (dist < 100) {
+                    window.GameLogic.isShopping = true;
+                    document.getElementById('store-modal').style.display = 'block';
+                    return;
+                }
+            }
+          
             if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!");
             let interacted = false;
             for (const key in this.furnitureSprites) {
@@ -725,7 +781,7 @@ updatePlayerEntity(entity, pData) {
 
         if (this.localPlayer.isSweeping) {
             this.localPlayer.sprite.setVelocity(0, 0);
-            this.localPlayer.sprite.play('walk-down', true); 
+            this.localPlayer.sprite.play('clean', true); 
             this.qteProgress -= (delta * 0.02); if (this.qteProgress < 0) this.qteProgress = 0;
             this.updateQTEBar(this.qteProgress);
             if (this.closestTrash) this.qteContainer.setPosition(this.closestTrash.x, this.closestTrash.y + 40);
@@ -816,6 +872,13 @@ updatePlayerEntity(entity, pData) {
                 if (!t.active) continue;
                 let d = Phaser.Math.Distance.Between(px, py, t.x, t.y);
                 if (d < minDist) { minDist = d; promptTarget = t; promptMsg = "按B使出掃地"; this.closestTrash = t; }
+              // 新增: 接近老闆時的浮動提示
+                if (this.sceneName === '7eonion' && this.storeManager && !window.GameLogic.isShopping) {
+                let d = Phaser.Math.Distance.Between(px, py, this.storeManager.x, this.storeManager.y);
+                if (d < 100) {
+                    minDist = d; promptTarget = this.storeManager; promptMsg = "按A對話購物";
+                }
+            }
             }
 
             if (promptTarget && !isPlacing) {
