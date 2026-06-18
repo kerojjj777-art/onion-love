@@ -696,6 +696,31 @@ class MainScene extends Phaser.Scene {
 
         this.otherPlayers = {}; this.furnitureSprites = {}; this.trashes = []; 
 
+      this.coinSprites = {};
+        // 監聽全域畫面上掉落的馬德幣
+        this.coinsListener = onValue(ref(window.GameLogic.db, 'droppedCoins'), (snap) => {
+            let data = snap.val() || {};
+            
+            // 產生地面上新出現的金幣
+            for (let key in data) {
+                if (!this.coinSprites[key]) {
+                    let cData = data[key];
+                    let coinSprite = this.physics.add.sprite(cData.x, cData.y, 'made-coin').setDepth(8);
+                    coinSprite.play('coin-anim', true);
+                    coinSprite.amount = cData.amount || 5;
+                    this.coinSprites[key] = coinSprite;
+                }
+            }
+            
+            // 移除已被其他玩家撿走的金幣
+            for (let key in this.coinSprites) {
+                if (!data[key]) {
+                    this.coinSprites[key].destroy();
+                    delete this.coinSprites[key];
+                }
+            }
+        });
+
         let startX = window.GameLogic.myProfile.lastX || mapW / 2;
         let startY = window.GameLogic.myProfile.lastY || mapH / 2;
         
@@ -863,15 +888,17 @@ class MainScene extends Phaser.Scene {
                 let coinsEl = document.getElementById("vp-coins");
                 if (coinsEl) coinsEl.innerText = p.coins;
 
-                // 地面噴濺馬德幣特效
-                for(let i = 0; i < 3; i++) {
+                    // 地面噴濺馬德幣：改為推送到 Firebase 全域資料庫中
+                    for (let i = 0; i < 3; i++) {
                     let cx = this.localPlayer.sprite.x + Phaser.Math.Between(-40, 40);
                     let cy = this.localPlayer.sprite.y + Phaser.Math.Between(-40, 40) + 20;
-                    let coinObj = this.physics.add.sprite(cx, cy, 'made-coin').setDepth(8);
-                    coinObj.play('coin-anim', true);
-                    this.tweens.add({
-                        targets: coinObj, y: cy - 20, alpha: 0, duration: 1500, delay: 500,
-                        onComplete: () => coinObj.destroy()
+                    
+                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                        module.push(module.ref(window.GameLogic.db, 'droppedCoins'), {
+                            x: cx,
+                            y: cy,
+                            amount: 5 // 總共扣 15 幣，均分成 3 個，每個價值 5 馬德幣
+                        });
                     });
                 }
 
@@ -1107,6 +1134,51 @@ updatePlayerEntity(entity, pData) {
             this.localPlayer.sprite.setAlpha((Math.floor(time / 100) % 2 === 0) ? 0.5 : 1);
         } else {
             this.localPlayer.sprite.setAlpha(1);
+        }
+
+      // 檢查玩家是否經過並撿起地上的馬德幣
+        for (let key in this.coinSprites) {
+            let coin = this.coinSprites[key];
+            let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, coin.x, coin.y);
+            
+            if (dist < 30) { // 判定半徑：當玩家與金幣距離小於 30 像素時算踩到
+                let coinAmount = coin.amount;
+                
+                // 為了防止多人同時踩到造成重複加錢，先利用 Firebase get 進行雙重驗證
+                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                    let coinRef = module.ref(window.GameLogic.db, `droppedCoins/${key}`);
+                    module.get(coinRef).then((coinSnap) => {
+                        if (coinSnap.exists()) {
+                            // 確定金幣還沒被別人撿走，由當前玩家成功移除並收下
+                            module.remove(coinRef).then(() => {
+                                let p = window.GameLogic.myProfile;
+                                p.coins = (p.coins || 0) + coinAmount;
+                                
+                                // 更新玩家自身的資料庫存款
+                                module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { 
+                                    coins: p.coins 
+                                });
+                                
+                                // 同步更新 UI 介面上的幣數
+                                let coinsEl = document.getElementById("vp-coins");
+                                if (coinsEl) coinsEl.innerText = p.coins;
+                                
+                                // 產生拾取成功的金色浮動文字特效
+                                let px = this.localPlayer.sprite.x;
+                                let py = this.localPlayer.sprite.y - 40;
+                                let pickupText = this.add.text(px, py, `+${coinAmount} 💰`, { 
+                                    fontSize: '16px', color: '#d4af37', fontStyle: 'bold', stroke: '#000', strokeThickness: 3 
+                                }).setOrigin(0.5).setDepth(200);
+                                
+                                this.tweens.add({
+                                    targets: pickupText, y: py - 40, alpha: 0, duration: 1000,
+                                    onComplete: () => pickupText.destroy()
+                                });
+                            });
+                        }
+                    });
+                });
+            }
         }
       
         this.updatePlayerEntity(this.localPlayer, window.GameLogic.myProfile);
