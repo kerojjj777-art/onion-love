@@ -317,11 +317,11 @@ class BootScene extends Phaser.Scene {
         this.load.image('memory', 'memory.png');
         this.load.image('shrine', 'shrine.png'); 
         this.load.spritesheet('onion-skin', 'onion-skin-sprite.png', { frameWidth: 50, frameHeight: 50 });
-        this.load.spritesheet('onion', 'onion-sprite.png', { frameWidth: 50, frameHeight: 50 });
-        this.load.spritesheet('onion-down', 'onion-down.png', { frameWidth: 50, frameHeight: 50 });
-        this.load.spritesheet('onion-up', 'onion-up.png', { frameWidth: 50, frameHeight: 50 });
-        this.load.spritesheet('onion-walk', 'onion-right.png', { frameWidth: 181, frameHeight: 362 });
-        this.load.spritesheet('onion-idle', 'onion-idle.png', { frameWidth: 50, frameHeight: 50 });
+        this.load.spritesheet('onion', 'onion-sprite.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.spritesheet('onion-down', 'onion-down.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.spritesheet('onion-up', 'onion-up.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.spritesheet('onion-walk', 'onion-right.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.spritesheet('onion-idle', 'onion-idle.png', { frameWidth: 75, frameHeight: 75 });
     }
     create() {
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 });
