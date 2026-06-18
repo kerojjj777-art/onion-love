@@ -204,7 +204,82 @@ function createSystemUI() {
 }
 
 createSystemUI();
+// --- 新增：背包與商店的全域邏輯 ---
+window.currentPurchaseItem = null;
+window.currentPurchasePrice = 0;
+window.currentPurchaseQty = 1;
 
+window.openInventoryModal = function() {
+    const list = document.getElementById('inventory-list');
+    list.innerHTML = '';
+    let inv = window.GameLogic.myProfile.inventory || {};
+    let keys = Object.keys(inv).filter(k => inv[k] > 0);
+    
+    if (keys.length === 0) {
+        list.innerHTML = "<div style='grid-column:span 2; text-align:center; color:#888; padding: 20px;'>背包空空如也...</div>";
+    } else {
+        keys.forEach(k => {
+            let icon = k === '水球' ? '🎈' : '📦';
+            list.innerHTML += `<div class="catalog-item"><span style="font-size:24px;">${icon}</span><span style="margin:5px 0;">${k} x${inv[k]}</span><button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="alert('你使用了 ${k}！')">使用</button></div>`;
+        });
+    }
+    document.getElementById('inventory-modal').style.display = 'block';
+};
+
+window.openPurchaseModal = function(name, price) {
+    let currentCoins = window.GameLogic.myProfile.coins || 0;
+    let maxQty = Math.floor(currentCoins / price);
+    
+    if (maxQty <= 0) {
+        alert("馬德幣不足！快去打掃賺錢吧！");
+        return;
+    }
+    
+    window.currentPurchaseItem = name;
+    window.currentPurchasePrice = price;
+    window.currentPurchaseQty = 1;
+    
+    document.getElementById('purchase-title').innerText = `購買 ${name}`;
+    document.getElementById('purchase-qty').innerText = window.currentPurchaseQty;
+    document.getElementById('purchase-total').innerText = window.currentPurchasePrice;
+    document.getElementById('purchase-modal').style.display = 'block';
+};
+
+window.adjustPurchaseQty = function(delta) {
+    let maxQty = Math.floor((window.GameLogic.myProfile.coins || 0) / window.currentPurchasePrice);
+    let newQty = window.currentPurchaseQty + delta;
+    if (newQty >= 1 && newQty <= maxQty) {
+        window.currentPurchaseQty = newQty;
+        document.getElementById('purchase-qty').innerText = window.currentPurchaseQty;
+        document.getElementById('purchase-total').innerText = window.currentPurchaseQty * window.currentPurchasePrice;
+    }
+};
+
+window.confirmPurchase = function() {
+    let cost = window.currentPurchaseQty * window.currentPurchasePrice;
+    if ((window.GameLogic.myProfile.coins || 0) >= cost) {
+        window.GameLogic.myProfile.coins -= cost;
+        
+        // 更新背包
+        window.GameLogic.myProfile.inventory = window.GameLogic.myProfile.inventory || {};
+        window.GameLogic.myProfile.inventory[window.currentPurchaseItem] = (window.GameLogic.myProfile.inventory[window.currentPurchaseItem] || 0) + window.currentPurchaseQty;
+        
+        // 寫入資料庫
+        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+            module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { 
+                coins: window.GameLogic.myProfile.coins,
+                inventory: window.GameLogic.myProfile.inventory
+            });
+        });
+        
+        alert(`結帳成功！獲得 ${window.currentPurchaseQty} 個 ${window.currentPurchaseItem}`);
+        document.getElementById('purchase-modal').style.display = 'none';
+        
+        // 同步更新介面上的馬德幣顯示
+        let coinsEl = document.getElementById("vp-coins");
+        if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
+    }
+};
 const loginScreen = document.getElementById("login-screen");
 const gameLayoutContainer = document.getElementById("game-layout-container");
 const chatSection = document.getElementById("chat-section");
