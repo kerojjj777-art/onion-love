@@ -213,14 +213,25 @@ window.currentPurchaseQty = 1;
 window.useItem = function(itemName) {
     let inv = window.GameLogic.myProfile.inventory || {};
     if (inv[itemName] && inv[itemName] > 0) {
-        inv[itemName] -= 1; // 扣除數量
+        if (itemName === '水球') {
+            // 不立刻扣除數量，改為切換成「裝備狀態」
+            window.GameLogic.armedItem = '水球';
+            document.getElementById('inventory-modal').style.display = 'none';
+            alert("💦 已準備水球！請靠近其他玩家 (75像素內) 並按 A 鍵投擲！");
+            return; 
+        }
         
-        // 更新資料庫中的背包資料
+        inv[itemName] -= 1; // 其他道具直接扣除數量
         import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
             module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { 
                 inventory: inv
             });
         });
+        
+        alert(`你成功使用了 ${itemName}！`);
+        window.openInventoryModal();
+    }
+};
         
         // 若需更多互動，未來可在這裡加入放水球特效
         alert(`你成功使用了 ${itemName}！`);
@@ -479,6 +490,10 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('onion-clean', 'onion-clean.png', { frameWidth: 75, frameHeight: 75 });
         this.load.image('bg7Eonion', '7eonion-bg.jpg'); 
         this.load.image('storeManager', 'store-manager.png');
+        this.load.spritesheet('onion-throw', 'onion-throw.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.spritesheet('water-ball-blast', 'water-ball-blast.png', { frameWidth: 50, frameHeight: 50 });
+        this.load.spritesheet('onion-wet', 'onion-wet.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.spritesheet('made-coin', 'made-coin.png', { frameWidth: 50, frameHeight: 50 });
     }
     create() {
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 });
@@ -487,6 +502,10 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'idle', frames: this.anims.generateFrameNumbers('onion-idle'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'skin-anim', frames: this.anims.generateFrameNumbers('onion-skin', { start: 0, end: 3 }), frameRate: 5, repeat: -1 });
         this.anims.create({ key: 'clean', frames: this.anims.generateFrameNumbers('onion-clean'), frameRate: 10, repeat: -1 });
+       this.anims.create({ key: 'throw', frames: this.anims.generateFrameNumbers('onion-throw'), frameRate: 10, repeat: 0 });
+        this.anims.create({ key: 'wb-blast', frames: this.anims.generateFrameNumbers('water-ball-blast'), frameRate: 15, repeat: -1 });
+        this.anims.create({ key: 'wet', frames: this.anims.generateFrameNumbers('onion-wet'), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'coin-anim', frames: this.anims.generateFrameNumbers('made-coin'), frameRate: 10, repeat: -1 });
       
         this.scene.launch('UIScene');
         this.scene.bringToTop('UIScene'); // 確保剛載入時 UI 在最頂
@@ -727,6 +746,56 @@ class MainScene extends Phaser.Scene {
         });
 
         this.events.on('action_A_short', () => {
+        if (window.GameLogic.armedItem === '水球') {
+            let targetUid = null;
+            let targetSprite = null;
+            let minDist = 75; // 判定範圍 75 像素
+
+            for (let uid in this.otherPlayers) {
+                let op = this.otherPlayers[uid].sprite;
+                let d = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, op.x, op.y);
+                if (d < minDist) {
+                    minDist = d;
+                    targetUid = uid;
+                    targetSprite = op;
+                }
+            }
+
+            // 扣除背包水球
+            let inv = window.GameLogic.myProfile.inventory || {};
+            inv['水球'] = Math.max(0, (inv['水球'] || 0) - 1);
+            update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
+            
+            window.GameLogic.armedItem = null; // 解除裝備
+            
+            // 【新增：自動轉向邏輯】
+            if (targetSprite) {
+                // 如果有鎖定目標，判斷目標在左邊還是右邊，並強制轉向目標
+                this.localPlayer.sprite.setFlipX(targetSprite.x < this.localPlayer.sprite.x);
+            }
+            // (若沒有目標，則會自動維持最後走路停止時的面向)
+
+            // 投擲動畫與角色短暫僵直
+            this.localPlayer.sprite.play('throw', true);
+            this.localPlayer.isThrowing = true;
+            this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
+
+            if (targetUid && targetSprite) {
+                let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15);
+                wb.play('wb-blast', true);
+                
+                this.tweens.add({
+                    targets: wb, x: targetSprite.x, y: targetSprite.y, duration: 200,
+                    onComplete: () => {
+                        wb.destroy();
+                        update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                    }
+                });
+            } else {
+                sendBubble("把水球砸向了空地...");
+            }
+            return; // 攔截原本的 A 鍵邏輯
+        }
             if (this.localPlayer.isSweeping) {
                 this.qteProgress += (100 / this.qteTotalClicks);
                 if (this.qteProgress >= 100) {
@@ -777,6 +846,40 @@ class MainScene extends Phaser.Scene {
 
         this.placePrompt = this.add.text(0, 0, '洋蔥精靈: 按A確定擺放', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#fff', backgroundColor: 'rgba(74, 93, 78, 0.8)', padding: {x:8, y:4} }).setOrigin(0.5).setDepth(20).setVisible(false);
         if (this.minimap) this.minimap.ignore(this.placePrompt);
+      
+      this.hitListener = onValue(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`), (snap) => {
+            let data = snap.val();
+            if (data && data.time && (Date.now() - data.time < 2000)) {
+                if (this.localPlayer.isInvincible) return; // 無敵期間不受傷
+
+                this.localPlayer.isInvincible = true;
+                this.localPlayer.isStunned = true;
+                
+                // 扣除 15 馬德幣
+                let p = window.GameLogic.myProfile;
+                let loss = Math.min(p.coins || 0, 15);
+                p.coins -= loss;
+                update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins });
+                let coinsEl = document.getElementById("vp-coins");
+                if (coinsEl) coinsEl.innerText = p.coins;
+
+                // 地面噴濺馬德幣特效
+                for(let i = 0; i < 3; i++) {
+                    let cx = this.localPlayer.sprite.x + Phaser.Math.Between(-40, 40);
+                    let cy = this.localPlayer.sprite.y + Phaser.Math.Between(-40, 40) + 20;
+                    let coinObj = this.physics.add.sprite(cx, cy, 'made-coin').setDepth(8);
+                    coinObj.play('coin-anim', true);
+                    this.tweens.add({
+                        targets: coinObj, y: cy - 20, alpha: 0, duration: 1500, delay: 500,
+                        onComplete: () => coinObj.destroy()
+                    });
+                }
+
+                this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); // 0.5s 恢復行動
+                this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); // 1.5s 恢復無敵
+                remove(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`)); // 吸收事件
+            }
+        });
     }
 
     spawnTrash() {
@@ -890,7 +993,14 @@ updatePlayerEntity(entity, pData) {
             this.updateQTEBar(this.qteProgress);
             if (this.closestTrash) this.qteContainer.setPosition(this.closestTrash.x, this.closestTrash.y + 40);
             this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
+        } else if (this.localPlayer.isStunned) {
+            this.localPlayer.sprite.setVelocity(0, 0);
+            this.localPlayer.sprite.play('wet', true); // 播放全身濕透精靈圖
+            this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
+        } else if (this.localPlayer.isThrowing) {
+            this.localPlayer.sprite.setVelocity(0, 0); // 丟水球時僵直
         } else {
+          
             if (uiScene && uiScene.joyStick && uiScene.joyStick.force > 0) {
                 vx = Math.cos(uiScene.joyStick.angle * Math.PI / 180) * speed; 
                 vy = Math.sin(uiScene.joyStick.angle * Math.PI / 180) * speed;
@@ -992,7 +1102,13 @@ updatePlayerEntity(entity, pData) {
                 this.smartPromptText.setPosition(ptX, ptY);
             } else { this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false); }
         }
-
+        // 無敵狀態閃爍效果
+        if (this.localPlayer.isInvincible) {
+            this.localPlayer.sprite.setAlpha((Math.floor(time / 100) % 2 === 0) ? 0.5 : 1);
+        } else {
+            this.localPlayer.sprite.setAlpha(1);
+        }
+      
         this.updatePlayerEntity(this.localPlayer, window.GameLogic.myProfile);
 
         if (this.isCafe) {
