@@ -840,10 +840,15 @@ function openFurnitureCatalog() {
                         let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
                         if(scene && scene.localPlayer) { pX = scene.localPlayer.sprite.x; pY = scene.localPlayer.sprite.y - 80; }
                     }
-                    update(ref(db, `cafeFurniture/${item.key}`), { x: pX, y: pY, locked: false, ownerUid: window.GameLogic.currentUser.uid });
-                    window.GameLogic.placingFurnitureKey = item.key;
-                }
-            };
+        
+                    let newData = { x: pX, y: pY, locked: false, ownerUid: window.GameLogic.currentUser.uid };
+                     // 【新增此行】預先更新本地端狀態，避免 Phaser update 迴圈因 Firebase 延遲而取消選取
+                    window.GameLogic.cafeFurniture[item.key] = newData; 
+        
+                   update(ref(db, `cafeFurniture/${item.key}`), newData);
+                   window.GameLogic.placingFurnitureKey = item.key;
+               }
+         };
             list.appendChild(div);
         });
     } else if (window.GameLogic.currentScene === "doghouse") {
