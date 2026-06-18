@@ -76,16 +76,16 @@ function createSystemUI() {
             .catalog-item:hover { background: rgba(197, 160, 89, 0.2); }
             .catalog-item img { width: 50px; height: 50px; margin-bottom: 5px; object-fit: contain;}
 
-            #chat-section { display: none; position: absolute; top: 20px; left: 20px; width: 280px; flex-direction: column; z-index: 100; pointer-events: none; } 
-            #chat-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 4px 4px 0 0; padding: 5px 10px; width: fit-content; cursor: pointer; font-size: 12px; font-weight: bold;}
+            #chat-section { display: none; position: absolute; top: 60px; left: 20px; width: 280px; flex-direction: column; z-index: 100; pointer-events: none; }            #chat-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 4px 4px 0 0; padding: 5px 10px; width: fit-content; cursor: pointer; font-size: 12px; font-weight: bold;}
             #chat-content { pointer-events: auto; transition: max-height 0.3s ease-in-out; overflow: hidden; display: flex; flex-direction: column; }
-            #chat-box { max-height: 180px; overflow-y: auto; background: rgba(0, 0, 0, 0.5); color: #fff; padding: 8px; border-radius: 0 8px 0 0; margin-bottom: 5px; font-size: 13px; text-shadow: 1px 1px 2px #000; }
-            #chat-input-area { display: flex; height: 40px; box-shadow: 0 2px 5px rgba(0,0,0,0.5); border-radius: 4px;}
+            #chat-box { max-height: 100px; overflow-y: auto; background: rgba(0, 0, 0, 0.5); color: #fff; padding: 8px; border-radius: 0 8px 0 0; margin-bottom: 5px; font-size: 13px; text-shadow: 1px 1px 2px #000; }            #chat-input-area { display: flex; height: 40px; box-shadow: 0 2px 5px rgba(0,0,0,0.5); border-radius: 4px;}
             #chat-input { flex-grow: 1; padding: 8px; border: 2px solid var(--mucha-gold); border-radius: 4px 0 0 4px; background: rgba(244, 236, 216, 0.95); font-family: inherit;}
             #send-btn { padding: 8px 15px; background: var(--mucha-gold); color: white; border: 2px solid var(--mucha-gold); border-radius: 0 4px 4px 0; font-family: inherit; font-weight: bold; cursor: pointer;}
             .chat-collapsed #chat-content { max-height: 0px !important; }
+            #top-notification-bar { position: absolute; top: 0; left: 0; width: 100%; padding: 8px 0; background: rgba(0, 0, 0, 0.6); color: #fff; text-align: center; font-size: 14px; z-index: 500; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 1px 1px 2px #000; letter-spacing: 1px; }
         </style>
-
+        
+        <div id="top-notification-bar">系統通知：歡迎來到洋蔥交誼廳！</div>
         <div id="action-menu" class="action-menu"><button id="view-profile-btn">洋蔥身分證</button></div>
 
         <div id="login-screen">
@@ -472,13 +472,13 @@ class MainScene extends Phaser.Scene {
             this.add.tileSprite(0, 0, mapW, mapH, 'bgCafe').setOrigin(0, 0);
             this.time.addEvent({ delay: 2000, callback: this.spawnTrash, callbackScope: this, loop: true });
 
-            const mapSize = 120; const margin = 20;
-            this.minimap = this.cameras.add(this.cameras.main.width - mapSize - margin, margin, mapSize, mapSize)
+            const mapSize = 120; const marginX = 20; const marginY = 60; // 調整 Y 軸 margin 將其往下挪
+            this.minimap = this.cameras.add(this.cameras.main.width - mapSize - marginX, marginY, mapSize, mapSize)
                 .setZoom(mapSize / 2048).setName('minimap');
             this.minimap.setBackgroundColor('rgba(26, 16, 8, 0.7)');
             this.minimap.centerOn(1024, 1024);
 
-            this.scale.on('resize', (gameSize) => { if (this.minimap) this.minimap.setPosition(gameSize.width - mapSize - margin, margin); });
+            this.scale.on('resize', (gameSize) => { if (this.minimap) this.minimap.setPosition(gameSize.width - mapSize - marginX, marginY); });
         } else if (this.sceneName === "doghouse") {
             this.add.image(mapW/2, mapH/2, 'bgDoghouse').setDisplaySize(mapW, mapH);
         } else if (this.sceneName === "farm") {
@@ -797,7 +797,34 @@ updatePlayerEntity(entity, pData) {
                 if (uid === window.GameLogic.currentUser.uid) continue;
                 let pd = playersData[uid]; pd.uid = uid;
                 if (!this.otherPlayers[uid]) this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
-                let op = this.otherPlayers[uid]; op.sprite.x = Phaser.Math.Linear(op.sprite.x, pd.x, 0.2); op.sprite.y = Phaser.Math.Linear(op.sprite.y, pd.y, 0.2);
+                
+                let op = this.otherPlayers[uid];
+                let oldX = op.sprite.x;
+                let oldY = op.sprite.y;
+                
+                op.sprite.x = Phaser.Math.Linear(op.sprite.x, pd.x, 0.2);
+                op.sprite.y = Phaser.Math.Linear(op.sprite.y, pd.y, 0.2);
+                
+                // === 新增：判斷其他玩家位移，並播放對應的精靈圖 ===
+                let diffX = op.sprite.x - oldX;
+                let diffY = op.sprite.y - oldY;
+                let absX = Math.abs(diffX);
+                let absY = Math.abs(diffY);
+
+                if (absX < 0.5 && absY < 0.5) {
+                    op.sprite.play('idle', true);
+                } else if (absX >= absY) {
+                    op.sprite.setFlipX(diffX < 0);
+                    op.sprite.play('walk', true);
+                } else {
+                    if (diffY < 0) {
+                        op.sprite.play('walk-up', true);
+                    } else {
+                        op.sprite.play('walk-down', true);
+                    }
+                }
+                // ===========================================
+
                 this.updatePlayerEntity(op, pd);
             }
             for (let uid in this.otherPlayers) {
@@ -988,13 +1015,26 @@ function sendChat() {
 
 function listenToChat() {
     onValue(ref(db, 'chats'), (snapshot) => {
-        const chatBox = document.getElementById("chat-box"); chatBox.innerHTML = "";
+        const chatBox = document.getElementById("chat-box"); 
+        chatBox.innerHTML = "";
         const chats = snapshot.val();
         if (chats) {
+            let lastMsg = "";
             Object.values(chats).forEach(c => {
                 chatBox.innerHTML += `<div style="margin-bottom: 4px;"><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg} <span style="font-size:10px; color:#bbb; margin-left:8px;">${c.date||''} ${c.time||''}</span></div>`;
+                lastMsg = `${c.name}：${c.msg}`; // 記錄最後一筆對話
             });
-            setTimeout(() => { chatBox.scrollTop = chatBox.scrollHeight; }, 50);
+            
+            // 更新頂部全域通知欄
+            const topBar = document.getElementById("top-notification-bar");
+            if (topBar && lastMsg) {
+                topBar.innerText = `💬 最新發言｜ ${lastMsg}`;
+            }
+
+            // 強制畫面重繪後，再進行捲動，確保永遠停在最新對話
+            requestAnimationFrame(() => {
+                setTimeout(() => { chatBox.scrollTop = chatBox.scrollHeight; }, 10);
+            });
         }
     });
 }
