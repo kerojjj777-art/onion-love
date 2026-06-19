@@ -121,6 +121,11 @@ window.closeProfileModal = function() {
     }
 };
 
+window.openPortalModal = function() {
+    document.getElementById('inventory-modal').style.display = 'none';
+    document.getElementById('portal-modal').style.display = 'block';
+};
+
 // ==========================================
 // 動態生成系統 UI 介面 (集中化管理)
 // ==========================================
@@ -293,6 +298,22 @@ function createSystemUI() {
                 <button class="btn-danger" onclick="window.deleteManualPage()">刪除此頁</button>
             </div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 30px; width: 100%;" onclick="document.getElementById('manual-modal').style.display='none'">關閉說明書</button>
+        </div>
+        
+        <div id="portal-modal" class="modal" style="z-index: 260; padding: 0; overflow: hidden; background: #2a1b12;">
+            <div style="background:#2a1b12; text-align:center; position:relative; border-bottom: 2px solid var(--mucha-gold); padding: 10px;">
+                <img src="magic-gap-big.png" style="width:100%; display:block;" alt="傳送門">
+            </div>
+            <div style="padding:15px; background: var(--mucha-paper);">
+                <h3 style="margin-top:0; color:var(--mucha-brown);">🌀 空間傳送門</h3>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('doghouse'); document.getElementById('portal-modal').style.display='none';">🏠 我的狗窩</button>
+                    <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('cafe'); document.getElementById('portal-modal').style.display='none';">☕ 洋蔥大廳</button>
+                    <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('farm'); document.getElementById('portal-modal').style.display='none';">🌱 我的蔥田</button>
+                    <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('7eonion'); document.getElementById('portal-modal').style.display='none';">🏪 7-EONION</button>
+                </div>
+                <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('portal-modal').style.display='none'">關閉傳送門</button>
+            </div>
         </div>
 
         <div id="game-layout-container">
@@ -556,6 +577,35 @@ window.openInventoryModal = function() {
                 ${btnHtml}
             </div>`;
     });
+    
+    // --- 新增目錄工具清單 (取代原本的選單功能) ---
+    invHTML += `
+        <div class="catalog-item">
+            <img src="magic-gap.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;" alt="傳送門">
+            <span style="margin:5px 0;">傳送門</span>
+            <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.openPortalModal()">開啟</button>
+        </div>
+        <div class="catalog-item">
+            <span style="font-size:32px; margin-bottom:5px; height:50px; display:flex; align-items:center; justify-content:center;">🆔</span>
+            <span style="margin:5px 0;">洋蔥身分證</span>
+            <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); document.getElementById('inventory-modal').style.display='none';">查看</button>
+        </div>
+        <div class="catalog-item">
+            <img src="music-box.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;" alt="🎵" onerror="this.src=''; this.alt='🎵'">
+            <span style="margin:5px 0;">蔥Music</span>
+            <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="document.getElementById('settings-modal').style.display='block'; document.getElementById('inventory-modal').style.display='none';">播放</button>
+        </div>
+        <div class="catalog-item">
+            <span style="font-size:32px; margin-bottom:5px; height:50px; display:flex; align-items:center; justify-content:center;">📖</span>
+            <span style="margin:5px 0;">說明書</span>
+            <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.openManualModal(); document.getElementById('inventory-modal').style.display='none';">閱讀</button>
+        </div>
+        <div class="catalog-item">
+            <span style="font-size:32px; margin-bottom:5px; height:50px; display:flex; align-items:center; justify-content:center;">🚪</span>
+            <span style="margin:5px 0;">登出大廳</span>
+            <button style="padding:4px 10px; font-size:12px; background:#d9534f; color:white; border:none; border-radius:4px; cursor:pointer;" onclick="window.leaveCafe(); if (window.GameLogic.currentUser) { import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.remove(module.ref(window.GameLogic.db, 'onlinePlayers/' + window.GameLogic.currentUser.uid)); }); } window.signOut(window.auth); document.getElementById('inventory-modal').style.display='none';">登出</button>
+        </div>
+    `;
     
     list.innerHTML = invHTML;
     document.getElementById('inventory-modal').style.display = 'block';
@@ -1068,67 +1118,17 @@ class UIScene extends Phaser.Scene {
         this.txtA = this.add.text(0, 0, 'A', { fontSize: '24px', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5);
         this.btnB = this.add.circle(0, 0, 25, 0xd4c5a0).setStrokeStyle(3, 0xc5a059).setInteractive();
         this.txtB = this.add.text(0, 0, 'B', { fontSize: '20px', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5);
-        this.mapBtn = this.add.circle(0, 0, 25, 0x4a5d4e).setStrokeStyle(3, 0xc5a059).setInteractive();
-        this.mapText = this.add.text(0, 0, '選單', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
         this.furnBtn = this.add.circle(0, 0, 25, 0x8b5a2b).setStrokeStyle(3, 0xc5a059).setInteractive();
         this.furnText = this.add.text(0, 0, '家俱', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
         this.itemBtn = this.add.circle(0, 0, 25, 0x607d8b).setStrokeStyle(3, 0xc5a059).setInteractive();
         this.itemText = this.add.text(0, 0, '給西', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
 
-        this.menuBgOverlay = this.add.rectangle(0, 0, 4000, 4000, 0x000000, 0).setInteractive().setDepth(199).setVisible(false);
-        this.menuBgOverlay.on('pointerdown', () => {
-            this.menuContainer.setVisible(false);
-            this.menuBgOverlay.setVisible(false);
-        });
-
-        this.menuContainer = this.add.container(0, 0).setVisible(false).setDepth(200);
-        const menuBg = this.add.graphics();
-        menuBg.fillStyle(0xf4ecd8, 0.95); menuBg.lineStyle(2, 0xc5a059, 1);
-        menuBg.fillRoundedRect(0, 0, 160, 420, 10); menuBg.strokeRoundedRect(0, 0, 160, 420, 10);
-        this.menuContainer.add(menuBg);
-
-        const menuOptions = [
-            { text: '🏠 我的狗窩', action: () => { window.switchScene('doghouse'); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
-            { text: '☕ 洋蔥大廳', action: () => { window.switchScene('cafe'); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
-            { text: '🌱 我的蔥田', action: () => { window.switchScene('farm'); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
-            { text: '🏪 7-EONION', action: () => { window.switchScene('7eonion'); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
-            { text: '🆔 洋蔥身分證', action: () => { window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
-            { text: '🎵 蔥Music', action: () => { document.getElementById('settings-modal').style.display='block'; this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
-            { text: '📖 說明書', action: () => { window.openManualModal(); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
-            { text: '🚪 登出大廳', action: () => { 
-                window.leaveCafe(); 
-                if (window.GameLogic.currentUser) {
-                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-                        module.remove(module.ref(window.GameLogic.db, `onlinePlayers/${window.GameLogic.currentUser.uid}`));
-                    });
-                }
-                window.signOut(window.auth); 
-                this.menuContainer.setVisible(false); 
-                this.menuBgOverlay.setVisible(false); 
-            } }
-        ];
-
-        menuOptions.forEach((opt, idx) => {
-            let btn = this.add.text(80, 30 + idx * 50, opt.text, { fontSize: '18px', color: '#3e2723', fontFamily: 'Georgia', fontStyle: 'bold' }).setOrigin(0.5).setInteractive();
-            btn.on('pointerdown', opt.action);
-            this.menuContainer.add(btn);
-        });
-
-        this.mapBtn.on('pointerdown', () => {
-            let isVis = !this.menuContainer.visible;
-            this.menuContainer.setVisible(isVis);
-            this.menuBgOverlay.setVisible(isVis);
-            document.getElementById('furniture-catalog-modal').style.display = 'none';
-        });
-
         this.itemBtn.on('pointerdown', () => {
-            this.menuContainer.setVisible(false);
-            if(this.menuBgOverlay) this.menuBgOverlay.setVisible(false);
             window.openInventoryModal();
         });
+        
         this.furnBtn.on('pointerdown', () => {
             if (this.furnText.text === '農具') return alert("農具選單尚未開放！");
-            this.menuContainer.setVisible(false);
             openFurnitureCatalog();
         });
 
@@ -1236,8 +1236,9 @@ class UIScene extends Phaser.Scene {
         // 套用縮放比例
         this.statusBg.setScale(scaleRatio);
         
-        // 洋蔥人頭像放大，套用 1.6 倍，讓他填滿上方的圓拱
-        this.portrait.setScale(1.6 * scaleRatio);
+        // --- 修正角色頭像被壓縮的問題 ---
+        // 狀態欄的角色圖，請讓角色圖呈現原始尺寸不裁切
+        this.portrait.setScale(1);
 
         const bgW = this.statusBg.displayWidth;
         const bgH = this.statusBg.displayHeight;
@@ -1265,7 +1266,7 @@ class UIScene extends Phaser.Scene {
         this.equipText.setPosition(bgW * 0.75, -bgH * 0.30);
         this.equipText.setFontSize(`${Math.max(16, 20 * scaleRatio)}px`);
 
-        // --- 4. 定位右側按鈕群與選單 (保持現有邏輯) ---
+        // --- 4. 定位右側按鈕群與選單 ---
         this.btnA.setPosition(gameSize.width - safeMargin, gameSize.height - safeMargin - bottomOffset + 20);
         this.txtA.setPosition(this.btnA.x, this.btnA.y);
         this.btnB.setPosition(gameSize.width - safeMargin - 70, gameSize.height - safeMargin - bottomOffset + 20);
@@ -1274,17 +1275,13 @@ class UIScene extends Phaser.Scene {
         let clusterX = gameSize.width - safeMargin - 35;
         let clusterY = gameSize.height - safeMargin - 70 - bottomOffset + 20;
 
-        this.mapBtn.setPosition(clusterX + 35, clusterY + 15);
-        this.mapText.setPosition(this.mapBtn.x, this.mapBtn.y);
-
-        this.furnBtn.setPosition(clusterX - 35, clusterY + 15);
-        this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
-
-        this.itemBtn.setPosition(clusterX, clusterY - 30);
+        // 替換原本的「選單」位置，由「給西」取代
+        this.itemBtn.setPosition(clusterX + 35, clusterY + 15);
         this.itemText.setPosition(this.itemBtn.x, this.itemBtn.y);
 
-        this.menuContainer.setPosition(gameSize.width / 2 - 80, gameSize.height / 2 - 200);
-        if(this.menuBgOverlay) this.menuBgOverlay.setPosition(gameSize.width / 2, gameSize.height / 2);
+        // 「家俱」維持原本位置
+        this.furnBtn.setPosition(clusterX - 35, clusterY + 15);
+        this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
     }
 }
 
