@@ -76,7 +76,7 @@ function createSystemUI() {
             #memory-upload-area input[type="text"] { padding: 10px; border: 1px solid var(--mucha-gold); border-radius: 4px; }
             
             .catalog-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-            .catalog-item { padding: 15px 5px; border: 1px solid var(--mucha-gold); border-radius: 8px; background: #fff; cursor: pointer; font-weight: bold; display: flex; flex-direction: column; align-items: center; }
+            .catalog-item { padding: 15px 5px; border: 1px solid var(--mucha-gold); border-radius: 8px; background: #fff; cursor: pointer; font-weight: bold; display: flex; flex-direction: column; align-items: center; transition: all 0.3s; }
             .catalog-item:hover { background: rgba(197, 160, 89, 0.2); }
             .catalog-item img { width: 50px; height: 50px; margin-bottom: 5px; object-fit: contain;}
 
@@ -88,17 +88,20 @@ function createSystemUI() {
             .chat-collapsed #chat-content { max-height: 0px !important; }
             #top-notification-bar { position: absolute; top: 0; left: 0; width: 100%; padding: 8px 0; background: rgba(0, 0, 0, 0.6); color: #fff; text-align: center; font-size: 14px; z-index: 500; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 1px 1px 2px #000; letter-spacing: 1px; }
        
-            /* --- 新增：商品精靈圖動畫 --- */
+            /* --- 商品精靈圖動畫 --- */
             .sprite-waterball {
-                width: 50px;  /* 單格的寬度 */
-                height: 50px; /* 單格的高度 */
+                width: 50px; 
+                height: 50px; 
                 background: url('shop-water-ball.png') left center;
-                animation: play-waterball 0.8s steps(8) infinite; /* steps(4) 代表這張圖有8格分解動作 */
+                animation: play-waterball 0.8s steps(8) infinite;
                 margin-bottom: 5px;
             }
             @keyframes play-waterball {
-                100% { background-position: -400px; } /* -200px 是這張圖的總寬度 (50px * 8格) */
+                100% { background-position: -400px; } 
             }
+            /* --- 裝備中狀態閃爍 --- */
+            @keyframes blink-red { 0% { box-shadow: 0 0 5px red; border-color: red; } 50% { box-shadow: 0 0 15px red; border-color: #ff6666; background-color: rgba(255,0,0,0.1); } 100% { box-shadow: 0 0 5px red; border-color: red; } }
+            .item-in-use { animation: blink-red 1.2s infinite; border: 2px solid red !important; }
         </style>
         
         <div id="top-notification-bar">系統通知：歡迎來到洋蔥交誼廳！</div>
@@ -231,22 +234,19 @@ function createSystemUI() {
 }
 
 createSystemUI();
-// --- 新增：背包與商店的全域邏輯 ---
+// --- 背包與商店的全域邏輯 ---
 window.currentPurchaseItem = null;
 window.currentPurchasePrice = 0;
 window.currentPurchaseQty = 1;
 
-// --- 新增全域道具使用邏輯 ---
 window.useItem = function(itemName) {
     let inv = window.GameLogic.myProfile.inventory || {};
     if (inv[itemName] && inv[itemName] > 0) {
         if (itemName === '水球') {
-            window.GameLogic.armedItemState = 'armed'; // 設定為武裝狀態，等待填充
-            document.getElementById('inventory-modal').style.display = 'none';
-            // 不再跳出 alert，改以畫面中的藍色氣泡提示
+            window.GameLogic.armedItemState = 'armed'; 
+            window.openInventoryModal(); // 刷新介面以顯示閃爍狀態
             return; 
         }
-
         inv[itemName] -= 1; 
         import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
             module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
@@ -256,18 +256,23 @@ window.useItem = function(itemName) {
     }
 };
 
+window.stopUsingItem = function(itemName) {
+    if (itemName === '水球') {
+        window.GameLogic.armedItemState = null;
+        window.openInventoryModal();
+    }
+};
+
 window.openInventoryModal = function() {
     const list = document.getElementById('inventory-list');
     list.innerHTML = '';
     let inv = window.GameLogic.myProfile.inventory || {};
-    // 在這裡直接過濾掉 '假人洋蔥'，確保它絕對不會顯示在背包裡
     let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥');
     
     if (keys.length === 0) {
         list.innerHTML = "<div style='grid-column:span 2; text-align:center; color:#888; padding: 20px;'>背包空空如也...</div>";
     } else {
         keys.forEach(k => {
-            // 判斷：如果是水球就用動畫 div，其他道具則使用預設符號
             let iconHtml = "";
             if (k === '水球') {
                 iconHtml = '<div class="sprite-waterball"></div>';
@@ -275,11 +280,17 @@ window.openInventoryModal = function() {
                 iconHtml = '<span style="font-size:24px; margin-bottom:5px;">📦</span>';
             }
             
+            let isUsing = (k === '水球' && window.GameLogic.armedItemState != null);
+            let itemClass = isUsing ? 'catalog-item item-in-use' : 'catalog-item';
+            let btnHtml = isUsing 
+                ? `<button style="padding:4px 10px; font-size:12px; background: #d9534f; color: white; border: none; border-radius: 4px; cursor: pointer;" onclick="window.stopUsingItem('${k}')">暫停使用</button>`
+                : `<button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.useItem('${k}')">使用</button>`;
+            
             list.innerHTML += `
-                <div class="catalog-item">
+                <div class="${itemClass}">
                     ${iconHtml}
                     <span style="margin:5px 0;">${k} x${inv[k]}</span>
-                    <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.useItem('${k}')">使用</button>
+                    ${btnHtml}
                 </div>`;
         });
     }
@@ -320,11 +331,9 @@ window.confirmPurchase = function() {
     if ((window.GameLogic.myProfile.coins || 0) >= cost) {
         window.GameLogic.myProfile.coins -= cost;
         
-        // 更新背包
         window.GameLogic.myProfile.inventory = window.GameLogic.myProfile.inventory || {};
         window.GameLogic.myProfile.inventory[window.currentPurchaseItem] = (window.GameLogic.myProfile.inventory[window.currentPurchaseItem] || 0) + window.currentPurchaseQty;
         
-        // 寫入資料庫
         import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
             module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { 
                 coins: window.GameLogic.myProfile.coins,
@@ -335,7 +344,6 @@ window.confirmPurchase = function() {
         alert(`結帳成功！獲得 ${window.currentPurchaseQty} 個 ${window.currentPurchaseItem}`);
         document.getElementById('purchase-modal').style.display = 'none';
         
-        // 同步更新介面上的馬德幣顯示
         let coinsEl = document.getElementById("vp-coins");
         if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
     }
@@ -393,7 +401,6 @@ onAuthStateChanged(auth, async (user) => {
 
         onValue(ref(db, 'cafeFurniture'), snap => window.GameLogic.cafeFurniture = snap.val() || {});
 
-        // 監聽全域的神龕傳送事件
         onValue(ref(db, 'serverEvents/teleport'), snap => {
             let data = snap.val();
             if (data && data.target === 'shrine' && (Date.now() - data.time < 5000)) {
@@ -448,7 +455,6 @@ function switchScene(sceneName) {
         const game = window.GameLogic.phaserGame;
         game.scene.stop('MainScene');
         game.scene.start('MainScene'); 
-        // 修正: 確保切換場景後，UI 圖層永遠保持在最上層，不會被覆蓋
         game.scene.bringToTop('UIScene');
     }
 }
@@ -460,7 +466,7 @@ function joinCafe() {
         y: window.GameLogic.myProfile.lastY || 1024, 
         name: window.GameLogic.myProfile.name, 
         color: window.GameLogic.myProfile.color, 
-        level: window.GameLogic.myProfile.level || 1, // 【新增此行】廣播等級資訊
+        level: window.GameLogic.myProfile.level || 1, 
         bubbleMsg: window.GameLogic.myProfile.bubbleMsg, 
         bubbleTime: window.GameLogic.myProfile.bubbleTime 
     });
@@ -497,7 +503,6 @@ function gainRewards(coins, exp) {
 class BootScene extends Phaser.Scene {
     constructor() { super('BootScene'); }
     preload() {
-        // 修正: GitHub raw 會阻擋 JS 執行，改用 jsDelivr CDN 確保不會在 Github Pages 上死機
         this.load.plugin('rexvirtualjoystickplugin', 'https://cdn.jsdelivr.net/gh/rexrainbow/phaser3-rex-notes@master/dist/rexvirtualjoystickplugin.min.js', true);
         
         this.load.image('bgCafe', 'cafe-bg.jpg');
@@ -523,6 +528,12 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('made-coin', 'made-coin.png', { frameWidth: 50, frameHeight: 50 });
         this.load.image('dummy', 'dummy.png');
         this.load.spritesheet('dummy-wet', 'dummy-wet.png', { frameWidth: 75, frameHeight: 75 });
+
+        // --- 新增音效資源 ---
+        this.load.audio('minimum_laser', 'minimum_laser.mp3');
+        this.load.audio('powerdown07', 'powerdown07.mp3');
+        this.load.audio('coin03', 'coin03.mp3');
+        this.load.audio('brooming1', 'brooming1.mp3');
     }
     create() {
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 });
@@ -538,7 +549,7 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'dummy-hit', frames: this.anims.generateFrameNumbers('dummy-wet'), frameRate: 10, repeat: -1 });
       
         this.scene.launch('UIScene');
-        this.scene.bringToTop('UIScene'); // 確保剛載入時 UI 在最頂
+        this.scene.bringToTop('UIScene'); 
         
         window.GameLogic.phaserLoaded = true;
         if (window.GameLogic.pendingScene) {
@@ -565,11 +576,9 @@ class UIScene extends Phaser.Scene {
         this.mapText = this.add.text(0, 0, '選單', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
         this.furnBtn = this.add.circle(0, 0, 25, 0x8b5a2b).setStrokeStyle(3, 0xc5a059).setInteractive();
         this.furnText = this.add.text(0, 0, '家俱', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
-        // 新增: 給西按鈕
         this.itemBtn = this.add.circle(0, 0, 25, 0x607d8b).setStrokeStyle(3, 0xc5a059).setInteractive();
         this.itemText = this.add.text(0, 0, '給西', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
 
-        // 新增: 用於點擊空白處關閉選單的透明遮罩
         this.menuBgOverlay = this.add.rectangle(0, 0, 4000, 4000, 0x000000, 0).setInteractive().setDepth(199).setVisible(false);
         this.menuBgOverlay.on('pointerdown', () => {
             this.menuContainer.setVisible(false);
@@ -579,11 +588,9 @@ class UIScene extends Phaser.Scene {
         this.menuContainer = this.add.container(0, 0).setVisible(false).setDepth(200);
         const menuBg = this.add.graphics();
         menuBg.fillStyle(0xf4ecd8, 0.95); menuBg.lineStyle(2, 0xc5a059, 1);
-        // 選單高度調高以容納設定選項
         menuBg.fillRoundedRect(0, 0, 160, 370, 10); menuBg.strokeRoundedRect(0, 0, 160, 370, 10);
         this.menuContainer.add(menuBg);
 
-        // 替換 menuOptions 定義
         const menuOptions = [
             { text: '🏠 我的狗窩', action: () => { window.switchScene('doghouse'); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
             { text: '☕ 洋蔥大廳', action: () => { window.switchScene('cafe'); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
@@ -600,7 +607,6 @@ class UIScene extends Phaser.Scene {
             this.menuContainer.add(btn);
         });
 
-        // 替換這段
         this.mapBtn.on('pointerdown', () => {
             let isVis = !this.menuContainer.visible;
             this.menuContainer.setVisible(isVis);
@@ -608,7 +614,6 @@ class UIScene extends Phaser.Scene {
             document.getElementById('furniture-catalog-modal').style.display = 'none';
         });
 
-        // 新增給西點擊
         this.itemBtn.on('pointerdown', () => {
             this.menuContainer.setVisible(false);
             if(this.menuBgOverlay) this.menuBgOverlay.setVisible(false);
@@ -656,7 +661,6 @@ class UIScene extends Phaser.Scene {
         this.btnB.setPosition(gameSize.width - safeMargin - 70, gameSize.height - safeMargin - bottomOffset + 20);
         this.txtB.setPosition(this.btnB.x, this.btnB.y);
 
-        // 三角形排列: 右下(選單) / 左下(家俱) / 中上(給西)
         let clusterX = gameSize.width - safeMargin - 35;
         let clusterY = gameSize.height - safeMargin - 70 - bottomOffset + 20;
 
@@ -669,9 +673,8 @@ class UIScene extends Phaser.Scene {
         this.itemBtn.setPosition(clusterX, clusterY - 30);
         this.itemText.setPosition(this.itemBtn.x, this.itemBtn.y);
 
-        // 選單放置於畫面正中央
-      this.menuContainer.setPosition(gameSize.width / 2 - 80, gameSize.height / 2 - 200);
-      if(this.menuBgOverlay) this.menuBgOverlay.setPosition(gameSize.width / 2, gameSize.height / 2);
+        this.menuContainer.setPosition(gameSize.width / 2 - 80, gameSize.height / 2 - 200);
+        if(this.menuBgOverlay) this.menuBgOverlay.setPosition(gameSize.width / 2, gameSize.height / 2);
     }
 }
 
@@ -679,7 +682,6 @@ class MainScene extends Phaser.Scene {
     constructor() { super('MainScene'); }
     
     create() {
-      // 播放背景音樂
         if (!this.sound.get('bgm')) {
             this.sound.play('bgm', { loop: true, volume: 0.5 });
         }
@@ -693,17 +695,50 @@ class MainScene extends Phaser.Scene {
         this.physics.world.setBounds(0, 0, mapW, mapH);
         this.cameras.main.setBounds(0, 0, mapW, mapH);
 
+        this.trashes = [];
+        
         if (this.isCafe) {
             this.add.tileSprite(0, 0, mapW, mapH, 'bgCafe').setOrigin(0, 0);
             this.time.addEvent({ delay: 2000, callback: this.spawnTrash, callbackScope: this, loop: true });
 
-            const mapSize = 120; const marginX = 20; const marginY = 60; // 調整 Y 軸 margin 將其往下挪
+            const mapSize = 120; const marginX = 20; const marginY = 60;
             this.minimap = this.cameras.add(this.cameras.main.width - mapSize - marginX, marginY, mapSize, mapSize)
                 .setZoom(mapSize / 2048).setName('minimap');
             this.minimap.setBackgroundColor('rgba(26, 16, 8, 0.7)');
             this.minimap.centerOn(1024, 1024);
 
             this.scale.on('resize', (gameSize) => { if (this.minimap) this.minimap.setPosition(gameSize.width - mapSize - marginX, marginY); });
+
+            // --- 新增：全域監聽洋蔥皮同步 ---
+            this.trashListener = onValue(ref(window.GameLogic.db, 'cafeTrashes'), (snap) => {
+                let data = snap.val() || {};
+                
+                for (let key in data) {
+                    if (!this.trashes.find(t => t.key === key)) {
+                        let tData = data[key];
+                        let skin = this.physics.add.sprite(tData.x, tData.y, 'onion-skin').setDepth(4);
+                        skin.play('skin-anim');
+                        skin.type = 'onion-skin';
+                        skin.key = key; 
+                        this.trashes.push(skin);
+                    }
+                }
+                
+                this.trashes = this.trashes.filter(t => {
+                    if (!data[t.key]) {
+                        t.destroy();
+                        if (this.closestTrash === t) {
+                            this.closestTrash = null;
+                            if (this.localPlayer && this.localPlayer.isSweeping) {
+                                this.localPlayer.isSweeping = false;
+                                this.qteContainer.setVisible(false);
+                            }
+                        }
+                        return false;
+                    }
+                    return true;
+                });
+            });
         } else if (this.sceneName === "doghouse") {
             this.add.image(mapW/2, mapH/2, 'bgDoghouse').setDisplaySize(mapW, mapH);
         } else if (this.sceneName === "farm") {
@@ -712,28 +747,20 @@ class MainScene extends Phaser.Scene {
             this.add.image(mapW/2, mapH/2, 'bgShrine').setDisplaySize(mapW, mapH);
         } else if (this.sceneName === "7eonion") {
             this.add.image(mapW/2, mapH/2, 'bg7Eonion').setDisplaySize(mapW, mapH);
-            // 產生無法穿越的老闆，放置於地圖中央
             this.storeManager = this.physics.add.staticSprite(mapW/2, mapH/2, 'storeManager').setDepth(5);
-            
-            // 【關鍵修正】手動縮小老闆的「隱形碰撞框」！
-            // 把實際會阻擋角色的實體範圍縮小為 120x120，讓洋蔥人可以無視透明邊緣，直接走到插圖旁
-            let imgW = this.storeManager.width;
-            let imgH = this.storeManager.height;
+            let imgW = this.storeManager.width; let imgH = this.storeManager.height;
             this.storeManager.body.setSize(120, 120); 
-            this.storeManager.body.setOffset((imgW - 120) / 2, (imgH - 120) / 2); // 讓碰撞框精準對齊圖片正中央
+            this.storeManager.body.setOffset((imgW - 120) / 2, (imgH - 120) / 2); 
         }
 
         const uiScene = this.scene.manager.getScene('UIScene');
         if (uiScene && uiScene.furnText) uiScene.furnText.setText(this.sceneName === 'farm' ? '農具' : '家俱');
 
-        this.otherPlayers = {}; this.furnitureSprites = {}; this.trashes = []; this.dummySprites = {};
-
+        this.otherPlayers = {}; this.furnitureSprites = {}; this.dummySprites = {};
         this.coinSprites = {};
         
-        // 1. 獨立監聽全域畫面上掉落的馬德幣
         this.coinsListener = onValue(ref(window.GameLogic.db, 'droppedCoins'), (snap) => {
             let data = snap.val() || {};
-            // 產生地面上新出現的金幣
             for (let key in data) {
                 if (!this.coinSprites[key]) {
                     let cData = data[key];
@@ -743,7 +770,6 @@ class MainScene extends Phaser.Scene {
                     this.coinSprites[key] = coinSprite;
                 }
             }
-            // 移除已被其他玩家撿走的金幣
             for (let key in this.coinSprites) {
                 if (!data[key]) {
                     this.coinSprites[key].destroy();
@@ -752,10 +778,8 @@ class MainScene extends Phaser.Scene {
             }
         });
 
-        // 2. 獨立監聽假人洋蔥的放置狀態 (已從 coinsListener 移出，避免互相干擾)
         this.dummiesListener = onValue(ref(window.GameLogic.db, 'cafeDummies'), (snap) => {
             let data = snap.val() || {};
-            // 產生新放置的假人
             for (let key in data) {
                 if (!this.dummySprites[key]) {
                     let dData = data[key];
@@ -763,7 +787,6 @@ class MainScene extends Phaser.Scene {
                     this.dummySprites[key] = dummySprite;
                 }
             }
-            // 移除被收回或消失的假人
             for (let key in this.dummySprites) {
                 if (!data[key]) {
                     this.dummySprites[key].destroy();
@@ -787,23 +810,15 @@ class MainScene extends Phaser.Scene {
         this.smartPromptText = this.add.text(0, 0, '', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#4a5d4e' }).setOrigin(0.5).setDepth(101).setVisible(false);
         if (this.minimap) this.minimap.ignore([this.smartPromptBg, this.smartPromptText]);
 
-        // 新增水球引導的氣泡提示與鎖定圖示
         this.waterPromptBg = this.add.graphics().setDepth(100).setVisible(false);
         this.waterPromptText = this.add.text(0, 0, '', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#fff' }).setOrigin(0.5).setDepth(101).setVisible(false);
         this.lockOnTarget = this.add.text(0, 0, '🎯', { fontSize: '28px' }).setOrigin(0.5).setDepth(150).setVisible(false);
         
         this.tweens.add({
-            targets: this.lockOnTarget,
-            scaleX: 1.2,
-            scaleY: 1.2,
-            yoyo: true,
-            repeat: -1,
-            duration: 400
+            targets: this.lockOnTarget, scaleX: 1.2, scaleY: 1.2, yoyo: true, repeat: -1, duration: 400
         });
 
-        if (this.minimap) {
-            this.minimap.ignore([this.waterPromptBg, this.waterPromptText, this.lockOnTarget]);
-        }
+        if (this.minimap) this.minimap.ignore([this.waterPromptBg, this.waterPromptText, this.lockOnTarget]);
 
         this.cursors = this.input.keyboard.createCursorKeys();
         this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
@@ -845,8 +860,17 @@ class MainScene extends Phaser.Scene {
                 inv['水球'] = Math.max(0, (inv['水球'] || 0) - 1);
                 update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
                 
-                window.GameLogic.armedItemState = null; 
+                // --- 調整：裝填與常駐邏輯 ---
+                if (inv['水球'] > 0) {
+                    window.GameLogic.armedItemState = 'armed';
+                } else {
+                    window.GameLogic.armedItemState = null;
+                }
+                window.openInventoryModal(); // 刷新介面狀態
                 
+                // --- 音效：投射 ---
+                if (this.sound.get('minimum_laser')) this.sound.play('minimum_laser'); else this.sound.add('minimum_laser').play();
+
                 let targetUid = window.GameLogic.currentTargetUid;
                 let targetSprite = window.GameLogic.currentTargetSprite;
                 let targetType = window.GameLogic.currentTargetType;
@@ -861,16 +885,15 @@ class MainScene extends Phaser.Scene {
 
                 if (targetUid && targetSprite) {
                     let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15);
-                    // 【修正】：飛行期間不播放爆裂動畫，將精靈圖固定在第 0 幀（水球狀態）
                     wb.setFrame(0); 
                     
                     this.tweens.add({
                         targets: wb, x: targetSprite.x, y: targetSprite.y, duration: 200,
                         onComplete: () => {
-                            // 【修正】：到達目標後才播放水球爆裂 (wb-blast) 精靈圖
-                            wb.play('wb-blast', true); 
+                            // --- 音效：擊中 ---
+                            if (this.sound.get('powerdown07')) this.sound.play('powerdown07'); else this.sound.add('powerdown07').play();
                             
-                            // 【修正】：延遲 300 毫秒後再銷毀，讓爆裂動畫有時間完整播完
+                            wb.play('wb-blast', true); 
                             this.time.delayedCall(300, () => { wb.destroy(); });
                             
                             if (targetType === 'player') {
@@ -878,7 +901,7 @@ class MainScene extends Phaser.Scene {
                             } else if (targetType === 'dummy') {
                                 update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                                 
-                                // 假人被砸中時由「攻擊方」負責廣播掉落的馬德幣
+                                // 假人被砸中掉落 15 馬德幣 (3枚 x5)
                                 for (let i = 0; i < 3; i++) {
                                     let cx = targetSprite.x + Phaser.Math.Between(-40, 40);
                                     let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
@@ -898,7 +921,9 @@ class MainScene extends Phaser.Scene {
             }
 
             if (this.localPlayer.isSweeping) {
-                // ... (保留原本的掃地邏輯)
+                // --- 音效：打掃 ---
+                if (this.sound.get('brooming1')) this.sound.play('brooming1'); else this.sound.add('brooming1').play();
+
                 this.qteProgress += (100 / this.qteTotalClicks);
                 if (this.qteProgress >= 100) {
                     this.qteProgress = 100;
@@ -906,7 +931,7 @@ class MainScene extends Phaser.Scene {
                 }
                 return;
             }
-          // 新增: A鍵觸發購物對話
+
             if (this.sceneName === '7eonion' && this.storeManager) {
                 let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.storeManager.x, this.storeManager.y);
                 if (dist < 150) {
@@ -936,7 +961,6 @@ class MainScene extends Phaser.Scene {
         });
 
         this.events.on('action_B', () => {
-            // 水球填充邏輯
             if (window.GameLogic.armedItemState === 'armed') {
                 window.GameLogic.armedItemState = 'ready';
                 return;
@@ -955,15 +979,14 @@ class MainScene extends Phaser.Scene {
         this.placePrompt = this.add.text(0, 0, '洋蔥精靈: 按A確定擺放', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#fff', backgroundColor: 'rgba(74, 93, 78, 0.8)', padding: {x:8, y:4} }).setOrigin(0.5).setDepth(20).setVisible(false);
         if (this.minimap) this.minimap.ignore(this.placePrompt);
       
-      this.hitListener = onValue(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`), (snap) => {
+        this.hitListener = onValue(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`), (snap) => {
             let data = snap.val();
             if (data && data.time && (Date.now() - data.time < 2000)) {
-                if (this.localPlayer.isInvincible) return; // 無敵期間不受傷
+                if (this.localPlayer.isInvincible) return; 
 
                 this.localPlayer.isInvincible = true;
                 this.localPlayer.isStunned = true;
                 
-                // 扣除 15 馬德幣
                 let p = window.GameLogic.myProfile;
                 let loss = Math.min(p.coins || 0, 15);
                 p.coins -= loss;
@@ -971,8 +994,9 @@ class MainScene extends Phaser.Scene {
                 let coinsEl = document.getElementById("vp-coins");
                 if (coinsEl) coinsEl.innerText = p.coins;
 
-                    // 地面噴濺馬德幣：改為推送到 Firebase 全域資料庫中
-                    for (let i = 0; i < 3; i++) {
+                // --- 調整：擊中玩家獎勵 35 馬德幣分配給攻擊者 ---
+                let amounts = [12, 12, 11];
+                for (let i = 0; i < 3; i++) {
                     let cx = this.localPlayer.sprite.x + Phaser.Math.Between(-40, 40);
                     let cy = this.localPlayer.sprite.y + Phaser.Math.Between(-40, 40) + 20;
                     
@@ -980,31 +1004,26 @@ class MainScene extends Phaser.Scene {
                         module.push(module.ref(window.GameLogic.db, 'droppedCoins'), {
                             x: cx,
                             y: cy,
-                            amount: 5 // 總共扣 15 幣，均分成 3 個，每個價值 5 馬德幣
+                            amount: amounts[i] 
                         });
                     });
                 }
 
-                this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); // 0.5s 恢復行動
-                this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); // 1.5s 恢復無敵
-                remove(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`)); // 吸收事件
+                this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); 
+                this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); 
+                remove(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`)); 
             }
         });
 
-          this.dummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/dummyHits'), (snap) => {
+        this.dummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/dummyHits'), (snap) => {
             let hits = snap.val() || {};
             for (let key in hits) {
                 let data = hits[key];
-                // 確保事件是最近 2 秒內發生的，並且場景中的家俱陣列確實存在這個假人
                 if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) {
                     let dummy = this.furnitureSprites[key].sprite;
-                    
-                    // 避免重複觸發，確保動畫順利播完
                     if (dummy && !dummy.isStunned) {
                         dummy.isStunned = true;
-                        dummy.play('dummy-hit', true); // 播放濕透動畫
-                        
-                        // 1.5 秒後假人恢復原狀
+                        dummy.play('dummy-hit', true); 
                         this.time.delayedCall(1500, () => { 
                             if (dummy && dummy.active) {
                                 dummy.isStunned = false; 
@@ -1016,23 +1035,25 @@ class MainScene extends Phaser.Scene {
                 }
             }
         });
-      
     }
 
     spawnTrash() {
         if (!this.isCafe) return;
         let playerCount = Object.keys(window.GameLogic.cafePlayers || {}).length || 1;
         
-        let maxTrash = Math.floor(Math.min(10 + Math.max(0, playerCount - 1) * 2.5, 20));
-        let spawnChance = 0.3 + (playerCount * 0.05); 
+        // --- 調整：動態上限與線性生成機率 ---
+        let limits = [10, 12, 15, 17, 20];
+        let maxTrash = limits[Math.min(playerCount - 1, 4)];
+        let spawnChance = 0.3 + (playerCount * 0.1); 
         
-        if (Math.random() < spawnChance && this.trashes.length < maxTrash) { 
+        let currentTrashCount = this.trashes.length;
+        if (Math.random() < spawnChance && currentTrashCount < maxTrash) { 
             let tx = Phaser.Math.Between(150, 1898); 
             let ty = Phaser.Math.Between(150, 1898);
-            let skin = this.physics.add.sprite(tx, ty, 'onion-skin').setDepth(4);
-            skin.play('skin-anim');
-            skin.type = 'onion-skin';
-            this.trashes.push(skin);
+            
+            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                module.push(module.ref(window.GameLogic.db, 'cafeTrashes'), { x: tx, y: ty });
+            });
         }
     }
 
@@ -1064,17 +1085,14 @@ class MainScene extends Phaser.Scene {
     updatePlayerEntity(entity, pData) {
         let sx = entity.sprite.x; let sy = entity.sprite.y;
         
-        // 【修改點】組合暱稱與等級字串
         let displayName = `${pData.name || '匿名'} (Lv.${pData.level || 1})`;
         entity.nameText.setText(displayName);
         if(pData.color) entity.nameText.setColor(pData.color);
 
-        // 【修改點】讓背景黑框根據文字長度動態調整寬度
         const nameBounds = entity.nameText.getBounds();
         const bgWidth = nameBounds.width + 16; 
         entity.nameBg.clear().fillStyle(0x000000, 0.6).fillRoundedRect(sx - bgWidth / 2, sy - 55, bgWidth, 20, 4);
         entity.nameText.setPosition(sx, sy - 45);
-        // --- (以下氣泡框 bubbleMsg 的邏輯保留原本的即可) ---
         if (pData.bubbleMsg && (Date.now() - pData.bubbleTime < 10000)) { 
             entity.bubbleBg.setVisible(true); entity.bubbleText.setVisible(true).setText(pData.bubbleMsg);
             const bounds = entity.bubbleText.getBounds(); const boxWidth = bounds.width + 20, boxHeight = bounds.height + 16, boxX = sx - boxWidth / 2, boxY = sy - 65 - boxHeight; 
@@ -1086,10 +1104,21 @@ class MainScene extends Phaser.Scene {
     }
 
     createFurniture(key, data) {
-        // 加入 dummy 的圖片判定，避免它被錯誤渲染成回憶錄
         let imgKey = key.includes('fridge') ? 'fridge' : (key.includes('shrine') ? 'shrine' : (key.includes('dummy') ? 'dummy' : 'memory'));
         let f = { sprite: this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true) };
         f.sprite.isLocked = data.locked;
+
+        // --- 新增：為假人配置專屬對話氣泡與機制 ---
+        if (imgKey === 'dummy') {
+            f.bubbleBg = this.add.graphics().setDepth(13).setVisible(false);
+            f.bubbleText = this.add.text(data.x, data.y, '', { fontSize: '12px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold', wordWrap: { width: 100, useAdvancedWrap: true }, align: 'center' }).setOrigin(0.5).setDepth(14).setVisible(false);
+            if (this.minimap) this.minimap.ignore([f.bubbleBg, f.bubbleText]);
+            f.dummyMsgs = ["我在這幹嘛？", "怎麼有洋蔥？", "該不會要打我吧......"];
+            f.msgIndex = 0;
+            f.lastMsgTime = 0;
+            f.isHit = false;
+        }
+
         return f;
     }
 
@@ -1100,20 +1129,23 @@ class MainScene extends Phaser.Scene {
         if (success && this.closestTrash) {
             let px = this.localPlayer.sprite.x; let py = this.localPlayer.sprite.y - 40; 
             
-            this.closestTrash.destroy();
-            this.trashes = this.trashes.filter(t => t !== this.closestTrash);
+            // --- 調整：從全域 Firebase 移除 ---
+            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                module.remove(module.ref(window.GameLogic.db, 'cafeTrashes/' + this.closestTrash.key));
+            });
             this.closestTrash = null;
             
-            let coinsEarned = Phaser.Math.Between(3, 5);
-            // 改為只增加掃地次數與經驗，馬德幣改由拾取地上的金幣獲得
             let leveledUp = gainRewards(0, 10); 
             
-            // 將金幣噴灑在地圖上
+            // --- 調整：掃皮王隨機獲得 10-18 馬德幣 ---
+            let totalCoins = Phaser.Math.Between(10, 18);
+            let coinAmounts = [Math.floor(totalCoins/3), Math.floor(totalCoins/3), totalCoins - 2*Math.floor(totalCoins/3)];
+
             import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-                for(let i = 0; i < coinsEarned; i++) {
+                for(let i = 0; i < 3; i++) {
                     let cx = this.localPlayer.sprite.x + Phaser.Math.Between(-30, 30);
                     let cy = this.localPlayer.sprite.y + Phaser.Math.Between(-30, 30) + 20;
-                    module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: 1 });
+                    module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: coinAmounts[i] });
                 }
             });
             
@@ -1143,12 +1175,11 @@ class MainScene extends Phaser.Scene {
             this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
         } else if (this.localPlayer.isStunned) {
             this.localPlayer.sprite.setVelocity(0, 0);
-            this.localPlayer.sprite.play('wet', true); // 播放全身濕透精靈圖
+            this.localPlayer.sprite.play('wet', true);
             this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
         } else if (this.localPlayer.isThrowing) {
-            this.localPlayer.sprite.setVelocity(0, 0); // 丟水球時僵直
+            this.localPlayer.sprite.setVelocity(0, 0); 
         } else {
-          
             if (uiScene && uiScene.joyStick && uiScene.joyStick.force > 0) {
                 vx = Math.cos(uiScene.joyStick.angle * Math.PI / 180) * speed; 
                 vy = Math.sin(uiScene.joyStick.angle * Math.PI / 180) * speed;
@@ -1178,8 +1209,7 @@ class MainScene extends Phaser.Scene {
                             this.lastSyncTime = Date.now();
                         }
                     }
-            } else if (!window.GameLogic.cafeFurniture[window.GameLogic.placingFurnitureKey]) {
-                    // 修正：只有當這件家俱真的不存在(或被收起)時，才取消選取狀態，避免因精靈圖尚未生成的 1 幀落差導致取消
+                } else if (!window.GameLogic.cafeFurniture[window.GameLogic.placingFurnitureKey]) {
                     window.GameLogic.placingFurnitureKey = null;
                     this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
                 }
@@ -1188,21 +1218,18 @@ class MainScene extends Phaser.Scene {
                 this.localPlayer.sprite.setVelocity(vx, vy);
                 this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
                 
-// 【修正點】：加入浮點數死區過濾誤差，並比較主要移動軸
                 let absX = Math.abs(vx);
                 let absY = Math.abs(vy);
 
-                if (absX < 1) vx = 0; // 過濾掉極小的浮點數
+                if (absX < 1) vx = 0; 
                 if (absY < 1) vy = 0;
 
                 if (vx === 0 && vy === 0) {
                     this.localPlayer.sprite.play('idle', true);
                 } else if (absX >= absY) {
-                    // 當橫向移動大於或等於縱向時，以左右動畫為主
                     this.localPlayer.sprite.setFlipX(vx < 0);
                     this.localPlayer.sprite.play('walk', true);
                 } else {
-                    // 當縱向移動較大時，以上下動畫為主
                     if (vy < 0) {
                         this.localPlayer.sprite.play('walk-up', true);
                     } else {
@@ -1227,7 +1254,7 @@ class MainScene extends Phaser.Scene {
                     minDist = d; promptTarget = f.sprite; 
                     if (key.includes('fridge')) promptMsg = "按A打開冰箱";
                     else if (key.includes('shrine')) promptMsg = "按A參拜神龕";
-                    else if (key.includes('dummy')) promptMsg = "假人洋蔥 (裝飾中)"; // 攔截假人洋蔥的專屬提示
+                    else if (key.includes('dummy')) promptMsg = "假人洋蔥 (裝飾中)"; 
                     else promptMsg = "按A打開回憶錄"; 
                 }
             }
@@ -1235,13 +1262,12 @@ class MainScene extends Phaser.Scene {
                 if (!t.active) continue;
                 let d = Phaser.Math.Distance.Between(px, py, t.x, t.y);
                 if (d < minDist) { minDist = d; promptTarget = t; promptMsg = "按B使出掃地"; this.closestTrash = t; }
-              // 新增: 接近老闆時的浮動提示
-                if (this.sceneName === '7eonion' && this.storeManager && !window.GameLogic.isShopping) {
+            }
+            if (this.sceneName === '7eonion' && this.storeManager && !window.GameLogic.isShopping) {
                 let d = Phaser.Math.Distance.Between(px, py, this.storeManager.x, this.storeManager.y);
                 if (d < 150) {
                     minDist = d; promptTarget = this.storeManager; promptMsg = "按A對話購物";
                 }
-            }
             }
 
             if (promptTarget && !isPlacing) {
@@ -1251,34 +1277,29 @@ class MainScene extends Phaser.Scene {
                 this.smartPromptText.setPosition(ptX, ptY);
             } else { this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false); }
 
-            // 新增：處理水球的 UI 提示與自動鎖定邏輯
             if (window.GameLogic.armedItemState) {
                 let msg = window.GameLogic.armedItemState === 'armed' ? "按B填充水球" : "按A投擲水球";
                 
                 this.waterPromptText.setText(msg).setVisible(true);
                 const wpBounds = this.waterPromptText.getBounds(); 
                 const wpWidth = wpBounds.width + 20, wpHeight = wpBounds.height + 10;
-                const wptX = px, wptY = py + 45; // 顯示在角色腳下
+                const wptX = px, wptY = py + 45; 
                 
                 this.waterPromptBg.clear().fillStyle(0x0077cc, 0.8).lineStyle(2, 0xffffff, 1).fillRoundedRect(wptX - wpWidth/2, wptY - wpHeight/2, wpWidth, wpHeight, 6).strokeRoundedRect(wptX - wpWidth/2, wptY - wpHeight/2, wpWidth, wpHeight, 6).setVisible(true);
                 this.waterPromptText.setPosition(wptX, wptY);
 
-                // 搜尋鎖定目標 (半徑 150, 直徑 300)
                 let lockOnDist = 150; 
                 let lockTargetUid = null;
                 let lockTargetSprite = null;
                 let isDummy = false;
 
-                // 1. 掃描其他玩家
                 for (let uid in this.otherPlayers) {
                     let op = this.otherPlayers[uid].sprite;
                     let d = Phaser.Math.Distance.Between(px, py, op.x, op.y);
                     if (d < lockOnDist) { lockOnDist = d; lockTargetUid = uid; lockTargetSprite = op; isDummy = false; }
                 }
                 
-                // 2. 掃描從「家俱目錄」放置的假人 (cafeFurniture)
                 for (let key in this.furnitureSprites) {
-                    // 如果這個家俱的 key 包含 dummy，代表它是假人
                     if (key.includes('dummy')) {
                         let fDummy = this.furnitureSprites[key].sprite;
                         let d = Phaser.Math.Distance.Between(px, py, fDummy.x, fDummy.y);
@@ -1304,41 +1325,38 @@ class MainScene extends Phaser.Scene {
                 }
             }
         }
-        // 無敵狀態閃爍效果
+        
         if (this.localPlayer.isInvincible) {
             this.localPlayer.sprite.setAlpha((Math.floor(time / 100) % 2 === 0) ? 0.5 : 1);
         } else {
             this.localPlayer.sprite.setAlpha(1);
         }
 
-      // 檢查玩家是否經過並撿起地上的馬德幣
         for (let key in this.coinSprites) {
             let coin = this.coinSprites[key];
             let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, coin.x, coin.y);
             
-            if (dist < 30) { // 判定半徑：當玩家與金幣距離小於 30 像素時算踩到
+            if (dist < 30) { 
+                // --- 音效：拾取馬德幣 ---
+                if (this.sound.get('coin03')) this.sound.play('coin03'); else this.sound.add('coin03').play();
+
                 let coinAmount = coin.amount;
                 
-                // 為了防止多人同時踩到造成重複加錢，先利用 Firebase get 進行雙重驗證
                 import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
                     let coinRef = module.ref(window.GameLogic.db, `droppedCoins/${key}`);
                     module.get(coinRef).then((coinSnap) => {
                         if (coinSnap.exists()) {
-                            // 確定金幣還沒被別人撿走，由當前玩家成功移除並收下
                             module.remove(coinRef).then(() => {
                                 let p = window.GameLogic.myProfile;
                                 p.coins = (p.coins || 0) + coinAmount;
                                 
-                                // 更新玩家自身的資料庫存款
                                 module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { 
                                     coins: p.coins 
                                 });
                                 
-                                // 同步更新 UI 介面上的幣數
                                 let coinsEl = document.getElementById("vp-coins");
                                 if (coinsEl) coinsEl.innerText = p.coins;
                                 
-                                // 產生拾取成功的金色浮動文字特效
                                 let px = this.localPlayer.sprite.x;
                                 let py = this.localPlayer.sprite.y - 40;
                                 let pickupText = this.add.text(px, py, `+${coinAmount} 💰`, { 
@@ -1372,7 +1390,6 @@ class MainScene extends Phaser.Scene {
                 op.sprite.x = Phaser.Math.Linear(op.sprite.x, pd.x, 0.2);
                 op.sprite.y = Phaser.Math.Linear(op.sprite.y, pd.y, 0.2);
                 
-                // === 新增：判斷其他玩家位移，並播放對應的精靈圖 ===
                 let diffX = op.sprite.x - oldX;
                 let diffY = op.sprite.y - oldY;
                 let absX = Math.abs(diffX);
@@ -1390,7 +1407,6 @@ class MainScene extends Phaser.Scene {
                         op.sprite.play('walk-down', true);
                     }
                 }
-                // ===========================================
 
                 this.updatePlayerEntity(op, pd);
             }
@@ -1405,6 +1421,27 @@ class MainScene extends Phaser.Scene {
                 let f = this.furnitureSprites[key]; f.sprite.isLocked = fd.locked;
                 if(window.GameLogic.placingFurnitureKey !== key) { f.sprite.x = Phaser.Math.Linear(f.sprite.x, fd.x, 0.3); f.sprite.y = Phaser.Math.Linear(f.sprite.y, fd.y, 0.3); }
                 f.sprite.setAlpha(!fd.locked ? 0.6 : 1);
+
+                // --- 假人對話框邏輯演算 ---
+                if (key.includes('dummy') && f.bubbleBg) {
+                    f.bubbleBg.setVisible(true); f.bubbleText.setVisible(true);
+                    
+                    if (f.sprite.isStunned) {
+                        f.bubbleText.setText("真的打我QAQ");
+                        f.isHit = true;
+                    } else {
+                        if (f.isHit) { f.isHit = false; f.lastMsgTime = 0; } 
+                        if (time - f.lastMsgTime > 4000) { 
+                            f.lastMsgTime = time;
+                            f.bubbleText.setText(f.dummyMsgs[f.msgIndex]);
+                            f.msgIndex = (f.msgIndex + 1) % f.dummyMsgs.length;
+                        }
+                    }
+                    let sx = f.sprite.x; let sy = f.sprite.y;
+                    const bounds = f.bubbleText.getBounds(); const boxWidth = bounds.width + 16, boxHeight = bounds.height + 12, boxX = sx - boxWidth / 2, boxY = sy - 60 - boxHeight; 
+                    f.bubbleBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(boxX, boxY, boxWidth, boxHeight, 6).strokeRoundedRect(boxX, boxY, boxWidth, boxHeight, 6);
+                    f.bubbleText.setPosition(sx, boxY + boxHeight / 2);
+                }
             }
             for (let key in this.furnitureSprites) {
                 if (!furnData[key]) {
@@ -1412,6 +1449,8 @@ class MainScene extends Phaser.Scene {
                         window.GameLogic.placingFurnitureKey = null;
                         this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
                     }
+                    if (this.furnitureSprites[key].bubbleBg) this.furnitureSprites[key].bubbleBg.destroy();
+                    if (this.furnitureSprites[key].bubbleText) this.furnitureSprites[key].bubbleText.destroy();
                     this.furnitureSprites[key].sprite.destroy(); 
                     delete this.furnitureSprites[key]; 
                 }
@@ -1441,7 +1480,7 @@ function openFurnitureCatalog() {
                 { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' },
                 { key: 'memory', name: '📖 咖啡廳回憶錄', img: 'memory.png' },
                 { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' },
-                { key: 'dummy', name: '🧍 假人洋蔥', img: 'dummy.png' } // 新增假人洋蔥
+                { key: 'dummy', name: '🧍 假人洋蔥', img: 'dummy.png' } 
             ];
 
         items.forEach(item => {
@@ -1468,7 +1507,6 @@ function openFurnitureCatalog() {
                     }
         
                     let newData = { x: pX, y: pY, locked: false, ownerUid: window.GameLogic.currentUser.uid };
-                     // 【新增此行】預先更新本地端狀態，避免 Phaser update 迴圈因 Firebase 延遲而取消選取
                     window.GameLogic.cafeFurniture[item.key] = newData; 
         
                    update(ref(db, `cafeFurniture/${item.key}`), newData);
@@ -1502,7 +1540,6 @@ function showProfileModal(p, uid) {
     document.getElementById("vp-coins").innerText = p.coins || 0;
     document.getElementById("vp-sweeps").innerText = p.sweeps || 0;
     
-    // 【修改點】綁定姓名與顏色的顯示
     document.getElementById("vp-name").innerText = p.name || '匿名';
     document.getElementById("vp-color").style.backgroundColor = p.color || '#c5a059';
     document.getElementById("vp-birth").innerText = p.birth || '未知';
@@ -1528,7 +1565,6 @@ document.getElementById("start-edit-btn").addEventListener("click", () => {
         let t = document.getElementById(`vp-${k}`); 
         let i = document.getElementById(`edit-${k}`);
         
-        // 【修改點】針對不同欄位給予預設編輯值
         if (k === 'color') {
             i.value = window.GameLogic.myProfile.color || '#c5a059';
         } else if (k === 'name') {
@@ -1542,7 +1578,6 @@ document.getElementById("start-edit-btn").addEventListener("click", () => {
 });
 
 document.getElementById("save-edit-btn").addEventListener("click", () => {
-    // 【修改點】打包 Name 與 Color 送進資料庫
     let newData = { 
         name: document.getElementById("edit-name").value.trim() || '匿名',
         color: document.getElementById("edit-color").value || '#c5a059',
@@ -1554,7 +1589,6 @@ document.getElementById("save-edit-btn").addEventListener("click", () => {
     update(ref(db, `users/${window.GameLogic.currentUser.uid}`), newData).then(() => {
         window.GameLogic.myProfile = { ...window.GameLogic.myProfile, ...newData };
         
-        // 若使用者在大廳中，同步更新大廳中的玩家名稱與顏色
         if (window.GameLogic.currentScene === "cafe") {
             update(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { name: newData.name, color: newData.color });
         }
@@ -1590,16 +1624,14 @@ function listenToChat() {
             let lastMsg = "";
             Object.values(chats).forEach(c => {
                 chatBox.innerHTML += `<div style="margin-bottom: 4px;"><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg} <span style="font-size:10px; color:#bbb; margin-left:8px;">${c.date||''} ${c.time||''}</span></div>`;
-                lastMsg = `${c.name}：${c.msg}`; // 記錄最後一筆對話
+                lastMsg = `${c.name}：${c.msg}`; 
             });
             
-            // 更新頂部全域通知欄
             const topBar = document.getElementById("top-notification-bar");
             if (topBar && lastMsg) {
                 topBar.innerText = `💬 最新發言｜ ${lastMsg}`;
             }
 
-            // 強制畫面重繪後，再進行捲動，確保永遠停在最新對話
             requestAnimationFrame(() => {
                 setTimeout(() => { chatBox.scrollTop = chatBox.scrollHeight; }, 10);
             });
@@ -1635,7 +1667,6 @@ window.deleteMemory = async function(key) {
     const snap = await get(ref(db, `memories/${key}`));
     if (snap.exists()) {
         let m = snap.val();
-        // 【修正】兼容舊資料沒有 uid 的情況，加上暱稱的比對
         let isMine = (m.uid === window.GameLogic.currentUser.uid) || (m.author === window.GameLogic.myProfile.name);
         
         if (isMine) {
@@ -1653,7 +1684,6 @@ function listenToMemories() {
         if (data) {
             Object.keys(data).reverse().forEach(key => {
                 let m = data[key];
-                // 【修正】兼容舊資料沒有 uid 的情況，加上暱稱的比對
                 let isMine = (m.uid === window.GameLogic.currentUser.uid) || (m.author === window.GameLogic.myProfile.name);
                 let delBtnHtml = isMine ? `<button class="del-btn" onclick="window.deleteMemory('${key}')">刪除</button>` : '';
                 feed.innerHTML += `<div class="memory-card">${delBtnHtml}<div class="author">${m.author} - ${m.time}</div>${m.img ? `<img src="${m.img}" alt="回憶照片">` : ''}${m.text ? `<div class="text">${m.text}</div>` : ''}</div>`;
