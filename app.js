@@ -182,8 +182,8 @@ function createSystemUI() {
             }
             .flash-text { animation: flash-orange 2s ease-out forwards; }
             
-            @keyframes blink-red { 0% { box-shadow: 0 0 5px red; border-color: red; } 50% { box-shadow: 0 0 15px red; border-color: #ff6666; background-color: rgba(255,0,0,0.1); } 100% { box-shadow: 0 0 5px red; border-color: red; } }
-            .item-in-use { animation: blink-red 1.2s infinite; border: 2px solid red !important; }
+            @keyframes blink-blue { 0% { text-shadow: 0 0 5px #66ccff; color: #66ccff; } 50% { text-shadow: 0 0 20px #003366, 0 0 30px #003366; color: #fff; } 100% { text-shadow: 0 0 5px #66ccff; color: #66ccff; } }
+            .item-in-use-blink { animation: blink-blue 1s infinite; font-weight: bold; }
 
             #pm-chat-box { height: 250px; overflow-y: auto; background: #fffdf5; border: 1px solid var(--mucha-gold); border-radius: 4px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; font-size: 14px;}
             .pm-bubble-me { background: #fff; color: #3e2723; border-radius: 12px 12px 0 12px; padding: 8px 12px; display: inline-block; max-width: 80%; text-align: left; border: 1px solid var(--mucha-gold); box-shadow: 1px 1px 3px rgba(0,0,0,0.1); word-break: break-word; }
@@ -976,6 +976,9 @@ class BootScene extends Phaser.Scene {
         this.load.image('dummy', 'dummy.png');
         this.load.spritesheet('dummy-wet', 'dummy-wet.png', { frameWidth: 75, frameHeight: 75 });
 
+        // 【新增目標 2】：載入慕夏風角色狀態基底圖
+        this.load.image('status-bg', 'character-status-bg.png');
+
         this.load.audio('minimum_laser', 'minimum_laser.mp3');
         this.load.audio('powerdown07', 'powerdown07.mp3');
         this.load.audio('coin03', 'coin03.mp3');
@@ -1010,24 +1013,32 @@ class BootScene extends Phaser.Scene {
 class UIScene extends Phaser.Scene {
     constructor() { super('UIScene'); }
     create() {
-        // --- 目標 2：慕夏風角色狀態圖層 (建立於底層 Depth -1 / -2) ---
-        this.statusGraphics = this.add.graphics().setDepth(-2);
-        this.portrait = this.add.sprite(0, 0, 'onion', 0).setScale(1.2).setDepth(-1); 
+        // --- 目標 2：慕夏風角色狀態圖層 (建立於底層 Depth -2) ---
+        // 直接使用 PNG 圖檔作為基底，徹底避開程式繪圖 Bug，專心處理排版
+        this.statusContainer = this.add.container(0, 0).setDepth(-2);
+        this.statusBg = this.add.image(0, 0, 'status-bg').setOrigin(0, 1);
         
-        this.statusLabel = this.add.text(0, 0, '狀態', { fontSize: '12px', color: '#8b7d6b' }).setDepth(-1);
-        this.statusText = this.add.text(0, 0, '沒怎樣', { fontSize: '14px', color: '#3e2723', fontStyle: 'bold' }).setDepth(-1);
+        // 洋蔥頭人像 (預設置於預留圓圈內)
+        this.portrait = this.add.sprite(0, 0, 'onion', 0).setScale(1.1);
         
-        this.equipLabel = this.add.text(0, 0, '裝備', { fontSize: '12px', color: '#8b7d6b' }).setDepth(-1);
-        this.equipText = this.add.text(0, 0, '沒東西', { fontSize: '14px', color: '#3e2723', fontStyle: 'bold' }).setDepth(-1);
-
-        this.statusBg = this.add.rectangle(0, 0, 80, 26, 0xd4c5a0, 0.7).setDepth(-2);
-        this.statusBg.setStrokeStyle(2, 0xc5a059);
+        // 狀態藍 (文字置於預留特殊框內)
+        this.statusText = this.add.text(0, 0, '沒怎樣', { 
+            fontSize: '15px', 
+            color: '#3e2723', 
+            fontStyle: 'bold', 
+            fontFamily: 'Georgia' 
+        }).setOrigin(0.5);
         
-        this.equipBg = this.add.rectangle(0, 0, 80, 26, 0xd4c5a0, 0.7).setInteractive().setDepth(-2);
-        this.equipBg.setStrokeStyle(2, 0xc5a059);
+        // 裝備欄 (文字置於預留特殊框內，具備點擊互動)
+        this.equipText = this.add.text(0, 0, '沒東西', { 
+            fontSize: '15px', 
+            color: '#3e2723', 
+            fontStyle: 'bold', 
+            fontFamily: 'Georgia' 
+        }).setOrigin(0.5).setInteractive();
 
         // 點擊裝備欄位取消裝備功能
-        this.equipBg.on('pointerdown', () => {
+        this.equipText.on('pointerdown', () => {
             if (window.GameLogic.armedItemState === 'armed' || window.GameLogic.armedItemState === 'ready') {
                 if (confirm('確定要收起水球裝備嗎？')) {
                     window.stopUsingItem('水球');
@@ -1035,15 +1046,8 @@ class UIScene extends Phaser.Scene {
             }
         });
 
-        this.equipBlink = this.tweens.add({
-            targets: this.equipBg,
-            fillColor: 0x66ccff,
-            alpha: 1,
-            yoyo: true,
-            repeat: -1,
-            duration: 500,
-            paused: true
-        });
+        // 將所有元件加入 Container 統一管理定位
+        this.statusContainer.add([this.statusBg, this.portrait, this.statusText, this.equipText]);
         // -----------------------------------------------------
 
         this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, {
@@ -1147,29 +1151,30 @@ class UIScene extends Phaser.Scene {
     }
 
     update() {
-        // UI 狀態同步更新
+        // UI 狀態同步更新 (目標 2：更新 PNG 圖檔上的文字與閃爍)
         if (window.GameLogic.armedItemState) {
-            this.equipText.setText('水球').setColor('#003366');
-            if (!this.equipBlink.isPlaying()) {
-                this.equipBg.setFillStyle(0x66ccff, 0.8);
-                this.equipBlink.play();
+            this.equipText.setText('水球');
+            // 透過 CSS Class 控制文字閃爍，不影響 Phaser 渲染性能
+            if (!this.equipText.node.classList.contains('item-in-use-blink')) {
+                this.equipText.node.classList.add('item-in-use-blink');
             }
         } else {
-            this.equipText.setText('沒東西').setColor('#3e2723');
-            if (this.equipBlink.isPlaying()) this.equipBlink.pause();
-            this.equipBg.setFillStyle(0xd4c5a0, 0.7);
+            this.equipText.setText('沒東西');
+            if (this.equipText.node.classList.contains('item-in-use-blink')) {
+                this.equipText.node.classList.remove('item-in-use-blink');
+            }
         }
 
         let ms = this.scene.manager.getScene('MainScene');
         if (ms && ms.localPlayer) {
             if (ms.localPlayer.isStunned) {
-                this.statusText.setText('濕身中').setColor('#003366');
+                this.statusText.setText('濕身中');
             } else if (ms.localPlayer.isSweeping) {
-                this.statusText.setText('打掃中').setColor('#d9534f');
+                this.statusText.setText('打掃中');
             } else if (ms.localPlayer.isThrowing) {
-                this.statusText.setText('攻擊中').setColor('#d9534f');
+                this.statusText.setText('攻擊中');
             } else {
-                this.statusText.setText('沒怎樣').setColor('#3e2723');
+                this.statusText.setText('沒怎樣');
             }
         }
     }
@@ -1180,74 +1185,34 @@ class UIScene extends Phaser.Scene {
         const isPortrait = gameSize.height > gameSize.width;
         const bottomOffset = isPortrait ? 120 : 20; 
 
-        // 繪製慕夏風角色狀態面板背景
-        this.statusGraphics.clear();
-        this.statusGraphics.lineStyle(4, 0x8c8371, 0.5);
-        this.statusGraphics.fillStyle(0xdcd3be, 0.3);
-        
-        let w = gameSize.width;
-        let h = gameSize.height;
-        
-        // 【最穩定的作法】：寫一個數學轉換器，利用 100% 支援的 lineTo 畫出平滑曲線
-        const drawQuadCurve = (g, x0, y0, cx, cy, x1, y1, segments = 20) => {
-            for (let i = 1; i <= segments; i++) {
-                let t = i / segments;
-                let u = 1 - t;
-                // 二次貝茲曲線公式
-                let px = u * u * x0 + 2 * u * t * cx + t * t * x1;
-                let py = u * u * y0 + 2 * u * t * cy + t * t * y1;
-                g.lineTo(px, py);
-            }
-        };
+        // 1. 定位角色狀態基底 Container (靠螢幕左下角)
+        this.statusContainer.setPosition(0, gameSize.height);
 
-        this.statusGraphics.beginPath();
-        this.statusGraphics.moveTo(0, h);
-        this.statusGraphics.lineTo(0, h - 220);
-        
-        // 替換為我們的無敵數學曲線函數
-        drawQuadCurve(this.statusGraphics, 0, h - 220, 80, h - 230, 140, h - 140);
-        drawQuadCurve(this.statusGraphics, 140, h - 140, 180, h - 60, 260, h);
-        
-        this.statusGraphics.closePath();
-        this.statusGraphics.fillPath();
-        this.statusGraphics.strokePath();
+        // 2. 依據 PNG 圖檔預留位置調整排版座標 (基於 Container 內部相對座標)
+        // 圖檔尺寸參考 1080x600px，我們根據實際情況微調
+        const bgW = this.statusBg.displayWidth;
+        const bgH = this.statusBg.displayHeight;
 
-        this.statusGraphics.lineStyle(2, 0x8c8371, 0.4);
-        this.statusGraphics.beginPath();
-        this.statusGraphics.moveTo(0, h - 190);
-        drawQuadCurve(this.statusGraphics, 0, h - 190, 60, h - 200, 110, h - 130);
-        this.statusGraphics.strokePath();
+        // 人像定位在左側圓圈處 (大約距 Container 左側 25%，高度 60%)
+        this.portrait.setPosition(bgW * 0.25, -bgH * 0.6);
 
-        this.statusGraphics.beginPath();
-        this.statusGraphics.moveTo(0, h - 160);
-        drawQuadCurve(this.statusGraphics, 0, h - 160, 40, h - 170, 80, h - 110);
-        this.statusGraphics.strokePath();
+        // 狀態文字定位在右側上方框內 (大約距 Container 左側 75%，高度 70%)
+        this.statusText.setPosition(bgW * 0.75, -bgH * 0.71);
 
-        this.joyStick.setPosition(safeMargin + 20, gameSize.height - safeMargin - bottomOffset);
+        // 裝備文字定位在右側下方框內 (大約距 Container 左側 75%，高度 35%)
+        this.equipText.setPosition(bgW * 0.75, -bgH * 0.38);
+
+
+        // 3. 定位搖桿 (目標 2要求：不要跟 PNG 重疊，置於上方)
+        // 我們將搖桿置於人像大圓圈的正下方偏左一點，呈現一個弧形排版
+        this.joyStick.setPosition(bgW * 0.25 - 20, gameSize.height - (bgH * 0.25));
         
-        // 設定搖桿深度確保在狀態圖層之上
+        // 設定搖桿深度確保在狀態 Container 之上
         if (this.joyStick.base) this.joyStick.base.setDepth(10);
         if (this.joyStick.thumb) this.joyStick.thumb.setDepth(10);
 
-        // 新增面板定位配置
-        let joyX = this.joyStick.x;
-        let joyY = this.joyStick.y;
-        let portX = joyX;
-        let portY = joyY - 90;
 
-        this.portrait.setPosition(portX, portY);
-
-        let boxX = portX + 45;
-        let boxYOffset = 18;
-
-        this.statusLabel.setPosition(boxX, portY - boxYOffset - 8);
-        this.statusBg.setPosition(boxX + 50, portY - boxYOffset);
-        this.statusText.setPosition(boxX + 50, portY - boxYOffset).setOrigin(0.5);
-
-        this.equipLabel.setPosition(boxX, portY + boxYOffset - 8);
-        this.equipBg.setPosition(boxX + 50, portY + boxYOffset);
-        this.equipText.setPosition(boxX + 50, portY + boxYOffset).setOrigin(0.5);
-
+        // 4. 定位右側按鈕群與選單 (保持現有邏輯)
         this.btnA.setPosition(gameSize.width - safeMargin, gameSize.height - safeMargin - bottomOffset + 20);
         this.txtA.setPosition(this.btnA.x, this.btnA.y);
         this.btnB.setPosition(gameSize.width - safeMargin - 70, gameSize.height - safeMargin - bottomOffset + 20);
