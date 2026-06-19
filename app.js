@@ -405,7 +405,7 @@ function createSystemUI() {
                         <span style="color:#d4af37; font-size:12px; font-weight:bold;">20 馬德幣</span>
                     </div>
                     <div class="catalog-item" onclick="window.openPurchaseModal('煙火', 100)">
-                        <img src="fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">
+                        <img src="shop-fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">
                         <span style="margin-top:5px;">煙火</span>
                         <span style="color:#d4af37; font-size:12px; font-weight:bold;">100 馬德幣</span>
                     </div>
@@ -679,7 +679,7 @@ window.openInventoryModal = function() {
     
     // 渲染一般道具
     keys.forEach(k => {
-        let iconHtml = (k === '水球') ? '<div class="sprite-waterball"></div>' : (k === '煙火' ? '<img src="fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">' : '<span style="font-size:24px; margin-bottom:5px;">📦</span>');
+        let iconHtml = (k === '水球') ? '<div class="sprite-waterball"></div>' : (k === '煙火' ? '<img src="shop-fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">' : '<span style="font-size:24px; margin-bottom:5px;">📦</span>');
         let isUsing = ((k === '水球' || k === '煙火') && window.GameLogic.armedItemState != null && window.GameLogic.armedItemName === k);
         let itemClass = isUsing ? 'catalog-item item-in-use' : 'catalog-item';
         
@@ -1217,7 +1217,7 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('dummy-wet', 'dummy-wet.png', { frameWidth: 75, frameHeight: 75 });
         
         // 煙火素材
-        this.load.image('fireworks', 'fireworks.png');
+        this.load.image('fireworks', 'shop-fireworks.png');
         this.load.spritesheet('onion-fireworks', 'onion-fireworks.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('onion-got-shot', 'onion-got-shot.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('fireworks-shoot', 'fireworks-shoot.png', { frameWidth: 50, frameHeight: 50 });
