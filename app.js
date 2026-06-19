@@ -976,7 +976,7 @@ class BootScene extends Phaser.Scene {
         this.load.image('dummy', 'dummy.png');
         this.load.spritesheet('dummy-wet', 'dummy-wet.png', { frameWidth: 75, frameHeight: 75 });
 
-        // 【新增目標 2】：載入慕夏風角色狀態基底圖
+        // 載入慕夏風角色狀態基底圖
         this.load.image('status-bg', 'character-status-bg.png');
 
         this.load.audio('minimum_laser', 'minimum_laser.mp3');
@@ -1013,15 +1013,22 @@ class BootScene extends Phaser.Scene {
 class UIScene extends Phaser.Scene {
     constructor() { super('UIScene'); }
     create() {
-        // --- 目標 2：慕夏風角色狀態圖層 (建立於底層 Depth -2) ---
-        // 直接使用 PNG 圖檔作為基底，徹底避開程式繪圖 Bug，專心處理排版
+        // --- 慕夏風角色狀態圖層 ---
         this.statusContainer = this.add.container(0, 0).setDepth(-2);
         this.statusBg = this.add.image(0, 0, 'status-bg').setOrigin(0, 1);
         
-        // 洋蔥頭人像 (預設置於預留圓圈內)
-        this.portrait = this.add.sprite(0, 0, 'onion', 0).setScale(1.1);
+        // 洋蔥頭人像 (等等在 resizeUI 放大)
+        this.portrait = this.add.sprite(0, 0, 'onion', 0);
         
-        // 狀態藍 (文字置於預留特殊框內)
+        // 新增：顯示暱稱與等級
+        this.nameLevelText = this.add.text(0, 0, '初心者 Lv.1', { 
+            fontSize: '14px', 
+            color: '#3e2723', 
+            fontStyle: 'bold', 
+            fontFamily: 'Georgia' 
+        }).setOrigin(0.5);
+
+        // 狀態欄文字
         this.statusText = this.add.text(0, 0, '沒怎樣', { 
             fontSize: '15px', 
             color: '#3e2723', 
@@ -1029,7 +1036,7 @@ class UIScene extends Phaser.Scene {
             fontFamily: 'Georgia' 
         }).setOrigin(0.5);
         
-        // 裝備欄 (文字置於預留特殊框內，具備點擊互動)
+        // 裝備欄文字
         this.equipText = this.add.text(0, 0, '沒東西', { 
             fontSize: '15px', 
             color: '#3e2723', 
@@ -1050,7 +1057,7 @@ class UIScene extends Phaser.Scene {
         });
 
         // 將所有元件加入 Container 統一管理定位
-        this.statusContainer.add([this.statusBg, this.portrait, this.statusText, this.equipText]);
+        this.statusContainer.add([this.statusBg, this.portrait, this.nameLevelText, this.statusText, this.equipText]);
         // -----------------------------------------------------
 
         this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, {
@@ -1154,10 +1161,15 @@ class UIScene extends Phaser.Scene {
     }
 
     update() {
-        // UI 狀態同步更新 (目標 2：更新 PNG 圖檔上的文字與閃爍)
+        // 更新暱稱與等級
+        if (window.GameLogic.myProfile) {
+            let p = window.GameLogic.myProfile;
+            this.nameLevelText.setText(`${p.name || '匿名'} Lv.${p.level || 1}`);
+        }
+
+        // UI 狀態同步更新
         if (window.GameLogic.armedItemState) {
             this.equipText.setText('水球');
-            // 改用 Phaser Tween 控制閃爍，因為 Phaser Text 沒有 DOM node 可以操控 classList
             if (!this.equipBlinkTween) {
                 this.equipText.setColor('#66ccff');
                 this.equipBlinkTween = this.tweens.add({
@@ -1170,7 +1182,6 @@ class UIScene extends Phaser.Scene {
             }
         } else {
             this.equipText.setText('沒東西');
-            // 停止閃爍並還原設定
             if (this.equipBlinkTween) {
                 this.equipBlinkTween.stop();
                 this.equipBlinkTween = null;
@@ -1200,7 +1211,6 @@ class UIScene extends Phaser.Scene {
         const bottomOffset = isPortrait ? 120 : 20; 
 
         // --- 1. 先定位搖桿 (固定在左下角舒適區) ---
-        // 我們需要先算出搖桿的位置，因為接下來狀態欄要參考它
         const joystickX = 90;
         const joystickY = gameSize.height - 90 - (isPortrait ? 80 : 0);
         this.joyStick.setPosition(joystickX, joystickY);
@@ -1209,31 +1219,38 @@ class UIScene extends Phaser.Scene {
         if (this.joyStick.thumb) this.joyStick.thumb.setDepth(10);
 
         // --- 2. 動態縮放狀態欄底圖 ---
-        // 稍微放大最大寬度限制，讓整體看起來更大氣 (最大不超過 350px)
-        const targetWidth = Math.min(gameSize.width * 0.45, 350);
+        // 配合這張較寬的 16:9 比例圖檔，我們讓最大寬度稍微放寬到 380px，或螢幕寬度的 45%
+        const targetWidth = Math.min(gameSize.width * 0.45, 380);
         const scaleRatio = targetWidth / this.statusBg.width;
 
         // 套用縮放比例
         this.statusBg.setScale(scaleRatio);
-        this.portrait.setScale(1.1 * scaleRatio);
+        
+        // 依照要求，洋蔥人頭像放大，套用 1.8 倍並跟隨整體縮放
+        this.portrait.setScale(1.8 * scaleRatio);
 
         const bgW = this.statusBg.displayWidth;
         const bgH = this.statusBg.displayHeight;
 
-        // --- 3. 定位角色狀態基底 Container (重點修改處) ---
-        // X: 靠畫面左側，留 20px 邊距
-        // Y: 放置於搖桿正上方。搖桿半徑是 40，所以減去 60 剛好能在搖桿上方保留 20px 的完美間距
+        // --- 3. 定位角色狀態基底 Container ---
         const statusX = 20;
-        const statusY = joystickY - 60;
+        const statusY = joystickY - 60; // 維持在搖桿上方
         this.statusContainer.setPosition(statusX, statusY);
 
-        // 依據縮放後的尺寸定位內部元件，並同步微調最小字體大小避免看不清楚
-        this.portrait.setPosition(bgW * 0.25, -bgH * 0.6);
+        // --- 重新定位內部元件 (基於原點在左下角 0, 1 的相對座標) ---
+        // 1. 洋蔥頭像 (置中於左側大拱門內，稍微偏上以留空間給名字)
+        this.portrait.setPosition(bgW * 0.25, -bgH * 0.55);
         
-        this.statusText.setPosition(bgW * 0.75, -bgH * 0.71);
+        // 2. 暱稱與等級 (位於左下角的長條框內)
+        this.nameLevelText.setPosition(bgW * 0.24, -bgH * 0.16);
+        this.nameLevelText.setFontSize(`${Math.max(12, 16 * scaleRatio)}px`);
+        
+        // 3. 狀態欄文字 (位於右上角框內中心，約佔整體寬度 73%，高度 65%)
+        this.statusText.setPosition(bgW * 0.73, -bgH * 0.65);
         this.statusText.setFontSize(`${Math.max(14, 18 * scaleRatio)}px`); 
 
-        this.equipText.setPosition(bgW * 0.75, -bgH * 0.38);
+        // 4. 裝備欄文字 (位於右下角框內中心，約佔整體寬度 73%，高度 25%)
+        this.equipText.setPosition(bgW * 0.73, -bgH * 0.25);
         this.equipText.setFontSize(`${Math.max(14, 18 * scaleRatio)}px`);
 
         // --- 4. 定位右側按鈕群與選單 (保持現有邏輯) ---
