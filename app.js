@@ -674,9 +674,12 @@ window.openInventoryModal = function() {
         let iconHtml = (k === '水球') ? '<div class="sprite-waterball"></div>' : '<span style="font-size:24px; margin-bottom:5px;">📦</span>';
         let isUsing = (k === '水球' && window.GameLogic.armedItemState != null);
         let itemClass = isUsing ? 'catalog-item item-in-use' : 'catalog-item';
+        
+        // 這裡將原本的 [點擊使用] 改為空字串，完全隱藏它
         let btnHtml = isUsing 
             ? `<span style="font-size:12px; color:#d9534f; font-weight:bold; margin-top:5px;">[點擊暫停]</span>`
-            : `<span style="font-size:12px; color:var(--mucha-green); font-weight:bold; margin-top:5px;">[點擊使用]</span>`;
+            : ``; 
+            
         let onclickStr = isUsing ? `window.stopUsingItem('${k}')` : `window.useItem('${k}')`;
         
         rawItems[k] = `
