@@ -67,7 +67,7 @@ window.closeFullscreen = function() {
 window.updateBGMVolume = function(val) {
     document.getElementById('bgm-vol-text').innerText = val + '%';
     if (window.GameLogic.phaserGame) {
-        let playlist = ['bgm', 'bgm-heart', 'bgm-inside'];
+        let playlist = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo'];
         playlist.forEach(k => {
             let sndList = window.GameLogic.phaserGame.sound.getAll(k);
             sndList.forEach(snd => snd.setVolume(val / 100));
@@ -99,7 +99,8 @@ window.changeTrack = function(dir) {
     let playlist = [
         { key: 'bgm', title: 'Sweet-Onion', cover: 'Sweet-Onion.png' },
         { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' },
-        { key: 'bgm-inside', title: 'Inside-of-Onion', cover: 'Inside-of-Onion.png' }
+        { key: 'bgm-inside', title: 'Inside-of-Onion', cover: 'Inside-of-Onion.png' },
+        { key: 'bgm-kyo', title: '귀엽다!귀엽다!Onion!', cover: 'kyo-kyo-onion.png' }
     ];
     window.GameLogic.currentTrackIdx = ((window.GameLogic.currentTrackIdx || 0) + dir + playlist.length) % playlist.length;
     let track = playlist[window.GameLogic.currentTrackIdx];
@@ -122,6 +123,7 @@ window.changeTrack = function(dir) {
         window.GameLogic.phaserGame.sound.removeByKey('bgm');
         window.GameLogic.phaserGame.sound.removeByKey('bgm-heart');
         window.GameLogic.phaserGame.sound.removeByKey('bgm-inside');
+        window.GameLogic.phaserGame.sound.removeByKey('bgm-kyo');
 
         window.GameLogic.phaserGame.sound.add(track.key, { loop: true, volume: vol }).play();
     }
@@ -988,7 +990,8 @@ onAuthStateChanged(auth, async (user) => {
             let playlist = [
                 { key: 'bgm', title: 'Sweet-Onion', cover: 'Sweet-Onion.png' },
                 { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' },
-                { key: 'bgm-inside', title: 'Inside-of-Onion', cover: 'Inside-of-Onion.png' }
+                { key: 'bgm-inside', title: 'Inside-of-Onion', cover: 'Inside-of-Onion.png' },
+                { key: 'bgm-kyo', title: '귀엽다!귀엽다!Onion!', cover: 'kyo-kyo-onion.png' }
             ];
             let track = playlist[window.GameLogic.currentTrackIdx];
             let coverEl = document.getElementById('music-cover');
@@ -1233,7 +1236,7 @@ class BootScene extends Phaser.Scene {
         const htmlUIImages = [
             'shop-fireworks.png', 'store-manager-talking.png', 'fridge.png', 
             'memory.png', 'shrine.png', 'dummy.png', 'doghouse-bed.png',
-            'Sweet-Onion.png', 'Onion-Heart.png', 'Inside-of-Onion.png'
+            'Sweet-Onion.png', 'Onion-Heart.png', 'Inside-of-Onion.png', 'kyo-kyo-onion.png'
         ];
         htmlUIImages.forEach(src => { let img = new Image(); img.src = src; });
 
@@ -1260,6 +1263,7 @@ class BootScene extends Phaser.Scene {
         this.load.audio('bgm', 'Sweet-Onion.mp3');
         this.load.audio('bgm-heart', 'Onion-Heart.mp3');
         this.load.audio('bgm-inside', 'Inside-of-Onion.mp3');
+        this.load.audio('bgm-kyo', 'kyo-kyo-onion.mp3');
         this.load.spritesheet('onion-clean', 'onion-clean.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('onion-sleep', 'onion-sleeping.png', { frameWidth: 75, frameHeight: 75 });
         this.load.image('bg7Eonion', '7eonion-bg.jpg'); 
@@ -1321,7 +1325,7 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'wb-blast', frames: this.anims.generateFrameNumbers('water-ball-blast'), frameRate: 15, repeat: -1 });
         this.anims.create({ key: 'wet', frames: this.anims.generateFrameNumbers('onion-wet'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'coin-anim', frames: this.anims.generateFrameNumbers('made-coin'), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'dummy-hit', frames: this.anims.generateFrameNumbers('dummy-wet'), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'dummy-hit', frames: this.anims.generateFrameNumbers('dummy-got-shot'), frameRate: 10, repeat: -1 }); // 統一假人被打動畫
         this.anims.create({ key: 'sleep', frames: this.anims.generateFrameNumbers('onion-sleep'), frameRate: 8, repeat: -1 });
         
         // 煙火動畫
@@ -1602,7 +1606,7 @@ class MainScene extends Phaser.Scene {
     constructor() { super('MainScene'); }
     
     create() {
-        let trackKeys = ['bgm', 'bgm-heart', 'bgm-inside'];
+        let trackKeys = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo'];
         let currentTrackKey = trackKeys[window.GameLogic.currentTrackIdx] || 'bgm';
         
         trackKeys.forEach(k => {
@@ -2158,7 +2162,7 @@ class MainScene extends Phaser.Scene {
                     let dummy = this.furnitureSprites[key].sprite;
                     if (dummy && !dummy.isStunned) {
                         dummy.isStunned = true;
-                        dummy.play('fw-hit', true); // 假人播報煙火受擊特效
+                        dummy.play('dummy-fw-hit', true); // 假人播報煙火受擊特效 (修正為統一使用 dummy-got-shot 精靈圖)
                         this.time.delayedCall(1500, () => {
                             if (dummy && dummy.active) {
                                 dummy.isStunned = false;
@@ -2229,7 +2233,7 @@ class MainScene extends Phaser.Scene {
                     let dummy = this.furnitureSprites[key].sprite;
                     if (dummy && !dummy.isStunned) {
                         dummy.isStunned = true;
-                        dummy.play('dummy-fw-hit', true); 
+                        dummy.play('dummy-fw-hit', true); // 水球受擊統一使用 dummy-got-shot
                         this.time.delayedCall(1500, () => { 
                             if (dummy && dummy.active) {
                                 dummy.isStunned = false; 
@@ -2261,19 +2265,22 @@ class MainScene extends Phaser.Scene {
 
     // --- 新增：小型煙火爆炸 (鎖定目標時) ---
     createMiniExplosion(x, y) {
+        let allColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xff8800];
+        let mixColors = [Phaser.Utils.Array.GetRandom(allColors), Phaser.Utils.Array.GetRandom(allColors), Phaser.Utils.Array.GetRandom(allColors)];
+
         let particles = this.add.particles(x, y, 'fw-particle', {
-            speed: { min: 100, max: 200 },
+            speed: { min: 100, max: 250 },
             angle: { min: 0, max: 360 },
-            scale: { start: 1, end: 0 },
+            scale: { start: 1.5, end: 0 },
             blendMode: 'ADD',
-            tint: [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xff8800],
-            lifespan: 600,
+            tint: mixColors,
+            lifespan: { min: 1000, max: 2000 },
             gravityY: 100,
-            quantity: 20
+            quantity: 60
         });
         particles.setDepth(200);
         particles.explode();
-        this.time.delayedCall(1000, () => particles.destroy());
+        this.time.delayedCall(2000, () => particles.destroy());
     }
 
     // --- 新增：全頻隨機色彩煙火 (未鎖定直接發射時) ---
@@ -2281,36 +2288,36 @@ class MainScene extends Phaser.Scene {
         let cam = this.cameras.main;
         let colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff, 0xff8800];
 
-        for (let i = 0; i < 5; i++) {
-            this.time.delayedCall(i * 400, () => {
+        for (let i = 0; i < 7; i++) { // 提升全頻爆炸數量
+            this.time.delayedCall(i * 500, () => { // 錯開爆炸時間
                 let x = cam.scrollX + Phaser.Math.Between(100, cam.width - 100);
                 let y = cam.scrollY + Phaser.Math.Between(100, cam.height - 100);
 
-                let c = Phaser.Utils.Array.GetRandom(colors);
+                let mixColors = [Phaser.Utils.Array.GetRandom(colors), Phaser.Utils.Array.GetRandom(colors), Phaser.Utils.Array.GetRandom(colors)];
 
                 let emitter = this.add.particles(x, y, 'fw-particle', {
-                    speed: { min: 150, max: 400 },
+                    speed: { min: 200, max: 450 },
                     angle: { min: 0, max: 360 },
-                    scale: { start: 1.5, end: 0 },
+                    scale: { start: 2, end: 0 },
                     blendMode: 'ADD',
-                    tint: c,
-                    lifespan: 1000,
+                    tint: mixColors,
+                    lifespan: { min: 1500, max: 3000 },
                     gravityY: 150,
-                    quantity: 50
+                    quantity: 100 // 增加顆粒數量
                 });
                 emitter.setDepth(200);
                 emitter.explode();
 
-                let flash = this.add.circle(x, y, 100, c, 0.4).setDepth(199).setBlendMode('ADD');
+                let flash = this.add.circle(x, y, 150, mixColors[0], 0.5).setDepth(199).setBlendMode('ADD');
                 this.tweens.add({
                     targets: flash,
                     alpha: 0,
-                    scale: 2,
-                    duration: 500,
+                    scale: 2.5,
+                    duration: 600,
                     onComplete: () => flash.destroy()
                 });
 
-                this.time.delayedCall(1500, () => emitter.destroy());
+                this.time.delayedCall(3000, () => emitter.destroy()); // 加長粒子顯示時間
             });
         }
     }
