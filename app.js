@@ -33,7 +33,8 @@ window.GameLogic = {
     armedItemState: null, 
     currentTargetUid: null,
     currentTargetSprite: null,
-    currentTargetType: null
+    currentTargetType: null,
+    muteSFX: false // 新增：音效靜音狀態
 };
 let cafeUnsubscribe = null;
 let profileViewingUid = null;
@@ -44,6 +45,45 @@ window.showProfileModal = showProfileModal;
 window.leaveCafe = leaveCafe;
 window.signOut = signOut;
 window.auth = auth;
+
+// ==========================================
+// 音樂與音效全域控制
+// ==========================================
+window.updateBGMVolume = function(val) {
+    document.getElementById('bgm-vol-text').innerText = val + '%';
+    if (window.GameLogic.phaserGame) {
+        let bgm = window.GameLogic.phaserGame.sound.get('bgm');
+        if (bgm) bgm.setVolume(val / 100);
+    }
+};
+
+window.toggleSFX = function() {
+    window.GameLogic.muteSFX = !window.GameLogic.muteSFX;
+    let btn = document.getElementById('mute-sfx-btn');
+    if (window.GameLogic.muteSFX) {
+        btn.innerText = "開啟所有音效";
+        btn.style.backgroundColor = "#ccc";
+        btn.style.color = "#333";
+    } else {
+        btn.innerText = "關閉所有音效";
+        btn.style.backgroundColor = "var(--mucha-green)";
+        btn.style.color = "white";
+    }
+};
+
+window.playSFX = function(scene, key) {
+    if (window.GameLogic.muteSFX) return;
+    if (scene.sound.get(key)) scene.sound.play(key);
+    else scene.sound.add(key).play();
+};
+
+window.closeProfileModal = function() {
+    document.getElementById('view-profile-modal').style.display = 'none';
+    if (profileViewingUid && profileViewingUid !== window.GameLogic.currentUser.uid) {
+        document.getElementById('phone-modal').style.display = 'block';
+    }
+};
+
 
 // ==========================================
 // 動態生成系統 UI 介面 (集中化管理)
@@ -82,7 +122,7 @@ function createSystemUI() {
             .catalog-item:hover { background: rgba(197, 160, 89, 0.2); }
             .catalog-item img { width: 50px; height: 50px; margin-bottom: 5px; object-fit: contain;}
 
-            #chat-section { display: none; position: absolute; top: 60px; left: 20px; width: 280px; flex-direction: column; z-index: 100; pointer-events: none; }            
+            #chat-section { display: flex; position: absolute; top: 60px; left: 20px; width: 280px; flex-direction: column; z-index: 100; pointer-events: none; }            
             #chat-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 4px 4px 0 0; padding: 5px 10px; width: fit-content; cursor: pointer; font-size: 12px; font-weight: bold;}
             #chat-content { pointer-events: auto; transition: max-height 0.3s ease-in-out; overflow: hidden; display: flex; flex-direction: column; }
             #chat-box { max-height: 100px; overflow-y: auto; background: rgba(0, 0, 0, 0.5); color: #fff; padding: 8px; border-radius: 0 8px 0 0; margin-bottom: 5px; font-size: 13px; text-shadow: 1px 1px 2px #000; }            
@@ -113,8 +153,9 @@ function createSystemUI() {
             .item-in-use { animation: blink-red 1.2s infinite; border: 2px solid red !important; }
 
             /* PM Chat Box Styles */
-            #pm-chat-box { height: 200px; overflow-y: auto; background: #fffdf5; border: 1px solid var(--mucha-gold); border-radius: 4px; padding: 10px; margin-bottom: 10px; text-align: left; font-size: 14px;}
-            .pm-msg { margin-bottom: 5px; }
+            #pm-chat-box { height: 250px; overflow-y: auto; background: #fffdf5; border: 1px solid var(--mucha-gold); border-radius: 4px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; font-size: 14px;}
+            .pm-bubble-me { background: #fff; color: #3e2723; border-radius: 12px 12px 0 12px; padding: 8px 12px; display: inline-block; max-width: 80%; text-align: left; border: 1px solid var(--mucha-gold); box-shadow: 1px 1px 3px rgba(0,0,0,0.1); word-break: break-word; }
+            .pm-bubble-other { background: #dcedc8; color: #3e2723; border-radius: 12px 12px 12px 0; padding: 8px 12px; display: inline-block; max-width: 80%; text-align: left; border: 1px solid #aed581; box-shadow: 1px 1px 3px rgba(0,0,0,0.1); word-break: break-word; }
         </style>
         
         <div id="top-notification-bar">系統通知：歡迎來到洋蔥交誼廳！</div>
@@ -157,7 +198,7 @@ function createSystemUI() {
             <div class="modal-btns">
                 <button id="start-edit-btn" class="btn-edit" style="display:none;">編輯</button>
                 <button id="save-edit-btn" class="btn-primary" style="display:none;">儲存</button>
-                <button class="close-modal-btn btn-secondary" onclick="document.getElementById('view-profile-modal').style.display='none'">收起證件</button>
+                <button class="close-modal-btn btn-secondary" onclick="window.closeProfileModal()">收起證件</button>
             </div>
         </div>
 
@@ -184,15 +225,22 @@ function createSystemUI() {
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('memory-modal').style.display='none'">闔上回憶錄</button>
         </div>
 
-        <div id="settings-modal" class="modal" style="width: 90%; max-width: none; height: 90vh; max-height: none; top: 5%; left: 5%; transform: none; box-sizing: border-box;">
-            <h3 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">⚙️ 設定</h3>
-            <div class="catalog-grid" style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
-                <div class="catalog-item" style="width: 80%; max-width: 300px;" onclick="alert('系統設定建置中...')">
-                    <span style="font-size: 24px; margin-bottom: 5px;">🔧</span>
-                    <span>系統設定</span>
+        <div id="settings-modal" class="modal" style="width: 85%; max-width: 320px; box-sizing: border-box; z-index: 260;">
+            <h3 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">🎵 蔥Music</h3>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                <img src="Sweet-Onion.png" alt="Sweet Onion" style="width: 150px; height: 150px; border-radius: 8px; border: 2px solid var(--mucha-gold); object-fit: cover; box-shadow: 0 4px 8px rgba(0,0,0,0.3);">
+                <div style="font-weight: bold; color: var(--mucha-brown); font-size: 16px;">Sweet-Onion</div>
+                
+                <div style="width: 100%; margin-top: 10px;">
+                    <label style="font-size: 14px; color: var(--mucha-brown); display: flex; justify-content: space-between;">
+                        <span>音樂音量</span> <span id="bgm-vol-text">50%</span>
+                    </label>
+                    <input type="range" id="bgm-volume" min="0" max="100" value="50" style="width: 100%; margin-top: 5px;" oninput="window.updateBGMVolume(this.value)">
                 </div>
+                
+                <button id="mute-sfx-btn" class="btn-primary" style="margin-top: 10px; width: 100%; background-color: var(--mucha-green);" onclick="window.toggleSFX()">關閉所有音效</button>
             </div>
-            <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('settings-modal').style.display='none'">關閉設定</button>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('settings-modal').style.display='none'">關閉播放器</button>
         </div>
 
         <div id="manual-modal" class="modal" style="width: 90%; max-width: none; height: 90vh; max-height: none; top: 5%; left: 5%; transform: none; box-sizing: border-box; z-index: 260;">
@@ -552,9 +600,11 @@ window.openPM = function(targetUid, targetName) {
             let box = document.getElementById('pm-chat-box');
             box.innerHTML = '';
             Object.values(msgs).forEach(m => {
-                let color = m.uid === myUid ? 'var(--mucha-green)' : 'var(--mucha-brown)';
-                let align = m.uid === myUid ? 'right' : 'left';
-                box.innerHTML += `<div class="pm-msg" style="text-align:${align};"><strong style="color:${color}">${m.name}</strong>: ${m.msg}</div>`;
+                if (m.uid === myUid) {
+                    box.innerHTML += `<div style="text-align:right; margin-bottom: 8px;"><div class="pm-bubble-me">${m.msg}</div></div>`;
+                } else {
+                    box.innerHTML += `<div style="text-align:left; margin-bottom: 8px;"><div class="pm-bubble-other"><div style="font-size:11px; color:#558b2f; font-weight:bold; margin-bottom:2px;">${m.name}</div>${m.msg}</div></div>`;
+                }
             });
             box.scrollTop = box.scrollHeight;
         });
@@ -785,10 +835,8 @@ function switchScene(sceneName) {
     window.GameLogic.placingFurnitureKey = null; 
     
     if (sceneName === "doghouse" || sceneName === "farm" || sceneName === "shrine" || sceneName === "7eonion") {
-        chatSection.style.display = "none";
         leaveCafe();
     } else if (sceneName === "cafe") {
-        chatSection.style.display = "flex";
         joinCafe();
     }
     
@@ -944,7 +992,7 @@ class UIScene extends Phaser.Scene {
             { text: '🌱 我的蔥田', action: () => { window.switchScene('farm'); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
             { text: '🏪 7-EONION', action: () => { window.switchScene('7eonion'); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
             { text: '🆔 洋蔥身分證', action: () => { window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
-            { text: '⚙️ 設定', action: () => { document.getElementById('settings-modal').style.display='block'; this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
+            { text: '🎵 蔥Music', action: () => { document.getElementById('settings-modal').style.display='block'; this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
             { text: '📖 說明書', action: () => { window.openManualModal(); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
             { text: '🚪 登出大廳', action: () => { 
                 window.leaveCafe(); 
@@ -1044,7 +1092,9 @@ class MainScene extends Phaser.Scene {
     
     create() {
         if (!this.sound.get('bgm')) {
-            this.sound.play('bgm', { loop: true, volume: 0.5 });
+            let volControl = document.getElementById('bgm-volume');
+            let vol = volControl ? volControl.value / 100 : 0.5;
+            this.sound.play('bgm', { loop: true, volume: vol });
         }
         this.cameras.main.setBackgroundColor('#1a1008');
         this.sceneName = window.GameLogic.currentScene;
@@ -1246,7 +1296,7 @@ class MainScene extends Phaser.Scene {
                 }
                 
                 // --- 音效：投射 ---
-                if (this.sound.get('minimum_laser')) this.sound.play('minimum_laser'); else this.sound.add('minimum_laser').play();
+                window.playSFX(this, 'minimum_laser');
 
                 let targetUid = window.GameLogic.currentTargetUid;
                 let targetSprite = window.GameLogic.currentTargetSprite;
@@ -1268,7 +1318,7 @@ class MainScene extends Phaser.Scene {
                         targets: wb, x: targetSprite.x, y: targetSprite.y, duration: 200,
                         onComplete: () => {
                             // --- 音效：擊中 ---
-                            if (this.sound.get('powerdown07')) this.sound.play('powerdown07'); else this.sound.add('powerdown07').play();
+                            window.playSFX(this, 'powerdown07');
                             
                             wb.play('wb-blast', true); 
                             this.time.delayedCall(300, () => { wb.destroy(); });
@@ -1298,7 +1348,7 @@ class MainScene extends Phaser.Scene {
 
             if (this.localPlayer.isSweeping) {
                 // --- 音效：打掃 ---
-                if (!this.sound.get('brooming1')?.isPlaying) {
+                if (!window.GameLogic.muteSFX && !this.sound.get('brooming1')?.isPlaying) {
                     if (this.sound.get('brooming1')) this.sound.play('brooming1'); 
                     else this.sound.add('brooming1').play();
                 }
@@ -1515,8 +1565,7 @@ class MainScene extends Phaser.Scene {
             let leveledUp = gainRewards(0, 10); 
             
             if (leveledUp) {
-                if (this.sound.get('chorus_of_angels1')) this.sound.play('chorus_of_angels1');
-                else this.sound.add('chorus_of_angels1').play();
+                window.playSFX(this, 'chorus_of_angels1');
             }
 
             let totalCoins = Phaser.Math.Between(10, 18);
@@ -1718,7 +1767,7 @@ class MainScene extends Phaser.Scene {
             let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, coin.x, coin.y);
             
             if (dist < 30) { 
-                if (this.sound.get('coin03')) this.sound.play('coin03'); else this.sound.add('coin03').play();
+                window.playSFX(this, 'coin03');
 
                 let coinAmount = coin.amount;
                 
