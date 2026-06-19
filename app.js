@@ -27,7 +27,11 @@ window.GameLogic = {
     phaserGame: null,
     phaserLoaded: false,
     pendingScene: null,
-    db: db 
+    db: db,
+    armedItemState: null, // 用於追蹤水球的裝備與填充狀態 ('armed' 或 'ready')
+    currentTargetUid: null,
+    currentTargetSprite: null,
+    currentTargetType: null
 };
 let cafeUnsubscribe = null;
 let profileViewingUid = null;
@@ -95,7 +99,6 @@ function createSystemUI() {
             @keyframes play-waterball {
                 100% { background-position: -400px; } /* -200px 是這張圖的總寬度 (50px * 8格) */
             }
-        
         </style>
         
         <div id="top-notification-bar">系統通知：歡迎來到洋蔥交誼廳！</div>
@@ -163,6 +166,17 @@ function createSystemUI() {
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('memory-modal').style.display='none'">闔上回憶錄</button>
         </div>
 
+        <div id="settings-modal" class="modal" style="width: 90%; max-width: none; height: 90vh; max-height: none; top: 5%; left: 5%; transform: none; box-sizing: border-box;">
+            <h3 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">⚙️ 設定</h3>
+            <div class="catalog-grid" style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
+                <div class="catalog-item" style="width: 80%; max-width: 300px;" onclick="alert('說明書內容建置中...')">
+                    <span style="font-size: 24px; margin-bottom: 5px;">📖</span>
+                    <span>說明書</span>
+                </div>
+            </div>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('settings-modal').style.display='none'">關閉設定</button>
+        </div>
+
         <div id="game-layout-container">
             <div id="phaser-app"></div>
             <div id="chat-section">
@@ -227,9 +241,9 @@ window.useItem = function(itemName) {
     let inv = window.GameLogic.myProfile.inventory || {};
     if (inv[itemName] && inv[itemName] > 0) {
         if (itemName === '水球') {
-            window.GameLogic.armedItem = '水球';
+            window.GameLogic.armedItemState = 'armed'; // 設定為武裝狀態，等待填充
             document.getElementById('inventory-modal').style.display = 'none';
-            alert("💦 已準備水球！請靠近其他玩家或假人 (75像素內) 並按 A 鍵投擲！");
+            // 不再跳出 alert，改以畫面中的藍色氣泡提示
             return; 
         }
 
@@ -590,7 +604,8 @@ class UIScene extends Phaser.Scene {
         this.menuContainer = this.add.container(0, 0).setVisible(false).setDepth(200);
         const menuBg = this.add.graphics();
         menuBg.fillStyle(0xf4ecd8, 0.95); menuBg.lineStyle(2, 0xc5a059, 1);
-        menuBg.fillRoundedRect(0, 0, 160, 320, 10); menuBg.strokeRoundedRect(0, 0, 160, 320, 10);
+        // 選單高度調高以容納設定選項
+        menuBg.fillRoundedRect(0, 0, 160, 370, 10); menuBg.strokeRoundedRect(0, 0, 160, 370, 10);
         this.menuContainer.add(menuBg);
 
         // 替換 menuOptions 定義
@@ -600,6 +615,7 @@ class UIScene extends Phaser.Scene {
             { text: '🌱 我的蔥田', action: () => { window.switchScene('farm'); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
             { text: '🏪 7-EONION', action: () => { window.switchScene('7eonion'); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
             { text: '🆔 洋蔥身分證', action: () => { window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
+            { text: '⚙️ 設定', action: () => { document.getElementById('settings-modal').style.display='block'; this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
             { text: '🚪 登出大廳', action: () => { window.leaveCafe(); window.signOut(window.auth); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } }
         ];
 
@@ -796,6 +812,24 @@ class MainScene extends Phaser.Scene {
         this.smartPromptText = this.add.text(0, 0, '', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#4a5d4e' }).setOrigin(0.5).setDepth(101).setVisible(false);
         if (this.minimap) this.minimap.ignore([this.smartPromptBg, this.smartPromptText]);
 
+        // 新增水球引導的氣泡提示與鎖定圖示
+        this.waterPromptBg = this.add.graphics().setDepth(100).setVisible(false);
+        this.waterPromptText = this.add.text(0, 0, '', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#fff' }).setOrigin(0.5).setDepth(101).setVisible(false);
+        this.lockOnTarget = this.add.text(0, 0, '🎯', { fontSize: '28px' }).setOrigin(0.5).setDepth(150).setVisible(false);
+        
+        this.tweens.add({
+            targets: this.lockOnTarget,
+            scaleX: 1.2,
+            scaleY: 1.2,
+            yoyo: true,
+            repeat: -1,
+            duration: 400
+        });
+
+        if (this.minimap) {
+            this.minimap.ignore([this.waterPromptBg, this.waterPromptText, this.lockOnTarget]);
+        }
+
         this.cursors = this.input.keyboard.createCursorKeys();
         this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
         this.shiftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
@@ -831,36 +865,17 @@ class MainScene extends Phaser.Scene {
         });
 
         this.events.on('action_A_short', () => {
-            if (window.GameLogic.armedItem === '水球') {
-                let targetUid = null;
-                let targetSprite = null;
-                let targetType = null; 
-                // 【修正 1】：將判定半徑從 75 放寬到 150，確保貼身或稍微走位錯開時也能精準命中
-                let minDist = 150;
-
-                // 優先找玩家
-                for (let uid in this.otherPlayers) {
-                    let op = this.otherPlayers[uid].sprite;
-                    let d = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, op.x, op.y);
-                    if (d < minDist) {
-                        minDist = d; targetUid = uid; targetSprite = op; targetType = 'player';
-                    }
-                }
-
-                // 同時找假人 (若假人更近，則改鎖定假人)
-                for (let key in this.dummySprites) {
-                    let dummy = this.dummySprites[key];
-                    let d = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, dummy.x, dummy.y);
-                    if (d < minDist) {
-                        minDist = d; targetUid = key; targetSprite = dummy; targetType = 'dummy';
-                    }
-                }
-
+            if (window.GameLogic.armedItemState === 'ready') {
                 let inv = window.GameLogic.myProfile.inventory || {};
                 inv['水球'] = Math.max(0, (inv['水球'] || 0) - 1);
                 update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
-                window.GameLogic.armedItem = null; 
                 
+                window.GameLogic.armedItemState = null; 
+                
+                let targetUid = window.GameLogic.currentTargetUid;
+                let targetSprite = window.GameLogic.currentTargetSprite;
+                let targetType = window.GameLogic.currentTargetType;
+
                 if (targetSprite) {
                     this.localPlayer.sprite.setFlipX(targetSprite.x < this.localPlayer.sprite.x);
                 }
@@ -946,6 +961,12 @@ class MainScene extends Phaser.Scene {
         });
 
         this.events.on('action_B', () => {
+            // 水球填充邏輯
+            if (window.GameLogic.armedItemState === 'armed') {
+                window.GameLogic.armedItemState = 'ready';
+                return;
+            }
+            
             if (!this.localPlayer.isSweeping && this.closestTrash) {
                 this.localPlayer.isSweeping = true;
                 this.qteProgress = 0;
@@ -1065,7 +1086,7 @@ class MainScene extends Phaser.Scene {
         return entity;
     }
 
-updatePlayerEntity(entity, pData) {
+    updatePlayerEntity(entity, pData) {
         let sx = entity.sprite.x; let sy = entity.sprite.y;
         
         // 【修改點】組合暱稱與等級字串
@@ -1109,9 +1130,19 @@ updatePlayerEntity(entity, pData) {
             this.closestTrash = null;
             
             let coinsEarned = Phaser.Math.Between(3, 5);
-            let leveledUp = gainRewards(coinsEarned, 10);
+            // 改為只增加掃地次數與經驗，馬德幣改由拾取地上的金幣獲得
+            let leveledUp = gainRewards(0, 10); 
             
-            let txt = `✨ 打掃成功 ✨\n+${coinsEarned} 馬德幣! +10 EXP`;
+            // 將金幣噴灑在地圖上
+            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                for(let i = 0; i < coinsEarned; i++) {
+                    let cx = this.localPlayer.sprite.x + Phaser.Math.Between(-30, 30);
+                    let cy = this.localPlayer.sprite.y + Phaser.Math.Between(-30, 30) + 20;
+                    module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: 1 });
+                }
+            });
+            
+            let txt = `✨ 打掃成功 ✨\n+10 EXP`;
             if (leveledUp) txt += `\n🆙 升級了!`;
 
             let successText = this.add.text(px, py, txt, { fontSize: '18px', color: '#c5a059', fontStyle: 'bold', stroke: '#fff', strokeThickness: 4, align:'center' }).setOrigin(0.5).setDepth(200);
@@ -1244,6 +1275,53 @@ updatePlayerEntity(entity, pData) {
                 this.smartPromptBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(ptX - pWidth/2, ptY - pHeight/2, pWidth, pHeight, 6).strokeRoundedRect(ptX - pWidth/2, ptY - pHeight/2, pWidth, pHeight, 6).setVisible(true);
                 this.smartPromptText.setPosition(ptX, ptY);
             } else { this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false); }
+
+            // 新增：處理水球的 UI 提示與自動鎖定邏輯
+            if (window.GameLogic.armedItemState) {
+                let msg = window.GameLogic.armedItemState === 'armed' ? "按B填充水球" : "按A投擲水球";
+                
+                this.waterPromptText.setText(msg).setVisible(true);
+                const wpBounds = this.waterPromptText.getBounds(); 
+                const wpWidth = wpBounds.width + 20, wpHeight = wpBounds.height + 10;
+                const wptX = px, wptY = py + 45; // 顯示在角色腳下
+                
+                this.waterPromptBg.clear().fillStyle(0x0077cc, 0.8).lineStyle(2, 0xffffff, 1).fillRoundedRect(wptX - wpWidth/2, wptY - wpHeight/2, wpWidth, wpHeight, 6).strokeRoundedRect(wptX - wpWidth/2, wptY - wpHeight/2, wpWidth, wpHeight, 6).setVisible(true);
+                this.waterPromptText.setPosition(wptX, wptY);
+
+                // 搜尋鎖定目標 (半徑 150, 直徑 300)
+                let lockOnDist = 150; 
+                let lockTargetUid = null;
+                let lockTargetSprite = null;
+                let isDummy = false;
+
+                for (let uid in this.otherPlayers) {
+                    let op = this.otherPlayers[uid].sprite;
+                    let d = Phaser.Math.Distance.Between(px, py, op.x, op.y);
+                    if (d < lockOnDist) { lockOnDist = d; lockTargetUid = uid; lockTargetSprite = op; isDummy = false; }
+                }
+                for (let key in this.dummySprites) {
+                    let dummy = this.dummySprites[key];
+                    let d = Phaser.Math.Distance.Between(px, py, dummy.x, dummy.y);
+                    if (d < lockOnDist) { lockOnDist = d; lockTargetUid = key; lockTargetSprite = dummy; isDummy = true; }
+                }
+
+                if (lockTargetSprite) {
+                    this.lockOnTarget.setPosition(lockTargetSprite.x, lockTargetSprite.y - 40).setVisible(true);
+                    window.GameLogic.currentTargetSprite = lockTargetSprite;
+                    window.GameLogic.currentTargetUid = lockTargetUid;
+                    window.GameLogic.currentTargetType = isDummy ? 'dummy' : 'player';
+                } else {
+                    this.lockOnTarget.setVisible(false);
+                    window.GameLogic.currentTargetSprite = null;
+                    window.GameLogic.currentTargetUid = null;
+                }
+            } else {
+                if (this.waterPromptBg) {
+                    this.waterPromptBg.setVisible(false);
+                    this.waterPromptText.setVisible(false);
+                    this.lockOnTarget.setVisible(false);
+                }
+            }
         }
         // 無敵狀態閃爍效果
         if (this.localPlayer.isInvincible) {
