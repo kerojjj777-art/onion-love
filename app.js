@@ -1185,6 +1185,61 @@ function gainRewards(coins, exp) {
 class BootScene extends Phaser.Scene {
     constructor() { super('BootScene'); }
     preload() {
+        // ==========================================
+        // 【新增】1. 建立載入進度條 (Loading Screen)
+        // ==========================================
+        let width = this.cameras.main.width;
+        let height = this.cameras.main.height;
+
+        let progressBox = this.add.graphics();
+        progressBox.fillStyle(0x3e2723, 0.8); // 深咖啡色底
+        progressBox.fillRoundedRect(width / 2 - 160, height / 2 - 25, 320, 50, 8);
+        progressBox.lineStyle(2, 0xc5a059, 1); // 慕夏金邊框
+        progressBox.strokeRoundedRect(width / 2 - 160, height / 2 - 25, 320, 50, 8);
+
+        let progressBar = this.add.graphics();
+
+        let loadingText = this.make.text({
+            x: width / 2, y: height / 2 - 50,
+            text: '推開洋蔥大門中...',
+            style: { font: 'bold 20px Georgia', fill: '#c5a059' }
+        }).setOrigin(0.5, 0.5);
+
+        let percentText = this.make.text({
+            x: width / 2, y: height / 2,
+            text: '0%',
+            style: { font: 'bold 18px Georgia', fill: '#ffffff' }
+        }).setOrigin(0.5, 0.5);
+
+        // 監聽載入進度事件，動態更新進度條長度
+        this.load.on('progress', function (value) {
+            percentText.setText(parseInt(value * 100) + '%');
+            progressBar.clear();
+            progressBar.fillStyle(0xc5a059, 1); // 慕夏金進度條
+            progressBar.fillRoundedRect(width / 2 - 150, height / 2 - 15, 300 * value, 30, 6);
+        });
+
+        // 載入完成時清理進度條元素
+        this.load.on('complete', function () {
+            progressBar.destroy();
+            progressBox.destroy();
+            loadingText.destroy();
+            percentText.destroy();
+        });
+
+        // ==========================================
+        // 【新增】2. 強制預載 HTML DOM 介面圖片 (避免打開選單才讀取)
+        // ==========================================
+        const htmlUIImages = [
+            'shop-fireworks.png', 'store-manager-talking.png', 'fridge.png', 
+            'memory.png', 'shrine.png', 'dummy.png', 'doghouse-bed.png',
+            'Sweet-Onion.png', 'Onion-Heart.png', 'Inside-of-Onion.png'
+        ];
+        htmlUIImages.forEach(src => { let img = new Image(); img.src = src; });
+
+        // ==========================================
+        // 3. 原本的 Phaser 資源加載 (保留不變)
+        // ==========================================
         this.load.plugin('rexvirtualjoystickplugin', 'https://cdn.jsdelivr.net/gh/rexrainbow/phaser3-rex-notes@master/dist/rexvirtualjoystickplugin.min.js', true);
         
         this.load.image('bgCafe', 'cafe-bg.jpg');
@@ -1216,7 +1271,7 @@ class BootScene extends Phaser.Scene {
         this.load.image('dummy', 'dummy.png');
         this.load.spritesheet('dummy-wet', 'dummy-wet.png', { frameWidth: 75, frameHeight: 75 });
         
-        // 煙火素材
+        // 煙火素材 (已修正為 shop-fireworks.png)
         this.load.image('fireworks', 'shop-fireworks.png');
         this.load.spritesheet('onion-fireworks', 'onion-fireworks.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('onion-got-shot', 'onion-got-shot.png', { frameWidth: 75, frameHeight: 75 });
