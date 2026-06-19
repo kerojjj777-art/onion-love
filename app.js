@@ -1037,6 +1037,9 @@ class UIScene extends Phaser.Scene {
             fontFamily: 'Georgia' 
         }).setOrigin(0.5).setInteractive();
 
+        // 裝備閃爍專用 Tween 變數
+        this.equipBlinkTween = null;
+
         // 點擊裝備欄位取消裝備功能
         this.equipText.on('pointerdown', () => {
             if (window.GameLogic.armedItemState === 'armed' || window.GameLogic.armedItemState === 'ready') {
@@ -1154,14 +1157,25 @@ class UIScene extends Phaser.Scene {
         // UI 狀態同步更新 (目標 2：更新 PNG 圖檔上的文字與閃爍)
         if (window.GameLogic.armedItemState) {
             this.equipText.setText('水球');
-            // 透過 CSS Class 控制文字閃爍，不影響 Phaser 渲染性能
-            if (!this.equipText.node.classList.contains('item-in-use-blink')) {
-                this.equipText.node.classList.add('item-in-use-blink');
+            // 改用 Phaser Tween 控制閃爍，因為 Phaser Text 沒有 DOM node 可以操控 classList
+            if (!this.equipBlinkTween) {
+                this.equipText.setColor('#66ccff');
+                this.equipBlinkTween = this.tweens.add({
+                    targets: this.equipText,
+                    alpha: 0.3,
+                    yoyo: true,
+                    repeat: -1,
+                    duration: 500
+                });
             }
         } else {
             this.equipText.setText('沒東西');
-            if (this.equipText.node.classList.contains('item-in-use-blink')) {
-                this.equipText.node.classList.remove('item-in-use-blink');
+            // 停止閃爍並還原設定
+            if (this.equipBlinkTween) {
+                this.equipBlinkTween.stop();
+                this.equipBlinkTween = null;
+                this.equipText.setAlpha(1);
+                this.equipText.setColor('#3e2723');
             }
         }
 
@@ -1207,7 +1221,7 @@ class UIScene extends Phaser.Scene {
         // 我們將搖桿置於人像大圓圈的正下方偏左一點，呈現一個弧形排版
         this.joyStick.setPosition(bgW * 0.25 - 20, gameSize.height - (bgH * 0.25));
         
-        // 設定搖桿深度確保在狀態 Container 之上
+        // 設定搖桿深度確保在狀態 Container 之之上
         if (this.joyStick.base) this.joyStick.base.setDepth(10);
         if (this.joyStick.thumb) this.joyStick.thumb.setDepth(10);
 
