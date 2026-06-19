@@ -633,6 +633,30 @@ window.moveInvItem = function(index, dir) {
     }
 };
 
+// 新增：統一的系統按鈕點擊處理器，完全避免 HTML onClick 字串解析錯誤
+window.clickSysItem = function(key) {
+    document.getElementById('inventory-modal').style.display = 'none';
+    if (key === 'phone') {
+        window.openPhoneModal();
+    } else if (key === 'portal') {
+        window.openPortalModal();
+    } else if (key === 'profile') {
+        window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid);
+    } else if (key === 'music') {
+        document.getElementById('settings-modal').style.display = 'block';
+    } else if (key === 'manual') {
+        window.openManualModal();
+    } else if (key === 'logout') {
+        window.leaveCafe();
+        if (window.GameLogic.currentUser) {
+            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                module.remove(module.ref(window.GameLogic.db, 'onlinePlayers/' + window.GameLogic.currentUser.uid));
+            });
+        }
+        window.signOut(window.auth);
+    }
+};
+
 window.openInventoryModal = function() {
     const list = document.getElementById('inventory-list');
     let hasUnread = Object.keys(window.GameLogic.unreadPMs || {}).length > 0;
@@ -645,6 +669,7 @@ window.openInventoryModal = function() {
     let sysKeys = ['phone', 'portal', 'profile', 'music', 'manual', 'logout'];
     let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥' && !sysKeys.includes(k));
     
+    // 渲染一般道具
     keys.forEach(k => {
         let iconHtml = (k === '水球') ? '<div class="sprite-waterball"></div>' : '<span style="font-size:24px; margin-bottom:5px;">📦</span>';
         let isUsing = (k === '水球' && window.GameLogic.armedItemState != null);
@@ -662,40 +687,40 @@ window.openInventoryModal = function() {
             </div>`;
     });
     
-    // 確保系統按鈕絕對正確載入
+    // 渲染系統按鈕（使用安全的 clickSysItem 避免解析崩潰）
     rawItems['phone'] = `
-        <div class="catalog-item" style="position:relative; width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.openPhoneModal()"' : ''} >
+        <div class="catalog-item" style="position:relative; width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'phone\')"' : ''} >
             ${dotHtml}
             <div class="sprite-onion-phone"></div>
             <span style="margin:5px 0;">洋蔥手機</span>
         </div>
     `;
     rawItems['portal'] = `
-        <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.openPortalModal()"' : ''}>
+        <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'portal\')"' : ''}>
             <div class="sprite-magic-gap"></div>
             <span style="margin:5px 0;">傳送門</span>
         </div>
     `;
     rawItems['profile'] = `
-        <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); document.getElementById(\'inventory-modal\').style.display=\'none\';"' : ''}>
+        <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'profile\')"' : ''}>
             <span style="font-size:32px; margin-bottom:5px; height:50px; display:flex; align-items:center; justify-content:center;">🆔</span>
             <span style="margin:5px 0;">洋蔥身分證</span>
         </div>
     `;
     rawItems['music'] = `
-        <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="document.getElementById(\'settings-modal\').style.display=\'block\'; document.getElementById(\'inventory-modal\').style.display=\'none\';"' : ''}>
+        <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'music\')"' : ''}>
             <div class="sprite-music-box"></div>
             <span style="margin:5px 0;">蔥Music</span>
         </div>
     `;
     rawItems['manual'] = `
-        <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.openManualModal(); document.getElementById(\'inventory-modal\').style.display=\'none\';"' : ''}>
+        <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'manual\')"' : ''}>
             <span style="font-size:32px; margin-bottom:5px; height:50px; display:flex; align-items:center; justify-content:center;">📖</span>
             <span style="margin:5px 0;">說明書</span>
         </div>
     `;
     rawItems['logout'] = `
-        <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.leaveCafe(); if (window.GameLogic.currentUser) { import(\'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js\').then(module => { module.remove(module.ref(window.GameLogic.db, \'onlinePlayers/\' + window.GameLogic.currentUser.uid)); }); } window.signOut(window.auth); document.getElementById(\'inventory-modal\').style.display=\'none\';"' : ''}>
+        <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'logout\')"' : ''}>
             <span style="font-size:32px; margin-bottom:5px; height:50px; display:flex; align-items:center; justify-content:center;">🚪</span>
             <span style="margin:5px 0;">登出大廳</span>
         </div>
@@ -703,7 +728,6 @@ window.openInventoryModal = function() {
 
     let activeKeys = Object.keys(rawItems);
     
-    // 增添防呆機制：確保 order 一定是陣列並且清除非字串的垃圾資料，避免出錯中斷渲染
     let order = Array.isArray(window.GameLogic.myProfile.inventoryOrder) ? window.GameLogic.myProfile.inventoryOrder.filter(k => k && typeof k === 'string') : [];
     let finalOrder = order.filter(k => activeKeys.includes(k));
     
@@ -728,7 +752,6 @@ window.openInventoryModal = function() {
         }
     });
 
-    // 強制寫入滾動屬性，解決介面項目無法全部顯示的 Bug
     list.style.display = 'grid';
     list.style.gridTemplateColumns = '1fr 1fr';
     list.style.gap = '10px';
@@ -740,8 +763,6 @@ window.openInventoryModal = function() {
     list.innerHTML = invHTML;
     document.getElementById('inventory-modal').style.display = 'block';
 };
-
-window.currentPMUid = null;
 window.pmUnsubscribe = null;
 
 window.viewOtherProfile = function(uid) {
