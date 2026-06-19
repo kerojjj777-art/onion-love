@@ -20,7 +20,7 @@ const db = getDatabase(app);
 window.GameLogic = {
     currentUser: null,
     currentScene: "doghouse",
-    myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse" },
+    myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0 },
     cafePlayers: {},
     onlinePlayers: {}, 
     cafeFurniture: {},
@@ -54,8 +54,8 @@ window.updateBGMVolume = function(val) {
     if (window.GameLogic.phaserGame) {
         let playlist = ['bgm', 'bgm-heart'];
         playlist.forEach(k => {
-            let snd = window.GameLogic.phaserGame.sound.get(k);
-            if (snd) snd.setVolume(val / 100);
+            let sndList = window.GameLogic.phaserGame.sound.getAll(k);
+            sndList.forEach(snd => snd.setVolume(val / 100));
         });
     }
 };
@@ -91,16 +91,24 @@ window.changeTrack = function(dir) {
     document.getElementById('music-cover').src = track.cover;
     document.getElementById('music-title').innerText = track.title;
 
+    // 將選擇紀錄至 Firebase，保持登入狀態
+    if (window.GameLogic.currentUser) {
+        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+            module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), {
+                currentTrackIdx: window.GameLogic.currentTrackIdx
+            });
+        });
+    }
+
     if (window.GameLogic.phaserGame) {
         let volControl = document.getElementById('bgm-volume');
         let vol = volControl ? volControl.value / 100 : 0.5;
 
-        playlist.forEach(t => {
-            let snd = window.GameLogic.phaserGame.sound.get(t.key);
-            if (snd) snd.stop();
-        });
+        // 徹底清除舊有音軌，防止無限堆疊播放 Bug
+        window.GameLogic.phaserGame.sound.removeByKey('bgm');
+        window.GameLogic.phaserGame.sound.removeByKey('bgm-heart');
 
-        window.GameLogic.phaserGame.sound.play(track.key, { loop: true, volume: vol });
+        window.GameLogic.phaserGame.sound.add(track.key, { loop: true, volume: vol }).play();
     }
 };
 window.prevTrack = () => window.changeTrack(-1);
@@ -495,7 +503,7 @@ window.useItem = function(itemName) {
     if (inv[itemName] && inv[itemName] > 0) {
         if (itemName === '水球') {
             window.GameLogic.armedItemState = 'armed'; 
-            window.openInventoryModal();
+            document.getElementById('inventory-modal').style.display = 'none'; // 自動關閉讓玩家立即進入戰鬥
             return; 
         }
         inv[itemName] -= 1; 
@@ -510,7 +518,6 @@ window.useItem = function(itemName) {
 window.stopUsingItem = function(itemName) {
     if (itemName === '水球') {
         window.GameLogic.armedItemState = null;
-        window.openInventoryModal();
     }
 };
 
@@ -761,6 +768,18 @@ onAuthStateChanged(auth, async (user) => {
         const profileSnap = await get(ref(db, `users/${user.uid}`));
         if (profileSnap.exists()) {
             window.GameLogic.myProfile = { ...window.GameLogic.myProfile, ...profileSnap.val() };
+            window.GameLogic.currentTrackIdx = window.GameLogic.myProfile.currentTrackIdx || 0;
+            
+            // 根據玩家過往喜好更新音樂播放器 UI
+            let playlist = [
+                { key: 'bgm', title: 'Sweet-Onion', cover: 'Sweet-Onion.png' },
+                { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' }
+            ];
+            let track = playlist[window.GameLogic.currentTrackIdx];
+            let coverEl = document.getElementById('music-cover');
+            let titleEl = document.getElementById('music-title');
+            if (coverEl) coverEl.src = track.cover;
+            if (titleEl) titleEl.innerText = track.title;
         } else {
             set(ref(db, `users/${user.uid}`), window.GameLogic.myProfile);
         }
@@ -991,6 +1010,42 @@ class BootScene extends Phaser.Scene {
 class UIScene extends Phaser.Scene {
     constructor() { super('UIScene'); }
     create() {
+        // --- 目標 2：慕夏風角色狀態圖層 (建立於底層 Depth -1 / -2) ---
+        this.statusGraphics = this.add.graphics().setDepth(-2);
+        this.portrait = this.add.sprite(0, 0, 'onion', 0).setScale(1.2).setDepth(-1); 
+        
+        this.statusLabel = this.add.text(0, 0, '狀態', { fontSize: '12px', color: '#8b7d6b' }).setDepth(-1);
+        this.statusText = this.add.text(0, 0, '沒怎樣', { fontSize: '14px', color: '#3e2723', fontStyle: 'bold' }).setDepth(-1);
+        
+        this.equipLabel = this.add.text(0, 0, '裝備', { fontSize: '12px', color: '#8b7d6b' }).setDepth(-1);
+        this.equipText = this.add.text(0, 0, '沒東西', { fontSize: '14px', color: '#3e2723', fontStyle: 'bold' }).setDepth(-1);
+
+        this.statusBg = this.add.rectangle(0, 0, 80, 26, 0xd4c5a0, 0.7).setDepth(-2);
+        this.statusBg.setStrokeStyle(2, 0xc5a059);
+        
+        this.equipBg = this.add.rectangle(0, 0, 80, 26, 0xd4c5a0, 0.7).setInteractive().setDepth(-2);
+        this.equipBg.setStrokeStyle(2, 0xc5a059);
+
+        // 點擊裝備欄位取消裝備功能
+        this.equipBg.on('pointerdown', () => {
+            if (window.GameLogic.armedItemState === 'armed' || window.GameLogic.armedItemState === 'ready') {
+                if (confirm('確定要收起水球裝備嗎？')) {
+                    window.stopUsingItem('水球');
+                }
+            }
+        });
+
+        this.equipBlink = this.tweens.add({
+            targets: this.equipBg,
+            fillColor: 0x66ccff,
+            alpha: 1,
+            yoyo: true,
+            repeat: -1,
+            duration: 500,
+            paused: true
+        });
+        // -----------------------------------------------------
+
         this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, {
             radius: 40,
             base: this.add.circle(0, 0, 40, 0xc5a059, 0.2).setStrokeStyle(2, 0xc5a059),
@@ -1091,13 +1146,93 @@ class UIScene extends Phaser.Scene {
         window.updateUnreadGlow();
     }
 
+    update() {
+        // UI 狀態同步更新
+        if (window.GameLogic.armedItemState) {
+            this.equipText.setText('水球').setColor('#003366');
+            if (!this.equipBlink.isPlaying()) {
+                this.equipBg.setFillStyle(0x66ccff, 0.8);
+                this.equipBlink.play();
+            }
+        } else {
+            this.equipText.setText('沒東西').setColor('#3e2723');
+            if (this.equipBlink.isPlaying()) this.equipBlink.pause();
+            this.equipBg.setFillStyle(0xd4c5a0, 0.7);
+        }
+
+        let ms = this.scene.manager.getScene('MainScene');
+        if (ms && ms.localPlayer) {
+            if (ms.localPlayer.isStunned) {
+                this.statusText.setText('濕身中').setColor('#003366');
+            } else if (ms.localPlayer.isSweeping) {
+                this.statusText.setText('打掃中').setColor('#d9534f');
+            } else if (ms.localPlayer.isThrowing) {
+                this.statusText.setText('攻擊中').setColor('#d9534f');
+            } else {
+                this.statusText.setText('沒怎樣').setColor('#3e2723');
+            }
+        }
+    }
+
     resizeUI(gameSize) {
         if (!this.joyStick) return;
         const safeMargin = 80;
         const isPortrait = gameSize.height > gameSize.width;
         const bottomOffset = isPortrait ? 120 : 20; 
 
+        // 繪製慕夏風角色狀態面板背景
+        this.statusGraphics.clear();
+        this.statusGraphics.lineStyle(4, 0x8c8371, 0.5);
+        this.statusGraphics.fillStyle(0xdcd3be, 0.3);
+        
+        let w = gameSize.width;
+        let h = gameSize.height;
+        
+        this.statusGraphics.beginPath();
+        this.statusGraphics.moveTo(0, h);
+        this.statusGraphics.lineTo(0, h - 220);
+        this.statusGraphics.quadraticCurveTo(80, h - 230, 140, h - 140);
+        this.statusGraphics.quadraticCurveTo(180, h - 60, 260, h);
+        this.statusGraphics.closePath();
+        this.statusGraphics.fillPath();
+        this.statusGraphics.strokePath();
+
+        this.statusGraphics.lineStyle(2, 0x8c8371, 0.4);
+        this.statusGraphics.beginPath();
+        this.statusGraphics.moveTo(0, h - 190);
+        this.statusGraphics.quadraticCurveTo(60, h - 200, 110, h - 130);
+        this.statusGraphics.strokePath();
+
+        this.statusGraphics.beginPath();
+        this.statusGraphics.moveTo(0, h - 160);
+        this.statusGraphics.quadraticCurveTo(40, h - 170, 80, h - 110);
+        this.statusGraphics.strokePath();
+
         this.joyStick.setPosition(safeMargin + 20, gameSize.height - safeMargin - bottomOffset);
+        
+        // 設定搖桿深度確保在狀態圖層之上
+        if (this.joyStick.base) this.joyStick.base.setDepth(10);
+        if (this.joyStick.thumb) this.joyStick.thumb.setDepth(10);
+
+        // 新增面板定位配置
+        let joyX = this.joyStick.x;
+        let joyY = this.joyStick.y;
+        let portX = joyX;
+        let portY = joyY - 90;
+
+        this.portrait.setPosition(portX, portY);
+
+        let boxX = portX + 45;
+        let boxYOffset = 18;
+
+        this.statusLabel.setPosition(boxX, portY - boxYOffset - 8);
+        this.statusBg.setPosition(boxX + 50, portY - boxYOffset);
+        this.statusText.setPosition(boxX + 50, portY - boxYOffset).setOrigin(0.5);
+
+        this.equipLabel.setPosition(boxX, portY + boxYOffset - 8);
+        this.equipBg.setPosition(boxX + 50, portY + boxYOffset);
+        this.equipText.setPosition(boxX + 50, portY + boxYOffset).setOrigin(0.5);
+
         this.btnA.setPosition(gameSize.width - safeMargin, gameSize.height - safeMargin - bottomOffset + 20);
         this.txtA.setPosition(this.btnA.x, this.btnA.y);
         this.btnB.setPosition(gameSize.width - safeMargin - 70, gameSize.height - safeMargin - bottomOffset + 20);
@@ -1125,11 +1260,17 @@ class MainScene extends Phaser.Scene {
     
     create() {
         let currentTrackKey = (window.GameLogic.currentTrackIdx === 1) ? 'bgm-heart' : 'bgm';
-        let bgmSound = this.sound.get(currentTrackKey);
-        if (!bgmSound || !bgmSound.isPlaying) {
+        let otherTrackKey = (window.GameLogic.currentTrackIdx === 1) ? 'bgm' : 'bgm-heart';
+        
+        // 切換場景時，乾淨移除沒播放的其餘音軌 (避免音樂堆疊 Bug)
+        this.sound.removeByKey(otherTrackKey);
+        
+        let currentSnd = this.sound.get(currentTrackKey);
+        if (!currentSnd || !currentSnd.isPlaying) {
+            this.sound.removeByKey(currentTrackKey);
             let volControl = document.getElementById('bgm-volume');
             let vol = volControl ? volControl.value / 100 : 0.5;
-            this.sound.play(currentTrackKey, { loop: true, volume: vol });
+            this.sound.add(currentTrackKey, { loop: true, volume: vol }).play();
         }
         
         this.cameras.main.setBackgroundColor('#1a1008');
