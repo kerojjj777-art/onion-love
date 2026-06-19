@@ -247,30 +247,6 @@ window.useItem = function(itemName) {
             return; 
         }
 
-        if (itemName === '假人洋蔥') {
-            if (window.GameLogic.currentScene !== "cafe") {
-                alert("假人洋蔥只能在大廳放置喔！");
-                return;
-            }
-            inv[itemName] -= 1;
-            
-            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-                module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
-                // 放置於玩家右側稍微偏移的位置，避免與玩家完全重疊
-                let px = window.GameLogic.myProfile.lastX || 1024;
-                let py = window.GameLogic.myProfile.lastY || 1024;
-                module.push(module.ref(window.GameLogic.db, 'cafeDummies'), {
-                    x: px + 40,
-                    y: py,
-                    ownerUid: window.GameLogic.currentUser.uid
-                });
-            });
-            
-            document.getElementById('inventory-modal').style.display = 'none';
-            alert("已成功放置假人洋蔥！");
-            return;
-        }
-        
         inv[itemName] -= 1; 
         import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
             module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
@@ -284,18 +260,17 @@ window.openInventoryModal = function() {
     const list = document.getElementById('inventory-list');
     list.innerHTML = '';
     let inv = window.GameLogic.myProfile.inventory || {};
-    let keys = Object.keys(inv).filter(k => inv[k] > 0);
+    // 在這裡直接過濾掉 '假人洋蔥'，確保它絕對不會顯示在背包裡
+    let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥');
     
     if (keys.length === 0) {
         list.innerHTML = "<div style='grid-column:span 2; text-align:center; color:#888; padding: 20px;'>背包空空如也...</div>";
     } else {
         keys.forEach(k => {
-            // 判斷：如果是水球就用動畫 div，其他道具則維持原本或使用預設符號
+            // 判斷：如果是水球就用動畫 div，其他道具則使用預設符號
             let iconHtml = "";
             if (k === '水球') {
                 iconHtml = '<div class="sprite-waterball"></div>';
-            } else if (k === '假人洋蔥') {
-                iconHtml = '<img src="dummy.png" style="width:50px; height:50px; margin-bottom:5px;">';
             } else {
                 iconHtml = '<span style="font-size:24px; margin-bottom:5px;">📦</span>';
             }
@@ -1016,22 +991,22 @@ class MainScene extends Phaser.Scene {
             }
         });
 
-         this.dummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/dummyHits'), (snap) => {
+          this.dummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/dummyHits'), (snap) => {
             let hits = snap.val() || {};
             for (let key in hits) {
                 let data = hits[key];
-                // 確保事件是最近 2 秒內發生的，並且場景中確實存在這個假人
-                if (data && data.time && (Date.now() - data.time < 2000) && this.dummySprites[key]) {
-                    let dummy = this.dummySprites[key];
+                // 確保事件是最近 2 秒內發生的，並且場景中的家俱陣列確實存在這個假人
+                if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) {
+                    let dummy = this.furnitureSprites[key].sprite;
                     
                     // 避免重複觸發，確保動畫順利播完
-                    if (!dummy.isStunned) {
+                    if (dummy && !dummy.isStunned) {
                         dummy.isStunned = true;
                         dummy.play('dummy-hit', true); // 播放濕透動畫
                         
                         // 1.5 秒後假人恢復原狀
                         this.time.delayedCall(1500, () => { 
-                            if (this.dummySprites[key]) {
+                            if (dummy && dummy.active) {
                                 dummy.isStunned = false; 
                                 dummy.anims.stop();
                                 dummy.setTexture('dummy');
@@ -1294,15 +1269,21 @@ class MainScene extends Phaser.Scene {
                 let lockTargetSprite = null;
                 let isDummy = false;
 
+                // 1. 掃描其他玩家
                 for (let uid in this.otherPlayers) {
                     let op = this.otherPlayers[uid].sprite;
                     let d = Phaser.Math.Distance.Between(px, py, op.x, op.y);
                     if (d < lockOnDist) { lockOnDist = d; lockTargetUid = uid; lockTargetSprite = op; isDummy = false; }
                 }
-                for (let key in this.dummySprites) {
-                    let dummy = this.dummySprites[key];
-                    let d = Phaser.Math.Distance.Between(px, py, dummy.x, dummy.y);
-                    if (d < lockOnDist) { lockOnDist = d; lockTargetUid = key; lockTargetSprite = dummy; isDummy = true; }
+                
+                // 2. 掃描從「家俱目錄」放置的假人 (cafeFurniture)
+                for (let key in this.furnitureSprites) {
+                    // 如果這個家俱的 key 包含 dummy，代表它是假人
+                    if (key.includes('dummy')) {
+                        let fDummy = this.furnitureSprites[key].sprite;
+                        let d = Phaser.Math.Distance.Between(px, py, fDummy.x, fDummy.y);
+                        if (d < lockOnDist) { lockOnDist = d; lockTargetUid = key; lockTargetSprite = fDummy; isDummy = true; }
+                    }
                 }
 
                 if (lockTargetSprite) {
