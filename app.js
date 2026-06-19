@@ -22,9 +22,9 @@ window.GameLogic = {
     currentScene: "doghouse",
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse" },
     cafePlayers: {},
-    onlinePlayers: {}, // 新增：全局在線玩家名單
+    onlinePlayers: {}, 
     cafeFurniture: {},
-    unreadPMs: {}, // 新增：未讀私訊狀態
+    unreadPMs: {}, 
     placingFurnitureKey: null, 
     phaserGame: null,
     phaserLoaded: false,
@@ -34,12 +34,12 @@ window.GameLogic = {
     currentTargetUid: null,
     currentTargetSprite: null,
     currentTargetType: null,
-    muteSFX: false // 新增：音效靜音狀態
+    muteSFX: false,
+    currentTrackIdx: 0 
 };
 let cafeUnsubscribe = null;
 let profileViewingUid = null;
 
-// 掛載方法
 window.switchScene = switchScene;
 window.showProfileModal = showProfileModal;
 window.leaveCafe = leaveCafe;
@@ -52,8 +52,11 @@ window.auth = auth;
 window.updateBGMVolume = function(val) {
     document.getElementById('bgm-vol-text').innerText = val + '%';
     if (window.GameLogic.phaserGame) {
-        let bgm = window.GameLogic.phaserGame.sound.get('bgm');
-        if (bgm) bgm.setVolume(val / 100);
+        let playlist = ['bgm', 'bgm-heart'];
+        playlist.forEach(k => {
+            let snd = window.GameLogic.phaserGame.sound.get(k);
+            if (snd) snd.setVolume(val / 100);
+        });
     }
 };
 
@@ -61,11 +64,11 @@ window.toggleSFX = function() {
     window.GameLogic.muteSFX = !window.GameLogic.muteSFX;
     let btn = document.getElementById('mute-sfx-btn');
     if (window.GameLogic.muteSFX) {
-        btn.innerText = "開啟所有音效";
+        btn.innerText = "開啟特殊音效";
         btn.style.backgroundColor = "#ccc";
         btn.style.color = "#333";
     } else {
-        btn.innerText = "關閉所有音效";
+        btn.innerText = "關閉特殊音效";
         btn.style.backgroundColor = "var(--mucha-green)";
         btn.style.color = "white";
     }
@@ -77,13 +80,38 @@ window.playSFX = function(scene, key) {
     else scene.sound.add(key).play();
 };
 
+window.changeTrack = function(dir) {
+    let playlist = [
+        { key: 'bgm', title: 'Sweet-Onion', cover: 'Sweet-Onion.png' },
+        { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' }
+    ];
+    window.GameLogic.currentTrackIdx = ((window.GameLogic.currentTrackIdx || 0) + dir + playlist.length) % playlist.length;
+    let track = playlist[window.GameLogic.currentTrackIdx];
+
+    document.getElementById('music-cover').src = track.cover;
+    document.getElementById('music-title').innerText = track.title;
+
+    if (window.GameLogic.phaserGame) {
+        let volControl = document.getElementById('bgm-volume');
+        let vol = volControl ? volControl.value / 100 : 0.5;
+
+        playlist.forEach(t => {
+            let snd = window.GameLogic.phaserGame.sound.get(t.key);
+            if (snd) snd.stop();
+        });
+
+        window.GameLogic.phaserGame.sound.play(track.key, { loop: true, volume: vol });
+    }
+};
+window.prevTrack = () => window.changeTrack(-1);
+window.nextTrack = () => window.changeTrack(1);
+
 window.closeProfileModal = function() {
     document.getElementById('view-profile-modal').style.display = 'none';
     if (profileViewingUid && profileViewingUid !== window.GameLogic.currentUser.uid) {
         document.getElementById('phone-modal').style.display = 'block';
     }
 };
-
 
 // ==========================================
 // 動態生成系統 UI 介面 (集中化管理)
@@ -132,10 +160,8 @@ function createSystemUI() {
             .chat-collapsed #chat-content { max-height: 0px !important; }
             #top-notification-bar { position: absolute; top: 0; left: 0; width: 100%; padding: 8px 0; background: rgba(0, 0, 0, 0.6); color: #fff; text-align: center; font-size: 14px; z-index: 500; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 1px 1px 2px #000; letter-spacing: 1px; }
        
-            /* --- 誰在玩 UI --- */
             #online-players-list { position: absolute; right: 15px; top: 220px; background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 8px; color: white; display: none; z-index: 100; font-size: 13px; border: 1px solid var(--mucha-gold); pointer-events: none; min-width: 80px; text-shadow: 1px 1px 2px #000; }
             
-            /* --- 商品精靈圖動畫 --- */
             .sprite-waterball { width: 50px; height: 50px; background: url('shop-water-ball.png') left center; animation: play-waterball 0.8s steps(8) infinite; margin-bottom: 5px; }
             .sprite-onion-phone { width: 50px; height: 50px; background: url('tool-onion-phone.png') left center; animation: play-onion-phone 0.8s steps(8) infinite; margin-bottom: 5px; }
             
@@ -148,11 +174,9 @@ function createSystemUI() {
             }
             .flash-text { animation: flash-orange 2s ease-out forwards; }
             
-            /* --- 裝備中狀態閃爍 --- */
             @keyframes blink-red { 0% { box-shadow: 0 0 5px red; border-color: red; } 50% { box-shadow: 0 0 15px red; border-color: #ff6666; background-color: rgba(255,0,0,0.1); } 100% { box-shadow: 0 0 5px red; border-color: red; } }
             .item-in-use { animation: blink-red 1.2s infinite; border: 2px solid red !important; }
 
-            /* PM Chat Box Styles */
             #pm-chat-box { height: 250px; overflow-y: auto; background: #fffdf5; border: 1px solid var(--mucha-gold); border-radius: 4px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; font-size: 14px;}
             .pm-bubble-me { background: #fff; color: #3e2723; border-radius: 12px 12px 0 12px; padding: 8px 12px; display: inline-block; max-width: 80%; text-align: left; border: 1px solid var(--mucha-gold); box-shadow: 1px 1px 3px rgba(0,0,0,0.1); word-break: break-word; }
             .pm-bubble-other { background: #dcedc8; color: #3e2723; border-radius: 12px 12px 12px 0; padding: 8px 12px; display: inline-block; max-width: 80%; text-align: left; border: 1px solid #aed581; box-shadow: 1px 1px 3px rgba(0,0,0,0.1); word-break: break-word; }
@@ -227,9 +251,13 @@ function createSystemUI() {
 
         <div id="settings-modal" class="modal" style="width: 85%; max-width: 320px; box-sizing: border-box; z-index: 260;">
             <h3 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">🎵 蔥Music</h3>
-            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
-                <img src="Sweet-Onion.png" alt="Sweet Onion" style="width: 150px; height: 150px; border-radius: 8px; border: 2px solid var(--mucha-gold); object-fit: cover; box-shadow: 0 4px 8px rgba(0,0,0,0.3);">
-                <div style="font-weight: bold; color: var(--mucha-brown); font-size: 16px;">Sweet-Onion</div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; position: relative;">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
+                    <button class="btn-secondary" onclick="window.prevTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0;">&lt;</button>
+                    <img id="music-cover" src="Sweet-Onion.png" alt="Music Cover" style="width: 150px; height: 150px; border-radius: 8px; border: 2px solid var(--mucha-gold); object-fit: cover; box-shadow: 0 4px 8px rgba(0,0,0,0.3);">
+                    <button class="btn-secondary" onclick="window.nextTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0;">&gt;</button>
+                </div>
+                <div id="music-title" style="font-weight: bold; color: var(--mucha-brown); font-size: 16px;">Sweet-Onion</div>
                 
                 <div style="width: 100%; margin-top: 10px;">
                     <label style="font-size: 14px; color: var(--mucha-brown); display: flex; justify-content: space-between;">
@@ -238,7 +266,7 @@ function createSystemUI() {
                     <input type="range" id="bgm-volume" min="0" max="100" value="50" style="width: 100%; margin-top: 5px;" oninput="window.updateBGMVolume(this.value)">
                 </div>
                 
-                <button id="mute-sfx-btn" class="btn-primary" style="margin-top: 10px; width: 100%; background-color: var(--mucha-green);" onclick="window.toggleSFX()">關閉所有音效</button>
+                <button id="mute-sfx-btn" class="btn-primary" style="margin-top: 10px; width: 100%; background-color: var(--mucha-green); border-radius: 25px;" onclick="window.toggleSFX()">關閉特殊音效</button>
             </div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('settings-modal').style.display='none'">關閉播放器</button>
         </div>
@@ -335,7 +363,6 @@ function createSystemUI() {
 
 createSystemUI();
 
-// --- 說明書全域變數與邏輯 ---
 window.manualPages = [];
 window.currentManualIndex = 0;
 
@@ -421,8 +448,6 @@ window.deleteManualPage = function() {
     }
 };
 
-
-// --- 給西發光控制邏輯 ---
 window.updateUnreadGlow = function() {
     if (!window.GameLogic.phaserGame) return;
     const uiScene = window.GameLogic.phaserGame.scene.getScene('UIScene');
@@ -448,11 +473,9 @@ window.updateUnreadGlow = function() {
     }
 };
 
-// --- 誰在玩 UI 更新 ---
 window.updateOnlinePlayersUI = function() {
     const listEl = document.getElementById('online-players-list');
     if (!listEl) return;
-    // 修改：任何場景均顯示，不再隱藏
     listEl.style.display = 'block';
     let html = '<div style="color:var(--mucha-gold); font-weight:bold; margin-bottom:5px; text-align:center; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 3px;">誰在線上</div>';
     let players = window.GameLogic.onlinePlayers || {};
@@ -463,7 +486,6 @@ window.updateOnlinePlayersUI = function() {
     listEl.innerHTML = html;
 };
 
-// --- 背包與商店的全域邏輯 ---
 window.currentPurchaseItem = null;
 window.currentPurchasePrice = 0;
 window.currentPurchaseQty = 1;
@@ -473,7 +495,7 @@ window.useItem = function(itemName) {
     if (inv[itemName] && inv[itemName] > 0) {
         if (itemName === '水球') {
             window.GameLogic.armedItemState = 'armed'; 
-            window.openInventoryModal(); // 刷新介面以顯示閃爍狀態
+            window.openInventoryModal();
             return; 
         }
         inv[itemName] -= 1; 
@@ -497,7 +519,6 @@ window.openInventoryModal = function() {
     let hasUnread = Object.keys(window.GameLogic.unreadPMs || {}).length > 0;
     let dotHtml = hasUnread ? '<div style="position:absolute; top:5px; right:5px; width:12px; height:12px; background:red; border-radius:50%; box-shadow:0 0 5px red; z-index:10;"></div>' : '';
     
-    // 洋蔥手機為常駐物品，加上紅點判斷
     let invHTML = `
         <div class="catalog-item" style="position:relative;">
             ${dotHtml}
@@ -536,7 +557,6 @@ window.openInventoryModal = function() {
     document.getElementById('inventory-modal').style.display = 'block';
 };
 
-// --- 洋蔥手機私訊功能 ---
 window.currentPMUid = null;
 window.pmUnsubscribe = null;
 
@@ -588,7 +608,6 @@ window.openPM = function(targetUid, targetName) {
     let myUid = window.GameLogic.currentUser.uid;
     let chatId = [myUid, targetUid].sort().join('_');
 
-    // 點開訊息後消除未讀標記
     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
         module.remove(module.ref(window.GameLogic.db, `users/${myUid}/unreadPMs/${targetUid}`));
     });
@@ -632,13 +651,11 @@ window.sendPM = function() {
             msg: msg,
             time: Date.now()
         });
-        // 對方身上標記未讀訊息
         module.update(module.ref(window.GameLogic.db, `users/${window.currentPMUid}/unreadPMs`), { [myUid]: true });
     });
     input.value = '';
 };
 
-// --- 商店購買邏輯 ---
 window.openPurchaseModal = function(name, price) {
     let currentCoins = window.GameLogic.myProfile.coins || 0;
     let maxQty = Math.floor(currentCoins / price);
@@ -683,13 +700,12 @@ window.confirmPurchase = function() {
             });
         });
         
-        // 結帳成功特效與氣泡變更
         document.getElementById('purchase-modal').style.display = 'none';
         
         let msgEl = document.getElementById('purchase-success-msg');
         msgEl.style.display = 'block';
         msgEl.classList.remove('flash-text');
-        void msgEl.offsetWidth; // trigger reflow
+        void msgEl.offsetWidth; 
         msgEl.classList.add('flash-text');
         setTimeout(() => { msgEl.style.display = 'none'; }, 2000);
 
@@ -711,9 +727,6 @@ const actionMenu = document.getElementById("action-menu");
 const viewProfileModal = document.getElementById("view-profile-modal");
 const chatInput = document.getElementById("chat-input");
 
-// ==========================================
-// PWA 與 系統基礎事件綁定
-// ==========================================
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(()=>{}); 
 }
@@ -729,13 +742,10 @@ document.getElementById('chat-toggle-btn').addEventListener('click', function() 
     this.innerText = chatSection.classList.contains('chat-collapsed') ? '展開對話 ▼' : '收起對話 ▲';
     if (!chatSection.classList.contains('chat-collapsed')) {
         const chatBox = document.getElementById("chat-box");
-        chatBox.scrollTop = 0; // 反轉順序後最新在上方
+        chatBox.scrollTop = 0; 
     }
 });
 
-// ==========================================
-// 1. 登入與場景切換
-// ==========================================
 document.getElementById("join-btn").addEventListener("click", () => {
     const email = document.getElementById("user-email").value;
     const pwd = document.getElementById("user-pwd").value;
@@ -755,7 +765,6 @@ onAuthStateChanged(auth, async (user) => {
             set(ref(db, `users/${user.uid}`), window.GameLogic.myProfile);
         }
 
-        // --- 設定全局在線狀態 ---
         const globalPlayerRef = ref(db, `onlinePlayers/${user.uid}`);
         set(globalPlayerRef, {
             name: window.GameLogic.myProfile.name || '匿名',
@@ -768,16 +777,14 @@ onAuthStateChanged(auth, async (user) => {
             window.updateOnlinePlayersUI();
         });
 
-        // --- 監聽未讀訊息狀態 ---
         onValue(ref(db, `users/${user.uid}/unreadPMs`), snap => {
             window.GameLogic.unreadPMs = snap.val() || {};
             window.updateUnreadGlow();
             if (document.getElementById('inventory-modal').style.display === 'block') {
-                window.openInventoryModal(); // 如果背包開啟中，自動重新渲染紅點
+                window.openInventoryModal(); 
             }
         });
 
-        // --- 讀取說明書資源 ---
         onValue(ref(db, 'manuals'), snap => {
             const data = snap.val();
             window.manualPages = [];
@@ -819,6 +826,26 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 function switchScene(sceneName) {
+    const doSwitch = () => {
+        window.GameLogic.currentScene = sceneName;
+        window.GameLogic.placingFurnitureKey = null; 
+        
+        if (sceneName === "doghouse" || sceneName === "farm" || sceneName === "shrine" || sceneName === "7eonion") {
+            leaveCafe();
+        } else if (sceneName === "cafe") {
+            joinCafe();
+        }
+        
+        window.updateOnlinePlayersUI();
+
+        if (window.GameLogic.phaserGame && window.GameLogic.phaserLoaded) {
+            const game = window.GameLogic.phaserGame;
+            game.scene.stop('MainScene');
+            game.scene.start('MainScene'); 
+            game.scene.bringToTop('UIScene');
+        }
+    };
+
     if (window.GameLogic.currentUser && window.GameLogic.phaserGame && window.GameLogic.phaserLoaded) {
         let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
         if (scene && scene.localPlayer) {
@@ -828,26 +855,32 @@ function switchScene(sceneName) {
             window.GameLogic.myProfile.lastScene = sceneName;
             window.GameLogic.myProfile.lastX = scene.localPlayer.sprite.x;
             window.GameLogic.myProfile.lastY = scene.localPlayer.sprite.y;
+
+            let cam = scene.cameras.main;
+            let tvBg = scene.add.rectangle(cam.width/2, cam.height/2, cam.width, cam.height, 0x000000).setDepth(9998).setScrollFactor(0);
+            let tvLine = scene.add.rectangle(cam.width/2, cam.height/2, cam.width, cam.height, 0xffffff).setDepth(9999).setScrollFactor(0);
+
+            scene.tweens.add({
+                targets: tvLine,
+                scaleY: 0.01,
+                duration: 150,
+                ease: 'Power2',
+                onComplete: () => {
+                    scene.tweens.add({
+                        targets: tvLine,
+                        scaleX: 0,
+                        duration: 150,
+                        onComplete: () => {
+                            tvLine.destroy();
+                            doSwitch();
+                        }
+                    });
+                }
+            });
+            return; 
         }
     }
-
-    window.GameLogic.currentScene = sceneName;
-    window.GameLogic.placingFurnitureKey = null; 
-    
-    if (sceneName === "doghouse" || sceneName === "farm" || sceneName === "shrine" || sceneName === "7eonion") {
-        leaveCafe();
-    } else if (sceneName === "cafe") {
-        joinCafe();
-    }
-    
-    window.updateOnlinePlayersUI();
-
-    if (window.GameLogic.phaserGame && window.GameLogic.phaserLoaded) {
-        const game = window.GameLogic.phaserGame;
-        game.scene.stop('MainScene');
-        game.scene.start('MainScene'); 
-        game.scene.bringToTop('UIScene');
-    }
+    doSwitch();
 }
 
 function joinCafe() {
@@ -864,7 +897,6 @@ function joinCafe() {
     onDisconnect(playerRef).remove(); 
     cafeUnsubscribe = onValue(ref(db, 'cafePlayers'), (snapshot) => {
         window.GameLogic.cafePlayers = snapshot.val() || {};
-        // 移除了由 cafe 觸發的 UI 更新，改為純全局觸發
     });
 }
 
@@ -907,12 +939,14 @@ class BootScene extends Phaser.Scene {
         this.load.image('memory', 'memory.png');
         this.load.image('shrine', 'shrine.png'); 
         this.load.spritesheet('onion-skin', 'onion-skin-sprite.png', { frameWidth: 50, frameHeight: 50 });
+        this.load.spritesheet('onion-skin-old', 'onion-skin-old-sprite.png', { frameWidth: 65, frameHeight: 65 });
         this.load.spritesheet('onion', 'onion-sprite.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('onion-down', 'onion-down.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('onion-up', 'onion-up.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('onion-walk', 'onion-right.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('onion-idle', 'onion-idle.png', { frameWidth: 75, frameHeight: 75 });
         this.load.audio('bgm', 'Sweet-Onion.mp3');
+        this.load.audio('bgm-heart', 'Onion-Heart.mp3');
         this.load.spritesheet('onion-clean', 'onion-clean.png', { frameWidth: 75, frameHeight: 75 });
         this.load.image('bg7Eonion', '7eonion-bg.jpg'); 
         this.load.image('storeManager', 'store-manager.png');
@@ -923,7 +957,6 @@ class BootScene extends Phaser.Scene {
         this.load.image('dummy', 'dummy.png');
         this.load.spritesheet('dummy-wet', 'dummy-wet.png', { frameWidth: 75, frameHeight: 75 });
 
-        // --- 音效資源 ---
         this.load.audio('minimum_laser', 'minimum_laser.mp3');
         this.load.audio('powerdown07', 'powerdown07.mp3');
         this.load.audio('coin03', 'coin03.mp3');
@@ -936,6 +969,7 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'walk', frames: this.anims.generateFrameNumbers('onion-walk', { start: 0, end: 5 }), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'idle', frames: this.anims.generateFrameNumbers('onion-idle'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'skin-anim', frames: this.anims.generateFrameNumbers('onion-skin', { start: 0, end: 3 }), frameRate: 5, repeat: -1 });
+        this.anims.create({ key: 'skin-old-anim', frames: this.anims.generateFrameNumbers('onion-skin-old', { start: 0, end: 5 }), frameRate: 5, repeat: -1 });
         this.anims.create({ key: 'clean', frames: this.anims.generateFrameNumbers('onion-clean'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'throw', frames: this.anims.generateFrameNumbers('onion-throw'), frameRate: 10, repeat: 0 });
         this.anims.create({ key: 'wb-blast', frames: this.anims.generateFrameNumbers('water-ball-blast'), frameRate: 15, repeat: -1 });
@@ -1054,7 +1088,6 @@ class UIScene extends Phaser.Scene {
         this.scale.on('resize', this.resizeUI, this);
         this.resizeUI(this.scale.gameSize);
 
-        // 如果未讀訊息在此場景建立前就有了，初始化 Glow
         window.updateUnreadGlow();
     }
 
@@ -1091,15 +1124,42 @@ class MainScene extends Phaser.Scene {
     constructor() { super('MainScene'); }
     
     create() {
-        if (!this.sound.get('bgm')) {
+        let currentTrackKey = (window.GameLogic.currentTrackIdx === 1) ? 'bgm-heart' : 'bgm';
+        let bgmSound = this.sound.get(currentTrackKey);
+        if (!bgmSound || !bgmSound.isPlaying) {
             let volControl = document.getElementById('bgm-volume');
             let vol = volControl ? volControl.value / 100 : 0.5;
-            this.sound.play('bgm', { loop: true, volume: vol });
+            this.sound.play(currentTrackKey, { loop: true, volume: vol });
         }
+        
         this.cameras.main.setBackgroundColor('#1a1008');
         this.sceneName = window.GameLogic.currentScene;
         this.isCafe = this.sceneName === "cafe";
         
+        let cam = this.cameras.main;
+        let tvBg = this.add.rectangle(cam.width/2, cam.height/2, cam.width, cam.height, 0x000000).setDepth(9998).setScrollFactor(0);
+        let tvLine = this.add.rectangle(cam.width/2, cam.height/2, cam.width, cam.height, 0xffffff).setDepth(9999).setScrollFactor(0);
+        tvLine.scaleX = 0;
+        tvLine.scaleY = 0.01;
+
+        this.tweens.add({
+            targets: tvLine,
+            scaleX: 1,
+            duration: 150,
+            onComplete: () => {
+                this.tweens.add({
+                    targets: tvLine,
+                    scaleY: 1,
+                    duration: 150,
+                    ease: 'Power2',
+                    onComplete: () => {
+                        tvBg.destroy();
+                        tvLine.destroy();
+                    }
+                });
+            }
+        });
+
         const mapW = this.isCafe ? 2048 : (this.sceneName === "shrine" ? 1280 : 1280);
         const mapH = this.isCafe ? 2048 : (this.sceneName === "shrine" ? 720 : 720);
         
@@ -1126,9 +1186,12 @@ class MainScene extends Phaser.Scene {
                 for (let key in data) {
                     if (!this.trashes.find(t => t.key === key)) {
                         let tData = data[key];
-                        let skin = this.physics.add.sprite(tData.x, tData.y, 'onion-skin').setDepth(4);
-                        skin.play('skin-anim');
-                        skin.type = 'onion-skin';
+                        let isOld = tData.type === 'old';
+                        let spriteKey = isOld ? 'onion-skin-old' : 'onion-skin';
+                        let animKey = isOld ? 'skin-old-anim' : 'skin-anim';
+                        let skin = this.physics.add.sprite(tData.x, tData.y, spriteKey).setDepth(4);
+                        skin.play(animKey);
+                        skin.type = isOld ? 'onion-skin-old' : 'onion-skin';
                         skin.key = key; 
                         this.trashes.push(skin);
                     }
@@ -1163,7 +1226,6 @@ class MainScene extends Phaser.Scene {
             this.storeManager.body.setSize(120, 120); 
             this.storeManager.body.setOffset((imgW - 120) / 2, (imgH - 120) / 2); 
             
-            // --- 店長氣泡 ---
             this.smBubbleBg = this.add.graphics().setDepth(6);
             this.smBubbleText = this.add.text(mapW/2, mapH/2 - 90, '好想離職......', { fontSize: '14px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(7);
             
@@ -1188,47 +1250,61 @@ class MainScene extends Phaser.Scene {
         this.otherPlayers = {}; this.furnitureSprites = {}; this.dummySprites = {};
         this.coinSprites = {};
         
-        this.coinsListener = onValue(ref(window.GameLogic.db, 'droppedCoins'), (snap) => {
-            let data = snap.val() || {};
-            for (let key in data) {
-                if (!this.coinSprites[key]) {
-                    let cData = data[key];
-                    let coinSprite = this.physics.add.sprite(cData.x, cData.y, 'made-coin').setDepth(8);
-                    coinSprite.play('coin-anim', true);
-                    coinSprite.amount = cData.amount || 5;
-                    this.coinSprites[key] = coinSprite;
+        if (this.isCafe || this.sceneName === "7eonion") {
+            this.coinsListener = onValue(ref(window.GameLogic.db, 'droppedCoins'), (snap) => {
+                let data = snap.val() || {};
+                for (let key in data) {
+                    if (!this.coinSprites[key]) {
+                        let cData = data[key];
+                        let coinSprite = this.physics.add.sprite(cData.x, cData.y, 'made-coin').setDepth(8);
+                        coinSprite.play('coin-anim', true);
+                        coinSprite.amount = cData.amount || 5;
+                        this.coinSprites[key] = coinSprite;
+                    }
                 }
-            }
-            for (let key in this.coinSprites) {
-                if (!data[key]) {
-                    this.coinSprites[key].destroy();
-                    delete this.coinSprites[key];
+                for (let key in this.coinSprites) {
+                    if (!data[key]) {
+                        this.coinSprites[key].destroy();
+                        delete this.coinSprites[key];
+                    }
                 }
-            }
-        });
+            });
 
-        this.dummiesListener = onValue(ref(window.GameLogic.db, 'cafeDummies'), (snap) => {
-            let data = snap.val() || {};
-            for (let key in data) {
-                if (!this.dummySprites[key]) {
-                    let dData = data[key];
-                    let dummySprite = this.physics.add.sprite(dData.x, dData.y, 'dummy').setDepth(8);
-                    this.dummySprites[key] = dummySprite;
+            this.dummiesListener = onValue(ref(window.GameLogic.db, 'cafeDummies'), (snap) => {
+                let data = snap.val() || {};
+                for (let key in data) {
+                    if (!this.dummySprites[key]) {
+                        let dData = data[key];
+                        let dummySprite = this.physics.add.sprite(dData.x, dData.y, 'dummy').setDepth(8);
+                        this.dummySprites[key] = dummySprite;
+                    }
                 }
-            }
-            for (let key in this.dummySprites) {
-                if (!data[key]) {
-                    this.dummySprites[key].destroy();
-                    delete this.dummySprites[key];
+                for (let key in this.dummySprites) {
+                    if (!data[key]) {
+                        this.dummySprites[key].destroy();
+                        delete this.dummySprites[key];
+                    }
                 }
-            }
-        });
+            });
+        }
 
-        let startX = window.GameLogic.myProfile.lastX || mapW / 2;
-        let startY = window.GameLogic.myProfile.lastY || mapH / 2;
+        let startX = mapW / 2 + 100;
+        let startY = mapH / 2;
         
         this.localPlayer = this.createPlayerEntity(startX, startY, window.GameLogic.myProfile, true);
         this.localPlayer.isSweeping = false;
+
+        this.tweens.add({
+            targets: this.localPlayer.sprite,
+            alpha: 0,
+            yoyo: true,
+            repeat: 5,
+            duration: 100,
+            onComplete: () => {
+                this.localPlayer.sprite.setAlpha(1);
+            }
+        });
+
         if (this.sceneName === "7eonion" && this.storeManager) {
             this.physics.add.collider(this.localPlayer.sprite, this.storeManager);
         }
@@ -1295,7 +1371,6 @@ class MainScene extends Phaser.Scene {
                     window.GameLogic.armedItemState = null;
                 }
                 
-                // --- 音效：投射 ---
                 window.playSFX(this, 'minimum_laser');
 
                 let targetUid = window.GameLogic.currentTargetUid;
@@ -1317,7 +1392,6 @@ class MainScene extends Phaser.Scene {
                     this.tweens.add({
                         targets: wb, x: targetSprite.x, y: targetSprite.y, duration: 200,
                         onComplete: () => {
-                            // --- 音效：擊中 ---
                             window.playSFX(this, 'powerdown07');
                             
                             wb.play('wb-blast', true); 
@@ -1347,7 +1421,6 @@ class MainScene extends Phaser.Scene {
             }
 
             if (this.localPlayer.isSweeping) {
-                // --- 音效：打掃 ---
                 if (!window.GameLogic.muteSFX && !this.sound.get('brooming1')?.isPlaying) {
                     if (this.sound.get('brooming1')) this.sound.play('brooming1'); 
                     else this.sound.add('brooming1').play();
@@ -1443,6 +1516,28 @@ class MainScene extends Phaser.Scene {
             }
         });
 
+        this.playersHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/waterHits'), (snap) => {
+            let hits = snap.val() || {};
+            for (let uid in hits) {
+                if (uid === window.GameLogic.currentUser.uid) continue;
+                let data = hits[uid];
+                if (data && data.time && (Date.now() - data.time < 2000)) {
+                    if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) {
+                        let opSprite = this.otherPlayers[uid].sprite;
+                        if (!opSprite.isStunned) {
+                            opSprite.isStunned = true;
+                            opSprite.play('wet', true);
+                            this.time.delayedCall(1500, () => {
+                                if (opSprite && opSprite.active) {
+                                    opSprite.isStunned = false;
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+        });
+
         this.dummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/dummyHits'), (snap) => {
             let hits = snap.val() || {};
             for (let key in hits) {
@@ -1463,6 +1558,15 @@ class MainScene extends Phaser.Scene {
                 }
             }
         });
+
+        this.events.on('shutdown', () => {
+            if (this.trashListener) this.trashListener();
+            if (this.coinsListener) this.coinsListener();
+            if (this.dummiesListener) this.dummiesListener();
+            if (this.hitListener) this.hitListener();
+            if (this.dummyHitListener) this.dummyHitListener();
+            if (this.playersHitListener) this.playersHitListener();
+        });
     }
 
     spawnTrash() {
@@ -1477,9 +1581,10 @@ class MainScene extends Phaser.Scene {
         if (Math.random() < spawnChance && currentTrashCount < maxTrash) { 
             let tx = Phaser.Math.Between(150, 1898); 
             let ty = Phaser.Math.Between(150, 1898);
+            let isOld = Math.random() < 0.05;
             
             import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-                module.push(module.ref(window.GameLogic.db, 'cafeTrashes'), { x: tx, y: ty });
+                module.push(module.ref(window.GameLogic.db, 'cafeTrashes'), { x: tx, y: ty, type: isOld ? 'old' : 'normal' });
             });
         }
     }
@@ -1556,9 +1661,11 @@ class MainScene extends Phaser.Scene {
 
         if (success && this.closestTrash) {
             let px = this.localPlayer.sprite.x; let py = this.localPlayer.sprite.y - 40; 
+            let trashKey = this.closestTrash.key;
+            let isOld = this.closestTrash.type === 'onion-skin-old';
             
             import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-                module.remove(module.ref(window.GameLogic.db, 'cafeTrashes/' + this.closestTrash.key));
+                module.remove(module.ref(window.GameLogic.db, 'cafeTrashes/' + trashKey));
             });
             this.closestTrash = null;
             
@@ -1568,7 +1675,7 @@ class MainScene extends Phaser.Scene {
                 window.playSFX(this, 'chorus_of_angels1');
             }
 
-            let totalCoins = Phaser.Math.Between(10, 18);
+            let totalCoins = isOld ? Phaser.Math.Between(50, 60) : Phaser.Math.Between(10, 18);
             let coinAmounts = [Math.floor(totalCoins/3), Math.floor(totalCoins/3), totalCoins - 2*Math.floor(totalCoins/3)];
 
             import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
@@ -1824,7 +1931,9 @@ class MainScene extends Phaser.Scene {
                 let absX = Math.abs(diffX);
                 let absY = Math.abs(diffY);
 
-                if (absX < 0.5 && absY < 0.5) {
+                if (op.sprite.isStunned) {
+                    op.sprite.play('wet', true);
+                } else if (absX < 0.5 && absY < 0.5) {
                     op.sprite.play('idle', true);
                 } else if (absX >= absY) {
                     op.sprite.setFlipX(diffX < 0);
@@ -2020,7 +2129,6 @@ document.getElementById("save-edit-btn").addEventListener("click", () => {
         if (window.GameLogic.currentScene === "cafe") {
             update(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { name: newData.name, color: newData.color });
         }
-        // 更新全域在線名稱
         update(ref(db, `onlinePlayers/${window.GameLogic.currentUser.uid}`), { name: newData.name, color: newData.color });
         
         showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid);
@@ -2066,7 +2174,6 @@ function listenToChat() {
                 lastMsg = `${latest.name}：${latest.msg}`;
             }
 
-            // 修改：反轉陣列，最新訊息排在最上方
             chatArray.reverse().forEach(c => {
                 html += `<div style="margin-bottom: 4px;"><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg} <span style="font-size:10px; color:#bbb; margin-left:8px;">${c.date||''} ${c.time||''}</span></div>`;
             });
@@ -2078,7 +2185,6 @@ function listenToChat() {
                 topBar.innerText = `💬 最新發言｜ ${lastMsg}`;
             }
 
-            // 修改：最新訊息在頂部，因此強制卷軸保持最上
             requestAnimationFrame(() => {
                 setTimeout(() => { chatBox.scrollTop = 0; }, 10);
             });
