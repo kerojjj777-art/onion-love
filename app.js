@@ -94,7 +94,6 @@ window.changeTrack = function(dir) {
     document.getElementById('music-cover').src = track.cover;
     document.getElementById('music-title').innerText = track.title;
 
-    // 將選擇紀錄至 Firebase，保持登入狀態
     if (window.GameLogic.currentUser) {
         import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
             module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), {
@@ -107,7 +106,6 @@ window.changeTrack = function(dir) {
         let volControl = document.getElementById('bgm-volume');
         let vol = volControl ? volControl.value / 100 : 0.5;
 
-        // 徹底清除舊有音軌，防止無限堆疊播放 Bug
         window.GameLogic.phaserGame.sound.removeByKey('bgm');
         window.GameLogic.phaserGame.sound.removeByKey('bgm-heart');
         window.GameLogic.phaserGame.sound.removeByKey('bgm-inside');
@@ -131,7 +129,7 @@ window.openPortalModal = function() {
 };
 
 // ==========================================
-// 動態生成系統 UI 介面 (集中化管理)
+// 動態生成系統 UI 介面
 // ==========================================
 function createSystemUI() {
     const appContainer = document.getElementById('app-container');
@@ -307,15 +305,19 @@ function createSystemUI() {
                 <br>
                 <button class="btn-primary" onclick="window.uploadManualPage()">上傳新頁面</button>
                 <button class="btn-danger" onclick="window.deleteManualPage()">刪除此頁</button>
+                <div style="margin-top: 10px;">
+                    <button class="btn-secondary" onclick="window.moveManualPage(-1)">前移頁面</button>
+                    <button class="btn-secondary" onclick="window.moveManualPage(1)">後移頁面</button>
+                </div>
             </div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 30px; width: 100%;" onclick="document.getElementById('manual-modal').style.display='none'">關閉說明書</button>
         </div>
         
-        <div id="portal-modal" class="modal" style="z-index: 260; padding: 0; overflow: hidden; background: #2a1b12;">
-            <div style="background:#2a1b12; text-align:center; position:relative; border-bottom: 2px solid var(--mucha-gold); padding: 10px;">
+        <div id="portal-modal" class="modal" style="z-index: 260; padding: 0; background: #2a1b12;">
+            <div id="portal-drag-handle" style="background:#2a1b12; text-align:center; position:relative; border-bottom: 2px solid var(--mucha-gold); padding: 10px; cursor: move;">
                 <div class="sprite-magic-gap-big"></div>
             </div>
-            <div style="padding:15px; background: var(--mucha-paper);">
+            <div style="padding:15px; background: var(--mucha-paper); max-height: 50vh; overflow-y: auto;">
                 <h3 style="margin-top:0; color:var(--mucha-brown);">🌀 空間傳送門</h3>
                 <div style="display:flex; flex-direction:column; gap:10px;">
                     <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('doghouse'); document.getElementById('portal-modal').style.display='none';">🏠 我的狗窩</button>
@@ -404,6 +406,37 @@ function createSystemUI() {
 
 createSystemUI();
 
+// 新增拖曳 Modal 的共用邏輯（應用於傳送門）
+function makeModalDraggable(modalId, handleId) {
+    const modal = document.getElementById(modalId);
+    const handle = document.getElementById(handleId);
+    if (!modal || !handle) return;
+    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    handle.onpointerdown = dragMouseDown;
+    function dragMouseDown(e) {
+        e.preventDefault();
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        document.onpointerup = closeDragElement;
+        document.onpointermove = elementDrag;
+    }
+    function elementDrag(e) {
+        e.preventDefault();
+        pos1 = pos3 - e.clientX;
+        pos2 = pos4 - e.clientY;
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        modal.style.top = (modal.offsetTop - pos2) + "px";
+        modal.style.left = (modal.offsetLeft - pos1) + "px";
+        modal.style.transform = "none"; 
+    }
+    function closeDragElement() {
+        document.onpointerup = null;
+        document.onpointermove = null;
+    }
+}
+makeModalDraggable('portal-modal', 'portal-drag-handle');
+
 window.manualPages = [];
 window.currentManualIndex = 0;
 
@@ -411,7 +444,7 @@ window.openManualModal = function() {
     document.getElementById('manual-modal').style.display = 'block';
     window.currentManualIndex = 0;
     
-    if (window.GameLogic.currentUser && window.GameLogic.currentUser.email === 'kerojjj777@gmail.com') {
+    if (window.GameLogic.currentUser && (window.GameLogic.currentUser.email === 'kerojjj777@gmail.com' || window.GameLogic.currentUser.email === 'kerojjj777@hotmail.com')) {
         document.getElementById('manual-admin-area').style.display = 'block';
     } else {
         document.getElementById('manual-admin-area').style.display = 'none';
@@ -489,6 +522,29 @@ window.deleteManualPage = function() {
     }
 };
 
+window.moveManualPage = function(dir) {
+    if (window.manualPages.length < 2) return;
+    let idx1 = window.currentManualIndex;
+    let idx2 = idx1 + dir;
+    if (idx2 < 0 || idx2 >= window.manualPages.length) return;
+    
+    let p1 = window.manualPages[idx1];
+    let p2 = window.manualPages[idx2];
+    
+    let tempTime = p1.timestamp;
+    p1.timestamp = p2.timestamp;
+    p2.timestamp = tempTime;
+    
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        let updates = {};
+        updates[`manuals/${p1.key}/timestamp`] = p1.timestamp;
+        updates[`manuals/${p2.key}/timestamp`] = p2.timestamp;
+        module.update(module.ref(window.GameLogic.db), updates).then(() => {
+            window.currentManualIndex = idx2;
+        });
+    });
+};
+
 window.updateUnreadGlow = function() {
     if (!window.GameLogic.phaserGame) return;
     const uiScene = window.GameLogic.phaserGame.scene.getScene('UIScene');
@@ -536,7 +592,7 @@ window.useItem = function(itemName) {
     if (inv[itemName] && inv[itemName] > 0) {
         if (itemName === '水球') {
             window.GameLogic.armedItemState = 'armed'; 
-            document.getElementById('inventory-modal').style.display = 'none'; // 自動關閉讓玩家立即進入戰鬥
+            document.getElementById('inventory-modal').style.display = 'none'; 
             return; 
         }
         inv[itemName] -= 1; 
@@ -584,13 +640,13 @@ window.openInventoryModal = function() {
     let dotHtml = hasUnread ? '<div style="position:absolute; top:5px; right:5px; width:12px; height:12px; background:red; border-radius:50%; box-shadow:0 0 5px red; z-index:10;"></div>' : '';
     
     let rawItems = {};
+    let isEdit = window.GameLogic.inventoryEditMode;
 
     rawItems['phone'] = `
-        <div class="catalog-item" style="position:relative; width: 100%; box-sizing: border-box;">
+        <div class="catalog-item" style="position:relative; width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.openPhoneModal()"' : ''}>
             ${dotHtml}
             <div class="sprite-onion-phone"></div>
             <span style="margin:5px 0;">洋蔥手機</span>
-            <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.openPhoneModal()">查看</button>
         </div>
     `;
 
@@ -602,50 +658,46 @@ window.openInventoryModal = function() {
         let isUsing = (k === '水球' && window.GameLogic.armedItemState != null);
         let itemClass = isUsing ? 'catalog-item item-in-use' : 'catalog-item';
         let btnHtml = isUsing 
-            ? `<button style="padding:4px 10px; font-size:12px; background: #d9534f; color: white; border: none; border-radius: 4px; cursor: pointer;" onclick="window.stopUsingItem('${k}')">暫停使用</button>`
-            : `<button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.useItem('${k}')">使用</button>`;
+            ? `<span style="font-size:12px; color:#d9534f; font-weight:bold; margin-top:5px;">[點擊暫停]</span>`
+            : `<span style="font-size:12px; color:var(--mucha-green); font-weight:bold; margin-top:5px;">[點擊使用]</span>`;
+        let onclickStr = isUsing ? `window.stopUsingItem('${k}')` : `window.useItem('${k}')`;
         
         rawItems[k] = `
-            <div class="${itemClass}" style="width: 100%; box-sizing: border-box;">
+            <div class="${itemClass}" style="width: 100%; box-sizing: border-box;" ${!isEdit ? `onclick="${onclickStr}"` : ''}>
                 ${iconHtml}
                 <span style="margin:5px 0;">${k} x${inv[k]}</span>
-                ${btnHtml}
+                ${!isEdit ? btnHtml : ''}
             </div>`;
     });
     
     rawItems['portal'] = `
-        <div class="catalog-item" style="width: 100%; box-sizing: border-box;">
+        <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.openPortalModal()"' : ''}>
             <div class="sprite-magic-gap"></div>
             <span style="margin:5px 0;">傳送門</span>
-            <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.openPortalModal()">開啟</button>
         </div>
     `;
     rawItems['profile'] = `
-        <div class="catalog-item" style="width: 100%; box-sizing: border-box;">
+        <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); document.getElementById(\'inventory-modal\').style.display=\'none\';"' : ''}>
             <span style="font-size:32px; margin-bottom:5px; height:50px; display:flex; align-items:center; justify-content:center;">🆔</span>
             <span style="margin:5px 0;">洋蔥身分證</span>
-            <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); document.getElementById('inventory-modal').style.display='none';">查看</button>
         </div>
     `;
     rawItems['music'] = `
-        <div class="catalog-item" style="width: 100%; box-sizing: border-box;">
+        <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="document.getElementById(\'settings-modal\').style.display=\'block\'; document.getElementById(\'inventory-modal\').style.display=\'none\';"' : ''}>
             <div class="sprite-music-box"></div>
             <span style="margin:5px 0;">蔥Music</span>
-            <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="document.getElementById('settings-modal').style.display='block'; document.getElementById('inventory-modal').style.display='none';">播放</button>
         </div>
     `;
     rawItems['manual'] = `
-        <div class="catalog-item" style="width: 100%; box-sizing: border-box;">
+        <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.openManualModal(); document.getElementById(\'inventory-modal\').style.display=\'none\';"' : ''}>
             <span style="font-size:32px; margin-bottom:5px; height:50px; display:flex; align-items:center; justify-content:center;">📖</span>
             <span style="margin:5px 0;">說明書</span>
-            <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.openManualModal(); document.getElementById('inventory-modal').style.display='none';">閱讀</button>
         </div>
     `;
     rawItems['logout'] = `
-        <div class="catalog-item" style="width: 100%; box-sizing: border-box;">
+        <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.leaveCafe(); if (window.GameLogic.currentUser) { import(\'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js\').then(module => { module.remove(module.ref(window.GameLogic.db, \'onlinePlayers/\' + window.GameLogic.currentUser.uid)); }); } window.signOut(window.auth); document.getElementById(\'inventory-modal\').style.display=\'none\';"' : ''}>
             <span style="font-size:32px; margin-bottom:5px; height:50px; display:flex; align-items:center; justify-content:center;">🚪</span>
             <span style="margin:5px 0;">登出大廳</span>
-            <button style="padding:4px 10px; font-size:12px; background:#d9534f; color:white; border:none; border-radius:4px; cursor:pointer;" onclick="window.leaveCafe(); if (window.GameLogic.currentUser) { import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.remove(module.ref(window.GameLogic.db, 'onlinePlayers/' + window.GameLogic.currentUser.uid)); }); } window.signOut(window.auth); document.getElementById('inventory-modal').style.display='none';">登出</button>
         </div>
     `;
 
@@ -853,8 +905,15 @@ if ('serviceWorker' in navigator) {
 }
 
 window.addEventListener('pointerdown', (e) => {
+    // 隱藏互動選單
     if (!e.target.closest('#action-menu') && e.target.tagName !== 'CANVAS') {
         actionMenu.style.display = 'none';
+    }
+    
+    // 點擊 Canvas 背景時，關閉所有的 Modal 視窗（達成點外側取消功能）
+    if (e.target.tagName === 'CANVAS') {
+        document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+        window.GameLogic.isShopping = false;
     }
 });
 
@@ -884,7 +943,6 @@ onAuthStateChanged(auth, async (user) => {
             window.GameLogic.myProfile = { ...window.GameLogic.myProfile, ...profileSnap.val() };
             window.GameLogic.currentTrackIdx = window.GameLogic.myProfile.currentTrackIdx || 0;
             
-            // 根據玩家過往喜好更新音樂播放器 UI
             let playlist = [
                 { key: 'bgm', title: 'Sweet-Onion', cover: 'Sweet-Onion.png' },
                 { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' },
@@ -926,6 +984,8 @@ onAuthStateChanged(auth, async (user) => {
                 Object.keys(data).forEach(key => {
                     window.manualPages.push({ key: key, imgBase64: data[key].imgBase64, timestamp: data[key].timestamp });
                 });
+                // 確保按照時間戳進行正確排序
+                window.manualPages.sort((a, b) => a.timestamp - b.timestamp);
             }
             window.renderManualPage();
         });
@@ -1147,15 +1207,15 @@ class UIScene extends Phaser.Scene {
             fontFamily: 'Georgia' 
         }).setOrigin(0.5);
 
-        // 狀態欄文字
+        // 狀態欄文字（預設加上紅色字與白色發光效果）
         this.statusText = this.add.text(0, 0, '沒怎樣', { 
             fontSize: '15px', 
-            color: '#3e2723', 
+            color: '#ff0000', 
             fontStyle: 'bold', 
             fontFamily: 'Georgia' 
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setShadow(0, 0, '#ffffff', 8, true, true);
         
-        // 裝備欄文字
+        // 裝備欄文字（基礎樣式）
         this.equipText = this.add.text(0, 0, '沒東西', { 
             fontSize: '15px', 
             color: '#3e2723', 
@@ -1163,7 +1223,7 @@ class UIScene extends Phaser.Scene {
             fontFamily: 'Georgia' 
         }).setOrigin(0.5).setInteractive();
 
-        // 動畫專用 Tween 變數 (修正 .node 報錯，改回 Phaser 引擎動畫)
+        // 動畫 Tween 變數
         this.equipBlinkTween = null;
         this.statusBlinkTween = null;
 
@@ -1177,7 +1237,8 @@ class UIScene extends Phaser.Scene {
         });
 
         // 將所有元件加入 Container 統一管理定位
-        this.statusContainer.add([this.statusBg, this.portrait, this.nameLevelText, this.statusText, this.equipText]);
+        // 【防遮蔽修改】：將 portrait 的順序移至 statusBg 之前，讓背景圖自身的透明窗戶成為原生的 Mask
+        this.statusContainer.add([this.portrait, this.statusBg, this.nameLevelText, this.statusText, this.equipText]);
         // -----------------------------------------------------
 
         this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, {
@@ -1186,14 +1247,15 @@ class UIScene extends Phaser.Scene {
             thumb: this.add.circle(0, 0, 20, 0xc5a059, 0.8)
         });
 
-        this.btnA = this.add.circle(0, 0, 30, 0xd4c5a0).setStrokeStyle(3, 0xc5a059).setInteractive();
-        this.txtA = this.add.text(0, 0, 'A', { fontSize: '24px', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5);
-        this.btnB = this.add.circle(0, 0, 25, 0xd4c5a0).setStrokeStyle(3, 0xc5a059).setInteractive();
-        this.txtB = this.add.text(0, 0, 'B', { fontSize: '20px', color: '#3e2723', fontStyle: 'bold' }).setOrigin(0.5);
-        this.furnBtn = this.add.circle(0, 0, 25, 0x8b5a2b).setStrokeStyle(3, 0xc5a059).setInteractive();
-        this.furnText = this.add.text(0, 0, '家俱', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
-        this.itemBtn = this.add.circle(0, 0, 25, 0x607d8b).setStrokeStyle(3, 0xc5a059).setInteractive();
-        this.itemText = this.add.text(0, 0, '給西', { fontSize: '14px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
+        // 按鈕大小全面統一為半徑 30，且 A=紅、B=藍
+        this.btnA = this.add.circle(0, 0, 30, 0xd9534f).setStrokeStyle(3, 0xffffff).setInteractive();
+        this.txtA = this.add.text(0, 0, 'A', { fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+        this.btnB = this.add.circle(0, 0, 30, 0x0077cc).setStrokeStyle(3, 0xffffff).setInteractive();
+        this.txtB = this.add.text(0, 0, 'B', { fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+        this.furnBtn = this.add.circle(0, 0, 30, 0x8b5a2b).setStrokeStyle(3, 0xc5a059).setInteractive();
+        this.furnText = this.add.text(0, 0, '家俱', { fontSize: '16px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+        this.itemBtn = this.add.circle(0, 0, 30, 0x607d8b).setStrokeStyle(3, 0xc5a059).setInteractive();
+        this.itemText = this.add.text(0, 0, '給西', { fontSize: '16px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
 
         this.itemBtn.on('pointerdown', () => {
             window.openInventoryModal();
@@ -1205,9 +1267,9 @@ class UIScene extends Phaser.Scene {
         });
 
         this.aPressTime = 0;
-        this.btnA.on('pointerdown', () => { this.btnA.setFillStyle(0xc5a059); this.aPressTime = Date.now(); });
+        this.btnA.on('pointerdown', () => { this.btnA.setFillStyle(0xb52b27); this.aPressTime = Date.now(); });
         this.btnA.on('pointerup', () => { 
-            this.btnA.setFillStyle(0xd4c5a0);
+            this.btnA.setFillStyle(0xd9534f);
             let duration = Date.now() - this.aPressTime;
             const mainScene = this.scene.manager.getScene('MainScene');
             if(mainScene) {
@@ -1218,11 +1280,11 @@ class UIScene extends Phaser.Scene {
         });
         
         this.btnB.on('pointerdown', () => { 
-            this.btnB.setFillStyle(0xc5a059);
+            this.btnB.setFillStyle(0x005599);
             const mainScene = this.scene.manager.getScene('MainScene');
             if (mainScene) mainScene.events.emit('action_B');
         });
-        this.btnB.on('pointerup', () => this.btnB.setFillStyle(0xd4c5a0));
+        this.btnB.on('pointerup', () => this.btnB.setFillStyle(0x0077cc));
         
         this.scale.on('resize', this.resizeUI, this);
         this.resizeUI(this.scale.gameSize);
@@ -1231,17 +1293,17 @@ class UIScene extends Phaser.Scene {
     }
 
     update() {
-        // 更新暱稱與等級 (拔除括號)
         if (window.GameLogic.myProfile) {
             let p = window.GameLogic.myProfile;
             this.nameLevelText.setText(`${p.name || '匿名'} Lv.${p.level || 1}`);
         }
 
-        // --- 裝備欄文字閃爍更新 (改回 Phaser 原生 Tween 防報錯) ---
+        // --- 裝備欄文字閃爍更新 (裝備水球時為白色文字，並散發藍光) ---
         if (window.GameLogic.armedItemState) {
             this.equipText.setText('水球');
             if (!this.equipBlinkTween) {
-                this.equipText.setColor('#66ccff');
+                this.equipText.setColor('#ffffff');
+                this.equipText.setShadow(0, 0, '#00aaff', 8, true, true);
                 this.equipBlinkTween = this.tweens.add({
                     targets: this.equipText, alpha: 0.3, yoyo: true, repeat: -1, duration: 500
                 });
@@ -1253,10 +1315,11 @@ class UIScene extends Phaser.Scene {
                 this.equipBlinkTween = null;
                 this.equipText.setAlpha(1);
                 this.equipText.setColor('#3e2723');
+                this.equipText.setShadow(0, 0, '#000', 0, false, false); // 移除發光
             }
         }
 
-        // --- 狀態欄文字閃爍更新 (紅色閃爍要求) ---
+        // --- 狀態欄文字閃爍更新 (紅色發白光要求已於建立時寫好) ---
         let ms = this.scene.manager.getScene('MainScene');
         let currentStatus = '沒怎樣';
         let isStatusActive = false;
@@ -1272,7 +1335,6 @@ class UIScene extends Phaser.Scene {
 
         if (isStatusActive) {
             if (!this.statusBlinkTween) {
-                this.statusText.setColor('#ff4444'); // 紅色警告色
                 this.statusBlinkTween = this.tweens.add({
                     targets: this.statusText, alpha: 0.3, yoyo: true, repeat: -1, duration: 500
                 });
@@ -1282,7 +1344,6 @@ class UIScene extends Phaser.Scene {
                 this.statusBlinkTween.stop();
                 this.statusBlinkTween = null;
                 this.statusText.setAlpha(1);
-                this.statusText.setColor('#3e2723'); // 恢復預設褐色
             }
         }
     }
@@ -1302,58 +1363,49 @@ class UIScene extends Phaser.Scene {
         if (this.joyStick.thumb) this.joyStick.thumb.setDepth(10);
 
         // --- 2. 動態縮放狀態欄底圖 ---
-        // 新圖檔稍微偏長方形，將最大寬度設為 320px
         const targetWidth = Math.min(gameSize.width * 0.45, 320);
         const scaleRatio = targetWidth / this.statusBg.width;
-
-        // 套用縮放比例
         this.statusBg.setScale(scaleRatio);
-        
-        // --- 修正角色頭像被壓縮的問題 ---
-        // 狀態欄的角色圖，請讓角色圖呈現原始尺寸不裁切
         this.portrait.setScale(1);
 
         const bgW = this.statusBg.displayWidth;
         const bgH = this.statusBg.displayHeight;
 
         // --- 3. 定位角色狀態基底 Container ---
-        // 置於搖桿上方，並靠左對齊
         const statusX = 20;
         const statusY = joystickY - 60; 
         this.statusContainer.setPosition(statusX, statusY);
 
-        // --- 重新定位內部元件 (基於原點在左下角 0, 1) ---
-        
-        // 1. 洋蔥頭像 (置中於頂端大圓框內)
         this.portrait.setPosition(bgW * 0.5, -bgH * 0.62);
-        
-        // 2. 暱稱與等級 (位於最底端長條框中央)
         this.nameLevelText.setPosition(bgW * 0.5, -bgH * 0.13);
         this.nameLevelText.setFontSize(`${Math.max(16, 20 * scaleRatio)}px`);
         
-        // 3. 狀態欄文字 (位於左邊小框內，因標籤靠左，所以數值放稍微偏右，約 32%)
         this.statusText.setPosition(bgW * 0.32, -bgH * 0.30);
         this.statusText.setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); 
 
-        // 4. 裝備欄文字 (位於右邊小框內，數值放稍微偏右，約 75%)
         this.equipText.setPosition(bgW * 0.75, -bgH * 0.30);
         this.equipText.setFontSize(`${Math.max(16, 20 * scaleRatio)}px`);
 
-        // --- 4. 定位右側按鈕群與選單 ---
-        this.btnA.setPosition(gameSize.width - safeMargin, gameSize.height - safeMargin - bottomOffset + 20);
-        this.txtA.setPosition(this.btnA.x, this.btnA.y);
-        this.btnB.setPosition(gameSize.width - safeMargin - 70, gameSize.height - safeMargin - bottomOffset + 20);
-        this.txtB.setPosition(this.btnB.x, this.btnB.y);
-
-        let clusterX = gameSize.width - safeMargin - 35;
-        let clusterY = gameSize.height - safeMargin - 70 - bottomOffset + 20;
-
-        // 替換原本的「選單」位置，由「給西」取代
-        this.itemBtn.setPosition(clusterX + 35, clusterY + 15);
+        // --- 4. 定位右側按鈕群 (統一配置為菱形，並偏右) ---
+        // 取得按鈕叢集的中心點，緊貼右側
+        let clusterX = gameSize.width - 70;
+        let clusterY = gameSize.height - bottomOffset - 70;
+        let d = 45; // 菱形的距離半徑
+        
+        // 上方：給西
+        this.itemBtn.setPosition(clusterX, clusterY - d);
         this.itemText.setPosition(this.itemBtn.x, this.itemBtn.y);
-
-        // 「家俱」維持原本位置
-        this.furnBtn.setPosition(clusterX - 35, clusterY + 15);
+        
+        // 右方：A鍵 (紅)
+        this.btnA.setPosition(clusterX + d, clusterY);
+        this.txtA.setPosition(this.btnA.x, this.btnA.y);
+        
+        // 下方：B鍵 (藍)
+        this.btnB.setPosition(clusterX, clusterY + d);
+        this.txtB.setPosition(this.btnB.x, this.btnB.y);
+        
+        // 左方：家俱
+        this.furnBtn.setPosition(clusterX - d, clusterY);
         this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
     }
 }
@@ -1365,7 +1417,6 @@ class MainScene extends Phaser.Scene {
         let trackKeys = ['bgm', 'bgm-heart', 'bgm-inside'];
         let currentTrackKey = trackKeys[window.GameLogic.currentTrackIdx] || 'bgm';
         
-        // 切換場景時，乾淨移除沒播放的其餘音軌 (避免音樂堆疊 Bug)
         trackKeys.forEach(k => {
             if (k !== currentTrackKey) this.sound.removeByKey(k);
         });
@@ -1920,8 +1971,6 @@ class MainScene extends Phaser.Scene {
 
     updatePlayerEntity(entity, pData) {
         let sx = entity.sprite.x; let sy = entity.sprite.y;
-        
-        // --- 根據歷史修改紀錄：全面移除玩家頭頂顯示的括號 ---
         let displayName = `${pData.name || '匿名'} Lv.${pData.level || 1}`;
         entity.nameText.setText(displayName);
         if(pData.color) entity.nameText.setColor(pData.color);
@@ -2411,7 +2460,6 @@ function openFurnitureCatalog() {
     }
     modal.style.display = 'block';
 }
-
 
 document.getElementById("view-profile-btn").addEventListener("click", async () => {
     actionMenu.style.display = "none";
