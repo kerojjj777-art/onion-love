@@ -22,13 +22,15 @@ window.GameLogic = {
     currentScene: "doghouse",
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse" },
     cafePlayers: {},
+    onlinePlayers: {}, // 新增：全局在線玩家名單
     cafeFurniture: {},
+    unreadPMs: {}, // 新增：未讀私訊狀態
     placingFurnitureKey: null, 
     phaserGame: null,
     phaserLoaded: false,
     pendingScene: null,
     db: db,
-    armedItemState: null, // 用於追蹤水球的裝備與填充狀態 ('armed' 或 'ready')
+    armedItemState: null, 
     currentTargetUid: null,
     currentTargetSprite: null,
     currentTargetType: null
@@ -127,7 +129,7 @@ function createSystemUI() {
             <button id="join-btn">推開洋蔥世界之門</button>
         </div>
 
-        <div id="view-profile-modal" class="modal">
+        <div id="view-profile-modal" class="modal" style="z-index: 270;">
             <h3 id="vp-title">洋蔥身分證</h3>
             <div class="stats-container">
                 <div>等級 <strong id="vp-level" style="color:var(--mucha-green);">1</strong> (EXP: <span id="vp-exp">0</span>)</div>
@@ -185,12 +187,31 @@ function createSystemUI() {
         <div id="settings-modal" class="modal" style="width: 90%; max-width: none; height: 90vh; max-height: none; top: 5%; left: 5%; transform: none; box-sizing: border-box;">
             <h3 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">⚙️ 設定</h3>
             <div class="catalog-grid" style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
-                <div class="catalog-item" style="width: 80%; max-width: 300px;" onclick="alert('說明書內容建置中...')">
-                    <span style="font-size: 24px; margin-bottom: 5px;">📖</span>
-                    <span>說明書</span>
+                <div class="catalog-item" style="width: 80%; max-width: 300px;" onclick="alert('系統設定建置中...')">
+                    <span style="font-size: 24px; margin-bottom: 5px;">🔧</span>
+                    <span>系統設定</span>
                 </div>
             </div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('settings-modal').style.display='none'">關閉設定</button>
+        </div>
+
+        <div id="manual-modal" class="modal" style="width: 90%; max-width: none; height: 90vh; max-height: none; top: 5%; left: 5%; transform: none; box-sizing: border-box; z-index: 260;">
+            <h3 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">📖 說明書</h3>
+            
+            <div id="manual-content" style="display:flex; justify-content:center; align-items:center; height: 60vh; position: relative;">
+                <button id="manual-prev-btn" class="btn-secondary" style="position:absolute; left:0; z-index:10; font-size:24px; padding:10px 15px;">&lt;</button>
+                <img id="manual-img-display" src="" alt="目前尚無說明書內容" style="max-width:80%; max-height:100%; object-fit:contain; border:1px solid var(--mucha-gold); border-radius:8px;">
+                <button id="manual-next-btn" class="btn-secondary" style="position:absolute; right:0; z-index:10; font-size:24px; padding:10px 15px;">&gt;</button>
+                <div id="manual-page-indicator" style="position:absolute; bottom: -30px; text-align:center; width:100%; font-weight:bold; color:var(--mucha-brown);">0 / 0</div>
+            </div>
+            
+            <div id="manual-admin-area" style="display:none; margin-top: 50px; border-top:2px dashed var(--mucha-gold); padding-top:15px; text-align:center;">
+                <input type="file" id="manual-file" accept="image/*" style="margin-bottom: 10px;">
+                <br>
+                <button class="btn-primary" onclick="window.uploadManualPage()">上傳新頁面</button>
+                <button class="btn-danger" onclick="window.deleteManualPage()">刪除此頁</button>
+            </div>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 30px; width: 100%;" onclick="document.getElementById('manual-modal').style.display='none'">關閉說明書</button>
         </div>
 
         <div id="game-layout-container">
@@ -230,8 +251,8 @@ function createSystemUI() {
         </div>
 
         <div id="store-modal" class="modal" style="padding:0; overflow:hidden; z-index: 250;">
-            <div style="background:#2a1b12; text-align:center; position:relative; border-bottom: 2px solid var(--mucha-gold);">
-                <div id="store-manager-bubble" style="position:absolute; top:10%; left:50%; transform:translateX(-50%); background:rgba(244, 236, 216, 0.95); color:#3e2723; padding:8px 12px; border-radius:8px; font-size:14px; border:2px solid var(--mucha-gold); font-weight:bold; white-space:nowrap; z-index:2; box-shadow: 0 2px 5px rgba(0,0,0,0.5);">這顆臭洋蔥打什麼主意啊</div>
+            <div style="background:#2a1b12; text-align:center; position:relative; border-bottom: 2px solid var(--mucha-gold); padding-top: 45px;">
+                <div id="store-manager-bubble" style="position:absolute; top:8px; left:50%; transform:translateX(-50%); background:rgba(244, 236, 216, 0.95); color:#3e2723; padding:8px 12px; border-radius:8px; font-size:14px; border:2px solid var(--mucha-gold); font-weight:bold; white-space:nowrap; z-index:2; box-shadow: 0 2px 5px rgba(0,0,0,0.5);">這顆臭洋蔥打什麼主意啊</div>
                 <img src="store-manager-talking.png" style="width:100%; display:block;" alt="老闆">
                 <div style="position:absolute; bottom:5px; right:5px; background:rgba(0,0,0,0.8); color:var(--mucha-gold); padding:4px 8px; border-radius:4px; font-size:12px; border:1px solid var(--mucha-gold); font-weight:bold;">德骨拉完叻</div>
             </div>
@@ -266,17 +287,127 @@ function createSystemUI() {
 
 createSystemUI();
 
+// --- 說明書全域變數與邏輯 ---
+window.manualPages = [];
+window.currentManualIndex = 0;
+
+window.openManualModal = function() {
+    document.getElementById('manual-modal').style.display = 'block';
+    window.currentManualIndex = 0;
+    
+    if (window.GameLogic.currentUser && window.GameLogic.currentUser.email === 'kerojjj777@gmail.com') {
+        document.getElementById('manual-admin-area').style.display = 'block';
+    } else {
+        document.getElementById('manual-admin-area').style.display = 'none';
+    }
+    
+    window.renderManualPage();
+};
+
+window.renderManualPage = function() {
+    const imgEl = document.getElementById('manual-img-display');
+    const indEl = document.getElementById('manual-page-indicator');
+    
+    if (window.manualPages.length === 0) {
+        imgEl.src = '';
+        imgEl.alt = '目前尚無說明書內容';
+        indEl.innerText = '0 / 0';
+        return;
+    }
+    
+    if (window.currentManualIndex < 0) window.currentManualIndex = 0;
+    if (window.currentManualIndex >= window.manualPages.length) window.currentManualIndex = window.manualPages.length - 1;
+    
+    let page = window.manualPages[window.currentManualIndex];
+    imgEl.src = page.imgBase64;
+    indEl.innerText = `${window.currentManualIndex + 1} / ${window.manualPages.length}`;
+};
+
+document.getElementById('manual-prev-btn').addEventListener('click', () => {
+    if (window.currentManualIndex > 0) { window.currentManualIndex--; window.renderManualPage(); }
+});
+document.getElementById('manual-next-btn').addEventListener('click', () => {
+    if (window.currentManualIndex < window.manualPages.length - 1) { window.currentManualIndex++; window.renderManualPage(); }
+});
+
+window.uploadManualPage = function() {
+    const fileInput = document.getElementById("manual-file");
+    const file = fileInput.files[0];
+    if (!file) return alert("請選擇圖片檔案！");
+    
+    const reader = new FileReader();
+    reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+            const cvs = document.createElement('canvas'); 
+            let w = img.width, h = img.height;
+            if (w > 1200) { h *= 1200 / w; w = 1200; } 
+            cvs.width = w; cvs.height = h;
+            cvs.getContext('2d').drawImage(img, 0, 0, w, h);
+            
+            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                module.push(module.ref(window.GameLogic.db, 'manuals'), {
+                    imgBase64: cvs.toDataURL('image/jpeg', 0.8),
+                    timestamp: Date.now()
+                }).then(() => {
+                    alert('上傳成功！');
+                    fileInput.value = "";
+                });
+            });
+        }; 
+        img.src = e.target.result;
+    }; 
+    reader.readAsDataURL(file);
+};
+
+window.deleteManualPage = function() {
+    if (window.manualPages.length === 0) return;
+    if (confirm("確定要刪除當前顯示的說明書頁面嗎？")) {
+        let pageKey = window.manualPages[window.currentManualIndex].key;
+        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+            module.remove(module.ref(window.GameLogic.db, `manuals/${pageKey}`)).then(() => {
+                alert('已刪除！');
+                window.currentManualIndex = 0; 
+            });
+        });
+    }
+};
+
+
+// --- 給西發光控制邏輯 ---
+window.updateUnreadGlow = function() {
+    if (!window.GameLogic.phaserGame) return;
+    const uiScene = window.GameLogic.phaserGame.scene.getScene('UIScene');
+    if (!uiScene || !uiScene.itemBtn) return;
+    
+    const hasUnread = Object.keys(window.GameLogic.unreadPMs || {}).length > 0;
+    if (hasUnread) {
+        if (!uiScene.itemGlowTween) {
+            uiScene.itemGlowTween = uiScene.tweens.add({
+                targets: uiScene.itemBtn,
+                scaleX: 1.1, scaleY: 1.1,
+                yoyo: true, repeat: -1, duration: 600
+            });
+        }
+        uiScene.itemBtn.setStrokeStyle(4, 0xff0000);
+    } else {
+        if (uiScene.itemGlowTween) {
+            uiScene.itemGlowTween.stop();
+            uiScene.itemGlowTween = null;
+            uiScene.itemBtn.setScale(1);
+        }
+        uiScene.itemBtn.setStrokeStyle(3, 0xc5a059);
+    }
+};
+
 // --- 誰在玩 UI 更新 ---
 window.updateOnlinePlayersUI = function() {
     const listEl = document.getElementById('online-players-list');
     if (!listEl) return;
-    if (window.GameLogic.currentScene !== 'cafe') {
-        listEl.style.display = 'none';
-        return;
-    }
+    // 修改：任何場景均顯示，不再隱藏
     listEl.style.display = 'block';
-    let html = '<div style="color:var(--mucha-gold); font-weight:bold; margin-bottom:5px; text-align:center; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 3px;">誰在玩</div>';
-    let players = window.GameLogic.cafePlayers || {};
+    let html = '<div style="color:var(--mucha-gold); font-weight:bold; margin-bottom:5px; text-align:center; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 3px;">誰在線上</div>';
+    let players = window.GameLogic.onlinePlayers || {};
     for (let uid in players) {
         let p = players[uid];
         html += `<div style="margin-top:5px; display:flex; align-items:center;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${p.color || '#fff'}; margin-right:8px; border:1px solid #000;"></span>${p.name || '匿名'}</div>`;
@@ -315,10 +446,13 @@ window.stopUsingItem = function(itemName) {
 
 window.openInventoryModal = function() {
     const list = document.getElementById('inventory-list');
+    let hasUnread = Object.keys(window.GameLogic.unreadPMs || {}).length > 0;
+    let dotHtml = hasUnread ? '<div style="position:absolute; top:5px; right:5px; width:12px; height:12px; background:red; border-radius:50%; box-shadow:0 0 5px red; z-index:10;"></div>' : '';
     
-    // 洋蔥手機為常駐物品
+    // 洋蔥手機為常駐物品，加上紅點判斷
     let invHTML = `
-        <div class="catalog-item">
+        <div class="catalog-item" style="position:relative;">
+            ${dotHtml}
             <div class="sprite-onion-phone"></div>
             <span style="margin:5px 0;">洋蔥手機</span>
             <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.openPhoneModal()">查看</button>
@@ -358,6 +492,17 @@ window.openInventoryModal = function() {
 window.currentPMUid = null;
 window.pmUnsubscribe = null;
 
+window.viewOtherProfile = function(uid) {
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.get(module.ref(window.GameLogic.db, `users/${uid}`)).then(snap => {
+            if (snap.exists()) {
+                document.getElementById('phone-modal').style.display = 'none';
+                showProfileModal(snap.val(), uid);
+            }
+        });
+    });
+};
+
 window.openPhoneModal = function() {
     document.getElementById('inventory-modal').style.display = 'none';
     document.getElementById('phone-modal').style.display = 'block';
@@ -369,10 +514,14 @@ window.openPhoneModal = function() {
             for (let uid in users) {
                 if (uid === window.GameLogic.currentUser.uid) continue;
                 let u = users[uid];
+                let unreadDot = (window.GameLogic.unreadPMs && window.GameLogic.unreadPMs[uid]) ? ' <span style="color:red; font-size:10px;">🔴</span>' : '';
                 html += `
-                    <div class="catalog-item" style="flex-direction:row; justify-content:space-between; padding: 10px;" onclick="window.openPM('${uid}', '${u.name || '匿名'}')">
-                        <span style="font-weight:bold; color: ${u.color || '#000'}">${u.name || '匿名'} (Lv.${u.level || 1})</span>
-                        <button class="btn-primary" style="padding: 4px 12px; font-size:12px;">私訊</button>
+                    <div class="catalog-item" style="flex-direction:row; justify-content:space-between; padding: 10px;">
+                        <span style="font-weight:bold; color: ${u.color || '#000'}">${u.name || '匿名'} (Lv.${u.level || 1})${unreadDot}</span>
+                        <div>
+                            <button class="btn-secondary" style="padding: 4px 12px; font-size:12px; margin-right: 5px;" onclick="window.viewOtherProfile('${uid}')">查看</button>
+                            <button class="btn-primary" style="padding: 4px 12px; font-size:12px;" onclick="window.openPM('${uid}', '${u.name || '匿名'}')">私訊</button>
+                        </div>
                     </div>
                 `;
             }
@@ -390,6 +539,11 @@ window.openPM = function(targetUid, targetName) {
     
     let myUid = window.GameLogic.currentUser.uid;
     let chatId = [myUid, targetUid].sort().join('_');
+
+    // 點開訊息後消除未讀標記
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.remove(module.ref(window.GameLogic.db, `users/${myUid}/unreadPMs/${targetUid}`));
+    });
     
     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
         if (window.pmUnsubscribe) window.pmUnsubscribe();
@@ -428,6 +582,8 @@ window.sendPM = function() {
             msg: msg,
             time: Date.now()
         });
+        // 對方身上標記未讀訊息
+        module.update(module.ref(window.GameLogic.db, `users/${window.currentPMUid}/unreadPMs`), { [myUid]: true });
     });
     input.value = '';
 };
@@ -523,7 +679,7 @@ document.getElementById('chat-toggle-btn').addEventListener('click', function() 
     this.innerText = chatSection.classList.contains('chat-collapsed') ? '展開對話 ▼' : '收起對話 ▲';
     if (!chatSection.classList.contains('chat-collapsed')) {
         const chatBox = document.getElementById("chat-box");
-        chatBox.scrollTop = chatBox.scrollHeight;
+        chatBox.scrollTop = 0; // 反轉順序後最新在上方
     }
 });
 
@@ -548,6 +704,40 @@ onAuthStateChanged(auth, async (user) => {
         } else {
             set(ref(db, `users/${user.uid}`), window.GameLogic.myProfile);
         }
+
+        // --- 設定全局在線狀態 ---
+        const globalPlayerRef = ref(db, `onlinePlayers/${user.uid}`);
+        set(globalPlayerRef, {
+            name: window.GameLogic.myProfile.name || '匿名',
+            color: window.GameLogic.myProfile.color || '#fff'
+        });
+        onDisconnect(globalPlayerRef).remove();
+        
+        onValue(ref(db, 'onlinePlayers'), (snapshot) => {
+            window.GameLogic.onlinePlayers = snapshot.val() || {};
+            window.updateOnlinePlayersUI();
+        });
+
+        // --- 監聽未讀訊息狀態 ---
+        onValue(ref(db, `users/${user.uid}/unreadPMs`), snap => {
+            window.GameLogic.unreadPMs = snap.val() || {};
+            window.updateUnreadGlow();
+            if (document.getElementById('inventory-modal').style.display === 'block') {
+                window.openInventoryModal(); // 如果背包開啟中，自動重新渲染紅點
+            }
+        });
+
+        // --- 讀取說明書資源 ---
+        onValue(ref(db, 'manuals'), snap => {
+            const data = snap.val();
+            window.manualPages = [];
+            if (data) {
+                Object.keys(data).forEach(key => {
+                    window.manualPages.push({ key: key, imgBase64: data[key].imgBase64, timestamp: data[key].timestamp });
+                });
+            }
+            window.renderManualPage();
+        });
 
         onValue(ref(db, 'cafeFurniture'), snap => window.GameLogic.cafeFurniture = snap.val() || {});
 
@@ -626,14 +816,13 @@ function joinCafe() {
     onDisconnect(playerRef).remove(); 
     cafeUnsubscribe = onValue(ref(db, 'cafePlayers'), (snapshot) => {
         window.GameLogic.cafePlayers = snapshot.val() || {};
-        window.updateOnlinePlayersUI();
+        // 移除了由 cafe 觸發的 UI 更新，改為純全局觸發
     });
 }
 
 function leaveCafe() {
     if (window.GameLogic.currentUser) set(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), null);
     if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; }
-    window.updateOnlinePlayersUI();
 }
 
 function gainRewards(coins, exp) {
@@ -746,7 +935,7 @@ class UIScene extends Phaser.Scene {
         this.menuContainer = this.add.container(0, 0).setVisible(false).setDepth(200);
         const menuBg = this.add.graphics();
         menuBg.fillStyle(0xf4ecd8, 0.95); menuBg.lineStyle(2, 0xc5a059, 1);
-        menuBg.fillRoundedRect(0, 0, 160, 370, 10); menuBg.strokeRoundedRect(0, 0, 160, 370, 10);
+        menuBg.fillRoundedRect(0, 0, 160, 420, 10); menuBg.strokeRoundedRect(0, 0, 160, 420, 10);
         this.menuContainer.add(menuBg);
 
         const menuOptions = [
@@ -756,7 +945,18 @@ class UIScene extends Phaser.Scene {
             { text: '🏪 7-EONION', action: () => { window.switchScene('7eonion'); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
             { text: '🆔 洋蔥身分證', action: () => { window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
             { text: '⚙️ 設定', action: () => { document.getElementById('settings-modal').style.display='block'; this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
-            { text: '🚪 登出大廳', action: () => { window.leaveCafe(); window.signOut(window.auth); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } }
+            { text: '📖 說明書', action: () => { window.openManualModal(); this.menuContainer.setVisible(false); this.menuBgOverlay.setVisible(false); } },
+            { text: '🚪 登出大廳', action: () => { 
+                window.leaveCafe(); 
+                if (window.GameLogic.currentUser) {
+                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                        module.remove(module.ref(window.GameLogic.db, `onlinePlayers/${window.GameLogic.currentUser.uid}`));
+                    });
+                }
+                window.signOut(window.auth); 
+                this.menuContainer.setVisible(false); 
+                this.menuBgOverlay.setVisible(false); 
+            } }
         ];
 
         menuOptions.forEach((opt, idx) => {
@@ -805,6 +1005,9 @@ class UIScene extends Phaser.Scene {
         
         this.scale.on('resize', this.resizeUI, this);
         this.resizeUI(this.scale.gameSize);
+
+        // 如果未讀訊息在此場景建立前就有了，初始化 Glow
+        window.updateUnreadGlow();
     }
 
     resizeUI(gameSize) {
@@ -1768,6 +1971,9 @@ document.getElementById("save-edit-btn").addEventListener("click", () => {
         if (window.GameLogic.currentScene === "cafe") {
             update(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { name: newData.name, color: newData.color });
         }
+        // 更新全域在線名稱
+        update(ref(db, `onlinePlayers/${window.GameLogic.currentUser.uid}`), { name: newData.name, color: newData.color });
+        
         showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid);
     });
 });
@@ -1803,18 +2009,29 @@ function listenToChat() {
         const chats = snapshot.val();
         if (chats) {
             let lastMsg = "";
-            Object.values(chats).forEach(c => {
-                chatBox.innerHTML += `<div style="margin-bottom: 4px;"><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg} <span style="font-size:10px; color:#bbb; margin-left:8px;">${c.date||''} ${c.time||''}</span></div>`;
-                lastMsg = `${c.name}：${c.msg}`; 
+            let html = "";
+            
+            let chatArray = Object.values(chats);
+            if (chatArray.length > 0) {
+                let latest = chatArray[chatArray.length - 1];
+                lastMsg = `${latest.name}：${latest.msg}`;
+            }
+
+            // 修改：反轉陣列，最新訊息排在最上方
+            chatArray.reverse().forEach(c => {
+                html += `<div style="margin-bottom: 4px;"><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg} <span style="font-size:10px; color:#bbb; margin-left:8px;">${c.date||''} ${c.time||''}</span></div>`;
             });
             
+            chatBox.innerHTML = html;
+
             const topBar = document.getElementById("top-notification-bar");
             if (topBar && lastMsg) {
                 topBar.innerText = `💬 最新發言｜ ${lastMsg}`;
             }
 
+            // 修改：最新訊息在頂部，因此強制卷軸保持最上
             requestAnimationFrame(() => {
-                setTimeout(() => { chatBox.scrollTop = chatBox.scrollHeight; }, 10);
+                setTimeout(() => { chatBox.scrollTop = 0; }, 10);
             });
         }
     });
