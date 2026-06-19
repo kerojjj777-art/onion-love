@@ -181,9 +181,6 @@ function createSystemUI() {
                 100% { transform: translate(-50%, -50%) scale(1); text-shadow: 0 0 10px orange; opacity: 0; }
             }
             .flash-text { animation: flash-orange 2s ease-out forwards; }
-            
-            @keyframes blink-blue { 0% { text-shadow: 0 0 5px #66ccff; color: #66ccff; } 50% { text-shadow: 0 0 20px #003366, 0 0 30px #003366; color: #fff; } 100% { text-shadow: 0 0 5px #66ccff; color: #66ccff; } }
-            .item-in-use-blink { animation: blink-blue 1s infinite; font-weight: bold; }
 
             #pm-chat-box { height: 250px; overflow-y: auto; background: #fffdf5; border: 1px solid var(--mucha-gold); border-radius: 4px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; font-size: 14px;}
             .pm-bubble-me { background: #fff; color: #3e2723; border-radius: 12px 12px 0 12px; padding: 8px 12px; display: inline-block; max-width: 80%; text-align: left; border: 1px solid var(--mucha-gold); box-shadow: 1px 1px 3px rgba(0,0,0,0.1); word-break: break-word; }
@@ -1017,10 +1014,10 @@ class UIScene extends Phaser.Scene {
         this.statusContainer = this.add.container(0, 0).setDepth(-2);
         this.statusBg = this.add.image(0, 0, 'status-bg').setOrigin(0, 1);
         
-        // 洋蔥頭人像 (等等在 resizeUI 放大)
+        // 洋蔥頭人像
         this.portrait = this.add.sprite(0, 0, 'onion', 0);
         
-        // 新增：顯示暱稱與等級
+        // 顯示暱稱與等級 (根據歷史要求拔除括號)
         this.nameLevelText = this.add.text(0, 0, '初心者 Lv.1', { 
             fontSize: '14px', 
             color: '#3e2723', 
@@ -1044,8 +1041,9 @@ class UIScene extends Phaser.Scene {
             fontFamily: 'Georgia' 
         }).setOrigin(0.5).setInteractive();
 
-        // 裝備閃爍專用 Tween 變數
+        // 動畫專用 Tween 變數 (修正 .node 報錯，改回 Phaser 引擎動畫)
         this.equipBlinkTween = null;
+        this.statusBlinkTween = null;
 
         // 點擊裝備欄位取消裝備功能
         this.equipText.on('pointerdown', () => {
@@ -1161,23 +1159,19 @@ class UIScene extends Phaser.Scene {
     }
 
     update() {
-        // 更新暱稱與等級
+        // 更新暱稱與等級 (拔除括號)
         if (window.GameLogic.myProfile) {
             let p = window.GameLogic.myProfile;
             this.nameLevelText.setText(`${p.name || '匿名'} Lv.${p.level || 1}`);
         }
 
-        // UI 狀態同步更新
+        // --- 裝備欄文字閃爍更新 (改回 Phaser 原生 Tween 防報錯) ---
         if (window.GameLogic.armedItemState) {
             this.equipText.setText('水球');
             if (!this.equipBlinkTween) {
                 this.equipText.setColor('#66ccff');
                 this.equipBlinkTween = this.tweens.add({
-                    targets: this.equipText,
-                    alpha: 0.3,
-                    yoyo: true,
-                    repeat: -1,
-                    duration: 500
+                    targets: this.equipText, alpha: 0.3, yoyo: true, repeat: -1, duration: 500
                 });
             }
         } else {
@@ -1190,16 +1184,32 @@ class UIScene extends Phaser.Scene {
             }
         }
 
+        // --- 狀態欄文字閃爍更新 (紅色閃爍要求) ---
         let ms = this.scene.manager.getScene('MainScene');
+        let currentStatus = '沒怎樣';
+        let isStatusActive = false;
+
         if (ms && ms.localPlayer) {
-            if (ms.localPlayer.isStunned) {
-                this.statusText.setText('濕身中');
-            } else if (ms.localPlayer.isSweeping) {
-                this.statusText.setText('打掃中');
-            } else if (ms.localPlayer.isThrowing) {
-                this.statusText.setText('攻擊中');
-            } else {
-                this.statusText.setText('沒怎樣');
+            if (ms.localPlayer.isStunned) { currentStatus = '濕身中'; isStatusActive = true; } 
+            else if (ms.localPlayer.isSweeping) { currentStatus = '打掃中'; isStatusActive = true; } 
+            else if (ms.localPlayer.isThrowing) { currentStatus = '攻擊中'; isStatusActive = true; }
+        }
+        
+        this.statusText.setText(currentStatus);
+
+        if (isStatusActive) {
+            if (!this.statusBlinkTween) {
+                this.statusText.setColor('#ff4444'); // 紅色警告色
+                this.statusBlinkTween = this.tweens.add({
+                    targets: this.statusText, alpha: 0.3, yoyo: true, repeat: -1, duration: 500
+                });
+            }
+        } else {
+            if (this.statusBlinkTween) {
+                this.statusBlinkTween.stop();
+                this.statusBlinkTween = null;
+                this.statusText.setAlpha(1);
+                this.statusText.setColor('#3e2723'); // 恢復預設褐色
             }
         }
     }
@@ -1210,7 +1220,7 @@ class UIScene extends Phaser.Scene {
         const isPortrait = gameSize.height > gameSize.width;
         const bottomOffset = isPortrait ? 120 : 20; 
 
-        // --- 1. 先定位搖桿 (固定在左下角舒適區) ---
+        // --- 1. 定位搖桿 (固定在左下角舒適區) ---
         const joystickX = 90;
         const joystickY = gameSize.height - 90 - (isPortrait ? 80 : 0);
         this.joyStick.setPosition(joystickX, joystickY);
@@ -1219,39 +1229,41 @@ class UIScene extends Phaser.Scene {
         if (this.joyStick.thumb) this.joyStick.thumb.setDepth(10);
 
         // --- 2. 動態縮放狀態欄底圖 ---
-        // 配合這張較寬的 16:9 比例圖檔，我們讓最大寬度稍微放寬到 380px，或螢幕寬度的 45%
-        const targetWidth = Math.min(gameSize.width * 0.45, 380);
+        // 新圖檔稍微偏長方形，將最大寬度設為 320px
+        const targetWidth = Math.min(gameSize.width * 0.45, 320);
         const scaleRatio = targetWidth / this.statusBg.width;
 
         // 套用縮放比例
         this.statusBg.setScale(scaleRatio);
         
-        // 依照要求，洋蔥人頭像放大，套用 1.8 倍並跟隨整體縮放
-        this.portrait.setScale(1.8 * scaleRatio);
+        // 洋蔥人頭像放大，套用 1.6 倍，讓他填滿上方的圓拱
+        this.portrait.setScale(1.6 * scaleRatio);
 
         const bgW = this.statusBg.displayWidth;
         const bgH = this.statusBg.displayHeight;
 
         // --- 3. 定位角色狀態基底 Container ---
+        // 置於搖桿上方，並靠左對齊
         const statusX = 20;
-        const statusY = joystickY - 60; // 維持在搖桿上方
+        const statusY = joystickY - 60; 
         this.statusContainer.setPosition(statusX, statusY);
 
-        // --- 重新定位內部元件 (基於原點在左下角 0, 1 的相對座標) ---
-        // 1. 洋蔥頭像 (置中於左側大拱門內，稍微偏上以留空間給名字)
-        this.portrait.setPosition(bgW * 0.25, -bgH * 0.55);
+        // --- 重新定位內部元件 (基於原點在左下角 0, 1) ---
         
-        // 2. 暱稱與等級 (位於左下角的長條框內)
-        this.nameLevelText.setPosition(bgW * 0.24, -bgH * 0.16);
-        this.nameLevelText.setFontSize(`${Math.max(12, 16 * scaleRatio)}px`);
+        // 1. 洋蔥頭像 (置中於頂端大圓框內)
+        this.portrait.setPosition(bgW * 0.5, -bgH * 0.62);
         
-        // 3. 狀態欄文字 (位於右上角框內中心，約佔整體寬度 73%，高度 65%)
-        this.statusText.setPosition(bgW * 0.73, -bgH * 0.65);
-        this.statusText.setFontSize(`${Math.max(14, 18 * scaleRatio)}px`); 
+        // 2. 暱稱與等級 (位於最底端長條框中央)
+        this.nameLevelText.setPosition(bgW * 0.5, -bgH * 0.13);
+        this.nameLevelText.setFontSize(`${Math.max(16, 20 * scaleRatio)}px`);
+        
+        // 3. 狀態欄文字 (位於左邊小框內，因標籤靠左，所以數值放稍微偏右，約 32%)
+        this.statusText.setPosition(bgW * 0.32, -bgH * 0.30);
+        this.statusText.setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); 
 
-        // 4. 裝備欄文字 (位於右下角框內中心，約佔整體寬度 73%，高度 25%)
-        this.equipText.setPosition(bgW * 0.73, -bgH * 0.25);
-        this.equipText.setFontSize(`${Math.max(14, 18 * scaleRatio)}px`);
+        // 4. 裝備欄文字 (位於右邊小框內，數值放稍微偏右，約 75%)
+        this.equipText.setPosition(bgW * 0.75, -bgH * 0.30);
+        this.equipText.setFontSize(`${Math.max(16, 20 * scaleRatio)}px`);
 
         // --- 4. 定位右側按鈕群與選單 (保持現有邏輯) ---
         this.btnA.setPosition(gameSize.width - safeMargin, gameSize.height - safeMargin - bottomOffset + 20);
@@ -1779,7 +1791,8 @@ class MainScene extends Phaser.Scene {
     updatePlayerEntity(entity, pData) {
         let sx = entity.sprite.x; let sy = entity.sprite.y;
         
-        let displayName = `${pData.name || '匿名'} (Lv.${pData.level || 1})`;
+        // --- 根據歷史修改紀錄：全面移除玩家頭頂顯示的括號 ---
+        let displayName = `${pData.name || '匿名'} Lv.${pData.level || 1}`;
         entity.nameText.setText(displayName);
         if(pData.color) entity.nameText.setColor(pData.color);
 
