@@ -20,10 +20,11 @@ const db = getDatabase(app);
 window.GameLogic = {
     currentUser: null,
     currentScene: "doghouse",
-    myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0 },
+    myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0, inventoryOrder: [] },
     cafePlayers: {},
     onlinePlayers: {}, 
     cafeFurniture: {},
+    doghouseFurniture: {},
     unreadPMs: {}, 
     placingFurnitureKey: null, 
     phaserGame: null,
@@ -35,7 +36,8 @@ window.GameLogic = {
     currentTargetSprite: null,
     currentTargetType: null,
     muteSFX: false,
-    currentTrackIdx: 0 
+    currentTrackIdx: 0,
+    inventoryEditMode: false
 };
 let cafeUnsubscribe = null;
 let profileViewingUid = null;
@@ -52,7 +54,7 @@ window.auth = auth;
 window.updateBGMVolume = function(val) {
     document.getElementById('bgm-vol-text').innerText = val + '%';
     if (window.GameLogic.phaserGame) {
-        let playlist = ['bgm', 'bgm-heart'];
+        let playlist = ['bgm', 'bgm-heart', 'bgm-inside'];
         playlist.forEach(k => {
             let sndList = window.GameLogic.phaserGame.sound.getAll(k);
             sndList.forEach(snd => snd.setVolume(val / 100));
@@ -83,7 +85,8 @@ window.playSFX = function(scene, key) {
 window.changeTrack = function(dir) {
     let playlist = [
         { key: 'bgm', title: 'Sweet-Onion', cover: 'Sweet-Onion.png' },
-        { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' }
+        { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' },
+        { key: 'bgm-inside', title: 'Inside-of-Onion', cover: 'Inside-of-Onion.png' }
     ];
     window.GameLogic.currentTrackIdx = ((window.GameLogic.currentTrackIdx || 0) + dir + playlist.length) % playlist.length;
     let track = playlist[window.GameLogic.currentTrackIdx];
@@ -107,6 +110,7 @@ window.changeTrack = function(dir) {
         // 徹底清除舊有音軌，防止無限堆疊播放 Bug
         window.GameLogic.phaserGame.sound.removeByKey('bgm');
         window.GameLogic.phaserGame.sound.removeByKey('bgm-heart');
+        window.GameLogic.phaserGame.sound.removeByKey('bgm-inside');
 
         window.GameLogic.phaserGame.sound.add(track.key, { loop: true, volume: vol }).play();
     }
@@ -177,9 +181,16 @@ function createSystemUI() {
             
             .sprite-waterball { width: 50px; height: 50px; background: url('shop-water-ball.png') left center; animation: play-waterball 0.8s steps(8) infinite; margin-bottom: 5px; }
             .sprite-onion-phone { width: 50px; height: 50px; background: url('tool-onion-phone.png') left center; animation: play-onion-phone 0.8s steps(8) infinite; margin-bottom: 5px; }
+            .sprite-magic-gap { width: 50px; height: 50px; background: url('magic-gap.png') left center; animation: play-magic-gap 0.8s steps(8) infinite; margin-bottom: 5px; }
+            .sprite-music-box { width: 50px; height: 50px; background: url('music-box.png') left center; animation: play-music-box 0.8s steps(8) infinite; margin-bottom: 5px; }
+            .sprite-magic-gap-big { width: 300px; height: 300px; background: url('magic-gap-big.png') left center; animation: play-magic-gap-big 0.8s steps(8) infinite; margin: 0 auto; display: block; }
             
             @keyframes play-waterball { 100% { background-position: -400px; } }
             @keyframes play-onion-phone { 100% { background-position: -400px; } }
+            @keyframes play-magic-gap { 100% { background-position: -400px; } }
+            @keyframes play-music-box { 100% { background-position: -400px; } }
+            @keyframes play-magic-gap-big { 100% { background-position: -2400px; } }
+            
             @keyframes flash-orange {
                 0% { transform: translate(-50%, -50%) scale(1); text-shadow: 0 0 10px orange; opacity: 1; }
                 50% { transform: translate(-50%, -50%) scale(1.2); text-shadow: 0 0 30px #ffcc00, 0 0 50px orange; opacity: 1; }
@@ -302,7 +313,7 @@ function createSystemUI() {
         
         <div id="portal-modal" class="modal" style="z-index: 260; padding: 0; overflow: hidden; background: #2a1b12;">
             <div style="background:#2a1b12; text-align:center; position:relative; border-bottom: 2px solid var(--mucha-gold); padding: 10px;">
-                <img src="magic-gap-big.png" style="width:100%; display:block;" alt="傳送門">
+                <div class="sprite-magic-gap-big"></div>
             </div>
             <div style="padding:15px; background: var(--mucha-paper);">
                 <h3 style="margin-top:0; color:var(--mucha-brown);">🌀 空間傳送門</h3>
@@ -329,8 +340,12 @@ function createSystemUI() {
                 </div>
             </div>
         </div>
+        
         <div id="inventory-modal" class="modal">
-            <h3>🎒 我的給西</h3>
+            <div id="inventory-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--mucha-gold); padding-bottom: 5px; margin-bottom: 15px;">
+                <h3 style="margin:0; border:none; color: var(--mucha-brown);">🎒 我的給西</h3>
+                <button id="inventory-edit-btn" class="btn-edit" onclick="window.toggleInventoryEdit()" style="padding:4px 8px; font-size:12px;">編輯排序</button>
+            </div>
             <div id="inventory-list" class="catalog-grid"></div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('inventory-modal').style.display='none'">關閉</button>
         </div>
@@ -539,13 +554,39 @@ window.stopUsingItem = function(itemName) {
     }
 };
 
+window.toggleInventoryEdit = function() {
+    window.GameLogic.inventoryEditMode = !window.GameLogic.inventoryEditMode;
+    let btn = document.getElementById('inventory-edit-btn');
+    if (btn) {
+        btn.innerText = window.GameLogic.inventoryEditMode ? '完成' : '編輯排序';
+        btn.className = window.GameLogic.inventoryEditMode ? 'btn-primary' : 'btn-edit';
+    }
+    window.openInventoryModal();
+};
+
+window.moveInvItem = function(index, dir) {
+    let order = window.GameLogic.myProfile.inventoryOrder || [];
+    if (index + dir >= 0 && index + dir < order.length) {
+        let temp = order[index];
+        order[index] = order[index + dir];
+        order[index + dir] = temp;
+        window.GameLogic.myProfile.inventoryOrder = order;
+        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+            module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventoryOrder: order });
+        });
+        window.openInventoryModal();
+    }
+};
+
 window.openInventoryModal = function() {
     const list = document.getElementById('inventory-list');
     let hasUnread = Object.keys(window.GameLogic.unreadPMs || {}).length > 0;
     let dotHtml = hasUnread ? '<div style="position:absolute; top:5px; right:5px; width:12px; height:12px; background:red; border-radius:50%; box-shadow:0 0 5px red; z-index:10;"></div>' : '';
     
-    let invHTML = `
-        <div class="catalog-item" style="position:relative;">
+    let rawItems = {};
+
+    rawItems['phone'] = `
+        <div class="catalog-item" style="position:relative; width: 100%; box-sizing: border-box;">
             ${dotHtml}
             <div class="sprite-onion-phone"></div>
             <span style="margin:5px 0;">洋蔥手機</span>
@@ -557,56 +598,82 @@ window.openInventoryModal = function() {
     let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥');
     
     keys.forEach(k => {
-        let iconHtml = "";
-        if (k === '水球') {
-            iconHtml = '<div class="sprite-waterball"></div>';
-        } else {
-            iconHtml = '<span style="font-size:24px; margin-bottom:5px;">📦</span>';
-        }
-        
+        let iconHtml = (k === '水球') ? '<div class="sprite-waterball"></div>' : '<span style="font-size:24px; margin-bottom:5px;">📦</span>';
         let isUsing = (k === '水球' && window.GameLogic.armedItemState != null);
         let itemClass = isUsing ? 'catalog-item item-in-use' : 'catalog-item';
         let btnHtml = isUsing 
             ? `<button style="padding:4px 10px; font-size:12px; background: #d9534f; color: white; border: none; border-radius: 4px; cursor: pointer;" onclick="window.stopUsingItem('${k}')">暫停使用</button>`
             : `<button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.useItem('${k}')">使用</button>`;
         
-        invHTML += `
-            <div class="${itemClass}">
+        rawItems[k] = `
+            <div class="${itemClass}" style="width: 100%; box-sizing: border-box;">
                 ${iconHtml}
                 <span style="margin:5px 0;">${k} x${inv[k]}</span>
                 ${btnHtml}
             </div>`;
     });
     
-    // --- 新增目錄工具清單 (取代原本的選單功能) ---
-    invHTML += `
-        <div class="catalog-item">
-            <img src="magic-gap.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;" alt="傳送門">
+    rawItems['portal'] = `
+        <div class="catalog-item" style="width: 100%; box-sizing: border-box;">
+            <div class="sprite-magic-gap"></div>
             <span style="margin:5px 0;">傳送門</span>
             <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.openPortalModal()">開啟</button>
         </div>
-        <div class="catalog-item">
+    `;
+    rawItems['profile'] = `
+        <div class="catalog-item" style="width: 100%; box-sizing: border-box;">
             <span style="font-size:32px; margin-bottom:5px; height:50px; display:flex; align-items:center; justify-content:center;">🆔</span>
             <span style="margin:5px 0;">洋蔥身分證</span>
             <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); document.getElementById('inventory-modal').style.display='none';">查看</button>
         </div>
-        <div class="catalog-item">
-            <img src="music-box.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;" alt="🎵" onerror="this.src=''; this.alt='🎵'">
+    `;
+    rawItems['music'] = `
+        <div class="catalog-item" style="width: 100%; box-sizing: border-box;">
+            <div class="sprite-music-box"></div>
             <span style="margin:5px 0;">蔥Music</span>
             <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="document.getElementById('settings-modal').style.display='block'; document.getElementById('inventory-modal').style.display='none';">播放</button>
         </div>
-        <div class="catalog-item">
+    `;
+    rawItems['manual'] = `
+        <div class="catalog-item" style="width: 100%; box-sizing: border-box;">
             <span style="font-size:32px; margin-bottom:5px; height:50px; display:flex; align-items:center; justify-content:center;">📖</span>
             <span style="margin:5px 0;">說明書</span>
             <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.openManualModal(); document.getElementById('inventory-modal').style.display='none';">閱讀</button>
         </div>
-        <div class="catalog-item">
+    `;
+    rawItems['logout'] = `
+        <div class="catalog-item" style="width: 100%; box-sizing: border-box;">
             <span style="font-size:32px; margin-bottom:5px; height:50px; display:flex; align-items:center; justify-content:center;">🚪</span>
             <span style="margin:5px 0;">登出大廳</span>
             <button style="padding:4px 10px; font-size:12px; background:#d9534f; color:white; border:none; border-radius:4px; cursor:pointer;" onclick="window.leaveCafe(); if (window.GameLogic.currentUser) { import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.remove(module.ref(window.GameLogic.db, 'onlinePlayers/' + window.GameLogic.currentUser.uid)); }); } window.signOut(window.auth); document.getElementById('inventory-modal').style.display='none';">登出</button>
         </div>
     `;
+
+    let activeKeys = Object.keys(rawItems);
+    let order = window.GameLogic.myProfile.inventoryOrder || [];
+    let finalOrder = order.filter(k => activeKeys.includes(k));
     
+    activeKeys.forEach(k => {
+        if (!finalOrder.includes(k)) finalOrder.push(k);
+    });
+    window.GameLogic.myProfile.inventoryOrder = finalOrder;
+
+    let invHTML = '';
+    finalOrder.forEach((k, i) => {
+        let inner = rawItems[k];
+        if (window.GameLogic.inventoryEditMode) {
+            invHTML += `<div style="display:flex; flex-direction:column; align-items:center; background: rgba(0,0,0,0.05); padding: 5px; border-radius: 8px;">
+                            ${inner}
+                            <div style="display:flex; justify-content:space-around; width:100%; margin-top:5px;">
+                                <button class="btn-secondary" style="padding:2px 10px;" onclick="window.moveInvItem(${i}, -1)" ${i === 0 ? 'disabled' : ''}>◀</button>
+                                <button class="btn-secondary" style="padding:2px 10px;" onclick="window.moveInvItem(${i}, 1)" ${i === finalOrder.length - 1 ? 'disabled' : ''}>▶</button>
+                            </div>
+                        </div>`;
+        } else {
+            invHTML += inner;
+        }
+    });
+
     list.innerHTML = invHTML;
     document.getElementById('inventory-modal').style.display = 'block';
 };
@@ -820,7 +887,8 @@ onAuthStateChanged(auth, async (user) => {
             // 根據玩家過往喜好更新音樂播放器 UI
             let playlist = [
                 { key: 'bgm', title: 'Sweet-Onion', cover: 'Sweet-Onion.png' },
-                { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' }
+                { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' },
+                { key: 'bgm-inside', title: 'Inside-of-Onion', cover: 'Inside-of-Onion.png' }
             ];
             let track = playlist[window.GameLogic.currentTrackIdx];
             let coverEl = document.getElementById('music-cover');
@@ -1004,6 +1072,7 @@ class BootScene extends Phaser.Scene {
         this.load.image('fridge', 'fridge.png');
         this.load.image('memory', 'memory.png');
         this.load.image('shrine', 'shrine.png'); 
+        this.load.image('doghouse-bed', 'doghouse-bed.png'); 
         this.load.spritesheet('onion-skin', 'onion-skin-sprite.png', { frameWidth: 50, frameHeight: 50 });
         this.load.spritesheet('onion-skin-old', 'onion-skin-old-sprite.png', { frameWidth: 65, frameHeight: 65 });
         this.load.spritesheet('onion', 'onion-sprite.png', { frameWidth: 75, frameHeight: 75 });
@@ -1013,7 +1082,9 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('onion-idle', 'onion-idle.png', { frameWidth: 75, frameHeight: 75 });
         this.load.audio('bgm', 'Sweet-Onion.mp3');
         this.load.audio('bgm-heart', 'Onion-Heart.mp3');
+        this.load.audio('bgm-inside', 'Inside-of-Onion.mp3');
         this.load.spritesheet('onion-clean', 'onion-clean.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.spritesheet('onion-sleep', 'onion-sleeping.png', { frameWidth: 75, frameHeight: 75 });
         this.load.image('bg7Eonion', '7eonion-bg.jpg'); 
         this.load.image('storeManager', 'store-manager.png');
         this.load.spritesheet('onion-throw', 'onion-throw.png', { frameWidth: 90, frameHeight: 75 });
@@ -1045,6 +1116,7 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'wet', frames: this.anims.generateFrameNumbers('onion-wet'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'coin-anim', frames: this.anims.generateFrameNumbers('made-coin'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'dummy-hit', frames: this.anims.generateFrameNumbers('dummy-wet'), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'sleep', frames: this.anims.generateFrameNumbers('onion-sleep'), frameRate: 8, repeat: -1 });
       
         this.scene.launch('UIScene');
         this.scene.bringToTop('UIScene'); 
@@ -1190,7 +1262,8 @@ class UIScene extends Phaser.Scene {
         let isStatusActive = false;
 
         if (ms && ms.localPlayer) {
-            if (ms.localPlayer.isStunned) { currentStatus = '濕身中'; isStatusActive = true; } 
+            if (ms.localPlayer.isSleeping) { currentStatus = '補眠中'; isStatusActive = true; }
+            else if (ms.localPlayer.isStunned) { currentStatus = '濕身中'; isStatusActive = true; } 
             else if (ms.localPlayer.isSweeping) { currentStatus = '打掃中'; isStatusActive = true; } 
             else if (ms.localPlayer.isThrowing) { currentStatus = '攻擊中'; isStatusActive = true; }
         }
@@ -1289,11 +1362,13 @@ class MainScene extends Phaser.Scene {
     constructor() { super('MainScene'); }
     
     create() {
-        let currentTrackKey = (window.GameLogic.currentTrackIdx === 1) ? 'bgm-heart' : 'bgm';
-        let otherTrackKey = (window.GameLogic.currentTrackIdx === 1) ? 'bgm' : 'bgm-heart';
+        let trackKeys = ['bgm', 'bgm-heart', 'bgm-inside'];
+        let currentTrackKey = trackKeys[window.GameLogic.currentTrackIdx] || 'bgm';
         
         // 切換場景時，乾淨移除沒播放的其餘音軌 (避免音樂堆疊 Bug)
-        this.sound.removeByKey(otherTrackKey);
+        trackKeys.forEach(k => {
+            if (k !== currentTrackKey) this.sound.removeByKey(k);
+        });
         
         let currentSnd = this.sound.get(currentTrackKey);
         if (!currentSnd || !currentSnd.isPlaying) {
@@ -1386,6 +1461,9 @@ class MainScene extends Phaser.Scene {
             });
         } else if (this.sceneName === "doghouse") {
             this.add.image(mapW/2, mapH/2, 'bgDoghouse').setDisplaySize(mapW, mapH);
+            this.doghouseFurnListener = onValue(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}/doghouseFurniture`), (snap) => {
+                window.GameLogic.doghouseFurniture = snap.val() || {};
+            });
         } else if (this.sceneName === "farm") {
             this.add.image(mapW/2, mapH/2, 'bgFarm').setDisplaySize(mapW, mapH);
         } else if (this.sceneName === "shrine") {
@@ -1464,6 +1542,7 @@ class MainScene extends Phaser.Scene {
         
         this.localPlayer = this.createPlayerEntity(startX, startY, window.GameLogic.myProfile, true);
         this.localPlayer.isSweeping = false;
+        this.localPlayer.isSleeping = false;
 
         this.tweens.add({
             targets: this.localPlayer.sprite,
@@ -1517,12 +1596,35 @@ class MainScene extends Phaser.Scene {
         this.qteContainer.add([qteBg, this.qteBar, qteLabel]);
         if (this.minimap) this.minimap.ignore([qteBg, this.qteBar, qteLabel, this.qteContainer]);
 
+        // Sleep Interaction setup
+        this.sleepTopBg = this.add.graphics().setDepth(150).setVisible(false);
+        this.sleepTopText = this.add.text(0, 0, '按A起床', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#fff', backgroundColor: 'rgba(74, 93, 78, 0.8)', padding: {x:8, y:4} }).setOrigin(0.5).setDepth(151).setVisible(false);
+        this.sleepBotBg = this.add.graphics().setDepth(150).setVisible(false);
+        this.sleepBotText = this.add.text(0, 0, 'zzZ', { fontSize: '16px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#3e2723' }).setOrigin(0.5).setDepth(151).setVisible(false);
+        this.sleepZzzArray = ['zzZ', 'Zzz', 'zZz'];
+        this.sleepZzzIdx = 0;
+        this.time.addEvent({
+            delay: 1000,
+            callback: () => {
+                if (this.localPlayer && this.localPlayer.isSleeping) {
+                    this.sleepZzzIdx = (this.sleepZzzIdx + 1) % 3;
+                    this.sleepBotText.setText(this.sleepZzzArray[this.sleepZzzIdx]);
+                    let bounds = this.sleepBotText.getBounds();
+                    let w = bounds.width + 16, h = bounds.height + 12;
+                    let x = this.sleepBotText.x - w/2, y = this.sleepBotText.y - h/2;
+                    this.sleepBotBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(x, y, w, h, 8).strokeRoundedRect(x, y, w, h, 8);
+                }
+            },
+            loop: true
+        });
+
         this.events.on('action_A_place', () => {
             let key = window.GameLogic.placingFurnitureKey;
             if(key && this.furnitureSprites[key]) {
                 let f = this.furnitureSprites[key];
                 f.sprite.setVelocity(0, 0); 
-                update(ref(window.GameLogic.db, `cafeFurniture/${key}`), { 
+                let path = this.isCafe ? `cafeFurniture/${key}` : `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}`;
+                update(ref(window.GameLogic.db, path), { 
                     locked: true, x: f.sprite.x, y: f.sprite.y, ownerUid: window.GameLogic.currentUser.uid 
                 });
                 window.GameLogic.placingFurnitureKey = null;
@@ -1531,6 +1633,35 @@ class MainScene extends Phaser.Scene {
         });
 
         this.events.on('action_A_short', () => {
+            if (this.localPlayer.isSleeping) {
+                this.localPlayer.isSleeping = false;
+                this.sleepTopBg.setVisible(false); this.sleepTopText.setVisible(false);
+                this.sleepBotBg.setVisible(false); this.sleepBotText.setVisible(false);
+                this.localPlayer.sprite.play('idle');
+                return;
+            }
+
+            if (this.sceneName === 'doghouse') {
+                for (let key in this.furnitureSprites) {
+                    if (key.includes('bed')) {
+                        let f = this.furnitureSprites[key];
+                        if (f.sprite.isLocked && Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y) < 90) {
+                            this.localPlayer.isSleeping = true;
+                            this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y);
+                            this.localPlayer.sprite.play('sleep', true);
+                            this.sleepTopText.setVisible(true).setPosition(f.sprite.x, f.sprite.y - 100);
+                            this.sleepBotText.setVisible(true).setPosition(f.sprite.x, f.sprite.y - 65);
+                            this.sleepBotBg.setVisible(true);
+                            let bounds = this.sleepBotText.getBounds();
+                            let w = bounds.width + 16, h = bounds.height + 12;
+                            let x = this.sleepBotText.x - w/2, y = this.sleepBotText.y - h/2;
+                            this.sleepBotBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(x, y, w, h, 8).strokeRoundedRect(x, y, w, h, 8);
+                            return;
+                        }
+                    }
+                }
+            }
+
             if (window.GameLogic.armedItemState === 'ready') {
                 let inv = window.GameLogic.myProfile.inventory || {};
                 inv['水球'] = Math.max(0, (inv['水球'] || 0) - 1);
@@ -1638,6 +1769,7 @@ class MainScene extends Phaser.Scene {
                 window.GameLogic.armedItemState = 'ready';
                 return;
             }
+            if (this.localPlayer.isSleeping) return;
             
             if (!this.localPlayer.isSweeping && this.closestTrash) {
                 this.localPlayer.isSweeping = true;
@@ -1737,6 +1869,7 @@ class MainScene extends Phaser.Scene {
             if (this.hitListener) this.hitListener();
             if (this.dummyHitListener) this.dummyHitListener();
             if (this.playersHitListener) this.playersHitListener();
+            if (this.doghouseFurnListener) this.doghouseFurnListener();
         });
     }
 
@@ -1808,7 +1941,7 @@ class MainScene extends Phaser.Scene {
     }
 
     createFurniture(key, data) {
-        let imgKey = key.includes('fridge') ? 'fridge' : (key.includes('shrine') ? 'shrine' : (key.includes('dummy') ? 'dummy' : 'memory'));
+        let imgKey = key.includes('fridge') ? 'fridge' : (key.includes('shrine') ? 'shrine' : (key.includes('dummy') ? 'dummy' : (key.includes('bed') ? 'doghouse-bed' : 'memory')));
         let f = { sprite: this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true) };
         f.sprite.isLocked = data.locked;
 
@@ -1882,6 +2015,9 @@ class MainScene extends Phaser.Scene {
             this.updateQTEBar(this.qteProgress);
             if (this.closestTrash) this.qteContainer.setPosition(this.closestTrash.x, this.closestTrash.y + 40);
             this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
+        } else if (this.localPlayer.isSleeping) {
+            this.localPlayer.sprite.setVelocity(0, 0);
+            this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
         } else if (this.localPlayer.isStunned) {
             this.localPlayer.sprite.setVelocity(0, 0);
             this.localPlayer.sprite.play('wet', true);
@@ -1903,7 +2039,7 @@ class MainScene extends Phaser.Scene {
                 if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; } 
             }
 
-            let isPlacing = window.GameLogic.placingFurnitureKey !== null && this.isCafe;
+            let isPlacing = window.GameLogic.placingFurnitureKey !== null && (this.isCafe || this.sceneName === 'doghouse');
 
             if (isPlacing) {
                 this.localPlayer.sprite.setVelocity(0, 0).play('idle', true);
@@ -1914,13 +2050,17 @@ class MainScene extends Phaser.Scene {
                     this.placePrompt.setPosition(f.sprite.x, f.sprite.y - 80).setVisible(true);
                     if (vx !== 0 || vy !== 0) {
                         if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) {
-                            update(ref(window.GameLogic.db, `cafeFurniture/${window.GameLogic.placingFurnitureKey}`), { x: f.sprite.x, y: f.sprite.y });
+                            let path = this.isCafe ? `cafeFurniture/${window.GameLogic.placingFurnitureKey}` : `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${window.GameLogic.placingFurnitureKey}`;
+                            update(ref(window.GameLogic.db, path), { x: f.sprite.x, y: f.sprite.y });
                             this.lastSyncTime = Date.now();
                         }
                     }
-                } else if (!window.GameLogic.cafeFurniture[window.GameLogic.placingFurnitureKey]) {
-                    window.GameLogic.placingFurnitureKey = null;
-                    this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
+                } else {
+                    let targetData = this.isCafe ? window.GameLogic.cafeFurniture : window.GameLogic.doghouseFurniture;
+                    if (!targetData[window.GameLogic.placingFurnitureKey]) {
+                        window.GameLogic.placingFurnitureKey = null;
+                        this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
+                    }
                 }
             } else {
                 this.placePrompt.setVisible(false);
@@ -1964,6 +2104,7 @@ class MainScene extends Phaser.Scene {
                     if (key.includes('fridge')) promptMsg = "按A打開冰箱";
                     else if (key.includes('shrine')) promptMsg = "按A參拜神龕";
                     else if (key.includes('dummy')) promptMsg = "假人洋蔥 (裝飾中)"; 
+                    else if (key.includes('bed')) promptMsg = "按A歐歐睏";
                     else promptMsg = "按A打開回憶錄"; 
                 }
             }
@@ -2084,6 +2225,47 @@ class MainScene extends Phaser.Scene {
       
         this.updatePlayerEntity(this.localPlayer, window.GameLogic.myProfile);
 
+        const furnData = this.isCafe ? window.GameLogic.cafeFurniture : (this.sceneName === 'doghouse' ? (window.GameLogic.doghouseFurniture || {}) : {});
+        for (let key in furnData) {
+            let fd = furnData[key];
+            if (!this.furnitureSprites[key]) this.furnitureSprites[key] = this.createFurniture(key, fd);
+            let f = this.furnitureSprites[key]; f.sprite.isLocked = fd.locked;
+            if(window.GameLogic.placingFurnitureKey !== key) { f.sprite.x = Phaser.Math.Linear(f.sprite.x, fd.x, 0.3); f.sprite.y = Phaser.Math.Linear(f.sprite.y, fd.y, 0.3); }
+            f.sprite.setAlpha(!fd.locked ? 0.6 : 1);
+
+            if (key.includes('dummy') && f.bubbleBg) {
+                f.bubbleBg.setVisible(true); f.bubbleText.setVisible(true);
+                
+                if (f.sprite.isStunned) {
+                    f.bubbleText.setText("真的打我QAQ");
+                    f.isHit = true;
+                } else {
+                    if (f.isHit) { f.isHit = false; f.lastMsgTime = 0; } 
+                    if (time - f.lastMsgTime > 4000) { 
+                        f.lastMsgTime = time;
+                        f.bubbleText.setText(f.dummyMsgs[f.msgIndex]);
+                        f.msgIndex = (f.msgIndex + 1) % f.dummyMsgs.length;
+                    }
+                }
+                let sx = f.sprite.x; let sy = f.sprite.y;
+                const bounds = f.bubbleText.getBounds(); const boxWidth = bounds.width + 16, boxHeight = bounds.height + 12, boxX = sx - boxWidth / 2, boxY = sy - 60 - boxHeight; 
+                f.bubbleBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(boxX, boxY, boxWidth, boxHeight, 6).strokeRoundedRect(boxX, boxY, boxWidth, boxHeight, 6);
+                f.bubbleText.setPosition(sx, boxY + boxHeight / 2);
+            }
+        }
+        for (let key in this.furnitureSprites) {
+            if (!furnData[key]) {
+                if (window.GameLogic.placingFurnitureKey === key) {
+                    window.GameLogic.placingFurnitureKey = null;
+                    this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
+                }
+                if (this.furnitureSprites[key].bubbleBg) this.furnitureSprites[key].bubbleBg.destroy();
+                if (this.furnitureSprites[key].bubbleText) this.furnitureSprites[key].bubbleText.destroy();
+                this.furnitureSprites[key].sprite.destroy(); 
+                delete this.furnitureSprites[key]; 
+            }
+        }
+
         if (this.isCafe) {
             const playersData = window.GameLogic.cafePlayers;
             for (let uid in playersData) {
@@ -2122,47 +2304,6 @@ class MainScene extends Phaser.Scene {
             }
             for (let uid in this.otherPlayers) {
                 if (!playersData[uid]) { this.otherPlayers[uid].sprite.destroy(); this.otherPlayers[uid].nameBg.destroy(); this.otherPlayers[uid].nameText.destroy(); this.otherPlayers[uid].bubbleBg.destroy(); this.otherPlayers[uid].bubbleText.destroy(); delete this.otherPlayers[uid]; }
-            }
-
-            const furnData = window.GameLogic.cafeFurniture;
-            for (let key in furnData) {
-                let fd = furnData[key];
-                if (!this.furnitureSprites[key]) this.furnitureSprites[key] = this.createFurniture(key, fd);
-                let f = this.furnitureSprites[key]; f.sprite.isLocked = fd.locked;
-                if(window.GameLogic.placingFurnitureKey !== key) { f.sprite.x = Phaser.Math.Linear(f.sprite.x, fd.x, 0.3); f.sprite.y = Phaser.Math.Linear(f.sprite.y, fd.y, 0.3); }
-                f.sprite.setAlpha(!fd.locked ? 0.6 : 1);
-
-                if (key.includes('dummy') && f.bubbleBg) {
-                    f.bubbleBg.setVisible(true); f.bubbleText.setVisible(true);
-                    
-                    if (f.sprite.isStunned) {
-                        f.bubbleText.setText("真的打我QAQ");
-                        f.isHit = true;
-                    } else {
-                        if (f.isHit) { f.isHit = false; f.lastMsgTime = 0; } 
-                        if (time - f.lastMsgTime > 4000) { 
-                            f.lastMsgTime = time;
-                            f.bubbleText.setText(f.dummyMsgs[f.msgIndex]);
-                            f.msgIndex = (f.msgIndex + 1) % f.dummyMsgs.length;
-                        }
-                    }
-                    let sx = f.sprite.x; let sy = f.sprite.y;
-                    const bounds = f.bubbleText.getBounds(); const boxWidth = bounds.width + 16, boxHeight = bounds.height + 12, boxX = sx - boxWidth / 2, boxY = sy - 60 - boxHeight; 
-                    f.bubbleBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(boxX, boxY, boxWidth, boxHeight, 6).strokeRoundedRect(boxX, boxY, boxWidth, boxHeight, 6);
-                    f.bubbleText.setPosition(sx, boxY + boxHeight / 2);
-                }
-            }
-            for (let key in this.furnitureSprites) {
-                if (!furnData[key]) {
-                    if (window.GameLogic.placingFurnitureKey === key) {
-                        window.GameLogic.placingFurnitureKey = null;
-                        this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
-                    }
-                    if (this.furnitureSprites[key].bubbleBg) this.furnitureSprites[key].bubbleBg.destroy();
-                    if (this.furnitureSprites[key].bubbleText) this.furnitureSprites[key].bubbleText.destroy();
-                    this.furnitureSprites[key].sprite.destroy(); 
-                    delete this.furnitureSprites[key]; 
-                }
             }
         }
     }
@@ -2225,8 +2366,48 @@ function openFurnitureCatalog() {
             list.appendChild(div);
         });
     } else if (window.GameLogic.currentScene === "doghouse") {
-        title.innerText = "🏠 房間家具擺設 (建置中)";
-        list.innerHTML = "<div style='grid-column: span 2; text-align:center; padding: 20px; color: #888;'>此處可見自己擁有的專屬傢俱，未來將陸續更新。</div>";
+        title.innerText = "🏠 房間家具擺設";
+        const items = [
+            { key: 'bed', name: '🛏️ 狗窩床鋪', img: 'doghouse-bed.png' }
+        ];
+
+        items.forEach(item => {
+            let div = document.createElement('div'); div.className = 'catalog-item';
+            div.innerHTML = `<img src="${item.img}"><span>${item.name}</span>`;
+            div.onclick = () => {
+                modal.style.display = 'none';
+                let fData = window.GameLogic.doghouseFurniture && window.GameLogic.doghouseFurniture[item.key];
+                if (fData && fData.locked) {
+                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                        module.remove(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${item.key}`));
+                    });
+                    window.GameLogic.placingFurnitureKey = null;
+                    if(window.GameLogic.phaserGame) {
+                        let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
+                        if(scene && scene.localPlayer) {
+                            scene.cameras.main.startFollow(scene.localPlayer.sprite, true, 0.08, 0.08);
+                        }
+                    }
+                    sendBubble("傢俱收起來了!");
+                } else {
+                    let pX = 640, pY = 360; 
+                    if(window.GameLogic.phaserGame) {
+                        let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
+                        if(scene && scene.localPlayer) { pX = scene.localPlayer.sprite.x; pY = scene.localPlayer.sprite.y - 80; }
+                    }
+                    let newData = { x: pX, y: pY, locked: false, ownerUid: window.GameLogic.currentUser.uid };
+                    
+                    window.GameLogic.doghouseFurniture = window.GameLogic.doghouseFurniture || {};
+                    window.GameLogic.doghouseFurniture[item.key] = newData; 
+                    
+                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                        module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${item.key}`), newData);
+                    });
+                    window.GameLogic.placingFurnitureKey = item.key;
+                }
+            };
+            list.appendChild(div);
+        });
     }
     modal.style.display = 'block';
 }
