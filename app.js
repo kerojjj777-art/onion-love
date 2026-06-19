@@ -642,7 +642,6 @@ window.openInventoryModal = function() {
     let isEdit = window.GameLogic.inventoryEditMode;
 
     let inv = window.GameLogic.myProfile.inventory || {};
-    // 排除系統按鍵保留字，避免玩家包包中含有殘留廢棄資料(如 phone)時蓋掉原本的UI結構
     let sysKeys = ['phone', 'portal', 'profile', 'music', 'manual', 'logout'];
     let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥' && !sysKeys.includes(k));
     
@@ -663,15 +662,14 @@ window.openInventoryModal = function() {
             </div>`;
     });
     
-    // 修復洋蔥手機顯示：移至物件生成的最後，並確保拼接屬性的方式不會被上方迴圈的殘留資料覆寫
+    // 確保系統按鈕絕對正確載入
     rawItems['phone'] = `
-        <div class="catalog-item" style="position:relative; width: 100%; box-sizing: border-box;" ${isEdit ? '' : 'onclick="window.openPhoneModal()"'} >
+        <div class="catalog-item" style="position:relative; width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.openPhoneModal()"' : ''} >
             ${dotHtml}
             <div class="sprite-onion-phone"></div>
             <span style="margin:5px 0;">洋蔥手機</span>
         </div>
     `;
-
     rawItems['portal'] = `
         <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.openPortalModal()"' : ''}>
             <div class="sprite-magic-gap"></div>
@@ -704,7 +702,9 @@ window.openInventoryModal = function() {
     `;
 
     let activeKeys = Object.keys(rawItems);
-    let order = window.GameLogic.myProfile.inventoryOrder || [];
+    
+    // 增添防呆機制：確保 order 一定是陣列並且清除非字串的垃圾資料，避免出錯中斷渲染
+    let order = Array.isArray(window.GameLogic.myProfile.inventoryOrder) ? window.GameLogic.myProfile.inventoryOrder.filter(k => k && typeof k === 'string') : [];
     let finalOrder = order.filter(k => activeKeys.includes(k));
     
     activeKeys.forEach(k => {
@@ -727,6 +727,15 @@ window.openInventoryModal = function() {
             invHTML += inner;
         }
     });
+
+    // 強制寫入滾動屬性，解決介面項目無法全部顯示的 Bug
+    list.style.display = 'grid';
+    list.style.gridTemplateColumns = '1fr 1fr';
+    list.style.gap = '10px';
+    list.style.maxHeight = '60vh'; 
+    list.style.overflowY = 'auto';
+    list.style.padding = '5px';
+    list.style.alignItems = 'start'; 
 
     list.innerHTML = invHTML;
     document.getElementById('inventory-modal').style.display = 'block';
@@ -1484,10 +1493,14 @@ class UIScene extends Phaser.Scene {
 
         this.portrait.setPosition(bgW * 0.5, -bgH * 0.62);
 
-        // 新配置：經驗值條上移且加粗
-        let expY = -bgH * 0.22;
-        let expW = bgW * 0.45; 
-        let expH = 18 * scaleRatio;
+        // 暱稱與等級文字在上
+        this.nameLevelText.setPosition(bgW * 0.5, -bgH * 0.24);
+        this.nameLevelText.setFontSize(`${Math.max(14, 18 * scaleRatio)}px`);
+        
+        // 經驗值條在下，並且加長加粗
+        let expY = -bgH * 0.12;
+        let expW = bgW * 0.50; 
+        let expH = 22 * scaleRatio; // 加粗經驗條高度
         this.expBarWidth = expW;
 
         this.expBarBg.clear();
@@ -1499,10 +1512,6 @@ class UIScene extends Phaser.Scene {
 
         this.expText.setPosition(bgW * 0.5, expY);
         this.expText.setFontSize(`${Math.max(10, 13 * scaleRatio)}px`);
-        
-        // 暱稱與等級文字往下移，並調整字體比例
-        this.nameLevelText.setPosition(bgW * 0.5, -bgH * 0.10);
-        this.nameLevelText.setFontSize(`${Math.max(14, 18 * scaleRatio)}px`);
         
         this.statusText.setPosition(bgW * 0.32, -bgH * 0.30);
         this.statusText.setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); 
