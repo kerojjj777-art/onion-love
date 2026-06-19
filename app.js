@@ -1188,11 +1188,23 @@ class UIScene extends Phaser.Scene {
         let w = gameSize.width;
         let h = gameSize.height;
         
+        // 【修正點】：新增轉換器，將二次貝茲曲線轉為 Phaser 支援的三次貝茲曲線
+        const quadToCubic = (g, x0, y0, cx, cy, x1, y1) => {
+            let c1x = x0 + (2 / 3) * (cx - x0);
+            let c1y = y0 + (2 / 3) * (cy - y0);
+            let c2x = x1 + (2 / 3) * (cx - x1);
+            let c2y = y1 + (2 / 3) * (cy - y1);
+            g.bezierCurveTo(c1x, c1y, c2x, c2y, x1, y1);
+        };
+
         this.statusGraphics.beginPath();
         this.statusGraphics.moveTo(0, h);
         this.statusGraphics.lineTo(0, h - 220);
-        this.statusGraphics.quadraticCurveTo(80, h - 230, 140, h - 140);
-        this.statusGraphics.quadraticCurveTo(180, h - 60, 260, h);
+        
+        // 原本的 quadraticCurveTo 替換為 quadToCubic
+        quadToCubic(this.statusGraphics, 0, h - 220, 80, h - 230, 140, h - 140);
+        quadToCubic(this.statusGraphics, 140, h - 140, 180, h - 60, 260, h);
+        
         this.statusGraphics.closePath();
         this.statusGraphics.fillPath();
         this.statusGraphics.strokePath();
@@ -1200,12 +1212,12 @@ class UIScene extends Phaser.Scene {
         this.statusGraphics.lineStyle(2, 0x8c8371, 0.4);
         this.statusGraphics.beginPath();
         this.statusGraphics.moveTo(0, h - 190);
-        this.statusGraphics.quadraticCurveTo(60, h - 200, 110, h - 130);
+        quadToCubic(this.statusGraphics, 0, h - 190, 60, h - 200, 110, h - 130);
         this.statusGraphics.strokePath();
 
         this.statusGraphics.beginPath();
         this.statusGraphics.moveTo(0, h - 160);
-        this.statusGraphics.quadraticCurveTo(40, h - 170, 80, h - 110);
+        quadToCubic(this.statusGraphics, 0, h - 160, 40, h - 170, 80, h - 110);
         this.statusGraphics.strokePath();
 
         this.joyStick.setPosition(safeMargin + 20, gameSize.height - safeMargin - bottomOffset);
