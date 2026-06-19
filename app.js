@@ -1199,34 +1199,44 @@ class UIScene extends Phaser.Scene {
         const isPortrait = gameSize.height > gameSize.width;
         const bottomOffset = isPortrait ? 120 : 20; 
 
-        // 1. 定位角色狀態基底 Container (靠螢幕左下角)
-        this.statusContainer.setPosition(0, gameSize.height);
+        // --- 1. 動態縮放狀態欄底圖 ---
+        // 設定狀態欄的最大寬度 (例如：不要超過螢幕寬度的 40%，且最大不超過 300px)
+        const targetWidth = Math.min(gameSize.width * 0.4, 300);
+        
+        // 計算縮放比例 (目標寬度 / 原始圖片真實寬度)
+        const scaleRatio = targetWidth / this.statusBg.width;
 
-        // 2. 依據 PNG 圖檔預留位置調整排版座標 (基於 Container 內部相對座標)
-        // 圖檔尺寸參考 1080x600px，我們根據實際情況微調
+        // 套用縮放比例到圖片與頭像
+        this.statusBg.setScale(scaleRatio);
+        this.portrait.setScale(1.1 * scaleRatio); // 頭像跟著等比縮放
+
+        // 取得縮放後的實際顯示寬高
         const bgW = this.statusBg.displayWidth;
         const bgH = this.statusBg.displayHeight;
 
-        // 人像定位在左側圓圈處 (大約距 Container 左側 25%，高度 60%)
+        // --- 2. 定位角色狀態基底 Container ---
+        // 靠螢幕左下角，可以微微往內推 10px 留白
+        this.statusContainer.setPosition(10, gameSize.height - 10);
+
+        // 依據「縮放後」的尺寸重新定位內部文字與頭像 (比例維持原本設定)
         this.portrait.setPosition(bgW * 0.25, -bgH * 0.6);
-
-        // 狀態文字定位在右側上方框內 (大約距 Container 左側 75%，高度 70%)
-        this.statusText.setPosition(bgW * 0.75, -bgH * 0.71);
-
-        // 裝備文字定位在右側下方框內 (大約距 Container 左側 75%，高度 35%)
-        this.equipText.setPosition(bgW * 0.75, -bgH * 0.38);
-
-
-        // 3. 定位搖桿 (目標 2要求：不要跟 PNG 重疊，置於上方)
-        // 我們將搖桿置於人像大圓圈的正下方偏左一點，呈現一個弧形排版
-        this.joyStick.setPosition(bgW * 0.25 - 20, gameSize.height - (bgH * 0.25));
         
-        // 設定搖桿深度確保在狀態 Container 之之上
+        this.statusText.setPosition(bgW * 0.75, -bgH * 0.71);
+        this.statusText.setFontSize(`${Math.max(12, 16 * scaleRatio)}px`); // 文字也跟著微調大小
+
+        this.equipText.setPosition(bgW * 0.75, -bgH * 0.38);
+        this.equipText.setFontSize(`${Math.max(12, 16 * scaleRatio)}px`);
+
+        // --- 3. 定位搖桿 (解除與圖片寬度的絕對綁定) ---
+        // 直接將搖桿固定在左下角的操作舒適區，不再被圖片寬度推移
+        const joystickX = 90;
+        const joystickY = gameSize.height - 90 - (isPortrait ? 80 : 0);
+        this.joyStick.setPosition(joystickX, joystickY);
+        
         if (this.joyStick.base) this.joyStick.base.setDepth(10);
         if (this.joyStick.thumb) this.joyStick.thumb.setDepth(10);
 
-
-        // 4. 定位右側按鈕群與選單 (保持現有邏輯)
+        // --- 4. 定位右側按鈕群與選單 (保持現有邏輯) ---
         this.btnA.setPosition(gameSize.width - safeMargin, gameSize.height - safeMargin - bottomOffset + 20);
         this.txtA.setPosition(this.btnA.x, this.btnA.y);
         this.btnB.setPosition(gameSize.width - safeMargin - 70, gameSize.height - safeMargin - bottomOffset + 20);
