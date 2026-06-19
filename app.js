@@ -32,6 +32,7 @@ window.GameLogic = {
     pendingScene: null,
     db: db,
     armedItemState: null, 
+    armedItemName: null, // 新增：用於區分當前裝備的是水球還是煙火
     currentTargetUid: null,
     currentTargetSprite: null,
     currentTargetType: null,
@@ -403,6 +404,11 @@ function createSystemUI() {
                         <span style="margin-top:5px;">水球</span>
                         <span style="color:#d4af37; font-size:12px; font-weight:bold;">20 馬德幣</span>
                     </div>
+                    <div class="catalog-item" onclick="window.openPurchaseModal('煙火', 100)">
+                        <img src="fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">
+                        <span style="margin-top:5px;">煙火</span>
+                        <span style="color:#d4af37; font-size:12px; font-weight:bold;">100 馬德幣</span>
+                    </div>
                 </div>
                 <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('store-modal').style.display='none'; window.GameLogic.isShopping = false;">離開商店</button>
             </div>
@@ -589,8 +595,9 @@ window.currentPurchaseQty = 1;
 window.useItem = function(itemName) {
     let inv = window.GameLogic.myProfile.inventory || {};
     if (inv[itemName] && inv[itemName] > 0) {
-        if (itemName === '水球') {
+        if (itemName === '水球' || itemName === '煙火') {
             window.GameLogic.armedItemState = 'armed'; 
+            window.GameLogic.armedItemName = itemName;
             document.getElementById('inventory-modal').style.display = 'none'; 
             return; 
         }
@@ -604,8 +611,9 @@ window.useItem = function(itemName) {
 };
 
 window.stopUsingItem = function(itemName) {
-    if (itemName === '水球') {
+    if (itemName === '水球' || itemName === '煙火') {
         window.GameLogic.armedItemState = null;
+        window.GameLogic.armedItemName = null;
     }
 };
 
@@ -671,11 +679,10 @@ window.openInventoryModal = function() {
     
     // 渲染一般道具
     keys.forEach(k => {
-        let iconHtml = (k === '水球') ? '<div class="sprite-waterball"></div>' : '<span style="font-size:24px; margin-bottom:5px;">📦</span>';
-        let isUsing = (k === '水球' && window.GameLogic.armedItemState != null);
+        let iconHtml = (k === '水球') ? '<div class="sprite-waterball"></div>' : (k === '煙火' ? '<img src="fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">' : '<span style="font-size:24px; margin-bottom:5px;">📦</span>');
+        let isUsing = ((k === '水球' || k === '煙火') && window.GameLogic.armedItemState != null && window.GameLogic.armedItemName === k);
         let itemClass = isUsing ? 'catalog-item item-in-use' : 'catalog-item';
         
-        // 這裡將原本的 [點擊使用] 改為空字串，完全隱藏它
         let btnHtml = isUsing 
             ? `<span style="font-size:12px; color:#d9534f; font-weight:bold; margin-top:5px;">[點擊暫停]</span>`
             : ``; 
@@ -994,7 +1001,6 @@ onAuthStateChanged(auth, async (user) => {
 
         // ==========================================
         // 連線狀態丟失修復：監聽 Firebase .info/connected
-        // 確保玩家因為短暫斷線引發 onDisconnect 被剔除後，還能自動補回在線清單
         // ==========================================
         onValue(ref(db, '.info/connected'), (snap) => {
             if (snap.val() === true && window.GameLogic.currentUser) {
@@ -1041,7 +1047,6 @@ onAuthStateChanged(auth, async (user) => {
                 Object.keys(data).forEach(key => {
                     window.manualPages.push({ key: key, imgBase64: data[key].imgBase64, timestamp: data[key].timestamp });
                 });
-                // 確保按照時間戳進行正確排序
                 window.manualPages.sort((a, b) => a.timestamp - b.timestamp);
             }
             window.renderManualPage();
@@ -1210,6 +1215,12 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('made-coin', 'made-coin.png', { frameWidth: 50, frameHeight: 50 });
         this.load.image('dummy', 'dummy.png');
         this.load.spritesheet('dummy-wet', 'dummy-wet.png', { frameWidth: 75, frameHeight: 75 });
+        
+        // 煙火素材
+        this.load.image('fireworks', 'fireworks.png');
+        this.load.spritesheet('onion-fireworks', 'onion-fireworks.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.spritesheet('onion-got-shot', 'onion-got-shot.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.spritesheet('fireworks-shoot', 'fireworks-shoot.png', { frameWidth: 50, frameHeight: 50 });
 
         // 載入慕夏風角色狀態基底圖
         this.load.image('status-bg', 'character-status-bg.png');
@@ -1236,7 +1247,12 @@ class BootScene extends Phaser.Scene {
             expGr.fillPath();
         }
         expGr.generateTexture('exp-liquid', 64, 16);
-        // ------------------------------
+        
+        // --- 產生煙火粒子紋理 ---
+        let fwGr = this.make.graphics({ x:0, y:0, add:false });
+        fwGr.fillStyle(0xffffff, 1);
+        fwGr.fillCircle(4, 4, 4);
+        fwGr.generateTexture('fw-particle', 8, 8);
 
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('onion-up'), frameRate: 10, repeat: -1 });
@@ -1251,6 +1267,11 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'coin-anim', frames: this.anims.generateFrameNumbers('made-coin'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'dummy-hit', frames: this.anims.generateFrameNumbers('dummy-wet'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'sleep', frames: this.anims.generateFrameNumbers('onion-sleep'), frameRate: 8, repeat: -1 });
+        
+        // 煙火動畫
+        this.anims.create({ key: 'fw-throw', frames: this.anims.generateFrameNumbers('onion-fireworks'), frameRate: 10, repeat: 0 });
+        this.anims.create({ key: 'fw-hit', frames: this.anims.generateFrameNumbers('onion-got-shot'), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'fw-shoot', frames: this.anims.generateFrameNumbers('fireworks-shoot'), frameRate: 15, repeat: -1 });
       
         this.scene.launch('UIScene');
         this.scene.bringToTop('UIScene'); 
@@ -1266,63 +1287,42 @@ class BootScene extends Phaser.Scene {
 class UIScene extends Phaser.Scene {
     constructor() { super('UIScene'); }
     create() {
-        // --- 慕夏風角色狀態圖層 ---
         this.statusContainer = this.add.container(0, 0).setDepth(-2);
         this.statusBg = this.add.image(0, 0, 'status-bg').setOrigin(0, 1);
         
-        // 洋蔥頭人像
         this.portrait = this.add.sprite(0, 0, 'onion', 0);
         
-        // 顯示暱稱與等級
         this.nameLevelText = this.add.text(0, 0, '初心者 Lv.1', { 
-            fontSize: '14px', 
-            color: '#3e2723', 
-            fontStyle: 'bold', 
-            fontFamily: 'Georgia' 
+            fontSize: '14px', color: '#3e2723', fontStyle: 'bold', fontFamily: 'Georgia' 
         }).setOrigin(0.5);
 
-        // 新增經驗值框與動態填滿條
         this.expBarBg = this.add.graphics();
         this.expLiquid = this.add.tileSprite(0, 0, 100, 16, 'exp-liquid').setOrigin(0, 0.5);
         this.expText = this.add.text(0, 0, '0/100', { 
-            fontSize: '10px', 
-            color: '#ffffff', 
-            fontStyle: 'bold', 
-            fontFamily: 'Georgia' 
+            fontSize: '10px', color: '#ffffff', fontStyle: 'bold', fontFamily: 'Georgia' 
         }).setOrigin(0.5);
 
-        // 狀態欄文字
         this.statusText = this.add.text(0, 0, '沒怎樣', { 
-            fontSize: '15px', 
-            color: '#3e2723', 
-            fontStyle: 'bold', 
-            fontFamily: 'Georgia' 
+            fontSize: '15px', color: '#3e2723', fontStyle: 'bold', fontFamily: 'Georgia' 
         }).setOrigin(0.5);
         
-        // 裝備欄文字
         this.equipText = this.add.text(0, 0, '沒東西', { 
-            fontSize: '15px', 
-            color: '#3e2723', 
-            fontStyle: 'bold', 
-            fontFamily: 'Georgia' 
+            fontSize: '15px', color: '#3e2723', fontStyle: 'bold', fontFamily: 'Georgia' 
         }).setOrigin(0.5).setInteractive();
 
-        // 收合切換按鈕 (洋蔥)
         this.statusToggleBtn = this.add.text(0, 0, '🧅', { fontSize: '24px' }).setOrigin(0, 0.5).setInteractive();
         this.isStatusCollapsed = false;
 
-        // 動畫 Tween 變數
         this.equipBlinkTween = null;
         this.statusBlinkTween = null;
 
-        // 點擊裝備欄位取消裝備功能
         this.equipText.on('pointerdown', () => {
             if (window.GameLogic.armedItemState === 'armed' || window.GameLogic.armedItemState === 'ready') {
                 const confModal = document.getElementById('ingame-confirm');
                 confModal.style.display = 'block';
                 document.getElementById('ingame-confirm-yes').onclick = () => {
                     confModal.style.display = 'none';
-                    window.stopUsingItem('水球');
+                    window.stopUsingItem(window.GameLogic.armedItemName || '水球');
                 };
                 document.getElementById('ingame-confirm-no').onclick = () => {
                     confModal.style.display = 'none';
@@ -1330,7 +1330,6 @@ class UIScene extends Phaser.Scene {
             }
         });
 
-        // 狀態欄收合功能
         this.statusToggleBtn.on('pointerdown', () => {
             this.isStatusCollapsed = !this.isStatusCollapsed;
             
@@ -1348,19 +1347,11 @@ class UIScene extends Phaser.Scene {
             });
         });
 
-        // 將所有元件加入 Container
         this.statusContainer.add([
-            this.statusBg, 
-            this.portrait, 
-            this.nameLevelText, 
-            this.expBarBg, 
-            this.expLiquid, 
-            this.expText, 
-            this.statusText, 
-            this.equipText, 
-            this.statusToggleBtn
+            this.statusBg, this.portrait, this.nameLevelText, 
+            this.expBarBg, this.expLiquid, this.expText, 
+            this.statusText, this.equipText, this.statusToggleBtn
         ]);
-        // -----------------------------------------------------
 
         this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, {
             radius: 40,
@@ -1368,7 +1359,6 @@ class UIScene extends Phaser.Scene {
             thumb: this.add.circle(0, 0, 20, 0xc5a059, 0.8)
         });
 
-        // 按鈕大小全面統一為半徑 30
         this.btnA = this.add.circle(0, 0, 30, 0xd9534f).setStrokeStyle(3, 0xffffff).setInteractive();
         this.txtA = this.add.text(0, 0, 'A', { fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
         this.btnB = this.add.circle(0, 0, 30, 0x0077cc).setStrokeStyle(3, 0xffffff).setInteractive();
@@ -1378,13 +1368,10 @@ class UIScene extends Phaser.Scene {
         this.itemBtn = this.add.circle(0, 0, 30, 0x607d8b).setStrokeStyle(3, 0xc5a059).setInteractive();
         this.itemText = this.add.text(0, 0, '給西', { fontSize: '16px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
 
-        this.itemBtn.on('pointerdown', () => {
-            window.openInventoryModal();
-        });
-        
-        this.furnBtn.on('pointerdown', () => {
+        this.itemBtn.on('pointerdown', () => { window.openInventoryModal(); });
+        this.furnBtn.on('pointerdown', () => { 
             if (this.furnText.text === '農具') return alert("農具選單尚未開放！");
-            openFurnitureCatalog();
+            openFurnitureCatalog(); 
         });
 
         this.aPressTime = 0;
@@ -1414,14 +1401,12 @@ class UIScene extends Phaser.Scene {
     }
 
     update() {
-        // --- 經驗值水波紋動畫持續流動 ---
         this.expLiquid.tilePositionX -= 0.5;
 
         if (window.GameLogic.myProfile) {
             let p = window.GameLogic.myProfile;
             this.nameLevelText.setText(`${p.name || '匿名'} Lv.${p.level || 1}`);
 
-            // 動態更新經驗值比例顯示
             let currentExp = p.exp || 0;
             let reqExp = (p.level || 1) * 100;
             this.expText.setText(`${currentExp}/${reqExp}`);
@@ -1431,9 +1416,8 @@ class UIScene extends Phaser.Scene {
             this.expLiquid.setSize(baseW * ratio, 16);
         }
 
-        // --- 裝備欄文字閃爍更新 ---
         if (window.GameLogic.armedItemState) {
-            this.equipText.setText('水球');
+            this.equipText.setText(window.GameLogic.armedItemName || '水球');
             if (!this.equipBlinkTween) {
                 this.equipText.setColor('#ffffff');
                 this.equipText.setShadow(0, 0, '#00aaff', 8, true, true);
@@ -1452,14 +1436,13 @@ class UIScene extends Phaser.Scene {
             }
         }
 
-        // --- 狀態欄文字更新與閃爍機制 ---
         let ms = this.scene.manager.getScene('MainScene');
         let currentStatus = '沒怎樣';
         let isStatusActive = false;
 
         if (ms && ms.localPlayer) {
             if (ms.localPlayer.isSleeping) { currentStatus = '補眠中'; isStatusActive = true; }
-            else if (ms.localPlayer.isStunned) { currentStatus = '濕身中'; isStatusActive = true; } 
+            else if (ms.localPlayer.isStunned) { currentStatus = '遭受打擊'; isStatusActive = true; } 
             else if (ms.localPlayer.isSweeping) { currentStatus = '打掃中'; isStatusActive = true; } 
             else if (ms.localPlayer.isThrowing) { currentStatus = '攻擊中'; isStatusActive = true; }
         }
@@ -1491,7 +1474,6 @@ class UIScene extends Phaser.Scene {
         const isPortrait = gameSize.height > gameSize.width;
         const bottomOffset = isPortrait ? 120 : 20; 
 
-        // --- 1. 定位搖桿 ---
         const joystickX = 90;
         const joystickY = gameSize.height - 90 - (isPortrait ? 80 : 0);
         this.joyStick.setPosition(joystickX, joystickY);
@@ -1499,7 +1481,6 @@ class UIScene extends Phaser.Scene {
         if (this.joyStick.base) this.joyStick.base.setDepth(10);
         if (this.joyStick.thumb) this.joyStick.thumb.setDepth(10);
 
-        // --- 2. 動態縮放狀態欄底圖 ---
         const targetWidth = Math.min(gameSize.width * 0.45, 320);
         const scaleRatio = targetWidth / this.statusBg.width;
         this.statusBg.setScale(scaleRatio);
@@ -1508,7 +1489,6 @@ class UIScene extends Phaser.Scene {
         const bgW = this.statusBg.displayWidth;
         const bgH = this.statusBg.displayHeight;
 
-        // --- 3. 定位角色狀態基底 Container ---
         const statusX = 20;
         const statusY = joystickY - 60; 
         
@@ -1517,14 +1497,12 @@ class UIScene extends Phaser.Scene {
 
         this.portrait.setPosition(bgW * 0.5, -bgH * 0.62);
 
-        // 暱稱與等級文字在上
         this.nameLevelText.setPosition(bgW * 0.5, -bgH * 0.16);
         this.nameLevelText.setFontSize(`${Math.max(14, 18 * scaleRatio)}px`);
         
-        // 經驗值條在下，並且加長加粗
         let expY = -bgH * 0.12;
         let expW = bgW * 0.50; 
-        let expH = 22 * scaleRatio; // 加粗經驗條高度
+        let expH = 22 * scaleRatio; 
         this.expBarWidth = expW;
 
         this.expBarBg.clear();
@@ -1545,7 +1523,6 @@ class UIScene extends Phaser.Scene {
         
         this.statusToggleBtn.setPosition(bgW, -bgH * 0.30);
 
-        // --- 4. 定位右側按鈕群 ---
         let clusterX = gameSize.width - 90;
         let clusterY = gameSize.height - bottomOffset - 70;
         let d = 45; 
@@ -1868,18 +1845,18 @@ class MainScene extends Phaser.Scene {
             }
 
             if (window.GameLogic.armedItemState === 'ready') {
+                let itemName = window.GameLogic.armedItemName || '水球';
                 let inv = window.GameLogic.myProfile.inventory || {};
-                inv['水球'] = Math.max(0, (inv['水球'] || 0) - 1);
+                inv[itemName] = Math.max(0, (inv[itemName] || 0) - 1);
                 update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
                 
-                if (inv['水球'] > 0) {
+                if (inv[itemName] > 0) {
                     window.GameLogic.armedItemState = 'armed';
                 } else {
                     window.GameLogic.armedItemState = null;
+                    window.GameLogic.armedItemName = null;
                 }
                 
-                window.playSFX(this, 'minimum_laser');
-
                 let targetUid = window.GameLogic.currentTargetUid;
                 let targetSprite = window.GameLogic.currentTargetSprite;
                 let targetType = window.GameLogic.currentTargetType;
@@ -1888,41 +1865,79 @@ class MainScene extends Phaser.Scene {
                     this.localPlayer.sprite.setFlipX(targetSprite.x < this.localPlayer.sprite.x);
                 }
 
-                this.localPlayer.sprite.play('throw', true);
-                this.localPlayer.isThrowing = true;
-                this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
+                if (itemName === '煙火') {
+                    this.localPlayer.sprite.play('fw-throw', true);
+                    this.localPlayer.isThrowing = true;
+                    this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
 
-                if (targetUid && targetSprite) {
-                    let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15);
-                    wb.setFrame(0); 
-                    
-                    this.tweens.add({
-                        targets: wb, x: targetSprite.x, y: targetSprite.y, duration: 200,
-                        onComplete: () => {
-                            window.playSFX(this, 'powerdown07');
-                            
-                            wb.play('wb-blast', true); 
-                            this.time.delayedCall(300, () => { wb.destroy(); });
-                            
-                            if (targetType === 'player') {
-                                update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
-                            } else if (targetType === 'dummy') {
-                                update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
-                                
-                                for (let i = 0; i < 3; i++) {
-                                    let cx = targetSprite.x + Phaser.Math.Between(-40, 40);
-                                    let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
-                                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-                                        module.push(module.ref(window.GameLogic.db, 'droppedCoins'), {
-                                            x: cx, y: cy, amount: 5
+                    // 同步施放動畫給其他玩家
+                    update(ref(window.GameLogic.db, `serverEvents/fireworkThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), scene: this.sceneName });
+
+                    if (targetUid && targetSprite) {
+                        let fw = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'fireworks-shoot').setDepth(15);
+                        fw.play('fw-shoot', true);
+
+                        this.tweens.add({
+                            targets: fw, x: targetSprite.x, y: targetSprite.y, duration: 300,
+                            onComplete: () => {
+                                fw.destroy();
+                                this.createMiniExplosion(targetSprite.x, targetSprite.y);
+
+                                if (targetType === 'player') {
+                                    update(ref(window.GameLogic.db, `serverEvents/fireworksHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                } else if (targetType === 'dummy') {
+                                    update(ref(window.GameLogic.db, `serverEvents/fireworksDummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+
+                                    for (let i = 0; i < 3; i++) {
+                                        let cx = targetSprite.x + Phaser.Math.Between(-40, 40);
+                                        let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
+                                        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                                            module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: 15 });
                                         });
-                                    });
+                                    }
                                 }
                             }
-                        }
-                    });
+                        });
+                    } else {
+                        // 觸發全頻煙火
+                        update(ref(window.GameLogic.db, 'serverEvents/globalFireworks'), { time: Date.now(), scene: this.sceneName, initiator: window.GameLogic.currentUser.uid });
+                        sendBubble("施放了全頻煙火！");
+                    }
                 } else {
-                    sendBubble("把水球砸向了空地...");
+                    // 水球邏輯
+                    window.playSFX(this, 'minimum_laser');
+                    this.localPlayer.sprite.play('throw', true);
+                    this.localPlayer.isThrowing = true;
+                    this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
+
+                    if (targetUid && targetSprite) {
+                        let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15);
+                        wb.setFrame(0); 
+                        
+                        this.tweens.add({
+                            targets: wb, x: targetSprite.x, y: targetSprite.y, duration: 200,
+                            onComplete: () => {
+                                window.playSFX(this, 'powerdown07');
+                                wb.play('wb-blast', true); 
+                                this.time.delayedCall(300, () => { wb.destroy(); });
+                                
+                                if (targetType === 'player') {
+                                    update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                } else if (targetType === 'dummy') {
+                                    update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                    for (let i = 0; i < 3; i++) {
+                                        let cx = targetSprite.x + Phaser.Math.Between(-40, 40);
+                                        let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
+                                        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                                            module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: 5 });
+                                        });
+                                    }
+                                }
+                            }
+                        });
+                    } else {
+                        sendBubble("把水球砸向了空地...");
+                    }
                 }
                 return; 
             }
@@ -1989,6 +2004,7 @@ class MainScene extends Phaser.Scene {
         this.placePrompt = this.add.text(0, 0, '洋蔥精靈: 按A確定擺放', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#fff', backgroundColor: 'rgba(74, 93, 78, 0.8)', padding: {x:8, y:4} }).setOrigin(0.5).setDepth(20).setVisible(false);
         if (this.minimap) this.minimap.ignore(this.placePrompt);
       
+        // --- 水球擊中事件監聽 ---
         this.hitListener = onValue(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`), (snap) => {
             let data = snap.val();
             if (data && data.time && (Date.now() - data.time < 2000)) {
@@ -1996,6 +2012,7 @@ class MainScene extends Phaser.Scene {
 
                 this.localPlayer.isInvincible = true;
                 this.localPlayer.isStunned = true;
+                this.localPlayer.sprite.play('wet', true); // 當地玩家播報水球受擊特效
                 
                 let p = window.GameLogic.myProfile;
                 let loss = Math.min(p.coins || 0, 15);
@@ -2008,19 +2025,122 @@ class MainScene extends Phaser.Scene {
                 for (let i = 0; i < 3; i++) {
                     let cx = this.localPlayer.sprite.x + Phaser.Math.Between(-40, 40);
                     let cy = this.localPlayer.sprite.y + Phaser.Math.Between(-40, 40) + 20;
-                    
                     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-                        module.push(module.ref(window.GameLogic.db, 'droppedCoins'), {
-                            x: cx,
-                            y: cy,
-                            amount: amounts[i] 
-                        });
+                        module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: amounts[i] });
                     });
                 }
 
                 this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); 
                 this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); 
                 remove(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`)); 
+            }
+        });
+
+        // --- 煙火擊中事件監聽 (對自己) ---
+        this.fwHitListener = onValue(ref(window.GameLogic.db, `serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`), (snap) => {
+            let data = snap.val();
+            if (data && data.time && (Date.now() - data.time < 2000)) {
+                if (this.localPlayer.isInvincible) return;
+
+                this.localPlayer.isInvincible = true;
+                this.localPlayer.isStunned = true;
+                this.localPlayer.sprite.play('fw-hit', true); // 當地玩家播報煙火受擊特效
+
+                let p = window.GameLogic.myProfile;
+                let loss = Math.min(p.coins || 0, 100); // 損失100
+                p.coins -= loss;
+                update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins });
+                let coinsEl = document.getElementById("vp-coins");
+                if (coinsEl) coinsEl.innerText = p.coins;
+
+                if (loss > 0) {
+                    let amounts = [Math.floor(loss * 0.4), Math.floor(loss * 0.3), loss - Math.floor(loss * 0.4) - Math.floor(loss * 0.3)];
+                    for (let i = 0; i < 3; i++) {
+                        if(amounts[i] <= 0) continue;
+                        let cx = this.localPlayer.sprite.x + Phaser.Math.Between(-50, 50);
+                        let cy = this.localPlayer.sprite.y + Phaser.Math.Between(-50, 50) + 20;
+                        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                            module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: amounts[i] });
+                        });
+                    }
+                }
+
+                this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; });
+                this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; });
+                remove(ref(window.GameLogic.db, `serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`));
+            }
+        });
+
+        // --- 煙火擊中事件監聽 (對其他玩家) ---
+        this.fwPlayersHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworksHits'), (snap) => {
+            let hits = snap.val() || {};
+            for (let uid in hits) {
+                if (uid === window.GameLogic.currentUser.uid) continue;
+                let data = hits[uid];
+                if (data && data.time && (Date.now() - data.time < 2000)) {
+                    if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) {
+                        let opSprite = this.otherPlayers[uid].sprite;
+                        if (!opSprite.isStunned) {
+                            opSprite.isStunned = true;
+                            opSprite.play('fw-hit', true); // 其他玩家播報煙火受擊特效
+                            this.time.delayedCall(1500, () => {
+                                if (opSprite && opSprite.active) opSprite.isStunned = false;
+                            });
+                        }
+                    }
+                }
+            }
+        });
+
+        // --- 煙火擊中事件監聽 (假人洋蔥) ---
+        this.fwDummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworksDummyHits'), (snap) => {
+            let hits = snap.val() || {};
+            for (let key in hits) {
+                let data = hits[key];
+                if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) {
+                    let dummy = this.furnitureSprites[key].sprite;
+                    if (dummy && !dummy.isStunned) {
+                        dummy.isStunned = true;
+                        dummy.play('fw-hit', true); // 假人播報煙火受擊特效
+                        this.time.delayedCall(1500, () => {
+                            if (dummy && dummy.active) {
+                                dummy.isStunned = false;
+                                dummy.anims.stop();
+                                dummy.setTexture('dummy');
+                            }
+                        });
+                    }
+                }
+            }
+        });
+
+        // --- 全頻煙火事件監聽 ---
+        this.globalFwListener = onValue(ref(window.GameLogic.db, 'serverEvents/globalFireworks'), (snap) => {
+            let data = snap.val();
+            if (data && data.time && (Date.now() - data.time < 3000) && data.scene === this.sceneName) {
+                if (this.lastGlobalFwTime !== data.time) {
+                    this.lastGlobalFwTime = data.time;
+                    this.playGlobalFireworks();
+                }
+            }
+        });
+
+        // --- 煙火施放動作同步監聽 ---
+        this.fwThrowsListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworkThrows'), (snap) => {
+            let throws = snap.val() || {};
+            for (let uid in throws) {
+                if (uid === window.GameLogic.currentUser.uid) continue;
+                let data = throws[uid];
+                if (data && data.time && (Date.now() - data.time < 1000) && data.scene === this.sceneName) {
+                    if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) {
+                        let opSprite = this.otherPlayers[uid].sprite;
+                        opSprite.play('fw-throw', true);
+                        opSprite.isThrowing = true;
+                        this.time.delayedCall(300, () => {
+                            if (opSprite && opSprite.active) opSprite.isThrowing = false;
+                        });
+                    }
+                }
             }
         });
 
@@ -2034,11 +2154,9 @@ class MainScene extends Phaser.Scene {
                         let opSprite = this.otherPlayers[uid].sprite;
                         if (!opSprite.isStunned) {
                             opSprite.isStunned = true;
-                            opSprite.play('wet', true);
+                            opSprite.play('wet', true); // 水球受擊特效
                             this.time.delayedCall(1500, () => {
-                                if (opSprite && opSprite.active) {
-                                    opSprite.isStunned = false;
-                                }
+                                if (opSprite && opSprite.active) opSprite.isStunned = false;
                             });
                         }
                     }
@@ -2075,7 +2193,69 @@ class MainScene extends Phaser.Scene {
             if (this.dummyHitListener) this.dummyHitListener();
             if (this.playersHitListener) this.playersHitListener();
             if (this.doghouseFurnListener) this.doghouseFurnListener();
+            // 煙火監聽註銷
+            if (this.fwHitListener) this.fwHitListener();
+            if (this.fwPlayersHitListener) this.fwPlayersHitListener();
+            if (this.fwDummyHitListener) this.fwDummyHitListener();
+            if (this.globalFwListener) this.globalFwListener();
+            if (this.fwThrowsListener) this.fwThrowsListener();
         });
+    }
+
+    // --- 新增：小型煙火爆炸 (鎖定目標時) ---
+    createMiniExplosion(x, y) {
+        let particles = this.add.particles(x, y, 'fw-particle', {
+            speed: { min: 100, max: 200 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 1, end: 0 },
+            blendMode: 'ADD',
+            tint: [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xff8800],
+            lifespan: 600,
+            gravityY: 100,
+            quantity: 20
+        });
+        particles.setDepth(200);
+        particles.explode();
+        this.time.delayedCall(1000, () => particles.destroy());
+    }
+
+    // --- 新增：全頻隨機色彩煙火 (未鎖定直接發射時) ---
+    playGlobalFireworks() {
+        let cam = this.cameras.main;
+        let colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff, 0xff8800];
+
+        for (let i = 0; i < 5; i++) {
+            this.time.delayedCall(i * 400, () => {
+                let x = cam.scrollX + Phaser.Math.Between(100, cam.width - 100);
+                let y = cam.scrollY + Phaser.Math.Between(100, cam.height - 100);
+
+                let c = Phaser.Utils.Array.GetRandom(colors);
+
+                let emitter = this.add.particles(x, y, 'fw-particle', {
+                    speed: { min: 150, max: 400 },
+                    angle: { min: 0, max: 360 },
+                    scale: { start: 1.5, end: 0 },
+                    blendMode: 'ADD',
+                    tint: c,
+                    lifespan: 1000,
+                    gravityY: 150,
+                    quantity: 50
+                });
+                emitter.setDepth(200);
+                emitter.explode();
+
+                let flash = this.add.circle(x, y, 100, c, 0.4).setDepth(199).setBlendMode('ADD');
+                this.tweens.add({
+                    targets: flash,
+                    alpha: 0,
+                    scale: 2,
+                    duration: 500,
+                    onComplete: () => flash.destroy()
+                });
+
+                this.time.delayedCall(1500, () => emitter.destroy());
+            });
+        }
     }
 
     spawnTrash() {
@@ -2223,8 +2403,8 @@ class MainScene extends Phaser.Scene {
             this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
         } else if (this.localPlayer.isStunned) {
             this.localPlayer.sprite.setVelocity(0, 0);
-            this.localPlayer.sprite.play('wet', true);
             this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
+            // 動畫已由事件監聽器播放 (wet 或 fw-hit)，不在此強制覆寫
         } else if (this.localPlayer.isThrowing) {
             this.localPlayer.sprite.setVelocity(0, 0); 
         } else {
@@ -2331,16 +2511,9 @@ class MainScene extends Phaser.Scene {
             } else { this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false); }
 
             if (window.GameLogic.armedItemState) {
-                let msg = window.GameLogic.armedItemState === 'armed' ? "按B填充水球" : "按A投擲水球";
+                let itemName = window.GameLogic.armedItemName || '水球';
+                let msg = window.GameLogic.armedItemState === 'armed' ? "按B填充" + itemName : "按A施放" + itemName;
                 
-                this.waterPromptText.setText(msg).setVisible(true);
-                const wpBounds = this.waterPromptText.getBounds(); 
-                const wpWidth = wpBounds.width + 20, wpHeight = wpBounds.height + 10;
-                const wptX = px, wptY = py + 45; 
-                
-                this.waterPromptBg.clear().fillStyle(0x0077cc, 0.8).lineStyle(2, 0xffffff, 1).fillRoundedRect(wptX - wpWidth/2, wptY - wpHeight/2, wpWidth, wpHeight, 6).strokeRoundedRect(wptX - wpWidth/2, wptY - wpHeight/2, wpWidth, wpHeight, 6).setVisible(true);
-                this.waterPromptText.setPosition(wptX, wptY);
-
                 let lockOnDist = 150; 
                 let lockTargetUid = null;
                 let lockTargetSprite = null;
@@ -2359,6 +2532,18 @@ class MainScene extends Phaser.Scene {
                         if (d < lockOnDist) { lockOnDist = d; lockTargetUid = key; lockTargetSprite = fDummy; isDummy = true; }
                     }
                 }
+
+                if (itemName === '煙火' && window.GameLogic.armedItemState === 'ready' && !lockTargetSprite) {
+                    msg = "按A施放全頻煙火";
+                }
+
+                this.waterPromptText.setText(msg).setVisible(true);
+                const wpBounds = this.waterPromptText.getBounds(); 
+                const wpWidth = wpBounds.width + 20, wpHeight = wpBounds.height + 10;
+                const wptX = px, wptY = py + 45; 
+                
+                this.waterPromptBg.clear().fillStyle(0x0077cc, 0.8).lineStyle(2, 0xffffff, 1).fillRoundedRect(wptX - wpWidth/2, wptY - wpHeight/2, wpWidth, wpHeight, 6).strokeRoundedRect(wptX - wpWidth/2, wptY - wpHeight/2, wpWidth, wpHeight, 6).setVisible(true);
+                this.waterPromptText.setPosition(wptX, wptY);
 
                 if (lockTargetSprite) {
                     this.lockOnTarget.setPosition(lockTargetSprite.x, lockTargetSprite.y - 40).setVisible(true);
@@ -2475,7 +2660,7 @@ class MainScene extends Phaser.Scene {
             
             for (let uid in playersData) {
                 if (uid === window.GameLogic.currentUser.uid) continue;
-                if (!globalOnline[uid]) continue; // 過濾判定已離線的幽靈玩家，搭配.info/connected可達到完美同步
+                if (!globalOnline[uid]) continue; 
                 
                 let pd = playersData[uid]; pd.uid = uid;
                 if (!this.otherPlayers[uid]) this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
@@ -2492,8 +2677,8 @@ class MainScene extends Phaser.Scene {
                 let absX = Math.abs(diffX);
                 let absY = Math.abs(diffY);
 
-                if (op.sprite.isStunned) {
-                    op.sprite.play('wet', true);
+                if (op.sprite.isStunned || op.sprite.isThrowing) {
+                    // 若是被擊暈或施放中，動畫由監聽器負責執行，不覆寫
                 } else if (absX < 0.5 && absY < 0.5) {
                     op.sprite.play('idle', true);
                 } else if (absX >= absY) {
@@ -2511,7 +2696,6 @@ class MainScene extends Phaser.Scene {
             }
             
             for (let uid in this.otherPlayers) {
-                // 如果該 UID 不存在於大廳資料，或是全域判斷離線，則予以刪除
                 if (!playersData[uid] || !globalOnline[uid]) { 
                     this.otherPlayers[uid].sprite.destroy(); 
                     this.otherPlayers[uid].nameBg.destroy(); 
