@@ -1515,7 +1515,7 @@ class UIScene extends Phaser.Scene {
         this.portrait.setPosition(bgW * 0.5, -bgH * 0.62);
 
         // 暱稱與等級文字在上
-        this.nameLevelText.setPosition(bgW * 0.5, -bgH * 0.10);
+        this.nameLevelText.setPosition(bgW * 0.5, -bgH * 0.16);
         this.nameLevelText.setFontSize(`${Math.max(14, 18 * scaleRatio)}px`);
         
         // 經驗值條在下，並且加長加粗
