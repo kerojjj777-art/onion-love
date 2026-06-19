@@ -339,6 +339,7 @@ function createSystemUI() {
         
         <div id="portal-modal" class="modal" style="z-index: 260; padding: 15px;">
             <h3 style="margin-top:0; color:var(--mucha-brown);">🌀 空間傳送門</h3>
+            <div class="sprite-magic-gap-big" style="margin: 10px auto;"></div>
             <div style="display:flex; flex-direction:column; gap:10px;">
                 <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('doghouse'); document.getElementById('portal-modal').style.display='none';">🏠 我的狗窩</button>
                 <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('cafe'); document.getElementById('portal-modal').style.display='none';">☕ 洋蔥大廳</button>
@@ -421,6 +422,16 @@ function createSystemUI() {
             </div>
         </div>
     `;
+
+    // 防點穿優化：為所有互動視窗阻擋 Pointer 事件，避免點擊到後方的 Phaser Canvas 元素
+    setTimeout(() => {
+        const stopProp = (e) => e.stopPropagation();
+        document.querySelectorAll('.modal, .action-menu, #chat-section').forEach(el => {
+            ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'wheel', 'mousedown', 'mouseup', 'click'].forEach(evt => {
+                el.addEventListener(evt, stopProp, { passive: false });
+            });
+        });
+    }, 500);
 }
 
 createSystemUI();
@@ -630,8 +641,9 @@ window.openInventoryModal = function() {
     let rawItems = {};
     let isEdit = window.GameLogic.inventoryEditMode;
 
+    // 修復洋蔥手機顯示：以安全拼接屬性的方式確保 HTML 字串無誤，並能在任何狀態穩定顯示
     rawItems['phone'] = `
-        <div class="catalog-item" style="position:relative; width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.openPhoneModal()"' : ''}>
+        <div class="catalog-item" style="position:relative; width: 100%; box-sizing: border-box;" ${isEdit ? '' : 'onclick="window.openPhoneModal()"'} >
             ${dotHtml}
             <div class="sprite-onion-phone"></div>
             <span style="margin:5px 0;">洋蔥手機</span>
@@ -1152,6 +1164,23 @@ class BootScene extends Phaser.Scene {
         this.load.audio('chorus_of_angels1', 'chorus_of_angels1.mp3');
     }
     create() {
+        // --- 產生經驗值條的流動紋理 ---
+        let expGr = this.make.graphics({ x:0, y:0, add:false });
+        expGr.fillStyle(0x81c784, 1);
+        expGr.fillRect(0, 0, 64, 16);
+        expGr.fillStyle(0xa5d6a7, 0.6);
+        for(let i = -16; i < 64; i += 16) {
+            expGr.beginPath();
+            expGr.moveTo(i, 0);
+            expGr.lineTo(i + 8, 0);
+            expGr.lineTo(i + 16, 16);
+            expGr.lineTo(i + 8, 16);
+            expGr.closePath();
+            expGr.fillPath();
+        }
+        expGr.generateTexture('exp-liquid', 64, 16);
+        // ------------------------------
+
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('onion-up'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'walk', frames: this.anims.generateFrameNumbers('onion-walk', { start: 0, end: 5 }), frameRate: 10, repeat: -1 });
@@ -1195,13 +1224,23 @@ class UIScene extends Phaser.Scene {
             fontFamily: 'Georgia' 
         }).setOrigin(0.5);
 
-        // 狀態欄文字（預設加上紅色字與白色發光效果）
-        this.statusText = this.add.text(0, 0, '沒怎樣', { 
-            fontSize: '15px', 
-            color: '#ff0000', 
+        // 新增經驗值框與動態填滿條
+        this.expBarBg = this.add.graphics();
+        this.expLiquid = this.add.tileSprite(0, 0, 100, 16, 'exp-liquid').setOrigin(0, 0.5);
+        this.expText = this.add.text(0, 0, '0/100', { 
+            fontSize: '10px', 
+            color: '#ffffff', 
             fontStyle: 'bold', 
             fontFamily: 'Georgia' 
-        }).setOrigin(0.5).setShadow(0, 0, '#ffffff', 8, true, true);
+        }).setOrigin(0.5);
+
+        // 狀態欄文字（平時為一般深棕色，拔除預設紅字與發光效果）
+        this.statusText = this.add.text(0, 0, '沒怎樣', { 
+            fontSize: '15px', 
+            color: '#3e2723', 
+            fontStyle: 'bold', 
+            fontFamily: 'Georgia' 
+        }).setOrigin(0.5);
         
         // 裝備欄文字（基礎樣式）
         this.equipText = this.add.text(0, 0, '沒東西', { 
@@ -1252,8 +1291,18 @@ class UIScene extends Phaser.Scene {
             });
         });
 
-        // 將所有元件加入 Container 統一管理定位
-        this.statusContainer.add([this.portrait, this.statusBg, this.nameLevelText, this.statusText, this.equipText, this.statusToggleBtn]);
+        // 將所有元件加入 Container，確保背景墊底，頭像與文字疊於其上
+        this.statusContainer.add([
+            this.statusBg, 
+            this.portrait, 
+            this.nameLevelText, 
+            this.expBarBg, 
+            this.expLiquid, 
+            this.expText, 
+            this.statusText, 
+            this.equipText, 
+            this.statusToggleBtn
+        ]);
         // -----------------------------------------------------
 
         this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, {
@@ -1308,9 +1357,21 @@ class UIScene extends Phaser.Scene {
     }
 
     update() {
+        // --- 經驗值水波紋動畫持續流動 ---
+        this.expLiquid.tilePositionX -= 0.5;
+
         if (window.GameLogic.myProfile) {
             let p = window.GameLogic.myProfile;
             this.nameLevelText.setText(`${p.name || '匿名'} Lv.${p.level || 1}`);
+
+            // 動態更新經驗值比例顯示
+            let currentExp = p.exp || 0;
+            let reqExp = (p.level || 1) * 100;
+            this.expText.setText(`${currentExp}/${reqExp}`);
+
+            let ratio = Phaser.Math.Clamp(currentExp / reqExp, 0, 1);
+            let baseW = this.expBarWidth || 100;
+            this.expLiquid.setSize(baseW * ratio, 16);
         }
 
         // --- 裝備欄文字閃爍更新 (裝備水球時為白色文字，並散發藍光) ---
@@ -1334,7 +1395,7 @@ class UIScene extends Phaser.Scene {
             }
         }
 
-        // --- 狀態欄文字閃爍更新 (紅色發白光要求已於建立時寫好) ---
+        // --- 狀態欄文字更新與閃爍機制 ---
         let ms = this.scene.manager.getScene('MainScene');
         let currentStatus = '沒怎樣';
         let isStatusActive = false;
@@ -1350,6 +1411,8 @@ class UIScene extends Phaser.Scene {
 
         if (isStatusActive) {
             if (!this.statusBlinkTween) {
+                this.statusText.setColor('#ff0000'); 
+                this.statusText.setShadow(0, 0, '#ffffff', 8, true, true);
                 this.statusBlinkTween = this.tweens.add({
                     targets: this.statusText, alpha: 0.3, yoyo: true, repeat: -1, duration: 500
                 });
@@ -1359,6 +1422,8 @@ class UIScene extends Phaser.Scene {
                 this.statusBlinkTween.stop();
                 this.statusBlinkTween = null;
                 this.statusText.setAlpha(1);
+                this.statusText.setColor('#3e2723'); 
+                this.statusText.setShadow(0, 0, '#000', 0, false, false); 
             }
         }
     }
@@ -1394,8 +1459,26 @@ class UIScene extends Phaser.Scene {
         this.statusContainer.setPosition(targetX, statusY);
 
         this.portrait.setPosition(bgW * 0.5, -bgH * 0.62);
-        this.nameLevelText.setPosition(bgW * 0.5, -bgH * 0.13);
-        this.nameLevelText.setFontSize(`${Math.max(16, 20 * scaleRatio)}px`);
+
+        // 將名稱與等級文字稍微微調向上
+        this.nameLevelText.setPosition(bgW * 0.5, -bgH * 0.18);
+        this.nameLevelText.setFontSize(`${Math.max(14, 18 * scaleRatio)}px`);
+        
+        // 設置與渲染經驗值框 (在其正下方)
+        let expY = -bgH * 0.08;
+        let expW = bgW * 0.45; 
+        let expH = 12 * scaleRatio;
+        this.expBarWidth = expW;
+
+        this.expBarBg.clear();
+        this.expBarBg.fillStyle(0x3e2723, 0.8);
+        this.expBarBg.fillRoundedRect(bgW * 0.5 - expW / 2, expY - expH / 2, expW, expH, 4);
+
+        this.expLiquid.setPosition(bgW * 0.5 - expW / 2, expY);
+        this.expLiquid.setScale(1, expH / 16); 
+
+        this.expText.setPosition(bgW * 0.5, expY);
+        this.expText.setFontSize(`${Math.max(9, 11 * scaleRatio)}px`);
         
         this.statusText.setPosition(bgW * 0.32, -bgH * 0.30);
         this.statusText.setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); 
@@ -1406,24 +1489,19 @@ class UIScene extends Phaser.Scene {
         this.statusToggleBtn.setPosition(bgW, -bgH * 0.30);
 
         // --- 4. 定位右側按鈕群 (統一配置為菱形，並偏左平移) ---
-        // 取得按鈕叢集的中心點，緊貼右側再平移 20px
         let clusterX = gameSize.width - 90;
         let clusterY = gameSize.height - bottomOffset - 70;
-        let d = 45; // 菱形的距離半徑
+        let d = 45; 
         
-        // 上方：給西
         this.itemBtn.setPosition(clusterX, clusterY - d);
         this.itemText.setPosition(this.itemBtn.x, this.itemBtn.y);
         
-        // 右方：A鍵 (紅)
         this.btnA.setPosition(clusterX + d, clusterY);
         this.txtA.setPosition(this.btnA.x, this.btnA.y);
         
-        // 下方：B鍵 (藍)
         this.btnB.setPosition(clusterX, clusterY + d);
         this.txtB.setPosition(this.btnB.x, this.btnB.y);
         
-        // 左方：家俱
         this.furnBtn.setPosition(clusterX - d, clusterY);
         this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
     }
