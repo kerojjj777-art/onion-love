@@ -49,6 +49,18 @@ window.signOut = signOut;
 window.auth = auth;
 
 // ==========================================
+// 滿版圖片顯示功能
+// ==========================================
+window.openFullscreen = function(src) {
+    if (!src || src.endsWith('null') || src === '') return;
+    document.getElementById('fullscreen-img').src = src;
+    document.getElementById('fullscreen-viewer').style.display = 'flex';
+};
+window.closeFullscreen = function() {
+    document.getElementById('fullscreen-viewer').style.display = 'none';
+};
+
+// ==========================================
 // 音樂與音效全域控制
 // ==========================================
 window.updateBGMVolume = function(val) {
@@ -200,6 +212,18 @@ function createSystemUI() {
             .pm-bubble-me { background: #fff; color: #3e2723; border-radius: 12px 12px 0 12px; padding: 8px 12px; display: inline-block; max-width: 80%; text-align: left; border: 1px solid var(--mucha-gold); box-shadow: 1px 1px 3px rgba(0,0,0,0.1); word-break: break-word; }
             .pm-bubble-other { background: #dcedc8; color: #3e2723; border-radius: 12px 12px 12px 0; padding: 8px 12px; display: inline-block; max-width: 80%; text-align: left; border: 1px solid #aed581; box-shadow: 1px 1px 3px rgba(0,0,0,0.1); word-break: break-word; }
         </style>
+
+        <div id="fullscreen-viewer" onclick="window.closeFullscreen()" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; cursor:pointer;">
+            <img id="fullscreen-img" style="max-width:90%; max-height:90%; border:3px solid var(--mucha-gold); border-radius:12px; object-fit:contain; background:var(--mucha-paper);">
+        </div>
+
+        <div id="ingame-confirm" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:var(--mucha-paper); border:3px solid var(--mucha-gold); padding:20px; z-index:400; border-radius:12px; text-align:center; box-shadow: 0 10px 25px rgba(0,0,0,0.8);">
+            <div style="margin-bottom:15px; color:var(--mucha-brown); font-weight:bold; font-size:16px;">確定要收起裝備嗎？</div>
+            <div style="display:flex; justify-content:center; gap:10px;">
+                <button class="btn-primary" id="ingame-confirm-yes" style="padding:8px 20px;">確定</button>
+                <button class="btn-secondary" id="ingame-confirm-no" style="padding:8px 20px;">取消</button>
+            </div>
+        </div>
         
         <div id="top-notification-bar">系統通知：歡迎來到洋蔥交誼廳！</div>
         <div id="action-menu" class="action-menu"><button id="view-profile-btn">洋蔥身分證</button></div>
@@ -273,7 +297,7 @@ function createSystemUI() {
             <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; position: relative;">
                 <div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
                     <button class="btn-secondary" onclick="window.prevTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0;">&lt;</button>
-                    <img id="music-cover" src="Sweet-Onion.png" alt="Music Cover" style="width: 150px; height: 150px; border-radius: 8px; border: 2px solid var(--mucha-gold); object-fit: cover; box-shadow: 0 4px 8px rgba(0,0,0,0.3);">
+                    <img id="music-cover" onclick="window.openFullscreen(this.src)" src="Sweet-Onion.png" alt="Music Cover" style="width: 150px; height: 150px; border-radius: 8px; border: 2px solid var(--mucha-gold); object-fit: cover; box-shadow: 0 4px 8px rgba(0,0,0,0.3); cursor: pointer;">
                     <button class="btn-secondary" onclick="window.nextTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0;">&gt;</button>
                 </div>
                 <div id="music-title" style="font-weight: bold; color: var(--mucha-brown); font-size: 16px;">Sweet-Onion</div>
@@ -295,7 +319,7 @@ function createSystemUI() {
             
             <div id="manual-content" style="display:flex; justify-content:center; align-items:center; height: 60vh; position: relative;">
                 <button id="manual-prev-btn" class="btn-secondary" style="position:absolute; left:0; z-index:10; font-size:24px; padding:10px 15px;">&lt;</button>
-                <img id="manual-img-display" src="" alt="目前尚無說明書內容" style="max-width:80%; max-height:100%; object-fit:contain; border:1px solid var(--mucha-gold); border-radius:8px;">
+                <img id="manual-img-display" onclick="window.openFullscreen(this.src)" src="" alt="目前尚無說明書內容" style="max-width:80%; max-height:100%; object-fit:contain; border:1px solid var(--mucha-gold); border-radius:8px; cursor: pointer;">
                 <button id="manual-next-btn" class="btn-secondary" style="position:absolute; right:0; z-index:10; font-size:24px; padding:10px 15px;">&gt;</button>
                 <div id="manual-page-indicator" style="position:absolute; bottom: -30px; text-align:center; width:100%; font-weight:bold; color:var(--mucha-brown);">0 / 0</div>
             </div>
@@ -313,20 +337,15 @@ function createSystemUI() {
             <button class="close-modal-btn btn-secondary" style="margin-top: 30px; width: 100%;" onclick="document.getElementById('manual-modal').style.display='none'">關閉說明書</button>
         </div>
         
-        <div id="portal-modal" class="modal" style="z-index: 260; padding: 0; background: #2a1b12;">
-            <div id="portal-drag-handle" style="background:#2a1b12; text-align:center; position:relative; border-bottom: 2px solid var(--mucha-gold); padding: 10px; cursor: move;">
-                <div class="sprite-magic-gap-big"></div>
+        <div id="portal-modal" class="modal" style="z-index: 260; padding: 15px;">
+            <h3 style="margin-top:0; color:var(--mucha-brown);">🌀 空間傳送門</h3>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('doghouse'); document.getElementById('portal-modal').style.display='none';">🏠 我的狗窩</button>
+                <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('cafe'); document.getElementById('portal-modal').style.display='none';">☕ 洋蔥大廳</button>
+                <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('farm'); document.getElementById('portal-modal').style.display='none';">🌱 我的蔥田</button>
+                <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('7eonion'); document.getElementById('portal-modal').style.display='none';">🏪 7-EONION</button>
             </div>
-            <div style="padding:15px; background: var(--mucha-paper); max-height: 50vh; overflow-y: auto;">
-                <h3 style="margin-top:0; color:var(--mucha-brown);">🌀 空間傳送門</h3>
-                <div style="display:flex; flex-direction:column; gap:10px;">
-                    <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('doghouse'); document.getElementById('portal-modal').style.display='none';">🏠 我的狗窩</button>
-                    <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('cafe'); document.getElementById('portal-modal').style.display='none';">☕ 洋蔥大廳</button>
-                    <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('farm'); document.getElementById('portal-modal').style.display='none';">🌱 我的蔥田</button>
-                    <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('7eonion'); document.getElementById('portal-modal').style.display='none';">🏪 7-EONION</button>
-                </div>
-                <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('portal-modal').style.display='none'">關閉傳送門</button>
-            </div>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('portal-modal').style.display='none'">關閉傳送門</button>
         </div>
 
         <div id="game-layout-container">
@@ -348,7 +367,7 @@ function createSystemUI() {
                 <h3 style="margin:0; border:none; color: var(--mucha-brown);">🎒 我的給西</h3>
                 <button id="inventory-edit-btn" class="btn-edit" onclick="window.toggleInventoryEdit()" style="padding:4px 8px; font-size:12px;">編輯排序</button>
             </div>
-            <div id="inventory-list" class="catalog-grid"></div>
+            <div id="inventory-list" class="catalog-grid" style="max-height: 50vh; overflow-y: auto; padding-right: 5px;"></div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('inventory-modal').style.display='none'">關閉</button>
         </div>
 
@@ -405,37 +424,6 @@ function createSystemUI() {
 }
 
 createSystemUI();
-
-// 新增拖曳 Modal 的共用邏輯（應用於傳送門）
-function makeModalDraggable(modalId, handleId) {
-    const modal = document.getElementById(modalId);
-    const handle = document.getElementById(handleId);
-    if (!modal || !handle) return;
-    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-    handle.onpointerdown = dragMouseDown;
-    function dragMouseDown(e) {
-        e.preventDefault();
-        pos3 = e.clientX;
-        pos4 = e.clientY;
-        document.onpointerup = closeDragElement;
-        document.onpointermove = elementDrag;
-    }
-    function elementDrag(e) {
-        e.preventDefault();
-        pos1 = pos3 - e.clientX;
-        pos2 = pos4 - e.clientY;
-        pos3 = e.clientX;
-        pos4 = e.clientY;
-        modal.style.top = (modal.offsetTop - pos2) + "px";
-        modal.style.left = (modal.offsetLeft - pos1) + "px";
-        modal.style.transform = "none"; 
-    }
-    function closeDragElement() {
-        document.onpointerup = null;
-        document.onpointermove = null;
-    }
-}
-makeModalDraggable('portal-modal', 'portal-drag-handle');
 
 window.manualPages = [];
 window.currentManualIndex = 0;
@@ -1223,22 +1211,49 @@ class UIScene extends Phaser.Scene {
             fontFamily: 'Georgia' 
         }).setOrigin(0.5).setInteractive();
 
+        // 收合切換按鈕 (洋蔥)
+        this.statusToggleBtn = this.add.text(0, 0, '🧅', { fontSize: '24px' }).setOrigin(0, 0.5).setInteractive();
+        this.isStatusCollapsed = false;
+
         // 動畫 Tween 變數
         this.equipBlinkTween = null;
         this.statusBlinkTween = null;
 
-        // 點擊裝備欄位取消裝備功能
+        // 點擊裝備欄位取消裝備功能 (改用內部確認彈窗)
         this.equipText.on('pointerdown', () => {
             if (window.GameLogic.armedItemState === 'armed' || window.GameLogic.armedItemState === 'ready') {
-                if (confirm('確定要收起水球裝備嗎？')) {
+                const confModal = document.getElementById('ingame-confirm');
+                confModal.style.display = 'block';
+                document.getElementById('ingame-confirm-yes').onclick = () => {
+                    confModal.style.display = 'none';
                     window.stopUsingItem('水球');
-                }
+                };
+                document.getElementById('ingame-confirm-no').onclick = () => {
+                    confModal.style.display = 'none';
+                };
             }
         });
 
+        // 狀態欄收合功能
+        this.statusToggleBtn.on('pointerdown', () => {
+            this.isStatusCollapsed = !this.isStatusCollapsed;
+            
+            const gameSize = this.scale.gameSize;
+            const targetWidth = Math.min(gameSize.width * 0.45, 320);
+            const bgW = this.statusBg.displayWidth;
+            const statusX = 20;
+            const targetX = this.isStatusCollapsed ? statusX - bgW + 10 : statusX;
+            
+            this.tweens.add({
+                targets: this.statusContainer,
+                x: targetX,
+                duration: 300,
+                ease: 'Power2'
+            });
+        });
+
         // 將所有元件加入 Container 統一管理定位
-        // 【防遮蔽修改】：將 portrait 的順序移至 statusBg 之前，讓背景圖自身的透明窗戶成為原生的 Mask
-        this.statusContainer.add([this.portrait, this.statusBg, this.nameLevelText, this.statusText, this.equipText]);
+        this.statusContainer.add([this.portrait, this.statusBg, this.nameLevelText, this.statusText, this.equipText, this.statusToggleBtn]);
         // -----------------------------------------------------
 
         this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, {
@@ -1374,7 +1389,9 @@ class UIScene extends Phaser.Scene {
         // --- 3. 定位角色狀態基底 Container ---
         const statusX = 20;
         const statusY = joystickY - 60; 
-        this.statusContainer.setPosition(statusX, statusY);
+        
+        const targetX = this.isStatusCollapsed ? statusX - bgW + 10 : statusX;
+        this.statusContainer.setPosition(targetX, statusY);
 
         this.portrait.setPosition(bgW * 0.5, -bgH * 0.62);
         this.nameLevelText.setPosition(bgW * 0.5, -bgH * 0.13);
@@ -1385,10 +1402,12 @@ class UIScene extends Phaser.Scene {
 
         this.equipText.setPosition(bgW * 0.75, -bgH * 0.30);
         this.equipText.setFontSize(`${Math.max(16, 20 * scaleRatio)}px`);
+        
+        this.statusToggleBtn.setPosition(bgW, -bgH * 0.30);
 
-        // --- 4. 定位右側按鈕群 (統一配置為菱形，並偏右) ---
-        // 取得按鈕叢集的中心點，緊貼右側
-        let clusterX = gameSize.width - 70;
+        // --- 4. 定位右側按鈕群 (統一配置為菱形，並偏左平移) ---
+        // 取得按鈕叢集的中心點，緊貼右側再平移 20px
+        let clusterX = gameSize.width - 90;
         let clusterY = gameSize.height - bottomOffset - 70;
         let d = 45; // 菱形的距離半徑
         
@@ -2317,8 +2336,12 @@ class MainScene extends Phaser.Scene {
 
         if (this.isCafe) {
             const playersData = window.GameLogic.cafePlayers;
+            const globalOnline = window.GameLogic.onlinePlayers || {}; 
+            
             for (let uid in playersData) {
                 if (uid === window.GameLogic.currentUser.uid) continue;
+                if (!globalOnline[uid]) continue; // 過濾判定已離線的幽靈玩家
+                
                 let pd = playersData[uid]; pd.uid = uid;
                 if (!this.otherPlayers[uid]) this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
                 
@@ -2351,8 +2374,17 @@ class MainScene extends Phaser.Scene {
 
                 this.updatePlayerEntity(op, pd);
             }
+            
             for (let uid in this.otherPlayers) {
-                if (!playersData[uid]) { this.otherPlayers[uid].sprite.destroy(); this.otherPlayers[uid].nameBg.destroy(); this.otherPlayers[uid].nameText.destroy(); this.otherPlayers[uid].bubbleBg.destroy(); this.otherPlayers[uid].bubbleText.destroy(); delete this.otherPlayers[uid]; }
+                // 如果該 UID 不存在於大廳資料，或是全域判斷離線，則予以刪除
+                if (!playersData[uid] || !globalOnline[uid]) { 
+                    this.otherPlayers[uid].sprite.destroy(); 
+                    this.otherPlayers[uid].nameBg.destroy(); 
+                    this.otherPlayers[uid].nameText.destroy(); 
+                    this.otherPlayers[uid].bubbleBg.destroy(); 
+                    this.otherPlayers[uid].bubbleText.destroy(); 
+                    delete this.otherPlayers[uid]; 
+                }
             }
         }
     }
