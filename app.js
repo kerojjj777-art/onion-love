@@ -641,17 +641,10 @@ window.openInventoryModal = function() {
     let rawItems = {};
     let isEdit = window.GameLogic.inventoryEditMode;
 
-    // 修復洋蔥手機顯示：以安全拼接屬性的方式確保 HTML 字串無誤，並能在任何狀態穩定顯示
-    rawItems['phone'] = `
-        <div class="catalog-item" style="position:relative; width: 100%; box-sizing: border-box;" ${isEdit ? '' : 'onclick="window.openPhoneModal()"'} >
-            ${dotHtml}
-            <div class="sprite-onion-phone"></div>
-            <span style="margin:5px 0;">洋蔥手機</span>
-        </div>
-    `;
-
     let inv = window.GameLogic.myProfile.inventory || {};
-    let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥');
+    // 排除系統按鍵保留字，避免玩家包包中含有殘留廢棄資料(如 phone)時蓋掉原本的UI結構
+    let sysKeys = ['phone', 'portal', 'profile', 'music', 'manual', 'logout'];
+    let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥' && !sysKeys.includes(k));
     
     keys.forEach(k => {
         let iconHtml = (k === '水球') ? '<div class="sprite-waterball"></div>' : '<span style="font-size:24px; margin-bottom:5px;">📦</span>';
@@ -670,6 +663,15 @@ window.openInventoryModal = function() {
             </div>`;
     });
     
+    // 修復洋蔥手機顯示：移至物件生成的最後，並確保拼接屬性的方式不會被上方迴圈的殘留資料覆寫
+    rawItems['phone'] = `
+        <div class="catalog-item" style="position:relative; width: 100%; box-sizing: border-box;" ${isEdit ? '' : 'onclick="window.openPhoneModal()"'} >
+            ${dotHtml}
+            <div class="sprite-onion-phone"></div>
+            <span style="margin:5px 0;">洋蔥手機</span>
+        </div>
+    `;
+
     rawItems['portal'] = `
         <div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.openPortalModal()"' : ''}>
             <div class="sprite-magic-gap"></div>
@@ -957,12 +959,34 @@ onAuthStateChanged(auth, async (user) => {
             set(ref(db, `users/${user.uid}`), window.GameLogic.myProfile);
         }
 
-        const globalPlayerRef = ref(db, `onlinePlayers/${user.uid}`);
-        set(globalPlayerRef, {
-            name: window.GameLogic.myProfile.name || '匿名',
-            color: window.GameLogic.myProfile.color || '#fff'
+        // ==========================================
+        // 連線狀態丟失修復：監聽 Firebase .info/connected
+        // 確保玩家因為短暫斷線引發 onDisconnect 被剔除後，還能自動補回在線清單
+        // ==========================================
+        onValue(ref(db, '.info/connected'), (snap) => {
+            if (snap.val() === true && window.GameLogic.currentUser) {
+                const globalPlayerRef = ref(db, `onlinePlayers/${window.GameLogic.currentUser.uid}`);
+                set(globalPlayerRef, {
+                    name: window.GameLogic.myProfile.name || '匿名',
+                    color: window.GameLogic.myProfile.color || '#fff'
+                });
+                onDisconnect(globalPlayerRef).remove();
+
+                if (window.GameLogic.currentScene === 'cafe') {
+                    const cafeRef = ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`);
+                    set(cafeRef, {
+                        x: window.GameLogic.myProfile.lastX || 1024,
+                        y: window.GameLogic.myProfile.lastY || 1024,
+                        name: window.GameLogic.myProfile.name,
+                        color: window.GameLogic.myProfile.color,
+                        level: window.GameLogic.myProfile.level || 1,
+                        bubbleMsg: window.GameLogic.myProfile.bubbleMsg || "",
+                        bubbleTime: window.GameLogic.myProfile.bubbleTime || 0
+                    });
+                    onDisconnect(cafeRef).remove();
+                }
+            }
         });
-        onDisconnect(globalPlayerRef).remove();
         
         onValue(ref(db, 'onlinePlayers'), (snapshot) => {
             window.GameLogic.onlinePlayers = snapshot.val() || {};
@@ -1216,7 +1240,7 @@ class UIScene extends Phaser.Scene {
         // 洋蔥頭人像
         this.portrait = this.add.sprite(0, 0, 'onion', 0);
         
-        // 顯示暱稱與等級 (根據歷史要求拔除括號)
+        // 顯示暱稱與等級
         this.nameLevelText = this.add.text(0, 0, '初心者 Lv.1', { 
             fontSize: '14px', 
             color: '#3e2723', 
@@ -1234,7 +1258,7 @@ class UIScene extends Phaser.Scene {
             fontFamily: 'Georgia' 
         }).setOrigin(0.5);
 
-        // 狀態欄文字（平時為一般深棕色，拔除預設紅字與發光效果）
+        // 狀態欄文字
         this.statusText = this.add.text(0, 0, '沒怎樣', { 
             fontSize: '15px', 
             color: '#3e2723', 
@@ -1242,7 +1266,7 @@ class UIScene extends Phaser.Scene {
             fontFamily: 'Georgia' 
         }).setOrigin(0.5);
         
-        // 裝備欄文字（基礎樣式）
+        // 裝備欄文字
         this.equipText = this.add.text(0, 0, '沒東西', { 
             fontSize: '15px', 
             color: '#3e2723', 
@@ -1258,7 +1282,7 @@ class UIScene extends Phaser.Scene {
         this.equipBlinkTween = null;
         this.statusBlinkTween = null;
 
-        // 點擊裝備欄位取消裝備功能 (改用內部確認彈窗)
+        // 點擊裝備欄位取消裝備功能
         this.equipText.on('pointerdown', () => {
             if (window.GameLogic.armedItemState === 'armed' || window.GameLogic.armedItemState === 'ready') {
                 const confModal = document.getElementById('ingame-confirm');
@@ -1291,7 +1315,7 @@ class UIScene extends Phaser.Scene {
             });
         });
 
-        // 將所有元件加入 Container，確保背景墊底，頭像與文字疊於其上
+        // 將所有元件加入 Container
         this.statusContainer.add([
             this.statusBg, 
             this.portrait, 
@@ -1311,7 +1335,7 @@ class UIScene extends Phaser.Scene {
             thumb: this.add.circle(0, 0, 20, 0xc5a059, 0.8)
         });
 
-        // 按鈕大小全面統一為半徑 30，且 A=紅、B=藍
+        // 按鈕大小全面統一為半徑 30
         this.btnA = this.add.circle(0, 0, 30, 0xd9534f).setStrokeStyle(3, 0xffffff).setInteractive();
         this.txtA = this.add.text(0, 0, 'A', { fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
         this.btnB = this.add.circle(0, 0, 30, 0x0077cc).setStrokeStyle(3, 0xffffff).setInteractive();
@@ -1374,7 +1398,7 @@ class UIScene extends Phaser.Scene {
             this.expLiquid.setSize(baseW * ratio, 16);
         }
 
-        // --- 裝備欄文字閃爍更新 (裝備水球時為白色文字，並散發藍光) ---
+        // --- 裝備欄文字閃爍更新 ---
         if (window.GameLogic.armedItemState) {
             this.equipText.setText('水球');
             if (!this.equipBlinkTween) {
@@ -1391,7 +1415,7 @@ class UIScene extends Phaser.Scene {
                 this.equipBlinkTween = null;
                 this.equipText.setAlpha(1);
                 this.equipText.setColor('#3e2723');
-                this.equipText.setShadow(0, 0, '#000', 0, false, false); // 移除發光
+                this.equipText.setShadow(0, 0, '#000', 0, false, false); 
             }
         }
 
@@ -1434,7 +1458,7 @@ class UIScene extends Phaser.Scene {
         const isPortrait = gameSize.height > gameSize.width;
         const bottomOffset = isPortrait ? 120 : 20; 
 
-        // --- 1. 定位搖桿 (固定在左下角舒適區) ---
+        // --- 1. 定位搖桿 ---
         const joystickX = 90;
         const joystickY = gameSize.height - 90 - (isPortrait ? 80 : 0);
         this.joyStick.setPosition(joystickX, joystickY);
@@ -1460,14 +1484,10 @@ class UIScene extends Phaser.Scene {
 
         this.portrait.setPosition(bgW * 0.5, -bgH * 0.62);
 
-        // 將名稱與等級文字稍微微調向上
-        this.nameLevelText.setPosition(bgW * 0.5, -bgH * 0.18);
-        this.nameLevelText.setFontSize(`${Math.max(14, 18 * scaleRatio)}px`);
-        
-        // 設置與渲染經驗值框 (在其正下方)
-        let expY = -bgH * 0.08;
+        // 新配置：經驗值條上移且加粗
+        let expY = -bgH * 0.22;
         let expW = bgW * 0.45; 
-        let expH = 12 * scaleRatio;
+        let expH = 18 * scaleRatio;
         this.expBarWidth = expW;
 
         this.expBarBg.clear();
@@ -1478,7 +1498,11 @@ class UIScene extends Phaser.Scene {
         this.expLiquid.setScale(1, expH / 16); 
 
         this.expText.setPosition(bgW * 0.5, expY);
-        this.expText.setFontSize(`${Math.max(9, 11 * scaleRatio)}px`);
+        this.expText.setFontSize(`${Math.max(10, 13 * scaleRatio)}px`);
+        
+        // 暱稱與等級文字往下移，並調整字體比例
+        this.nameLevelText.setPosition(bgW * 0.5, -bgH * 0.10);
+        this.nameLevelText.setFontSize(`${Math.max(14, 18 * scaleRatio)}px`);
         
         this.statusText.setPosition(bgW * 0.32, -bgH * 0.30);
         this.statusText.setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); 
@@ -1488,7 +1512,7 @@ class UIScene extends Phaser.Scene {
         
         this.statusToggleBtn.setPosition(bgW, -bgH * 0.30);
 
-        // --- 4. 定位右側按鈕群 (統一配置為菱形，並偏左平移) ---
+        // --- 4. 定位右側按鈕群 ---
         let clusterX = gameSize.width - 90;
         let clusterY = gameSize.height - bottomOffset - 70;
         let d = 45; 
@@ -2418,7 +2442,7 @@ class MainScene extends Phaser.Scene {
             
             for (let uid in playersData) {
                 if (uid === window.GameLogic.currentUser.uid) continue;
-                if (!globalOnline[uid]) continue; // 過濾判定已離線的幽靈玩家
+                if (!globalOnline[uid]) continue; // 過濾判定已離線的幽靈玩家，搭配.info/connected可達到完美同步
                 
                 let pd = playersData[uid]; pd.uid = uid;
                 if (!this.otherPlayers[uid]) this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
