@@ -80,32 +80,45 @@ function createSystemUI() {
             .catalog-item:hover { background: rgba(197, 160, 89, 0.2); }
             .catalog-item img { width: 50px; height: 50px; margin-bottom: 5px; object-fit: contain;}
 
-            #chat-section { display: none; position: absolute; top: 60px; left: 20px; width: 280px; flex-direction: column; z-index: 100; pointer-events: none; }            #chat-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 4px 4px 0 0; padding: 5px 10px; width: fit-content; cursor: pointer; font-size: 12px; font-weight: bold;}
+            #chat-section { display: none; position: absolute; top: 60px; left: 20px; width: 280px; flex-direction: column; z-index: 100; pointer-events: none; }            
+            #chat-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 4px 4px 0 0; padding: 5px 10px; width: fit-content; cursor: pointer; font-size: 12px; font-weight: bold;}
             #chat-content { pointer-events: auto; transition: max-height 0.3s ease-in-out; overflow: hidden; display: flex; flex-direction: column; }
-            #chat-box { max-height: 100px; overflow-y: auto; background: rgba(0, 0, 0, 0.5); color: #fff; padding: 8px; border-radius: 0 8px 0 0; margin-bottom: 5px; font-size: 13px; text-shadow: 1px 1px 2px #000; }            #chat-input-area { display: flex; height: 40px; box-shadow: 0 2px 5px rgba(0,0,0,0.5); border-radius: 4px;}
+            #chat-box { max-height: 100px; overflow-y: auto; background: rgba(0, 0, 0, 0.5); color: #fff; padding: 8px; border-radius: 0 8px 0 0; margin-bottom: 5px; font-size: 13px; text-shadow: 1px 1px 2px #000; }            
+            #chat-input-area { display: flex; height: 40px; box-shadow: 0 2px 5px rgba(0,0,0,0.5); border-radius: 4px;}
             #chat-input { flex-grow: 1; padding: 8px; border: 2px solid var(--mucha-gold); border-radius: 4px 0 0 4px; background: rgba(244, 236, 216, 0.95); font-family: inherit;}
             #send-btn { padding: 8px 15px; background: var(--mucha-gold); color: white; border: 2px solid var(--mucha-gold); border-radius: 0 4px 4px 0; font-family: inherit; font-weight: bold; cursor: pointer;}
             .chat-collapsed #chat-content { max-height: 0px !important; }
             #top-notification-bar { position: absolute; top: 0; left: 0; width: 100%; padding: 8px 0; background: rgba(0, 0, 0, 0.6); color: #fff; text-align: center; font-size: 14px; z-index: 500; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 1px 1px 2px #000; letter-spacing: 1px; }
        
+            /* --- 誰在玩 UI --- */
+            #online-players-list { position: absolute; right: 15px; top: 220px; background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 8px; color: white; display: none; z-index: 100; font-size: 13px; border: 1px solid var(--mucha-gold); pointer-events: none; min-width: 80px; text-shadow: 1px 1px 2px #000; }
+            
             /* --- 商品精靈圖動畫 --- */
-            .sprite-waterball {
-                width: 50px; 
-                height: 50px; 
-                background: url('shop-water-ball.png') left center;
-                animation: play-waterball 0.8s steps(8) infinite;
-                margin-bottom: 5px;
+            .sprite-waterball { width: 50px; height: 50px; background: url('shop-water-ball.png') left center; animation: play-waterball 0.8s steps(8) infinite; margin-bottom: 5px; }
+            .sprite-onion-phone { width: 50px; height: 50px; background: url('tool-onion-phone.png') left center; animation: play-onion-phone 0.8s steps(8) infinite; margin-bottom: 5px; }
+            
+            @keyframes play-waterball { 100% { background-position: -400px; } }
+            @keyframes play-onion-phone { 100% { background-position: -400px; } }
+            @keyframes flash-orange {
+                0% { transform: translate(-50%, -50%) scale(1); text-shadow: 0 0 10px orange; opacity: 1; }
+                50% { transform: translate(-50%, -50%) scale(1.2); text-shadow: 0 0 30px #ffcc00, 0 0 50px orange; opacity: 1; }
+                100% { transform: translate(-50%, -50%) scale(1); text-shadow: 0 0 10px orange; opacity: 0; }
             }
-            @keyframes play-waterball {
-                100% { background-position: -400px; } 
-            }
+            .flash-text { animation: flash-orange 2s ease-out forwards; }
+            
             /* --- 裝備中狀態閃爍 --- */
             @keyframes blink-red { 0% { box-shadow: 0 0 5px red; border-color: red; } 50% { box-shadow: 0 0 15px red; border-color: #ff6666; background-color: rgba(255,0,0,0.1); } 100% { box-shadow: 0 0 5px red; border-color: red; } }
             .item-in-use { animation: blink-red 1.2s infinite; border: 2px solid red !important; }
+
+            /* PM Chat Box Styles */
+            #pm-chat-box { height: 200px; overflow-y: auto; background: #fffdf5; border: 1px solid var(--mucha-gold); border-radius: 4px; padding: 10px; margin-bottom: 10px; text-align: left; font-size: 14px;}
+            .pm-msg { margin-bottom: 5px; }
         </style>
         
         <div id="top-notification-bar">系統通知：歡迎來到洋蔥交誼廳！</div>
         <div id="action-menu" class="action-menu"><button id="view-profile-btn">洋蔥身分證</button></div>
+        <div id="online-players-list"></div>
+        <div id="purchase-success-msg" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:#ffcc00; font-size:48px; z-index:400; font-weight:bold; text-align:center; pointer-events:none; -webkit-text-stroke: 2px #d4af37;">你大撒幣！</div>
 
         <div id="login-screen">
             <h2 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">入館登記</h2>
@@ -199,8 +212,26 @@ function createSystemUI() {
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('inventory-modal').style.display='none'">關閉</button>
         </div>
 
+        <div id="phone-modal" class="modal">
+            <h3 style="color: var(--mucha-green);">📱 洋蔥手機</h3>
+            <p style="font-size: 12px; color: #666; margin-top: 0;">點擊聯絡人發送私訊</p>
+            <div id="phone-contacts" class="catalog-grid" style="display: flex; flex-direction: column; gap: 5px;"></div>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('phone-modal').style.display='none'">收起手機</button>
+        </div>
+
+        <div id="pm-modal" class="modal" style="z-index: 260;">
+            <h3 id="pm-title" style="color: var(--mucha-green);">私訊</h3>
+            <div id="pm-chat-box"></div>
+            <div style="display:flex; gap: 5px;">
+                <input type="text" id="pm-input" style="flex-grow:1; padding:5px; border: 1px solid var(--mucha-gold); border-radius: 4px;" placeholder="輸入訊息...">
+                <button class="btn-primary" onclick="window.sendPM()">發送</button>
+            </div>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="window.closePM()">返回聯絡人</button>
+        </div>
+
         <div id="store-modal" class="modal" style="padding:0; overflow:hidden; z-index: 250;">
             <div style="background:#2a1b12; text-align:center; position:relative; border-bottom: 2px solid var(--mucha-gold);">
+                <div id="store-manager-bubble" style="position:absolute; top:10%; left:50%; transform:translateX(-50%); background:rgba(244, 236, 216, 0.95); color:#3e2723; padding:8px 12px; border-radius:8px; font-size:14px; border:2px solid var(--mucha-gold); font-weight:bold; white-space:nowrap; z-index:2; box-shadow: 0 2px 5px rgba(0,0,0,0.5);">這顆臭洋蔥打什麼主意啊</div>
                 <img src="store-manager-talking.png" style="width:100%; display:block;" alt="老闆">
                 <div style="position:absolute; bottom:5px; right:5px; background:rgba(0,0,0,0.8); color:var(--mucha-gold); padding:4px 8px; border-radius:4px; font-size:12px; border:1px solid var(--mucha-gold); font-weight:bold;">德骨拉完叻</div>
             </div>
@@ -234,6 +265,25 @@ function createSystemUI() {
 }
 
 createSystemUI();
+
+// --- 誰在玩 UI 更新 ---
+window.updateOnlinePlayersUI = function() {
+    const listEl = document.getElementById('online-players-list');
+    if (!listEl) return;
+    if (window.GameLogic.currentScene !== 'cafe') {
+        listEl.style.display = 'none';
+        return;
+    }
+    listEl.style.display = 'block';
+    let html = '<div style="color:var(--mucha-gold); font-weight:bold; margin-bottom:5px; text-align:center; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 3px;">誰在玩</div>';
+    let players = window.GameLogic.cafePlayers || {};
+    for (let uid in players) {
+        let p = players[uid];
+        html += `<div style="margin-top:5px; display:flex; align-items:center;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${p.color || '#fff'}; margin-right:8px; border:1px solid #000;"></span>${p.name || '匿名'}</div>`;
+    }
+    listEl.innerHTML = html;
+};
+
 // --- 背包與商店的全域邏輯 ---
 window.currentPurchaseItem = null;
 window.currentPurchasePrice = 0;
@@ -265,38 +315,124 @@ window.stopUsingItem = function(itemName) {
 
 window.openInventoryModal = function() {
     const list = document.getElementById('inventory-list');
-    list.innerHTML = '';
+    
+    // 洋蔥手機為常駐物品
+    let invHTML = `
+        <div class="catalog-item">
+            <div class="sprite-onion-phone"></div>
+            <span style="margin:5px 0;">洋蔥手機</span>
+            <button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.openPhoneModal()">查看</button>
+        </div>
+    `;
+
     let inv = window.GameLogic.myProfile.inventory || {};
     let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥');
     
-    if (keys.length === 0) {
-        list.innerHTML = "<div style='grid-column:span 2; text-align:center; color:#888; padding: 20px;'>背包空空如也...</div>";
-    } else {
-        keys.forEach(k => {
-            let iconHtml = "";
-            if (k === '水球') {
-                iconHtml = '<div class="sprite-waterball"></div>';
-            } else {
-                iconHtml = '<span style="font-size:24px; margin-bottom:5px;">📦</span>';
-            }
-            
-            let isUsing = (k === '水球' && window.GameLogic.armedItemState != null);
-            let itemClass = isUsing ? 'catalog-item item-in-use' : 'catalog-item';
-            let btnHtml = isUsing 
-                ? `<button style="padding:4px 10px; font-size:12px; background: #d9534f; color: white; border: none; border-radius: 4px; cursor: pointer;" onclick="window.stopUsingItem('${k}')">暫停使用</button>`
-                : `<button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.useItem('${k}')">使用</button>`;
-            
-            list.innerHTML += `
-                <div class="${itemClass}">
-                    ${iconHtml}
-                    <span style="margin:5px 0;">${k} x${inv[k]}</span>
-                    ${btnHtml}
-                </div>`;
-        });
-    }
+    keys.forEach(k => {
+        let iconHtml = "";
+        if (k === '水球') {
+            iconHtml = '<div class="sprite-waterball"></div>';
+        } else {
+            iconHtml = '<span style="font-size:24px; margin-bottom:5px;">📦</span>';
+        }
+        
+        let isUsing = (k === '水球' && window.GameLogic.armedItemState != null);
+        let itemClass = isUsing ? 'catalog-item item-in-use' : 'catalog-item';
+        let btnHtml = isUsing 
+            ? `<button style="padding:4px 10px; font-size:12px; background: #d9534f; color: white; border: none; border-radius: 4px; cursor: pointer;" onclick="window.stopUsingItem('${k}')">暫停使用</button>`
+            : `<button style="padding:4px 10px; font-size:12px;" class="btn-primary" onclick="window.useItem('${k}')">使用</button>`;
+        
+        invHTML += `
+            <div class="${itemClass}">
+                ${iconHtml}
+                <span style="margin:5px 0;">${k} x${inv[k]}</span>
+                ${btnHtml}
+            </div>`;
+    });
+    
+    list.innerHTML = invHTML;
     document.getElementById('inventory-modal').style.display = 'block';
 };
 
+// --- 洋蔥手機私訊功能 ---
+window.currentPMUid = null;
+window.pmUnsubscribe = null;
+
+window.openPhoneModal = function() {
+    document.getElementById('inventory-modal').style.display = 'none';
+    document.getElementById('phone-modal').style.display = 'block';
+    
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.get(module.ref(window.GameLogic.db, 'users')).then(snap => {
+            let users = snap.val() || {};
+            let html = '';
+            for (let uid in users) {
+                if (uid === window.GameLogic.currentUser.uid) continue;
+                let u = users[uid];
+                html += `
+                    <div class="catalog-item" style="flex-direction:row; justify-content:space-between; padding: 10px;" onclick="window.openPM('${uid}', '${u.name || '匿名'}')">
+                        <span style="font-weight:bold; color: ${u.color || '#000'}">${u.name || '匿名'} (Lv.${u.level || 1})</span>
+                        <button class="btn-primary" style="padding: 4px 12px; font-size:12px;">私訊</button>
+                    </div>
+                `;
+            }
+            if (html === '') html = '<div style="text-align:center; color:#888;">目前沒有其他聯絡人</div>';
+            document.getElementById('phone-contacts').innerHTML = html;
+        });
+    });
+};
+
+window.openPM = function(targetUid, targetName) {
+    document.getElementById('phone-modal').style.display = 'none';
+    document.getElementById('pm-modal').style.display = 'block';
+    document.getElementById('pm-title').innerText = `💬 與 ${targetName} 密語`;
+    window.currentPMUid = targetUid;
+    
+    let myUid = window.GameLogic.currentUser.uid;
+    let chatId = [myUid, targetUid].sort().join('_');
+    
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        if (window.pmUnsubscribe) window.pmUnsubscribe();
+        window.pmUnsubscribe = module.onValue(module.ref(window.GameLogic.db, `privateChats/${chatId}`), snap => {
+            let msgs = snap.val() || {};
+            let box = document.getElementById('pm-chat-box');
+            box.innerHTML = '';
+            Object.values(msgs).forEach(m => {
+                let color = m.uid === myUid ? 'var(--mucha-green)' : 'var(--mucha-brown)';
+                let align = m.uid === myUid ? 'right' : 'left';
+                box.innerHTML += `<div class="pm-msg" style="text-align:${align};"><strong style="color:${color}">${m.name}</strong>: ${m.msg}</div>`;
+            });
+            box.scrollTop = box.scrollHeight;
+        });
+    });
+};
+
+window.closePM = function() {
+    if (window.pmUnsubscribe) { window.pmUnsubscribe(); window.pmUnsubscribe = null; }
+    document.getElementById('pm-modal').style.display = 'none';
+    document.getElementById('phone-modal').style.display = 'block';
+};
+
+window.sendPM = function() {
+    let input = document.getElementById('pm-input');
+    let msg = input.value.trim();
+    if (!msg || !window.currentPMUid) return;
+    
+    let myUid = window.GameLogic.currentUser.uid;
+    let chatId = [myUid, window.currentPMUid].sort().join('_');
+    
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.push(module.ref(window.GameLogic.db, `privateChats/${chatId}`), {
+            uid: myUid,
+            name: window.GameLogic.myProfile.name,
+            msg: msg,
+            time: Date.now()
+        });
+    });
+    input.value = '';
+};
+
+// --- 商店購買邏輯 ---
 window.openPurchaseModal = function(name, price) {
     let currentCoins = window.GameLogic.myProfile.coins || 0;
     let maxQty = Math.floor(currentCoins / price);
@@ -341,13 +477,27 @@ window.confirmPurchase = function() {
             });
         });
         
-        alert(`結帳成功！獲得 ${window.currentPurchaseQty} 個 ${window.currentPurchaseItem}`);
+        // 結帳成功特效與氣泡變更
         document.getElementById('purchase-modal').style.display = 'none';
+        
+        let msgEl = document.getElementById('purchase-success-msg');
+        msgEl.style.display = 'block';
+        msgEl.classList.remove('flash-text');
+        void msgEl.offsetWidth; // trigger reflow
+        msgEl.classList.add('flash-text');
+        setTimeout(() => { msgEl.style.display = 'none'; }, 2000);
+
+        let smBubble = document.getElementById('store-manager-bubble');
+        if (smBubble) {
+            smBubble.innerText = "懂買的都是好蔥！";
+            setTimeout(() => { smBubble.innerText = "這顆臭洋蔥打什麼主意啊"; }, 3000);
+        }
         
         let coinsEl = document.getElementById("vp-coins");
         if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
     }
 };
+
 const loginScreen = document.getElementById("login-screen");
 const gameLayoutContainer = document.getElementById("game-layout-container");
 const chatSection = document.getElementById("chat-section");
@@ -424,6 +574,7 @@ onAuthStateChanged(auth, async (user) => {
         loginScreen.style.display = "block";
         gameLayoutContainer.style.display = "none";
         if (cafeUnsubscribe) cafeUnsubscribe();
+        window.updateOnlinePlayersUI();
     }
 });
 
@@ -450,6 +601,8 @@ function switchScene(sceneName) {
         chatSection.style.display = "flex";
         joinCafe();
     }
+    
+    window.updateOnlinePlayersUI();
 
     if (window.GameLogic.phaserGame && window.GameLogic.phaserLoaded) {
         const game = window.GameLogic.phaserGame;
@@ -471,12 +624,16 @@ function joinCafe() {
         bubbleTime: window.GameLogic.myProfile.bubbleTime 
     });
     onDisconnect(playerRef).remove(); 
-    cafeUnsubscribe = onValue(ref(db, 'cafePlayers'), (snapshot) => window.GameLogic.cafePlayers = snapshot.val() || {});
+    cafeUnsubscribe = onValue(ref(db, 'cafePlayers'), (snapshot) => {
+        window.GameLogic.cafePlayers = snapshot.val() || {};
+        window.updateOnlinePlayersUI();
+    });
 }
 
 function leaveCafe() {
     if (window.GameLogic.currentUser) set(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), null);
     if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; }
+    window.updateOnlinePlayersUI();
 }
 
 function gainRewards(coins, exp) {
@@ -529,11 +686,12 @@ class BootScene extends Phaser.Scene {
         this.load.image('dummy', 'dummy.png');
         this.load.spritesheet('dummy-wet', 'dummy-wet.png', { frameWidth: 75, frameHeight: 75 });
 
-        // --- 新增音效資源 ---
+        // --- 音效資源 ---
         this.load.audio('minimum_laser', 'minimum_laser.mp3');
         this.load.audio('powerdown07', 'powerdown07.mp3');
         this.load.audio('coin03', 'coin03.mp3');
         this.load.audio('brooming1', 'brooming1.mp3');
+        this.load.audio('chorus_of_angels1', 'chorus_of_angels1.mp3');
     }
     create() {
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 });
@@ -709,7 +867,6 @@ class MainScene extends Phaser.Scene {
 
             this.scale.on('resize', (gameSize) => { if (this.minimap) this.minimap.setPosition(gameSize.width - mapSize - marginX, marginY); });
 
-            // --- 新增：全域監聽洋蔥皮同步 ---
             this.trashListener = onValue(ref(window.GameLogic.db, 'cafeTrashes'), (snap) => {
                 let data = snap.val() || {};
                 
@@ -732,6 +889,7 @@ class MainScene extends Phaser.Scene {
                             if (this.localPlayer && this.localPlayer.isSweeping) {
                                 this.localPlayer.isSweeping = false;
                                 this.qteContainer.setVisible(false);
+                                if (this.sound.get('brooming1')) this.sound.stopByKey('brooming1');
                             }
                         }
                         return false;
@@ -751,6 +909,24 @@ class MainScene extends Phaser.Scene {
             let imgW = this.storeManager.width; let imgH = this.storeManager.height;
             this.storeManager.body.setSize(120, 120); 
             this.storeManager.body.setOffset((imgW - 120) / 2, (imgH - 120) / 2); 
+            
+            // --- 店長氣泡 ---
+            this.smBubbleBg = this.add.graphics().setDepth(6);
+            this.smBubbleText = this.add.text(mapW/2, mapH/2 - 90, '好想離職......', { fontSize: '14px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(7);
+            
+            const smPhrases = ["好想離職......", "這裡怎麼還沒倒......", "洋蔥好臭啊......"];
+            let phraseIdx = 0;
+
+            const updateSMBubble = () => {
+                this.smBubbleText.setText(smPhrases[phraseIdx]);
+                const bounds = this.smBubbleText.getBounds();
+                const boxWidth = bounds.width + 16, boxHeight = bounds.height + 12;
+                const boxX = this.smBubbleText.x - boxWidth / 2, boxY = this.smBubbleText.y - boxHeight / 2;
+                this.smBubbleBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(boxX, boxY, boxWidth, boxHeight, 8).strokeRoundedRect(boxX, boxY, boxWidth, boxHeight, 8);
+                phraseIdx = (phraseIdx + 1) % smPhrases.length;
+            };
+            updateSMBubble();
+            this.time.addEvent({ delay: 4000, callback: updateSMBubble, callbackScope: this, loop: true });
         }
 
         const uiScene = this.scene.manager.getScene('UIScene');
@@ -860,13 +1036,11 @@ class MainScene extends Phaser.Scene {
                 inv['水球'] = Math.max(0, (inv['水球'] || 0) - 1);
                 update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
                 
-                // --- 調整：裝填與常駐邏輯 ---
                 if (inv['水球'] > 0) {
                     window.GameLogic.armedItemState = 'armed';
                 } else {
                     window.GameLogic.armedItemState = null;
                 }
-                window.openInventoryModal(); // 刷新介面狀態
                 
                 // --- 音效：投射 ---
                 if (this.sound.get('minimum_laser')) this.sound.play('minimum_laser'); else this.sound.add('minimum_laser').play();
@@ -901,7 +1075,6 @@ class MainScene extends Phaser.Scene {
                             } else if (targetType === 'dummy') {
                                 update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                                 
-                                // 假人被砸中掉落 15 馬德幣 (3枚 x5)
                                 for (let i = 0; i < 3; i++) {
                                     let cx = targetSprite.x + Phaser.Math.Between(-40, 40);
                                     let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
@@ -922,7 +1095,10 @@ class MainScene extends Phaser.Scene {
 
             if (this.localPlayer.isSweeping) {
                 // --- 音效：打掃 ---
-                if (this.sound.get('brooming1')) this.sound.play('brooming1'); else this.sound.add('brooming1').play();
+                if (!this.sound.get('brooming1')?.isPlaying) {
+                    if (this.sound.get('brooming1')) this.sound.play('brooming1'); 
+                    else this.sound.add('brooming1').play();
+                }
 
                 this.qteProgress += (100 / this.qteTotalClicks);
                 if (this.qteProgress >= 100) {
@@ -994,7 +1170,6 @@ class MainScene extends Phaser.Scene {
                 let coinsEl = document.getElementById("vp-coins");
                 if (coinsEl) coinsEl.innerText = p.coins;
 
-                // --- 調整：擊中玩家獎勵 35 馬德幣分配給攻擊者 ---
                 let amounts = [12, 12, 11];
                 for (let i = 0; i < 3; i++) {
                     let cx = this.localPlayer.sprite.x + Phaser.Math.Between(-40, 40);
@@ -1041,7 +1216,6 @@ class MainScene extends Phaser.Scene {
         if (!this.isCafe) return;
         let playerCount = Object.keys(window.GameLogic.cafePlayers || {}).length || 1;
         
-        // --- 調整：動態上限與線性生成機率 ---
         let limits = [10, 12, 15, 17, 20];
         let maxTrash = limits[Math.min(playerCount - 1, 4)];
         let spawnChance = 0.3 + (playerCount * 0.1); 
@@ -1108,7 +1282,6 @@ class MainScene extends Phaser.Scene {
         let f = { sprite: this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true) };
         f.sprite.isLocked = data.locked;
 
-        // --- 新增：為假人配置專屬對話氣泡與機制 ---
         if (imgKey === 'dummy') {
             f.bubbleBg = this.add.graphics().setDepth(13).setVisible(false);
             f.bubbleText = this.add.text(data.x, data.y, '', { fontSize: '12px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold', wordWrap: { width: 100, useAdvancedWrap: true }, align: 'center' }).setOrigin(0.5).setDepth(14).setVisible(false);
@@ -1125,11 +1298,12 @@ class MainScene extends Phaser.Scene {
     finishSweeping(success) {
         this.localPlayer.isSweeping = false;
         this.qteContainer.setVisible(false);
+        
+        if (this.sound.get('brooming1')) this.sound.stopByKey('brooming1');
 
         if (success && this.closestTrash) {
             let px = this.localPlayer.sprite.x; let py = this.localPlayer.sprite.y - 40; 
             
-            // --- 調整：從全域 Firebase 移除 ---
             import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
                 module.remove(module.ref(window.GameLogic.db, 'cafeTrashes/' + this.closestTrash.key));
             });
@@ -1137,7 +1311,11 @@ class MainScene extends Phaser.Scene {
             
             let leveledUp = gainRewards(0, 10); 
             
-            // --- 調整：掃皮王隨機獲得 10-18 馬德幣 ---
+            if (leveledUp) {
+                if (this.sound.get('chorus_of_angels1')) this.sound.play('chorus_of_angels1');
+                else this.sound.add('chorus_of_angels1').play();
+            }
+
             let totalCoins = Phaser.Math.Between(10, 18);
             let coinAmounts = [Math.floor(totalCoins/3), Math.floor(totalCoins/3), totalCoins - 2*Math.floor(totalCoins/3)];
 
@@ -1337,7 +1515,6 @@ class MainScene extends Phaser.Scene {
             let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, coin.x, coin.y);
             
             if (dist < 30) { 
-                // --- 音效：拾取馬德幣 ---
                 if (this.sound.get('coin03')) this.sound.play('coin03'); else this.sound.add('coin03').play();
 
                 let coinAmount = coin.amount;
@@ -1422,7 +1599,6 @@ class MainScene extends Phaser.Scene {
                 if(window.GameLogic.placingFurnitureKey !== key) { f.sprite.x = Phaser.Math.Linear(f.sprite.x, fd.x, 0.3); f.sprite.y = Phaser.Math.Linear(f.sprite.y, fd.y, 0.3); }
                 f.sprite.setAlpha(!fd.locked ? 0.6 : 1);
 
-                // --- 假人對話框邏輯演算 ---
                 if (key.includes('dummy') && f.bubbleBg) {
                     f.bubbleBg.setVisible(true); f.bubbleText.setVisible(true);
                     
@@ -1597,7 +1773,12 @@ document.getElementById("save-edit-btn").addEventListener("click", () => {
 });
 
 document.getElementById("send-btn").addEventListener("click", sendChat);
-window.addEventListener("keydown", (e) => { if (e.key === "Enter" && document.activeElement === chatInput) sendChat(); });
+window.addEventListener("keydown", (e) => { 
+    if (e.key === "Enter") {
+        if (document.activeElement === chatInput) sendChat();
+        else if (document.activeElement === document.getElementById("pm-input")) window.sendPM();
+    }
+});
 
 function sendBubble(msg) {
     if (window.GameLogic.currentUser) {
