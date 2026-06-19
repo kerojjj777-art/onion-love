@@ -1275,6 +1275,7 @@ class BootScene extends Phaser.Scene {
         this.load.image('fireworks', 'shop-fireworks.png');
         this.load.spritesheet('onion-fireworks', 'onion-fireworks.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('onion-got-shot', 'onion-got-shot.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.spritesheet('dummy-got-shot', 'dummy-got-shot.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('fireworks-shoot', 'fireworks-shoot.png', { frameWidth: 50, frameHeight: 50 });
 
         // 載入慕夏風角色狀態基底圖
@@ -1327,6 +1328,7 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'fw-throw', frames: this.anims.generateFrameNumbers('onion-fireworks'), frameRate: 8, repeat: 2 });
         this.anims.create({ key: 'fw-hit', frames: this.anims.generateFrameNumbers('onion-got-shot'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'fw-shoot', frames: this.anims.generateFrameNumbers('fireworks-shoot'), frameRate: 15, repeat: -1 });
+        this.anims.create({ key: 'dummy-fw-hit', frames: this.anims.generateFrameNumbers('dummy-got-shot'), frameRate: 10, repeat: -1 });
       
         this.scene.launch('UIScene');
         this.scene.bringToTop('UIScene'); 
@@ -2227,7 +2229,7 @@ class MainScene extends Phaser.Scene {
                     let dummy = this.furnitureSprites[key].sprite;
                     if (dummy && !dummy.isStunned) {
                         dummy.isStunned = true;
-                        dummy.play('dummy-hit', true); 
+                        dummy.play('dummy-fw-hit', true); 
                         this.time.delayedCall(1500, () => { 
                             if (dummy && dummy.active) {
                                 dummy.isStunned = false; 
