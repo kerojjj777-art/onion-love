@@ -1199,42 +1199,42 @@ class UIScene extends Phaser.Scene {
         const isPortrait = gameSize.height > gameSize.width;
         const bottomOffset = isPortrait ? 120 : 20; 
 
-        // --- 1. 動態縮放狀態欄底圖 ---
-        // 設定狀態欄的最大寬度 (例如：不要超過螢幕寬度的 40%，且最大不超過 300px)
-        const targetWidth = Math.min(gameSize.width * 0.4, 300);
-        
-        // 計算縮放比例 (目標寬度 / 原始圖片真實寬度)
-        const scaleRatio = targetWidth / this.statusBg.width;
-
-        // 套用縮放比例到圖片與頭像
-        this.statusBg.setScale(scaleRatio);
-        this.portrait.setScale(1.1 * scaleRatio); // 頭像跟著等比縮放
-
-        // 取得縮放後的實際顯示寬高
-        const bgW = this.statusBg.displayWidth;
-        const bgH = this.statusBg.displayHeight;
-
-        // --- 2. 定位角色狀態基底 Container ---
-        // 靠螢幕左下角，可以微微往內推 10px 留白
-        this.statusContainer.setPosition(10, gameSize.height - 10);
-
-        // 依據「縮放後」的尺寸重新定位內部文字與頭像 (比例維持原本設定)
-        this.portrait.setPosition(bgW * 0.25, -bgH * 0.6);
-        
-        this.statusText.setPosition(bgW * 0.75, -bgH * 0.71);
-        this.statusText.setFontSize(`${Math.max(12, 16 * scaleRatio)}px`); // 文字也跟著微調大小
-
-        this.equipText.setPosition(bgW * 0.75, -bgH * 0.38);
-        this.equipText.setFontSize(`${Math.max(12, 16 * scaleRatio)}px`);
-
-        // --- 3. 定位搖桿 (解除與圖片寬度的絕對綁定) ---
-        // 直接將搖桿固定在左下角的操作舒適區，不再被圖片寬度推移
+        // --- 1. 先定位搖桿 (固定在左下角舒適區) ---
+        // 我們需要先算出搖桿的位置，因為接下來狀態欄要參考它
         const joystickX = 90;
         const joystickY = gameSize.height - 90 - (isPortrait ? 80 : 0);
         this.joyStick.setPosition(joystickX, joystickY);
         
         if (this.joyStick.base) this.joyStick.base.setDepth(10);
         if (this.joyStick.thumb) this.joyStick.thumb.setDepth(10);
+
+        // --- 2. 動態縮放狀態欄底圖 ---
+        // 稍微放大最大寬度限制，讓整體看起來更大氣 (最大不超過 350px)
+        const targetWidth = Math.min(gameSize.width * 0.45, 350);
+        const scaleRatio = targetWidth / this.statusBg.width;
+
+        // 套用縮放比例
+        this.statusBg.setScale(scaleRatio);
+        this.portrait.setScale(1.1 * scaleRatio);
+
+        const bgW = this.statusBg.displayWidth;
+        const bgH = this.statusBg.displayHeight;
+
+        // --- 3. 定位角色狀態基底 Container (重點修改處) ---
+        // X: 靠畫面左側，留 20px 邊距
+        // Y: 放置於搖桿正上方。搖桿半徑是 40，所以減去 60 剛好能在搖桿上方保留 20px 的完美間距
+        const statusX = 20;
+        const statusY = joystickY - 60;
+        this.statusContainer.setPosition(statusX, statusY);
+
+        // 依據縮放後的尺寸定位內部元件，並同步微調最小字體大小避免看不清楚
+        this.portrait.setPosition(bgW * 0.25, -bgH * 0.6);
+        
+        this.statusText.setPosition(bgW * 0.75, -bgH * 0.71);
+        this.statusText.setFontSize(`${Math.max(14, 18 * scaleRatio)}px`); 
+
+        this.equipText.setPosition(bgW * 0.75, -bgH * 0.38);
+        this.equipText.setFontSize(`${Math.max(14, 18 * scaleRatio)}px`);
 
         // --- 4. 定位右側按鈕群與選單 (保持現有邏輯) ---
         this.btnA.setPosition(gameSize.width - safeMargin, gameSize.height - safeMargin - bottomOffset + 20);
