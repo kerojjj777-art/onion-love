@@ -1,5 +1,5 @@
 // 升級版號至 v0.0.8 (地圖縮放、家俱控制、對話框翻新版)
-const CACHE_NAME = 'onion-store-v0.1.4.1';
+const CACHE_NAME = 'onion-store-v0.1.4.2';
 
 const ASSETS = [
     './',
