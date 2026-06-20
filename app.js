@@ -983,9 +983,12 @@ class MainScene extends Phaser.Scene {
                 if (uid === window.GameLogic.currentUser.uid) continue; if (!globalOnline[uid]) continue; 
                 let pd = playersData[uid]; pd.uid = uid; if (!this.otherPlayers[uid]) this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
                 let op = this.otherPlayers[uid]; let oldX = op.sprite.x; let oldY = op.sprite.y; op.sprite.x = Phaser.Math.Linear(op.sprite.x, pd.x, 0.2); op.sprite.y = Phaser.Math.Linear(op.sprite.y, pd.y, 0.2); let diffX = op.sprite.x - oldX; let diffY = op.sprite.y - oldY; let absX = Math.abs(diffX); let absY = Math.abs(diffY);
-                if (op.sprite.isStunned || op.sprite.isThrowing) { } else if (pd.isSeated) {
+               if (op.sprite.isStunned || op.sprite.isThrowing) { } else if (pd.isSeated) {
                     if (isPurifying) {
-                        if (evData.targetUid === uid) op.sprite.play('purify-target', true); else op.sprite.play('purify-magic', true);
+                        if (evData.targetUid === uid) {
+                            op.sprite.play('purify-target', true);
+                            if (this.furnitureSprites['altar']) { op.sprite.x = this.furnitureSprites['altar'].sprite.x; op.sprite.y = this.furnitureSprites['altar'].sprite.y + 40; }
+                        } else { op.sprite.play('purify-magic', true); }
                     } else { op.sprite.play('seat-idle', true); }
                 } else if (absX < 0.5 && absY < 0.5) { op.sprite.play('idle', true); } else if (absX >= absY) { op.sprite.setFlipX(diffX < 0); op.sprite.play('walk', true); } else { if (diffY < 0) { op.sprite.play('walk-up', true); } else { op.sprite.play('walk-down', true); } }
                 this.updatePlayerEntity(op, pd);
