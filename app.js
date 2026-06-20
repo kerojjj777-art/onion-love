@@ -1005,9 +1005,48 @@ class MainScene extends Phaser.Scene {
 
 function initPhaser() { const config = { type: Phaser.AUTO, parent: 'phaser-app', width: '100%', height: '100%', backgroundColor: '#1a1008', scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH }, physics: { default: 'arcade', arcade: { debug: false } }, scene: [ BootScene, MainScene, UIScene ] }; window.GameLogic.phaserGame = new Phaser.Game(config); }
 
-function openFurnitureCatalog() {
+window.openFurnitureCatalog = function() {
     const modal = document.getElementById('furniture-catalog-modal'); const list = document.getElementById('catalog-list'); const title = document.getElementById('catalog-title'); list.innerHTML = "";
     let items = [];
-    if (window.GameLogic.currentScene === "cafe") { title.innerText = "📦 大廳家俱目錄"; items = [ { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' }, { key: 'memory', name: '📖 咖啡廳回憶錄', img: 'memory.png' }, { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' }, { key: 'dummy', name: '🧍 假人洋蔥', img: 'dummy.png' } ]; }
-    else if (window.GameLogic.currentScene === "doghouse") { title.innerText = "🏠 房間家具擺設"; items = [ { key: 'bed', name: '🛏️ 狗窩床鋪', img: 'doghouse-bed.png' } ]; }
-    else if (window.GameLogic.currentScene === "shrine") { title.innerText = "☯️ 神
+    if (window.GameLogic.currentScene === "cafe") { 
+        title.innerText = "📦 大廳家俱目錄"; 
+        items = [ { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' }, { key: 'memory', name: '📖 咖啡廳回憶錄', img: 'memory.png' }, { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' }, { key: 'dummy', name: '🧍 假人洋蔥', img: 'dummy.png' } ]; 
+    }
+    else if (window.GameLogic.currentScene === "doghouse") { 
+        title.innerText = "🏠 房間家具擺設"; 
+        items = [ { key: 'bed', name: '🛏️ 狗窩床鋪', img: 'doghouse-bed.png' } ]; 
+    }
+    else if (window.GameLogic.currentScene === "shrine") { 
+        title.innerText = "☯️ 神龕法器"; 
+        items = [ { key: 'altar', name: '🪔 儀式祭壇', img: 'shrine-altar.png' }, { key: 'seat', name: '🧘 禁屎坐墊', img: 'shrine-no-poo-poo-seat.png' } ]; 
+    }
+    
+    items.forEach(item => {
+        let div = document.createElement('div'); div.className = 'catalog-item';
+        div.innerHTML = `<img src="${item.img}"><span>${item.name}</span>`;
+        div.onclick = () => {
+            let finalKey = item.key;
+            
+            // 修正 4：判斷如果是禁屎坐墊，進行上限檢查
+            if (finalKey === 'seat') {
+                let currentSeats = 0;
+                for (let k in (window.GameLogic.shrineFurniture || {})) { if (k.startsWith('seat_')) currentSeats++; }
+                if (currentSeats >= 6) { alert("禁屎坐墊最多只能擺放 6 個喔！"); return; }
+                finalKey = 'seat_' + Date.now(); // 確保多個坐墊有不同的獨立 key
+            }
+
+            window.GameLogic.placingFurnitureKey = finalKey;
+            let path = window.GameLogic.currentScene === 'cafe' ? `cafeFurniture/${finalKey}` : (window.GameLogic.currentScene === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${finalKey}` : `shrineFurniture/${finalKey}`);
+            let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
+            let px = ms && ms.localPlayer ? ms.localPlayer.sprite.x : 1024;
+            let py = ms && ms.localPlayer ? ms.localPlayer.sprite.y - 100 : 1024;
+            
+            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { 
+                module.update(module.ref(window.GameLogic.db, path), { locked: false, x: px, y: py, ownerUid: window.GameLogic.currentUser.uid }); 
+            });
+            modal.style.display = 'none';
+        };
+        list.appendChild(div);
+    });
+    modal.style.display = 'block';
+};
