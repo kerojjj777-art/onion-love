@@ -78,7 +78,8 @@ window.changeTrack = function(dir) {
     let track = playlist[window.GameLogic.currentTrackIdx];
     document.getElementById('music-cover').src = track.cover; document.getElementById('music-title').innerText = track.title;
     if (window.GameLogic.currentUser) update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { currentTrackIdx: window.GameLogic.currentTrackIdx });
-    if (window.GameLogic.phaserGame && !window.GameLogic.shrineRitualActive) {
+    // 修正5：只要在神龕場景內，就強制阻斷切換音樂的功能
+    if (window.GameLogic.phaserGame && window.GameLogic.currentScene !== 'shrine') {
         let vol = document.getElementById('bgm-volume') ? document.getElementById('bgm-volume').value / 100 : 0.5;
         ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo'].forEach(k => window.GameLogic.phaserGame.sound.removeByKey(k));
         window.GameLogic.phaserGame.sound.add(track.key, { loop: true, volume: vol }).play();
@@ -281,6 +282,8 @@ window.confirmSummon = function(isYes) {
     let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
     
     update(ref(db, 'serverEvents/summonShrine'), { time: Date.now(), callerUid: window.GameLogic.currentUser.uid, callerName: window.GameLogic.myProfile.name });
+    // 修正2：只有付費後，資料庫才會刻上 'summoned' 狀態，並以此作為入座後開啟票選的唯一觸發鑰匙
+    set(ref(db, 'shrineEvents/current'), { state: 'summoned', startTime: Date.now() });
     sendBubble("已發出神聖的召喚...");
     window.startShrineRitual();
 };
@@ -293,12 +296,15 @@ window.acceptSummon = function() {
 
 let voteTarget = null; let voteTalisman = null;
 window.selectVoteTarget = function(uid) { 
-    if (voteTarget === uid) { voteTarget = null; document.getElementById('vote-tgt-' + uid)?.classList.remove('selected'); return; }
-    voteTarget = uid; document.querySelectorAll('[id^="vote-tgt-"]').forEach(b => b.classList.remove('selected')); document.getElementById('vote-tgt-' + uid)?.classList.add('selected'); 
+    if (voteTarget === uid) { voteTarget = null; document.getElementById('vote-tgt-' + uid)?.classList.remove('selected'); }
+    else { voteTarget = uid; document.querySelectorAll('[id^="vote-tgt-"]').forEach(b => b.classList.remove('selected')); document.getElementById('vote-tgt-' + uid)?.classList.add('selected'); }
+    // 修正4：即時上傳未確認的選擇供他人觀看
+    update(ref(window.GameLogic.db, `shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`), { target: voteTarget || 'none', name: window.GameLogic.myProfile.name, confirmed: false });
 };
 window.selectVoteTalisman = function(tId) { 
-    if (voteTalisman === tId) { voteTalisman = null; document.getElementById('vote-tali-' + tId)?.classList.remove('selected'); return; }
-    voteTalisman = tId; document.querySelectorAll('[id^="vote-tali-"]').forEach(b => b.classList.remove('selected')); document.getElementById('vote-tali-' + tId)?.classList.add('selected'); 
+    if (voteTalisman === tId) { voteTalisman = null; document.getElementById('vote-tali-' + tId)?.classList.remove('selected'); }
+    else { voteTalisman = tId; document.querySelectorAll('[id^="vote-tali-"]').forEach(b => b.classList.remove('selected')); document.getElementById('vote-tali-' + tId)?.classList.add('selected'); }
+    update(ref(window.GameLogic.db, `shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`), { talisman: voteTalisman || 'none', name: window.GameLogic.myProfile.name, confirmed: false });
 };
 window.submitVote = function() {
     if (!voteTarget || !voteTalisman) return alert("請選擇一位淨化對象與一款符咒！");
@@ -413,6 +419,24 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
+let voteTarget = null; let voteTalisman = null;
+window.selectVoteTarget = function(uid) { 
+    if (voteTarget === uid) { voteTarget = null; document.getElementById('vote-tgt-' + uid)?.classList.remove('selected'); }
+    else { voteTarget = uid; document.querySelectorAll('[id^="vote-tgt-"]').forEach(b => b.classList.remove('selected')); document.getElementById('vote-tgt-' + uid)?.classList.add('selected'); }
+    // 修正4：即時上傳未確認的選擇供他人觀看
+    update(ref(window.GameLogic.db, `shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`), { target: voteTarget || 'none', name: window.GameLogic.myProfile.name, confirmed: false });
+};
+window.selectVoteTalisman = function(tId) { 
+    if (voteTalisman === tId) { voteTalisman = null; document.getElementById('vote-tali-' + tId)?.classList.remove('selected'); }
+    else { voteTalisman = tId; document.querySelectorAll('[id^="vote-tali-"]').forEach(b => b.classList.remove('selected')); document.getElementById('vote-tali-' + tId)?.classList.add('selected'); }
+    update(ref(window.GameLogic.db, `shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`), { talisman: voteTalisman || 'none', name: window.GameLogic.myProfile.name, confirmed: false });
+};
+window.submitVote = function() {
+    if (!voteTarget || !voteTalisman) return alert("請選擇一位淨化對象與一款符咒！");
+    update(ref(db, `shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`), { target: voteTarget, talisman: voteTalisman, confirmed: true, name: window.GameLogic.myProfile.name });
+    document.getElementById('voting-confirm-btn').innerText = "已確認 (等待他人...)"; document.getElementById('voting-confirm-btn').disabled = true;
+};
+
 function joinShrine() {
     const playerRef = ref(db, `shrinePlayers/${window.GameLogic.currentUser.uid}`);
     set(playerRef, { x: window.GameLogic.myProfile.lastX || 640, y: window.GameLogic.myProfile.lastY || 360, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, isSeated: false });
@@ -439,11 +463,17 @@ function joinShrine() {
             talismans.forEach(t => { let isSel = (voteTalisman === t.id) ? 'selected' : ''; taliHtml += `<div id="vote-tali-${t.id}" class="vote-item ${isSel}" onclick="window.selectVoteTalisman('${t.id}')" style="display:flex; align-items:center; gap:10px;"><img src="${t.img}" style="width:40px; height:40px; object-fit:contain;"><span>${t.name}</span></div>`; });
             document.getElementById('voting-talismans').innerHTML = taliHtml;
 
-            let sHtml = ''; let votes = eventData.votes || {};
+            // 修正4：重構 UI 以顯示其他人的即時選擇狀態
+            let sHtml = '<div style="font-weight:bold; color:#ba55d3; margin-bottom:5px; text-align:center;">--- 大家正在猶豫什麼 ---</div>'; 
+            let votes = eventData.votes || {};
             for (let uid in votes) {
-                let v = votes[uid]; let tName = v.target === 'any' ? '都可以' : (seatedPlayers[v.target] ? seatedPlayers[v.target].name : '未知');
+                let v = votes[uid]; 
+                let tName = v.target === 'any' ? '都可以' : (seatedPlayers[v.target] ? seatedPlayers[v.target].name : '...');
                 let taliObj = talismans.find(x => x.id === v.talisman);
-                sHtml += `<div>${v.name} 選擇了 [${tName}] <img src="${taliObj ? taliObj.img : ''}" style="width:20px; vertical-align:middle;"></div>`;
+                let tIcon = taliObj ? `<img src="${taliObj.img}" style="width:20px; vertical-align:middle;">` : '...';
+                let statusColor = v.confirmed ? '#00ff00' : '#aaa';
+                let statusText = v.confirmed ? '✅已確認' : '🤔選擇中';
+                sHtml += `<div style="color:${statusColor}; font-size:13px; margin-bottom:4px;">${v.name}: [${tName}] + ${tIcon} (${statusText})</div>`;
             }
             document.getElementById('voting-status').innerHTML = sHtml;
 
@@ -460,18 +490,17 @@ function joinShrine() {
                 if (taliObj) {
                     let sBtn = document.getElementById('spam-btn');
                     sBtn.innerHTML = `<img src="${taliObj.img}" style="width:100%; height:100%; object-fit:contain; border-radius:50%; pointer-events:none;">`;
-}
+                }
             }
         } else { spamUI.style.display = 'none'; }
     });
 }
+
 function leaveShrine() { 
     if (window.GameLogic.currentUser) set(ref(db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), null); 
     if (shrineUnsubscribe) { shrineUnsubscribe(); shrineUnsubscribe = null; } 
     if (shrineEventUnsubscribe) { shrineEventUnsubscribe(); shrineEventUnsubscribe = null; } 
-    // 修正：強制隱藏票選與狂點 UI，避免切換場景後殘留
-    document.getElementById('voting-modal').style.display = 'none';
-    document.getElementById('spam-ui').style.display = 'none';
+    document.getElementById('voting-modal').style.display = 'none'; document.getElementById('spam-ui').style.display = 'none';
 }
 
 function checkShrineVotingTrigger() { 
@@ -482,15 +511,14 @@ function checkShrineVotingTrigger() {
     let isHost = uids.sort()[0] === window.GameLogic.currentUser.uid;
     let seatedCount = uids.filter(uid => players[uid].isSeated).length;
     
-    // 修正：如果所有人都離開坐墊，且活動還卡在進行中，房主負責強制結束活動，避免符咒按鈕常駐
     if (seatedCount === 0 && isHost && window.GameLogic.shrineEventData && window.GameLogic.shrineEventData.state !== 'finished') {
-        update(ref(db, 'shrineEvents/current'), { state: 'finished' });
-        return;
+        update(ref(db, 'shrineEvents/current'), { state: 'finished' }); return;
     }
     
     let allSeated = seatedCount > 0 && seatedCount === uids.length; 
     if (allSeated) { 
-        if (isHost && (!window.GameLogic.shrineEventData || window.GameLogic.shrineEventData.state === 'finished')) { 
+        // 修正2：嚴格限制只有在 'summoned' (已付費號召) 的狀態下入座，才能開啟投票
+        if (isHost && window.GameLogic.shrineEventData && window.GameLogic.shrineEventData.state === 'summoned') { 
             set(ref(db, 'shrineEvents/current'), { state: 'voting', startTime: Date.now() }); 
         } 
     } 
@@ -697,7 +725,7 @@ class MainScene extends Phaser.Scene {
 
         this.otherPlayers = {}; this.furnitureSprites = {}; this.dummySprites = {}; this.coinSprites = {};
         
-        if (this.isCafe || this.sceneName === "7eonion") {
+        if (this.isCafe || this.sceneName === "7eonion" || this.sceneName === "shrine") { // 修正1：增加 shrine 使金幣可以被讀取
             this.coinsListener = onValue(ref(window.GameLogic.db, 'droppedCoins'), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.coinSprites[key]) { let cData = data[key]; let coinSprite = this.physics.add.sprite(cData.x, cData.y, 'made-coin').setDepth(8); coinSprite.play('coin-anim', true); coinSprite.amount = cData.amount || 5; this.coinSprites[key] = coinSprite; } } for (let key in this.coinSprites) { if (!data[key]) { this.coinSprites[key].destroy(); delete this.coinSprites[key]; } } });
             this.dummiesListener = onValue(ref(window.GameLogic.db, 'cafeDummies'), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.dummySprites[key]) { let dData = data[key]; let dummySprite = this.physics.add.sprite(dData.x, dData.y, 'dummy').setDepth(8); this.dummySprites[key] = dummySprite; } } for (let key in this.dummySprites) { if (!data[key]) { this.dummySprites[key].destroy(); delete this.dummySprites[key]; } } });
         }
