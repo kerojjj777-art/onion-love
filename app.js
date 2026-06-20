@@ -519,8 +519,15 @@ function joinShrine() {
 
         if (eventData.state === 'voting') {
             votingModal.style.display = 'block';
+            
+            // 🌟 新增：重繪前先記憶目前的滾動條位置，避免重新渲染時把選項彈回最頂端
+            let scrollArea = document.getElementById('voting-targets') ? document.getElementById('voting-targets').parentElement : null;
+            let currentScroll = scrollArea ? scrollArea.scrollTop : 0;
+            let statusBox = document.getElementById('voting-status');
+            let statusScroll = statusBox ? statusBox.scrollTop : 0;
+
             let tHtml = ''; let seatedPlayers = window.GameLogic.shrinePlayers || {};
-            let onlineGlobal = window.GameLogic.onlinePlayers || {}; // 【修正 BUG 1】過濾出真正連線的玩家，避免斷線幽靈
+            let onlineGlobal = window.GameLogic.onlinePlayers || {}; 
             for (let uid in seatedPlayers) { 
                 if (!seatedPlayers[uid].isSeated || !onlineGlobal[uid]) continue; 
                 let isSel = (voteTarget === uid) ? 'selected' : ''; 
@@ -550,6 +557,11 @@ function joinShrine() {
 
             let myVote = votes[window.GameLogic.currentUser.uid]; let btn = document.getElementById('voting-confirm-btn');
             if (myVote && myVote.confirmed) { btn.innerText = "已確認 (等待他人...)"; btn.disabled = true; } else { btn.innerText = "確認"; btn.disabled = false; }
+            
+            // 🌟 新增：重新渲染完成後，瞬間將滾動條拉回原本的位置
+            if (scrollArea) scrollArea.scrollTop = currentScroll;
+            if (statusBox) statusBox.scrollTop = statusScroll;
+
         } else { votingModal.style.display = 'none'; }
 
         if (eventData.state === 'purifying') {
