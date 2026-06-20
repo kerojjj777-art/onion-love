@@ -852,29 +852,23 @@ class MainScene extends Phaser.Scene {
         if (this.sceneName !== 'shrine') return;
         let eventData = window.GameLogic.shrineEventData; let evState = eventData ? eventData.state : 'none';
 
-        // 修正6：嚴格控制各種階段的背景音樂播放邏輯
-        if (window.GameLogic.shrineRitualActive && evState !== this.currentRitualState) {
+        // 修正5：儀式各階段的音樂交由純狀態機控制
+        if (evState !== this.currentRitualState) {
             this.currentRitualState = evState;
-            ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo'].forEach(k => this.sound.stopByKey(k));
+            let trackKeys = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'];
+            trackKeys.forEach(k => this.sound.stopByKey(k));
+            
+            let volControl = document.getElementById('bgm-volume'); let vol = volControl ? volControl.value / 100 : 0.5;
 
-            if (evState === 'voting') {
-                ['shrine-wierd-people-sound', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'].forEach(k => this.sound.stopByKey(k));
-                if (!this.sound.get('shrine-selection')?.isPlaying) this.sound.play('shrine-selection', {loop: true});
-            } else if (evState === 'countdown') {
-                this.sound.stopByKey('shrine-selection'); this.sound.play('shrine-selection', {loop: false});
+            if (evState === 'voting' || evState === 'countdown') {
+                this.sound.play('shrine-selection', {loop: true, volume: vol});
             } else if (evState === 'purifying') {
-                ['shrine-wierd-people-sound', 'shrine-selection'].forEach(k => this.sound.stopByKey(k));
-                if (!this.sound.get('shrine-purify-fight')?.isPlaying) this.sound.play('shrine-purify-fight', {loop: true});
+                this.sound.play('shrine-purify-fight', {loop: true, volume: vol});
             } else if (evState === 'success') {
-                this.sound.stopByKey('shrine-purify-fight'); this.sound.stopByKey('shrine-wierd-people-sound');
-                let winSnd = this.sound.add('shrine-purify-success-win'); winSnd.play();
-                winSnd.once('complete', () => { if (this.currentRitualState === 'success') { this.sound.play('shrine-purify-success', {loop: true}); } });
-            } else if (evState === 'finished' || evState === 'none') {
-                ['shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'].forEach(k => this.sound.stopByKey(k));
-                window.GameLogic.shrineRitualActive = false;
-                let vol = document.getElementById('bgm-volume') ? document.getElementById('bgm-volume').value / 100 : 0.5;
-                let currentTrackKey = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo'][window.GameLogic.currentTrackIdx] || 'bgm';
-                this.sound.add(currentTrackKey, { loop: true, volume: vol }).play();
+                let winSnd = this.sound.add('shrine-purify-success-win', {volume: vol}); winSnd.play();
+                winSnd.once('complete', () => { if (this.currentRitualState === 'success') { this.sound.play('shrine-purify-success', {loop: true, volume: vol}); } });
+            } else {
+                this.sound.play('shrine-wierd-people-sound', {loop: true, volume: vol}); // 回歸神龕預設音樂
             }
         }
 
@@ -891,8 +885,12 @@ class MainScene extends Phaser.Scene {
         if (evState === 'voting') {
             if (isHost) {
                 let votes = eventData.votes || {}; let seatedCount = pUids.filter(u => window.GameLogic.shrinePlayers[u].isSeated).length;
-                if (Object.keys(votes).length >= seatedCount && seatedCount > 0) {
-                    // BUG修復：增加本地節流(2秒內不重複執行)，防止60FPS狂發Firebase請求造成卡死
+                
+                // 修正3：掃描所有投票者，確保數量足夠「且」每個人都按下「確認」才前進
+                let allConfirmed = true; let voteCount = 0;
+                for (let k in votes) { voteCount++; if (!votes[k].confirmed) allConfirmed = false; }
+                
+                if (voteCount >= seatedCount && seatedCount > 0 && allConfirmed) {
                     if (!this.pendingStateChange || Date.now() - this.pendingStateChange > 2000) {
                         this.pendingStateChange = Date.now();
                         let counts = {}; Object.values(votes).forEach(v => counts[v.target] = (counts[v.target] || 0) + 1);
@@ -912,7 +910,6 @@ class MainScene extends Phaser.Scene {
                 this.countdownText.setText("淨化開始"); this.countdownText.setFontSize('96px');
                 if (!this.countdownTween) { this.countdownTween = this.tweens.add({ targets: this.countdownText, scale: 1.5, alpha: 0, duration: 1000 }); }
                 if (isHost && elapsed > 4000) {
-                    // BUG修復：本地節流
                     if (!this.pendingStateChange || Date.now() - this.pendingStateChange > 2000) {
                         this.pendingStateChange = Date.now();
                         update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'purifying', decay: 0, startTime: Date.now() });
@@ -926,17 +923,12 @@ class MainScene extends Phaser.Scene {
             let clicks = eventData.clicks || {}; let totalClicks = Object.values(clicks).reduce((a, b) => a + b, 0); let currentDecay = eventData.decay || 0;
             if (isHost) {
                 if (!this.lastDecaySync || Date.now() - this.lastDecaySync > 500) {
-                    this.lastDecaySync = Date.now();
-                    currentDecay += 4; // 修正難度：將自然消退速度減半
+                    this.lastDecaySync = Date.now(); currentDecay += 4; 
                     update(ref(window.GameLogic.db, 'shrineEvents/current'), { decay: currentDecay, lastDecayTime: Date.now() });
                 }
             }
-            
-            // 修正難度：將每次點擊的威力提升為 5 倍
             let progressVal = (totalClicks * 5) - currentDecay; if (progressVal < 0) progressVal = 0;
             let targetProgress = pUids.length * 50; let ratio = Phaser.Math.Clamp(progressVal / targetProgress, 0, 1);
-            
-            // 修正顯示：使用與外框完全相同的 camW, camH 以確保進度條內容不會跑位
             let camW = this.cameras.main.width; let camH = this.cameras.main.height;
             this.purifyBar.clear().fillStyle(0xff4500, 1).fillRoundedRect(camW/2 - 196, camH * 0.75 - 96, 392 * ratio, 32, 16);
             
@@ -957,15 +949,12 @@ class MainScene extends Phaser.Scene {
             if (this.pooBoss && this.furnitureSprites['altar']) {
                 let targetSprite = (eventData.targetUid === window.GameLogic.currentUser.uid) ? this.localPlayer.sprite : (this.otherPlayers[eventData.targetUid] ? this.otherPlayers[eventData.targetUid].sprite : this.furnitureSprites['altar'].sprite);
                 let ax = targetSprite.x; let ay = targetSprite.y;
-                
-                this.pooBoss.x = ax + Math.cos(time * 0.0015) * 120; 
-                this.pooBoss.y = ay - 40 + Math.sin(time * 0.002) * 80; 
-                
+                this.pooBoss.x = ax + Math.cos(time * 0.0015) * 120; this.pooBoss.y = ay - 40 + Math.sin(time * 0.002) * 80; 
                 if (time - this.pooBoss.lastQuoteTime > 2500) { this.pooBoss.lastQuoteTime = time; this.pooBoss.bubbleText.setText(Phaser.Utils.Array.GetRandom(this.pooBoss.quotes)); }
                 let bBounds = this.pooBoss.bubbleText.getBounds(); let bW = bBounds.width + 16, bH = bBounds.height + 12; let bx = this.pooBoss.x, by = this.pooBoss.y - 60 - bH/2;
                 this.pooBoss.bubbleBg.clear().fillStyle(0x3e2723, 0.9).lineStyle(2, 0xffcc00, 1).fillRoundedRect(bx - bW/2, by - bH/2, bW, bH, 8).strokeRoundedRect(bx - bW/2, by - bH/2, bW, bH, 8); this.pooBoss.bubbleText.setPosition(bx, by);
             }
-        }
+        } 
         else if (evState === 'success') {
             this.stopPurifyEffects(true); let tUid = eventData.targetUid;
             if (this.pooBoss) { this.pooBoss.bubbleText.setText("我還會再回來的..!!!!"); this.tweens.add({ targets: this.pooBoss, y: this.pooBoss.y - 300, alpha: 0, duration: 2000 }); this.pooBoss.bubbleBg.destroy(); this.pooBoss.bubbleText.destroy(); this.pooBoss = null; }
@@ -981,16 +970,34 @@ class MainScene extends Phaser.Scene {
                             this.createMiniExplosion(targetSprite.x, targetSprite.y); targetSprite.setScale(1).setAlpha(1).setY(targetSprite.y + 300);
                             let coinEmitter = this.add.particles(0, -50, 'made-coin', { x: { min: 0, max: this.cameras.main.width }, speedY: { min: 400, max: 800 }, bounce: 0.5, lifespan: 3000, quantity: 15, maxParticles: 800 }).setDepth(290).setScrollFactor(0);
                             this.time.addEvent({ delay: 150, repeat: 20, callback: () => window.playSFX(this, 'coin03') });
-                            let participantCount = pUids.filter(u => window.GameLogic.shrinePlayers[u].isSeated).length || 1; let totalValue = participantCount >= 5 ? 100000 : participantCount * 1500; let myReward = Math.floor(totalValue / participantCount);
-                            if (window.GameLogic.shrinePlayers[window.GameLogic.currentUser.uid]?.isSeated) {
-                                window.GameLogic.myProfile.coins += myReward; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: window.GameLogic.myProfile.coins }); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
-                                let rewardText = this.add.text(cx, cy + 100, `+${myReward} 💰`, { fontSize: '48px', color: '#ffcc00', fontStyle: 'bold', stroke: '#000', strokeThickness: 6 }).setOrigin(0.5).setDepth(300).setScrollFactor(0); this.tweens.add({ targets: rewardText, y: cy, alpha: 0, duration: 3000, onComplete: () => rewardText.destroy() });
+                            
+                            // 修正1：淨化成功後取消自動發錢，改為在地圖噴濺 100 枚實體金幣，讓所有人自己去搶
+                            if (isHost && !this.coinsDropped) {
+                                this.coinsDropped = true;
+                                let participantCount = pUids.filter(u => window.GameLogic.shrinePlayers[u].isSeated).length || 1; 
+                                let totalValue = participantCount >= 5 ? 10000 : participantCount * 2500; 
+                                let coinValue = Math.floor(totalValue / 100);
+                                
+                                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                                    let dropUpdates = {};
+                                    let altar = this.furnitureSprites['altar'] ? this.furnitureSprites['altar'].sprite : {x: cx, y: cy};
+                                    for (let i = 0; i < 100; i++) {
+                                        let rx = altar.x + Phaser.Math.Between(-350, 350);
+                                        let ry = altar.y + Phaser.Math.Between(-250, 250);
+                                        let key = 'shrine_coin_' + Date.now() + '_' + i;
+                                        dropUpdates[`droppedCoins/${key}`] = { x: rx, y: ry, amount: coinValue };
+                                    }
+                                    module.update(module.ref(window.GameLogic.db), dropUpdates);
+                                });
                             }
+                            
+                            let rewardText = this.add.text(cx, cy + 100, `滿地金幣快去撿！`, { fontSize: '48px', color: '#ffcc00', fontStyle: 'bold', stroke: '#000', strokeThickness: 6 }).setOrigin(0.5).setDepth(300).setScrollFactor(0); 
+                            this.tweens.add({ targets: rewardText, y: cy, alpha: 0, duration: 4000, onComplete: () => rewardText.destroy() });
                         }
                     });
                 }
                 this.time.delayedCall(8000, () => {
-                    this.successTextShown = false;
+                    this.successTextShown = false; this.coinsDropped = false;
                     if (isHost) update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'finished' });
                     if (this.localPlayer.isSeated) { this.localPlayer.isSeated = false; update(ref(window.GameLogic.db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), { isSeated: false }); }
                 });
