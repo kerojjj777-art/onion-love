@@ -478,7 +478,7 @@ function switchScene(sceneName) {
         if (scene && scene.localPlayer) {
             update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { lastScene: sceneName, lastX: scene.localPlayer.sprite.x, lastY: scene.localPlayer.sprite.y });
             window.GameLogic.myProfile.lastScene = sceneName; window.GameLogic.myProfile.lastX = scene.localPlayer.sprite.x; window.GameLogic.myProfile.lastY = scene.localPlayer.sprite.y;
-            let cam = scene.cameras.main; let tvLine = scene.add.rectangle(cam.width/2, cam.height/2, cam.width, cam.height, 0xffffff).setDepth(9999).setScrollFactor(0);
+            let cam = scene.cameras.main; let tvLine = scene.add.rectangle(cam.width/2, cam.height/2, cam.width, cam.height, 0x000000).setDepth(9999).setScrollFactor(0);
             scene.tweens.add({ targets: tvLine, scaleY: 0.01, duration: 150, ease: 'Power2', onComplete: () => { scene.tweens.add({ targets: tvLine, scaleX: 0, duration: 150, onComplete: () => { tvLine.destroy(); doSwitch(); } }); } });
             return; 
         }
@@ -631,7 +631,7 @@ class MainScene extends Phaser.Scene {
         
         this.cameras.main.setBackgroundColor('#1a1008');
         let cam = this.cameras.main;
-        let tvLine = this.add.rectangle(cam.width/2, cam.height/2, cam.width, cam.height, 0xffffff).setDepth(9999).setScrollFactor(0); tvLine.scaleX = 0; tvLine.scaleY = 0.01;
+        let tvLine = this.add.rectangle(cam.width/2, cam.height/2, cam.width, cam.height, 0x000000).setDepth(9999).setScrollFactor(0); tvLine.scaleX = 0; tvLine.scaleY = 0.01;
         this.tweens.add({ targets: tvLine, scaleX: 1, duration: 150, onComplete: () => { this.tweens.add({ targets: tvLine, scaleY: 1, duration: 150, ease: 'Power2', onComplete: () => { tvLine.destroy(); } }); } });
 
         const mapW = this.isCafe ? 2048 : 1280; const mapH = this.isCafe ? 2048 : 720;
