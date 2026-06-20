@@ -826,11 +826,11 @@ class MainScene extends Phaser.Scene {
         }
 
         let pUids = Object.keys(window.GameLogic.shrinePlayers || {});
-        let isHost = pUids.sort()[0] === window.GameLogic.currentUser.uid;
+        let isHost = pUids.length > 0 && pUids.sort()[0] === window.GameLogic.currentUser.uid;
 
         if (!eventData || eventData.state === 'finished') {
             if (this.pooBoss) { this.pooBoss.bubbleBg.destroy(); this.pooBoss.bubbleText.destroy(); this.pooBoss.destroy(); this.pooBoss = null; }
-            this.countdownText.setVisible(false); this.stopPurifyEffects(false); return;
+            if (this.countdownText) this.countdownText.setVisible(false); this.stopPurifyEffects(false); return;
         }
 
         let cx = this.cameras.main.scrollX + this.cameras.main.width/2; let cy = this.cameras.main.scrollY + this.cameras.main.height/2;
@@ -839,12 +839,16 @@ class MainScene extends Phaser.Scene {
             if (isHost) {
                 let votes = eventData.votes || {}; let seatedCount = pUids.filter(u => window.GameLogic.shrinePlayers[u].isSeated).length;
                 if (Object.keys(votes).length >= seatedCount && seatedCount > 0) {
-                    let counts = {}; Object.values(votes).forEach(v => counts[v.target] = (counts[v.target] || 0) + 1);
-                    let maxV = 0, winners = [];
-                    for (let uid in counts) { if (counts[uid] > maxV) { maxV = counts[uid]; winners = [uid]; } else if (counts[uid] === maxV) { winners.push(uid); } }
-                    let finalWinner = winners[Math.floor(Math.random() * winners.length)];
-                    if (finalWinner === 'any') { let seatedUids = pUids.filter(u => window.GameLogic.shrinePlayers[u].isSeated); finalWinner = seatedUids[Math.floor(Math.random() * seatedUids.length)]; }
-                    update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'countdown', targetUid: finalWinner, startTime: Date.now() });
+                    // BUG修復：增加本地節流(2秒內不重複執行)，防止60FPS狂發Firebase請求造成卡死
+                    if (!this.pendingStateChange || Date.now() - this.pendingStateChange > 2000) {
+                        this.pendingStateChange = Date.now();
+                        let counts = {}; Object.values(votes).forEach(v => counts[v.target] = (counts[v.target] || 0) + 1);
+                        let maxV = 0, winners = [];
+                        for (let uid in counts) { if (counts[uid] > maxV) { maxV = counts[uid]; winners = [uid]; } else if (counts[uid] === maxV) { winners.push(uid); } }
+                        let finalWinner = winners[Math.floor(Math.random() * winners.length)];
+                        if (finalWinner === 'any') { let seatedUids = pUids.filter(u => window.GameLogic.shrinePlayers[u].isSeated); finalWinner = seatedUids[Math.floor(Math.random() * seatedUids.length)]; }
+                        update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'countdown', targetUid: finalWinner, startTime: Date.now() });
+                    }
                 }
             }
         } 
@@ -854,7 +858,13 @@ class MainScene extends Phaser.Scene {
             if (remain > 0) { this.countdownText.setText(remain); } else {
                 this.countdownText.setText("淨化開始"); this.countdownText.setFontSize('96px');
                 if (!this.countdownTween) { this.countdownTween = this.tweens.add({ targets: this.countdownText, scale: 1.5, alpha: 0, duration: 1000 }); }
-                if (isHost && elapsed > 4000) { update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'purifying', decay: 0, startTime: Date.now() }); }
+                if (isHost && elapsed > 4000) {
+                    // BUG修復：本地節流
+                    if (!this.pendingStateChange || Date.now() - this.pendingStateChange > 2000) {
+                        this.pendingStateChange = Date.now();
+                        update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'purifying', decay: 0, startTime: Date.now() });
+                    }
+                }
             }
         } 
         else if (evState === 'purifying') {
@@ -862,15 +872,24 @@ class MainScene extends Phaser.Scene {
             this.startPurifyEffects();
             let clicks = eventData.clicks || {}; let totalClicks = Object.values(clicks).reduce((a, b) => a + b, 0); let currentDecay = eventData.decay || 0;
             if (isHost) {
-                let decayElapsed = Date.now() - (eventData.lastDecayTime || Date.now());
-                if (decayElapsed > 500) { currentDecay += 8; update(ref(window.GameLogic.db, 'shrineEvents/current'), { decay: currentDecay, lastDecayTime: Date.now() }); }
+                // BUG修復：這裡原先判斷伺服器的時間差，導致延遲時一秒發送數十次，改為純本地判斷
+                if (!this.lastDecaySync || Date.now() - this.lastDecaySync > 500) {
+                    this.lastDecaySync = Date.now();
+                    currentDecay += 8;
+                    update(ref(window.GameLogic.db, 'shrineEvents/current'), { decay: currentDecay, lastDecayTime: Date.now() });
+                }
             }
             let progressVal = (totalClicks * 3) - currentDecay; if (progressVal < 0) progressVal = 0;
             let targetProgress = pUids.length * 50; let ratio = Phaser.Math.Clamp(progressVal / targetProgress, 0, 1);
             
-            // 修正5：填滿大進度條
             this.purifyBar.clear().fillStyle(0xff4500, 1).fillRoundedRect(this.cameras.main.width/2 - 196, this.cameras.main.height * 0.75 - 96, 392 * ratio, 32, 16);
-            if (isHost && ratio >= 1) { update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'success', endTime: Date.now() }); }
+            if (isHost && ratio >= 1) {
+                // BUG修復：本地節流
+                if (!this.pendingStateChange || Date.now() - this.pendingStateChange > 2000) {
+                    this.pendingStateChange = Date.now();
+                    update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'success', endTime: Date.now() });
+                }
+            }
 
             if (!this.pooBoss && this.furnitureSprites['altar']) {
                 let ax = this.furnitureSprites['altar'].sprite.x; let ay = this.furnitureSprites['altar'].sprite.y;
@@ -879,7 +898,6 @@ class MainScene extends Phaser.Scene {
                 this.pooBoss.lastQuoteTime = 0;
             }
             
-            // 修正3：屎王精確追蹤「被票選者」飛行
             if (this.pooBoss && this.furnitureSprites['altar']) {
                 let targetSprite = (eventData.targetUid === window.GameLogic.currentUser.uid) ? this.localPlayer.sprite : (this.otherPlayers[eventData.targetUid] ? this.otherPlayers[eventData.targetUid].sprite : this.furnitureSprites['altar'].sprite);
                 let ax = targetSprite.x; let ay = targetSprite.y;
