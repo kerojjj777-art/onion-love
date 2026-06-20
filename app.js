@@ -908,9 +908,16 @@ class MainScene extends Phaser.Scene {
             if (isPurifying) {
                 if (evData.targetUid === window.GameLogic.currentUser.uid) {
                     if (this.furnitureSprites['altar']) this.localPlayer.sprite.setPosition(this.furnitureSprites['altar'].sprite.x, this.furnitureSprites['altar'].sprite.y + 40);
-                    this.localPlayer.sprite.play('purify-target', true); sendBubble("痾...我不敢再吃屎了...!!");
-                } else { this.localPlayer.sprite.play('purify-magic', true); sendBubble("退！退！退！"); }
-            } else { this.localPlayer.sprite.play('seat-idle', true); }
+                    this.localPlayer.sprite.play('purify-target', true);
+                    if (this.localPlayer.lastBubbleState !== 'purify-target') { sendBubble("痾...我不敢再吃屎了...!!"); this.localPlayer.lastBubbleState = 'purify-target'; }
+                } else { 
+                    this.localPlayer.sprite.play('purify-magic', true); 
+                    if (this.localPlayer.lastBubbleState !== 'purify-magic') { sendBubble("退！退！退！"); this.localPlayer.lastBubbleState = 'purify-magic'; }
+                }
+            } else { 
+                this.localPlayer.sprite.play('seat-idle', true); 
+                this.localPlayer.lastBubbleState = 'idle';
+            }
         } else {
             if (uiScene && uiScene.joyStick && uiScene.joyStick.force > 0) {
                 vx = Math.cos(uiScene.joyStick.angle * Math.PI / 180) * speed; vy = Math.sin(uiScene.joyStick.angle * Math.PI / 180) * speed;
