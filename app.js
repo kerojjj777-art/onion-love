@@ -211,6 +211,22 @@ function createSystemUI() {
             }
             .flash-text { animation: flash-orange 2s ease-out forwards; }
 
+            /* 新增抖動金幣特效 */
+            @keyframes shake-gold {
+                0% { transform: translate(1px, 1px) rotate(0deg); }
+                10% { transform: translate(-1px, -2px) rotate(-1deg); }
+                20% { transform: translate(-3px, 0px) rotate(1deg); }
+                30% { transform: translate(3px, 2px) rotate(0deg); }
+                40% { transform: translate(1px, -1px) rotate(1deg); }
+                50% { transform: translate(-1px, 2px) rotate(-1deg); }
+                60% { transform: translate(-3px, 1px) rotate(0deg); }
+                70% { transform: translate(3px, 1px) rotate(-1deg); }
+                80% { transform: translate(-1px, -1px) rotate(1deg); }
+                90% { transform: translate(1px, 2px) rotate(0deg); }
+                100% { transform: translate(1px, -2px) rotate(-1deg); }
+            }
+            .shake-gold-text { animation: shake-gold 0.5s infinite; }
+
             #pm-chat-box { height: 250px; overflow-y: auto; background: #fffdf5; border: 1px solid var(--mucha-gold); border-radius: 4px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; font-size: 14px;}
             .pm-bubble-me { background: #fff; color: #3e2723; border-radius: 12px 12px 0 12px; padding: 8px 12px; display: inline-block; max-width: 80%; text-align: left; border: 1px solid var(--mucha-gold); box-shadow: 1px 1px 3px rgba(0,0,0,0.1); word-break: break-word; }
             .pm-bubble-other { background: #dcedc8; color: #3e2723; border-radius: 12px 12px 12px 0; padding: 8px 12px; display: inline-block; max-width: 80%; text-align: left; border: 1px solid #aed581; box-shadow: 1px 1px 3px rgba(0,0,0,0.1); word-break: break-word; }
@@ -396,9 +412,10 @@ function createSystemUI() {
             <div style="background:#2a1b12; text-align:center; position:relative; border-bottom: 2px solid var(--mucha-gold); padding-top: 45px;">
                 <div id="store-manager-bubble" style="position:absolute; top:8px; left:50%; transform:translateX(-50%); background:rgba(244, 236, 216, 0.95); color:#3e2723; padding:8px 12px; border-radius:8px; font-size:14px; border:2px solid var(--mucha-gold); font-weight:bold; white-space:nowrap; z-index:2; box-shadow: 0 2px 5px rgba(0,0,0,0.5);">這顆臭洋蔥打什麼主意啊</div>
                 <img src="store-manager-talking.png" style="width:100%; display:block;" alt="老闆">
-                <div style="position:absolute; bottom:5px; right:5px; background:rgba(0,0,0,0.8); color:var(--mucha-gold); padding:4px 8px; border-radius:4px; font-size:12px; border:1px solid var(--mucha-gold); font-weight:bold;">德骨拉完叻</div>
+                <div id="store-current-coins" class="shake-gold-text" style="position:absolute; bottom:5px; right:85px; color:#ffcc00; text-shadow:0 0 5px #ffaa00; padding:4px 8px; font-size:14px; font-weight:bold; z-index:2;">💰 0</div>
+                <div style="position:absolute; bottom:5px; right:5px; background:rgba(0,0,0,0.8); color:var(--mucha-gold); padding:4px 8px; border-radius:4px; font-size:12px; border:1px solid var(--mucha-gold); font-weight:bold; z-index:2;">德骨拉完叻</div>
             </div>
-            <div style="padding:15px;">
+            <div style="padding:15px; max-height: 55vh; overflow-y: auto;">
                 <h3 style="margin-top:0; border:none; color:var(--mucha-brown);">🏪 7-EONION 便利商店</h3>
                 <div id="store-list" class="catalog-grid">
                     <div class="catalog-item" onclick="window.openPurchaseModal('水球', 20)">
@@ -418,6 +435,8 @@ function createSystemUI() {
 
         <div id="purchase-modal" class="modal" style="z-index: 260;">
             <h3 id="purchase-title" style="color:var(--mucha-green);">購買</h3>
+            <div id="purchase-desc" style="font-size:12px; color:var(--mucha-brown); background:rgba(255,255,255,0.8); padding:8px; border-radius:4px; border:1px dashed var(--mucha-gold); margin-bottom:10px; text-align:left; line-height:1.4;"></div>
+            
             <div style="display:flex; justify-content:center; align-items:center; gap:20px; margin: 15px 0;">
                 <button class="btn-secondary" style="font-size:18px; padding:5px 15px;" onclick="window.adjustPurchaseQty(-1)">-</button>
                 <span id="purchase-qty" style="font-size:24px; font-weight:bold; color:var(--mucha-brown);">1</span>
@@ -431,7 +450,6 @@ function createSystemUI() {
         </div>
     `;
 
-    // 防點穿優化：為所有互動視窗阻擋 Pointer 事件，避免點擊到後方的 Phaser Canvas 元素
     setTimeout(() => {
         const stopProp = (e) => e.stopPropagation();
         document.querySelectorAll('.modal, .action-menu, #chat-section').forEach(el => {
@@ -643,7 +661,6 @@ window.moveInvItem = function(index, dir) {
     }
 };
 
-// 新增：統一的系統按鈕點擊處理器，完全避免 HTML onClick 字串解析錯誤
 window.clickSysItem = function(key) {
     document.getElementById('inventory-modal').style.display = 'none';
     if (key === 'phone') {
@@ -679,7 +696,6 @@ window.openInventoryModal = function() {
     let sysKeys = ['phone', 'portal', 'profile', 'music', 'manual', 'logout'];
     let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥' && !sysKeys.includes(k));
     
-    // 渲染一般道具
     keys.forEach(k => {
         let iconHtml = (k === '水球') ? '<div class="sprite-waterball"></div>' : (k === '煙火' ? '<img src="shop-fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">' : '<span style="font-size:24px; margin-bottom:5px;">📦</span>');
         let isUsing = ((k === '水球' || k === '煙火') && window.GameLogic.armedItemState != null && window.GameLogic.armedItemName === k);
@@ -699,7 +715,6 @@ window.openInventoryModal = function() {
             </div>`;
     });
     
-    // 渲染系統按鈕（使用安全的 clickSysItem 避免解析崩潰）
     rawItems['phone'] = `
         <div class="catalog-item" style="position:relative; width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'phone\')"' : ''} >
             ${dotHtml}
@@ -887,6 +902,16 @@ window.openPurchaseModal = function(name, price) {
     window.currentPurchaseQty = 1;
     
     document.getElementById('purchase-title').innerText = `購買 ${name}`;
+    
+    // 新增：注入商品推銷話術
+    let desc = "";
+    if (name === '水球') {
+        desc = "聽說洋蔥都躲在大廳裡面玩水球大戰，為了讓我可以賺更多錢，我在水球裡加了魔法，被擊中的對象也會噴錢，然後他們就會.....一直噴錢，一直撿錢，來找我花錢!!! 嘿嘿嘿...";
+    } else if (name === '煙火') {
+        desc = "曾經聽我朋友說他的同事們很奇怪，遇到好事就要說『咻蹦～』還要搭配放煙火手勢，我都懶得講話所以做了這個神奇的煙火拿來賣，畫面漂亮((還可以攻擊別人))多麼棒～";
+    }
+    document.getElementById('purchase-desc').innerText = desc;
+    
     document.getElementById('purchase-qty').innerText = window.currentPurchaseQty;
     document.getElementById('purchase-total').innerText = window.currentPurchasePrice;
     document.getElementById('purchase-modal').style.display = 'block';
@@ -918,6 +943,15 @@ window.confirmPurchase = function() {
         });
         
         document.getElementById('purchase-modal').style.display = 'none';
+
+        // 新增：結帳成功播放兩種音效
+        if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) {
+            let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
+            if (scene) {
+                window.playSFX(scene, 'shop-boss-thank-you');
+                window.playSFX(scene, 'shop-check-buying');
+            }
+        }
         
         let msgEl = document.getElementById('purchase-success-msg');
         msgEl.style.display = 'block';
@@ -934,6 +968,9 @@ window.confirmPurchase = function() {
         
         let coinsEl = document.getElementById("vp-coins");
         if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
+        
+        let storeCoinsEl = document.getElementById("store-current-coins");
+        if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins}`;
     }
 };
 
@@ -949,12 +986,9 @@ if ('serviceWorker' in navigator) {
 }
 
 window.addEventListener('pointerdown', (e) => {
-    // 隱藏互動選單
     if (!e.target.closest('#action-menu') && e.target.tagName !== 'CANVAS') {
         actionMenu.style.display = 'none';
     }
-    
-    // 點擊 Canvas 背景時，關閉所有的 Modal 視窗（達成點外側取消功能）
     if (e.target.tagName === 'CANVAS') {
         document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
         window.GameLogic.isShopping = false;
@@ -1002,9 +1036,6 @@ onAuthStateChanged(auth, async (user) => {
             set(ref(db, `users/${user.uid}`), window.GameLogic.myProfile);
         }
 
-        // ==========================================
-        // 連線狀態丟失修復：監聽 Firebase .info/connected
-        // ==========================================
         onValue(ref(db, '.info/connected'), (snap) => {
             if (snap.val() === true && window.GameLogic.currentUser) {
                 const globalPlayerRef = ref(db, `onlinePlayers/${window.GameLogic.currentUser.uid}`);
@@ -1085,6 +1116,12 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 function switchScene(sceneName) {
+    // 新增：切換場景時播放 jump04 音效
+    if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) {
+        let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
+        if (scene) window.playSFX(scene, 'jump04');
+    }
+
     const doSwitch = () => {
         window.GameLogic.currentScene = sceneName;
         window.GameLogic.placingFurnitureKey = null; 
@@ -1188,16 +1225,13 @@ function gainRewards(coins, exp) {
 class BootScene extends Phaser.Scene {
     constructor() { super('BootScene'); }
     preload() {
-        // ==========================================
-        // 【新增】1. 建立載入進度條 (Loading Screen)
-        // ==========================================
         let width = this.cameras.main.width;
         let height = this.cameras.main.height;
 
         let progressBox = this.add.graphics();
-        progressBox.fillStyle(0x3e2723, 0.8); // 深咖啡色底
+        progressBox.fillStyle(0x3e2723, 0.8); 
         progressBox.fillRoundedRect(width / 2 - 160, height / 2 - 25, 320, 50, 8);
-        progressBox.lineStyle(2, 0xc5a059, 1); // 慕夏金邊框
+        progressBox.lineStyle(2, 0xc5a059, 1); 
         progressBox.strokeRoundedRect(width / 2 - 160, height / 2 - 25, 320, 50, 8);
 
         let progressBar = this.add.graphics();
@@ -1214,15 +1248,13 @@ class BootScene extends Phaser.Scene {
             style: { font: 'bold 18px Georgia', fill: '#ffffff' }
         }).setOrigin(0.5, 0.5);
 
-        // 監聽載入進度事件，動態更新進度條長度
         this.load.on('progress', function (value) {
             percentText.setText(parseInt(value * 100) + '%');
             progressBar.clear();
-            progressBar.fillStyle(0xc5a059, 1); // 慕夏金進度條
+            progressBar.fillStyle(0xc5a059, 1); 
             progressBar.fillRoundedRect(width / 2 - 150, height / 2 - 15, 300 * value, 30, 6);
         });
 
-        // 載入完成時清理進度條元素
         this.load.on('complete', function () {
             progressBar.destroy();
             progressBox.destroy();
@@ -1230,9 +1262,6 @@ class BootScene extends Phaser.Scene {
             percentText.destroy();
         });
 
-        // ==========================================
-        // 【新增】2. 強制預載 HTML DOM 介面圖片 (避免打開選單才讀取)
-        // ==========================================
         const htmlUIImages = [
             'shop-fireworks.png', 'store-manager-talking.png', 'fridge.png', 
             'memory.png', 'shrine.png', 'dummy.png', 'doghouse-bed.png',
@@ -1240,9 +1269,6 @@ class BootScene extends Phaser.Scene {
         ];
         htmlUIImages.forEach(src => { let img = new Image(); img.src = src; });
 
-        // ==========================================
-        // 3. 原本的 Phaser 資源加載 (保留不變)
-        // ==========================================
         this.load.plugin('rexvirtualjoystickplugin', 'https://cdn.jsdelivr.net/gh/rexrainbow/phaser3-rex-notes@master/dist/rexvirtualjoystickplugin.min.js', true);
         
         this.load.image('bgCafe', 'cafe-bg.jpg');
@@ -1260,10 +1286,20 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('onion-up', 'onion-up.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('onion-walk', 'onion-right.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('onion-idle', 'onion-idle.png', { frameWidth: 75, frameHeight: 75 });
+        
         this.load.audio('bgm', 'Sweet-Onion.mp3');
         this.load.audio('bgm-heart', 'Onion-Heart.mp3');
         this.load.audio('bgm-inside', 'Inside-of-Onion.mp3');
         this.load.audio('bgm-kyo', 'kyo-kyo-onion.mp3');
+        
+        // 新增音效資源
+        this.load.audio('jump04', 'jump04.mp3');
+        this.load.audio('launcher1', 'launcher1.mp3');
+        this.load.audio('bomb', 'bomb.mp3');
+        this.load.audio('fireworks-in-the-sky', 'fireworks-in-the-sky.mp3');
+        this.load.audio('shop-boss-thank-you', 'shop-boss-thank-you.mp3');
+        this.load.audio('shop-check-buying', 'shop-check-buying.mp3');
+
         this.load.spritesheet('onion-clean', 'onion-clean.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('onion-sleep', 'onion-sleeping.png', { frameWidth: 75, frameHeight: 75 });
         this.load.image('bg7Eonion', '7eonion-bg.jpg'); 
@@ -1275,14 +1311,12 @@ class BootScene extends Phaser.Scene {
         this.load.image('dummy', 'dummy.png');
         this.load.spritesheet('dummy-wet', 'dummy-wet.png', { frameWidth: 75, frameHeight: 75 });
         
-        // 煙火素材 (已修正為 shop-fireworks.png)
         this.load.image('fireworks', 'shop-fireworks.png');
         this.load.spritesheet('onion-fireworks', 'onion-fireworks.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('onion-got-shot', 'onion-got-shot.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('dummy-got-shot', 'dummy-got-shot.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('fireworks-shoot', 'fireworks-shoot.png', { frameWidth: 50, frameHeight: 50 });
 
-        // 載入慕夏風角色狀態基底圖
         this.load.image('status-bg', 'character-status-bg.png');
 
         this.load.audio('minimum_laser', 'minimum_laser.mp3');
@@ -1292,7 +1326,6 @@ class BootScene extends Phaser.Scene {
         this.load.audio('chorus_of_angels1', 'chorus_of_angels1.mp3');
     }
     create() {
-        // --- 產生經驗值條的流動紋理 ---
         let expGr = this.make.graphics({ x:0, y:0, add:false });
         expGr.fillStyle(0x81c784, 1);
         expGr.fillRect(0, 0, 64, 16);
@@ -1308,7 +1341,6 @@ class BootScene extends Phaser.Scene {
         }
         expGr.generateTexture('exp-liquid', 64, 16);
         
-        // --- 產生煙火粒子紋理 ---
         let fwGr = this.make.graphics({ x:0, y:0, add:false });
         fwGr.fillStyle(0xffffff, 1);
         fwGr.fillCircle(4, 4, 4);
@@ -1325,10 +1357,9 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'wb-blast', frames: this.anims.generateFrameNumbers('water-ball-blast'), frameRate: 15, repeat: -1 });
         this.anims.create({ key: 'wet', frames: this.anims.generateFrameNumbers('onion-wet'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'coin-anim', frames: this.anims.generateFrameNumbers('made-coin'), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'dummy-hit', frames: this.anims.generateFrameNumbers('dummy-got-shot'), frameRate: 10, repeat: -1 }); // 統一假人被打動畫
+        this.anims.create({ key: 'dummy-hit', frames: this.anims.generateFrameNumbers('dummy-got-shot'), frameRate: 10, repeat: -1 }); 
         this.anims.create({ key: 'sleep', frames: this.anims.generateFrameNumbers('onion-sleep'), frameRate: 8, repeat: -1 });
         
-        // 煙火動畫
         this.anims.create({ key: 'fw-throw', frames: this.anims.generateFrameNumbers('onion-fireworks'), frameRate: 8, repeat: 2 });
         this.anims.create({ key: 'fw-hit', frames: this.anims.generateFrameNumbers('onion-got-shot'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'fw-shoot', frames: this.anims.generateFrameNumbers('fireworks-shoot'), frameRate: 15, repeat: -1 });
@@ -1839,7 +1870,6 @@ class MainScene extends Phaser.Scene {
         this.qteContainer.add([qteBg, this.qteBar, qteLabel]);
         if (this.minimap) this.minimap.ignore([qteBg, this.qteBar, qteLabel, this.qteContainer]);
 
-        // Sleep Interaction setup
         this.sleepTopBg = this.add.graphics().setDepth(150).setVisible(false);
         this.sleepTopText = this.add.text(0, 0, '按A起床', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#fff', backgroundColor: 'rgba(74, 93, 78, 0.8)', padding: {x:8, y:4} }).setOrigin(0.5).setDepth(151).setVisible(false);
         this.sleepBotBg = this.add.graphics().setDepth(150).setVisible(false);
@@ -1927,11 +1957,13 @@ class MainScene extends Phaser.Scene {
                 }
 
                 if (itemName === '煙火') {
+                    // 新增：不論有沒有鎖定，施放煙火就播放 launcher1
+                    window.playSFX(this, 'launcher1');
+
                     this.localPlayer.sprite.play('fw-throw', true);
                     this.localPlayer.isThrowing = true;
                     this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
 
-                    // 同步施放動畫給其他玩家
                     update(ref(window.GameLogic.db, `serverEvents/fireworkThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), scene: this.sceneName });
 
                     if (targetUid && targetSprite) {
@@ -1960,12 +1992,10 @@ class MainScene extends Phaser.Scene {
                             }
                         });
                     } else {
-                        // 觸發全頻煙火
                         update(ref(window.GameLogic.db, 'serverEvents/globalFireworks'), { time: Date.now(), scene: this.sceneName, initiator: window.GameLogic.currentUser.uid });
                         sendBubble("施放了全頻煙火！");
                     }
                 } else {
-                    // 水球邏輯
                     window.playSFX(this, 'minimum_laser');
                     this.localPlayer.sprite.play('throw', true);
                     this.localPlayer.isThrowing = true;
@@ -2021,6 +2051,9 @@ class MainScene extends Phaser.Scene {
                 let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.storeManager.x, this.storeManager.y);
                 if (dist < 150) {
                     window.GameLogic.isShopping = true;
+                    // 新增：開啟商店時更新身上的錢包顯示
+                    let storeCoinsEl = document.getElementById('store-current-coins');
+                    if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins || 0}`;
                     document.getElementById('store-modal').style.display = 'block';
                     return;
                 }
@@ -2065,7 +2098,6 @@ class MainScene extends Phaser.Scene {
         this.placePrompt = this.add.text(0, 0, '洋蔥精靈: 按A確定擺放', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#fff', backgroundColor: 'rgba(74, 93, 78, 0.8)', padding: {x:8, y:4} }).setOrigin(0.5).setDepth(20).setVisible(false);
         if (this.minimap) this.minimap.ignore(this.placePrompt);
       
-        // --- 水球擊中事件監聽 ---
         this.hitListener = onValue(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`), (snap) => {
             let data = snap.val();
             if (data && data.time && (Date.now() - data.time < 2000)) {
@@ -2073,7 +2105,7 @@ class MainScene extends Phaser.Scene {
 
                 this.localPlayer.isInvincible = true;
                 this.localPlayer.isStunned = true;
-                this.localPlayer.sprite.play('wet', true); // 當地玩家播報水球受擊特效
+                this.localPlayer.sprite.play('wet', true); 
                 
                 let p = window.GameLogic.myProfile;
                 let loss = Math.min(p.coins || 0, 15);
@@ -2097,18 +2129,20 @@ class MainScene extends Phaser.Scene {
             }
         });
 
-        // --- 煙火擊中事件監聽 (對自己) ---
         this.fwHitListener = onValue(ref(window.GameLogic.db, `serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`), (snap) => {
             let data = snap.val();
             if (data && data.time && (Date.now() - data.time < 2000)) {
                 if (this.localPlayer.isInvincible) return;
 
+                // 新增：玩家被炸到時播放一次 bomb
+                window.playSFX(this, 'bomb');
+
                 this.localPlayer.isInvincible = true;
                 this.localPlayer.isStunned = true;
-                this.localPlayer.sprite.play('fw-hit', true); // 當地玩家播報煙火受擊特效
+                this.localPlayer.sprite.play('fw-hit', true);
 
                 let p = window.GameLogic.myProfile;
-                let loss = Math.min(p.coins || 0, 100); // 損失100
+                let loss = Math.min(p.coins || 0, 100); 
                 p.coins -= loss;
                 update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins });
                 let coinsEl = document.getElementById("vp-coins");
@@ -2132,7 +2166,6 @@ class MainScene extends Phaser.Scene {
             }
         });
 
-        // --- 煙火擊中事件監聽 (對其他玩家) ---
         this.fwPlayersHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworksHits'), (snap) => {
             let hits = snap.val() || {};
             for (let uid in hits) {
@@ -2142,8 +2175,11 @@ class MainScene extends Phaser.Scene {
                     if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) {
                         let opSprite = this.otherPlayers[uid].sprite;
                         if (!opSprite.isStunned) {
+                            // 新增：其他玩家被炸到時播放一次 bomb
+                            window.playSFX(this, 'bomb');
+
                             opSprite.isStunned = true;
-                            opSprite.play('fw-hit', true); // 其他玩家播報煙火受擊特效
+                            opSprite.play('fw-hit', true); 
                             this.time.delayedCall(1500, () => {
                                 if (opSprite && opSprite.active) opSprite.isStunned = false;
                             });
@@ -2153,7 +2189,6 @@ class MainScene extends Phaser.Scene {
             }
         });
 
-        // --- 煙火擊中事件監聽 (假人洋蔥) ---
         this.fwDummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworksDummyHits'), (snap) => {
             let hits = snap.val() || {};
             for (let key in hits) {
@@ -2161,8 +2196,11 @@ class MainScene extends Phaser.Scene {
                 if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) {
                     let dummy = this.furnitureSprites[key].sprite;
                     if (dummy && !dummy.isStunned) {
+                        // 新增：洋蔥假人被炸到時播放一次 bomb
+                        window.playSFX(this, 'bomb');
+
                         dummy.isStunned = true;
-                        dummy.play('dummy-fw-hit', true); // 假人播報煙火受擊特效 (修正為統一使用 dummy-got-shot 精靈圖)
+                        dummy.play('dummy-fw-hit', true); 
                         this.time.delayedCall(1500, () => {
                             if (dummy && dummy.active) {
                                 dummy.isStunned = false;
@@ -2175,7 +2213,6 @@ class MainScene extends Phaser.Scene {
             }
         });
 
-        // --- 全頻煙火事件監聽 ---
         this.globalFwListener = onValue(ref(window.GameLogic.db, 'serverEvents/globalFireworks'), (snap) => {
             let data = snap.val();
             if (data && data.time && (Date.now() - data.time < 3000) && data.scene === this.sceneName) {
@@ -2186,7 +2223,6 @@ class MainScene extends Phaser.Scene {
             }
         });
 
-        // --- 煙火施放動作同步監聽 ---
         this.fwThrowsListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworkThrows'), (snap) => {
             let throws = snap.val() || {};
             for (let uid in throws) {
@@ -2215,7 +2251,7 @@ class MainScene extends Phaser.Scene {
                         let opSprite = this.otherPlayers[uid].sprite;
                         if (!opSprite.isStunned) {
                             opSprite.isStunned = true;
-                            opSprite.play('wet', true); // 水球受擊特效
+                            opSprite.play('wet', true); 
                             this.time.delayedCall(1500, () => {
                                 if (opSprite && opSprite.active) opSprite.isStunned = false;
                             });
@@ -2233,7 +2269,7 @@ class MainScene extends Phaser.Scene {
                     let dummy = this.furnitureSprites[key].sprite;
                     if (dummy && !dummy.isStunned) {
                         dummy.isStunned = true;
-                        dummy.play('dummy-fw-hit', true); // 水球受擊統一使用 dummy-got-shot
+                        dummy.play('dummy-fw-hit', true); 
                         this.time.delayedCall(1500, () => { 
                             if (dummy && dummy.active) {
                                 dummy.isStunned = false; 
@@ -2254,7 +2290,6 @@ class MainScene extends Phaser.Scene {
             if (this.dummyHitListener) this.dummyHitListener();
             if (this.playersHitListener) this.playersHitListener();
             if (this.doghouseFurnListener) this.doghouseFurnListener();
-            // 煙火監聽註銷
             if (this.fwHitListener) this.fwHitListener();
             if (this.fwPlayersHitListener) this.fwPlayersHitListener();
             if (this.fwDummyHitListener) this.fwDummyHitListener();
@@ -2263,7 +2298,6 @@ class MainScene extends Phaser.Scene {
         });
     }
 
-    // --- 新增：小型煙火爆炸 (鎖定目標時) ---
     createMiniExplosion(x, y) {
         let allColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xff8800];
         let mixColors = [Phaser.Utils.Array.GetRandom(allColors), Phaser.Utils.Array.GetRandom(allColors), Phaser.Utils.Array.GetRandom(allColors)];
@@ -2283,13 +2317,15 @@ class MainScene extends Phaser.Scene {
         this.time.delayedCall(2000, () => particles.destroy());
     }
 
-    // --- 新增：全頻隨機色彩煙火 (未鎖定直接發射時) ---
     playGlobalFireworks() {
+        // 新增：煙火滿版綻放時播放一次音效
+        window.playSFX(this, 'fireworks-in-the-sky');
+
         let cam = this.cameras.main;
         let colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff, 0xff8800];
 
-        for (let i = 0; i < 7; i++) { // 提升全頻爆炸數量
-            this.time.delayedCall(i * 500, () => { // 錯開爆炸時間
+        for (let i = 0; i < 7; i++) { 
+            this.time.delayedCall(i * 500, () => { 
                 let x = cam.scrollX + Phaser.Math.Between(100, cam.width - 100);
                 let y = cam.scrollY + Phaser.Math.Between(100, cam.height - 100);
 
@@ -2303,7 +2339,7 @@ class MainScene extends Phaser.Scene {
                     tint: mixColors,
                     lifespan: { min: 1500, max: 3000 },
                     gravityY: 150,
-                    quantity: 100 // 增加顆粒數量
+                    quantity: 100 
                 });
                 emitter.setDepth(200);
                 emitter.explode();
@@ -2317,7 +2353,7 @@ class MainScene extends Phaser.Scene {
                     onComplete: () => flash.destroy()
                 });
 
-                this.time.delayedCall(3000, () => emitter.destroy()); // 加長粒子顯示時間
+                this.time.delayedCall(3000, () => emitter.destroy()); 
             });
         }
     }
@@ -2468,7 +2504,6 @@ class MainScene extends Phaser.Scene {
         } else if (this.localPlayer.isStunned) {
             this.localPlayer.sprite.setVelocity(0, 0);
             this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
-            // 動畫已由事件監聽器播放 (wet 或 fw-hit)，不在此強制覆寫
         } else if (this.localPlayer.isThrowing) {
             this.localPlayer.sprite.setVelocity(0, 0); 
         } else {
@@ -2742,7 +2777,7 @@ class MainScene extends Phaser.Scene {
                 let absY = Math.abs(diffY);
 
                 if (op.sprite.isStunned || op.sprite.isThrowing) {
-                    // 若是被擊暈或施放中，動畫由監聽器負責執行，不覆寫
+                    // 動畫由監聽器負責執行，不覆寫
                 } else if (absX < 0.5 && absY < 0.5) {
                     op.sprite.play('idle', true);
                 } else if (absX >= absY) {
