@@ -720,7 +720,19 @@ class MainScene extends Phaser.Scene {
 
             if (this.localPlayer.isSweeping) { if (!window.GameLogic.muteSFX && !this.sound.get('brooming1')?.isPlaying) { if (this.sound.get('brooming1')) this.sound.play('brooming1'); else this.sound.add('brooming1').play(); } this.qteProgress += (100 / this.qteTotalClicks); if (this.qteProgress >= 100) { this.qteProgress = 100; this.finishSweeping(true); } return; }
             if (this.sceneName === '7eonion' && this.storeManager) { let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.storeManager.x, this.storeManager.y); if (dist < 150) { window.GameLogic.isShopping = true; let storeCoinsEl = document.getElementById('store-current-coins'); if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins || 0}`; document.getElementById('store-modal').style.display = 'block'; return; } }
-            if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!"); let interacted = false; for (const key in this.furnitureSprites) { let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y); if (dist < 90) { if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block'; if (key.startsWith('memory')) document.getElementById('memory-modal').style.display = 'block'; if (key.includes('shrine')) { window.switchScene('shrine'); } interacted = true; break; } } if(!interacted) sendBubble("使用了 A 技能!");
+            if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!"); let interacted = false; 
+            for (const key in this.furnitureSprites) { 
+                let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; 
+                let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y); 
+                if (dist < 90) { 
+                    if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block'; 
+                    if (key.startsWith('memory')) document.getElementById('memory-modal').style.display = 'block'; 
+                    // 修正 2：確保按 A 可轉跳神龕場景
+                    if (key.includes('shrine')) { window.switchScene('shrine'); } 
+                    interacted = true; break; 
+                } 
+            } 
+            if(!interacted) sendBubble("使用了 A 技能!");
         });
 
         this.events.on('action_B', () => {
