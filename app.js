@@ -1037,12 +1037,19 @@ function openFurnitureCatalog() {
     let items = [];
     if (window.GameLogic.currentScene === "cafe") { title.innerText = "📦 大廳家俱目錄"; items = [ { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' }, { key: 'memory', name: '📖 咖啡廳回憶錄', img: 'memory.png' }, { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' }, { key: 'dummy', name: '🧍 假人洋蔥', img: 'dummy.png' } ]; }
     else if (window.GameLogic.currentScene === "doghouse") { title.innerText = "🏠 房間家具擺設"; items = [ { key: 'bed', name: '🛏️ 狗窩床鋪', img: 'doghouse-bed.png' } ]; }
-    else if (window.GameLogic.currentScene === "shrine") { title.innerText = "☯️ 神龕法器目錄"; items = [ { key: 'altar', name: '🌀 呼蔥祭壇', img: 'shrine-altar.png', unique: true }, { key: 'seat', name: '🧎 禁屎坐墊', img: 'shrine-no-poo-poo-seat.png', infinite: true } ]; }
+    else if (window.GameLogic.currentScene === "shrine") { 
+        title.innerText = "☯️ 神龕法器目錄"; 
+        items = [ 
+            { key: 'altar', name: '🌀 呼蔥祭壇', img: 'shrine-altar.png', unique: true }, 
+            { key: 'seat', name: '🧎 禁屎坐墊', img: 'shrine-no-poo-poo-seat.png', infinite: true },
+            { key: 'clear_seats', name: '🧹 回收所有坐墊', isAction: true } // 修正：補回一鍵回收選項
+        ]; 
+    }
 
     items.forEach(item => {
-        let div = document.createElement('div'); div.className = 'catalog-item'; div.innerHTML = `<img src="${item.img}"><span>${item.name}</span>`;
+        let div = document.createElement('div'); div.className = 'catalog-item'; 
+        div.innerHTML = item.isAction ? `<span style="font-size:24px; margin-bottom:5px;">${item.name.split(' ')[0]}</span><span>${item.name.split(' ')[1]}</span>` : `<img src="${item.img}"><span>${item.name}</span>`;
         div.onclick = () => {
-            // ----- [新增：特殊行為判斷] -----
             if (item.isAction) {
                 if (item.key === 'clear_seats') {
                     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
@@ -1053,7 +1060,6 @@ function openFurnitureCatalog() {
                 }
                 return;
             }
-            // -----------------------------
             
             modal.style.display = 'none'; let isCafe = window.GameLogic.currentScene === "cafe"; let isDoghouse = window.GameLogic.currentScene === "doghouse"; let isShrine = window.GameLogic.currentScene === "shrine";
             let targetDict = isCafe ? window.GameLogic.cafeFurniture : (isDoghouse ? window.GameLogic.doghouseFurniture : window.GameLogic.shrineFurniture);
@@ -1081,7 +1087,8 @@ function openFurnitureCatalog() {
                 let newData = { x: pX, y: pY, locked: false, ownerUid: window.GameLogic.currentUser.uid };
                 if (isDoghouse) { window.GameLogic.doghouseFurniture = window.GameLogic.doghouseFurniture || {}; window.GameLogic.doghouseFurniture[itemKey] = newData; }
                 else if (isCafe) window.GameLogic.cafeFurniture[itemKey] = newData;
-                else if (isShrine) window.GameLogic.shrineFurniture[itemKey] = newData;
+                // 修正：為神龕加入 || {} 的防護機制，避免資料庫為空時引發 null 取值報錯卡死
+                else if (isShrine) { window.GameLogic.shrineFurniture = window.GameLogic.shrineFurniture || {}; window.GameLogic.shrineFurniture[itemKey] = newData; }
                 import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, pathPrefix + itemKey), newData); });
                 window.GameLogic.placingFurnitureKey = itemKey;
             }
