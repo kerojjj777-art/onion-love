@@ -104,7 +104,7 @@ function createSystemUI() {
             #login-screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--mucha-paper); padding: 30px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 300; text-align: center; width: 80%; max-width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
             #login-screen input { padding: 10px; border: 1px solid var(--mucha-gold); border-radius: 4px; background: #fffdf5; margin-bottom: 15px; width: 85%; font-size: 16px; }
             #join-btn { background: var(--mucha-gold); color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; width: 95%; }
-            .modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--mucha-paper); padding: 20px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 250; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8); width: 85%; max-width: 320px; max-height: 80vh; overflow-y: auto; box-sizing: border-box; }
+            .modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--mucha-paper); padding: 20px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 250; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8); width: 85%; max-width: 320px; max-height: 80vh; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
             .modal h3 { color: var(--mucha-green); margin-top: 0; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 8px; }
             .modal-btns { display: flex; justify-content: space-around; margin-top: 15px; }
             .modal-btns button, .close-modal-btn { padding: 10px 15px; border-radius: 4px; border: none; cursor: pointer; font-family: inherit; font-size: 15px; margin: 5px;}
@@ -121,7 +121,7 @@ function createSystemUI() {
             #memory-upload-area { margin-top: 15px; display: flex; flex-direction: column; gap: 10px; border-top: 2px dashed var(--mucha-gold); padding-top: 15px; }
             #memory-upload-area input[type="text"] { padding: 10px; border: 1px solid var(--mucha-gold); border-radius: 4px; }
             .catalog-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-            .catalog-item { padding: 15px 5px; border: 1px solid var(--mucha-gold); border-radius: 8px; background: #fff; cursor: pointer; font-weight: bold; display: flex; flex-direction: column; align-items: center; transition: all 0.3s; }
+            .catalog-item { padding: 8px 5px; border: 1px solid var(--mucha-gold); border-radius: 8px; background: #fff; cursor: pointer; font-weight: bold; display: flex; flex-direction: column; align-items: center; transition: all 0.3s; font-size: 13px; }
             .catalog-item:hover { background: rgba(197, 160, 89, 0.2); }
             .catalog-item img { width: 50px; height: 50px; margin-bottom: 5px; object-fit: contain;}
             #chat-section { display: flex; position: absolute; top: 60px; left: 20px; width: 240px; flex-direction: column; z-index: 100; pointer-events: none; }            
@@ -138,7 +138,7 @@ function createSystemUI() {
             .sprite-onion-phone { width: 50px; height: 50px; background: url('tool-onion-phone.png') left center; animation: play-onion-phone 0.8s steps(8) infinite; margin-bottom: 5px; }
             .sprite-magic-gap { width: 50px; height: 50px; background: url('magic-gap.png') left center; animation: play-magic-gap 0.8s steps(8) infinite; margin-bottom: 5px; }
             .sprite-music-box { width: 50px; height: 50px; background: url('music-box.png') left center; animation: play-music-box 0.8s steps(8) infinite; margin-bottom: 5px; }
-            .sprite-magic-gap-big { width: 300px; height: 300px; background: url('magic-gap-big.png') left center; animation: play-magic-gap-big 0.8s steps(8) infinite; margin: 0 auto; display: block; }
+            .sprite-magic-gap-big { width: 300px; height: 300px; background: url('magic-gap-big.png') left center; animation: play-magic-gap-big 0.8s steps(8) infinite; margin: -45px auto; display: block; transform: scale(0.75); }
             @keyframes play-waterball { 100% { background-position: -400px; } } @keyframes play-onion-phone { 100% { background-position: -400px; } } @keyframes play-magic-gap { 100% { background-position: -400px; } } @keyframes play-music-box { 100% { background-position: -400px; } } @keyframes play-magic-gap-big { 100% { background-position: -2400px; } }
             @keyframes flash-orange { 0% { transform: translate(-50%, -50%) scale(1); text-shadow: 0 0 10px orange; opacity: 1; } 50% { transform: translate(-50%, -50%) scale(1.2); text-shadow: 0 0 30px #ffcc00, 0 0 50px orange; opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); text-shadow: 0 0 10px orange; opacity: 0; } } .flash-text { animation: flash-orange 2s ease-out forwards; }
             @keyframes shake-gold { 0% { transform: translate(1px, 1px) rotate(0deg); } 10% { transform: translate(-1px, -2px) rotate(-1deg); } 20% { transform: translate(-3px, 0px) rotate(1deg); } 30% { transform: translate(3px, 2px) rotate(0deg); } 40% { transform: translate(1px, -1px) rotate(1deg); } 50% { transform: translate(-1px, 2px) rotate(-1deg); } 60% { transform: translate(-3px, 1px) rotate(0deg); } 70% { transform: translate(3px, 1px) rotate(-1deg); } 80% { transform: translate(-1px, -1px) rotate(1deg); } 90% { transform: translate(1px, 2px) rotate(0deg); } 100% { transform: translate(1px, -2px) rotate(-1deg); } } .shake-gold-text { animation: shake-gold 0.5s infinite; }
@@ -420,7 +420,14 @@ window.confirmPurchase = function() { let cost = window.currentPurchaseQty * win
 
 const loginScreen = document.getElementById("login-screen"); const gameLayoutContainer = document.getElementById("game-layout-container"); const chatSection = document.getElementById("chat-section"); const actionMenu = document.getElementById("action-menu"); const viewProfileModal = document.getElementById("view-profile-modal"); const chatInput = document.getElementById("chat-input");
 if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(()=>{}); }
-window.addEventListener('pointerdown', (e) => { if (!e.target.closest('#action-menu') && e.target.tagName !== 'CANVAS') { actionMenu.style.display = 'none'; } if (e.target.tagName === 'CANVAS') { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); window.GameLogic.isShopping = false; } });
+window.addEventListener('pointerdown', (e) => { 
+    if (!e.target.closest('#action-menu') && e.target.tagName !== 'CANVAS') { actionMenu.style.display = 'none'; } 
+    if (e.target.tagName === 'CANVAS') { 
+        // 修正2：點擊背景時，不要關閉投票介面與強制召喚介面
+        document.querySelectorAll('.modal:not(#voting-modal):not(#forced-summon-modal)').forEach(m => m.style.display = 'none'); 
+        window.GameLogic.isShopping = false; 
+    } 
+});
 document.getElementById('chat-toggle-btn').addEventListener('click', function() { chatSection.classList.toggle('chat-collapsed'); this.innerText = chatSection.classList.contains('chat-collapsed') ? '展開對話 ▼' : '收起對話 ▲'; if (!chatSection.classList.contains('chat-collapsed')) { const chatBox = document.getElementById("chat-box"); chatBox.scrollTop = 0; } });
 document.getElementById("join-btn").addEventListener("click", () => { const email = document.getElementById("user-email").value; const pwd = document.getElementById("user-pwd").value; signInWithEmailAndPassword(auth, email, pwd).catch(error => alert("登入失敗: " + error.message)); });
 
@@ -640,12 +647,21 @@ function switchScene(sceneName) {
     if (window.GameLogic.currentUser && window.GameLogic.phaserGame && window.GameLogic.phaserLoaded) {
         let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
         if (scene && scene.localPlayer) {
-            update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { lastScene: sceneName, lastX: scene.localPlayer.sprite.x, lastY: scene.localPlayer.sprite.y });
-            window.GameLogic.myProfile.lastScene = sceneName; window.GameLogic.myProfile.lastX = scene.localPlayer.sprite.x; window.GameLogic.myProfile.lastY = scene.localPlayer.sprite.y;
-            let cam = scene.cameras.main; let tvLine = scene.add.rectangle(cam.width/2, cam.height/2, cam.width, cam.height, 0x000000).setDepth(9999).setScrollFactor(0);
-            scene.tweens.add({ targets: tvLine, scaleY: 0.01, duration: 150, ease: 'Power2', onComplete: () => { scene.tweens.add({ targets: tvLine, scaleX: 0, duration: 150, onComplete: () => { tvLine.destroy(); doSwitch(); } }); } });
-            return; 
-        }
+                update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { lastScene: sceneName, lastX: scene.localPlayer.sprite.x, lastY: scene.localPlayer.sprite.y });
+                window.GameLogic.myProfile.lastScene = sceneName; window.GameLogic.myProfile.lastX = scene.localPlayer.sprite.x; window.GameLogic.myProfile.lastY = scene.localPlayer.sprite.y;
+                
+                let cam = scene.cameras.main; 
+                let topBlack = scene.add.rectangle(cam.width/2, 0, cam.width, cam.height/2, 0x000000).setOrigin(0.5, 0).setDepth(9999).setScrollFactor(0);
+                let botBlack = scene.add.rectangle(cam.width/2, cam.height, cam.width, cam.height/2, 0x000000).setOrigin(0.5, 1).setDepth(9999).setScrollFactor(0);
+                topBlack.scaleY = 0; botBlack.scaleY = 0;
+                let whiteLine = scene.add.rectangle(cam.width/2, cam.height/2, cam.width, 4, 0xffffff).setDepth(10000).setScrollFactor(0).setAlpha(0);
+                
+                scene.tweens.add({ targets: [topBlack, botBlack], scaleY: 1, duration: 200, ease: 'Cubic.easeIn', onComplete: () => {
+                    whiteLine.setAlpha(1);
+                    scene.tweens.add({ targets: whiteLine, scaleX: 0, duration: 150, ease: 'Power2', onComplete: () => { doSwitch(); } });
+                }});
+                return; 
+            }
     }
     doSwitch();
 }
@@ -799,8 +815,15 @@ class MainScene extends Phaser.Scene {
         
         this.cameras.main.setBackgroundColor('#1a1008');
         let cam = this.cameras.main;
-        let tvLine = this.add.rectangle(cam.width/2, cam.height/2, cam.width, cam.height, 0x000000).setDepth(9999).setScrollFactor(0); tvLine.scaleX = 0; tvLine.scaleY = 0.01;
-        this.tweens.add({ targets: tvLine, scaleX: 1, duration: 150, onComplete: () => { this.tweens.add({ targets: tvLine, scaleY: 1, duration: 150, ease: 'Power2', onComplete: () => { tvLine.destroy(); } }); } });
+        let topBlack = this.add.rectangle(cam.width/2, 0, cam.width, cam.height/2, 0x000000).setOrigin(0.5, 0).setDepth(9999).setScrollFactor(0);
+        let botBlack = this.add.rectangle(cam.width/2, cam.height, cam.width, cam.height/2, 0x000000).setOrigin(0.5, 1).setDepth(9999).setScrollFactor(0);
+        let whiteLine = this.add.rectangle(cam.width/2, cam.height/2, cam.width, 4, 0xffffff).setDepth(10000).setScrollFactor(0);
+        whiteLine.scaleX = 0;
+        
+        this.tweens.add({ targets: whiteLine, scaleX: 1, duration: 150, ease: 'Power2', onComplete: () => {
+            whiteLine.setAlpha(0);
+            this.tweens.add({ targets: [topBlack, botBlack], scaleY: 0, duration: 200, ease: 'Cubic.easeOut', onComplete: () => { topBlack.destroy(); botBlack.destroy(); whiteLine.destroy(); } });
+        }});
 
         const mapW = this.isCafe ? 2048 : 1280; const mapH = this.isCafe ? 2048 : 720;
         this.physics.world.setBounds(0, 0, mapW, mapH); this.cameras.main.setBounds(0, 0, mapW, mapH);
@@ -894,7 +917,7 @@ class MainScene extends Phaser.Scene {
         this.events.on('action_B', () => {
             if (window.GameLogic.armedItemState === 'armed') { window.GameLogic.armedItemState = 'ready'; return; }
             if (this.localPlayer.isSleeping) return;
-            if (this.sceneName === 'shrine') { if (this.localPlayer.isSeated) { this.localPlayer.isSeated = false; this.localPlayer.sprite.play('idle'); update(ref(window.GameLogic.db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), { isSeated: false }); return; } else { for (let key in this.furnitureSprites) { if (key.startsWith('seat_')) { let f = this.furnitureSprites[key]; if (f.sprite.isLocked && Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y) < 70) { this.localPlayer.isSeated = true; this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y - 15); this.localPlayer.sprite.play('seat-idle', true); update(ref(window.GameLogic.db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), { isSeated: true, x: f.sprite.x, y: f.sprite.y - 15 }); return; } } } } }
+            if (this.sceneName === 'shrine') { if (this.localPlayer.isSeated) { this.localPlayer.isSeated = false; this.localPlayer.sprite.play('idle'); update(ref(window.GameLogic.db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), { isSeated: false }); return; } else { for (let key in this.furnitureSprites) { if (key.startsWith('seat_')) { let f = this.furnitureSprites[key]; if (f.sprite.isLocked && Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y) < 90) { this.localPlayer.isSeated = true; this.localPlayer.sprite.setVelocity(0, 0); this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y - 15); this.localPlayer.sprite.play('seat-idle', true); update(ref(window.GameLogic.db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), { isSeated: true, x: f.sprite.x, y: f.sprite.y - 15 }); return; } } } } }
             if (!this.localPlayer.isSweeping && this.closestTrash) { this.localPlayer.isSweeping = true; this.qteProgress = 0; this.qteTotalClicks = Phaser.Math.Between(5, 10); this.qteContainer.setVisible(true); } else if (!this.localPlayer.isSweeping) { sendBubble("使用了 B 技能!"); }
         });
 
