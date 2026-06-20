@@ -925,7 +925,7 @@ class MainScene extends Phaser.Scene {
                 if (f && f.sprite && f.sprite.active) {
                     f.sprite.setVelocity(vx, vy); this.cameras.main.startFollow(f.sprite, true, 0.1, 0.1); this.placePrompt.setPosition(f.sprite.x, f.sprite.y - 80).setVisible(true);
                     if (vx !== 0 || vy !== 0) { if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) { let path = this.isCafe ? `cafeFurniture/${window.GameLogic.placingFurnitureKey}` : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${window.GameLogic.placingFurnitureKey}` : `shrineFurniture/${window.GameLogic.placingFurnitureKey}`); update(ref(window.GameLogic.db, path), { x: f.sprite.x, y: f.sprite.y }); this.lastSyncTime = Date.now(); } }
-                } else { window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); }
+                } else { /* 等待 Firebase 同步建立 Sprite，不提早取消擺放模式 */ }
             } else {
                 this.placePrompt.setVisible(false); this.localPlayer.sprite.setVelocity(vx, vy); this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
                 let absX = Math.abs(vx); let absY = Math.abs(vy); if (absX < 1) vx = 0; if (absY < 1) vy = 0;
@@ -1005,7 +1005,16 @@ function openFurnitureCatalog() {
             let pathPrefix = isCafe ? 'cafeFurniture/' : (isDoghouse ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/` : 'shrineFurniture/');
             
             let itemKey = item.key;
-            if (item.infinite) { itemKey = item.key + '_' + Date.now(); }
+            if (item.infinite) { 
+                if (item.key === 'seat') {
+                    let seatCount = Object.keys(targetDict || {}).filter(k => k.startsWith('seat_')).length;
+                    if (seatCount >= 6) {
+                        alert("禁屎坐墊最多只能放置6個！");
+                        return;
+                    }
+                }
+                itemKey = item.key + '_' + Date.now(); 
+            }
 
             let fData = targetDict && targetDict[itemKey];
             if (fData && fData.locked && !item.infinite) {
