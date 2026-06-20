@@ -419,24 +419,6 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-let voteTarget = null; let voteTalisman = null;
-window.selectVoteTarget = function(uid) { 
-    if (voteTarget === uid) { voteTarget = null; document.getElementById('vote-tgt-' + uid)?.classList.remove('selected'); }
-    else { voteTarget = uid; document.querySelectorAll('[id^="vote-tgt-"]').forEach(b => b.classList.remove('selected')); document.getElementById('vote-tgt-' + uid)?.classList.add('selected'); }
-    // 修正4：即時上傳未確認的選擇供他人觀看
-    update(ref(window.GameLogic.db, `shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`), { target: voteTarget || 'none', name: window.GameLogic.myProfile.name, confirmed: false });
-};
-window.selectVoteTalisman = function(tId) { 
-    if (voteTalisman === tId) { voteTalisman = null; document.getElementById('vote-tali-' + tId)?.classList.remove('selected'); }
-    else { voteTalisman = tId; document.querySelectorAll('[id^="vote-tali-"]').forEach(b => b.classList.remove('selected')); document.getElementById('vote-tali-' + tId)?.classList.add('selected'); }
-    update(ref(window.GameLogic.db, `shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`), { talisman: voteTalisman || 'none', name: window.GameLogic.myProfile.name, confirmed: false });
-};
-window.submitVote = function() {
-    if (!voteTarget || !voteTalisman) return alert("請選擇一位淨化對象與一款符咒！");
-    update(ref(db, `shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`), { target: voteTarget, talisman: voteTalisman, confirmed: true, name: window.GameLogic.myProfile.name });
-    document.getElementById('voting-confirm-btn').innerText = "已確認 (等待他人...)"; document.getElementById('voting-confirm-btn').disabled = true;
-};
-
 function joinShrine() {
     const playerRef = ref(db, `shrinePlayers/${window.GameLogic.currentUser.uid}`);
     set(playerRef, { x: window.GameLogic.myProfile.lastX || 640, y: window.GameLogic.myProfile.lastY || 360, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, isSeated: false });
