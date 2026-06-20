@@ -1000,6 +1000,19 @@ function openFurnitureCatalog() {
     items.forEach(item => {
         let div = document.createElement('div'); div.className = 'catalog-item'; div.innerHTML = `<img src="${item.img}"><span>${item.name}</span>`;
         div.onclick = () => {
+            // ----- [新增：特殊行為判斷] -----
+            if (item.isAction) {
+                if (item.key === 'clear_seats') {
+                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                        let seats = Object.keys(window.GameLogic.shrineFurniture || {}).filter(k => k.startsWith('seat_'));
+                        let updates = {}; seats.forEach(s => updates[`shrineFurniture/${s}`] = null);
+                        module.update(module.ref(window.GameLogic.db), updates).then(() => { alert("已回收所有禁屎坐墊！"); modal.style.display = 'none'; });
+                    });
+                }
+                return;
+            }
+            // -----------------------------
+            
             modal.style.display = 'none'; let isCafe = window.GameLogic.currentScene === "cafe"; let isDoghouse = window.GameLogic.currentScene === "doghouse"; let isShrine = window.GameLogic.currentScene === "shrine";
             let targetDict = isCafe ? window.GameLogic.cafeFurniture : (isDoghouse ? window.GameLogic.doghouseFurniture : window.GameLogic.shrineFurniture);
             let pathPrefix = isCafe ? 'cafeFurniture/' : (isDoghouse ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/` : 'shrineFurniture/');
