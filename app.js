@@ -942,11 +942,13 @@ class MainScene extends Phaser.Scene {
         if (this.sceneName !== 'shrine') return;
         let eventData = window.GameLogic.shrineEventData; let evState = eventData ? eventData.state : 'none';
 
-        // 修正5：儀式各階段的音樂交由純狀態機控制
+        // 修正5：正確利用原生陣列清除音樂，根除音樂被帶出神龕的 Bug
         if (evState !== this.currentRitualState) {
             this.currentRitualState = evState;
             let trackKeys = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'];
-            trackKeys.forEach(k => this.sound.stopByKey(k));
+            trackKeys.forEach(k => {
+                if (this.sound.getAll(k)) { this.sound.getAll(k).forEach(s => s.stop()); }
+            });
             
             let volControl = document.getElementById('bgm-volume'); let vol = volControl ? volControl.value / 100 : 0.5;
 
@@ -958,7 +960,7 @@ class MainScene extends Phaser.Scene {
                 let winSnd = this.sound.add('shrine-purify-success-win', {volume: vol}); winSnd.play();
                 winSnd.once('complete', () => { if (this.currentRitualState === 'success') { this.sound.play('shrine-purify-success', {loop: true, volume: vol}); } });
             } else {
-                this.sound.play('shrine-wierd-people-sound', {loop: true, volume: vol}); // 回歸神龕預設音樂
+                this.sound.play('shrine-wierd-people-sound', {loop: true, volume: vol});
             }
         }
 
@@ -975,8 +977,6 @@ class MainScene extends Phaser.Scene {
         if (evState === 'voting') {
             if (isHost) {
                 let votes = eventData.votes || {}; let seatedCount = pUids.filter(u => window.GameLogic.shrinePlayers[u].isSeated).length;
-                
-                // 修正3：掃描所有投票者，確保數量足夠「且」每個人都按下「確認」才前進
                 let allConfirmed = true; let voteCount = 0;
                 for (let k in votes) { voteCount++; if (!votes[k].confirmed) allConfirmed = false; }
                 
@@ -1061,19 +1061,22 @@ class MainScene extends Phaser.Scene {
                             let coinEmitter = this.add.particles(0, -50, 'made-coin', { x: { min: 0, max: this.cameras.main.width }, speedY: { min: 400, max: 800 }, bounce: 0.5, lifespan: 3000, quantity: 15, maxParticles: 800 }).setDepth(290).setScrollFactor(0);
                             this.time.addEvent({ delay: 150, repeat: 20, callback: () => window.playSFX(this, 'coin03') });
                             
-                            // 修正1：淨化成功後取消自動發錢，改為在地圖噴濺 100 枚實體金幣，讓所有人自己去搶
                             if (isHost && !this.coinsDropped) {
                                 this.coinsDropped = true;
                                 let participantCount = pUids.filter(u => window.GameLogic.shrinePlayers[u].isSeated).length || 1; 
                                 let totalValue = participantCount >= 5 ? 10000 : participantCount * 2500; 
                                 let coinValue = Math.floor(totalValue / 100);
                                 
+                                let mapW = this.physics.world.bounds.width;
+                                let mapH = this.physics.world.bounds.height;
+                                
                                 import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
                                     let dropUpdates = {};
                                     let altar = this.furnitureSprites['altar'] ? this.furnitureSprites['altar'].sprite : {x: cx, y: cy};
                                     for (let i = 0; i < 100; i++) {
-                                        let rx = altar.x + Phaser.Math.Between(-350, 350);
-                                        let ry = altar.y + Phaser.Math.Between(-250, 250);
+                                        // 修正1：縮小隨機半徑並加入嚴格 Clamp 邊界防禦，絕不讓金幣貼在畫面最頂端或死角
+                                        let rx = Phaser.Math.Clamp(altar.x + Phaser.Math.Between(-250, 250), 100, mapW - 100);
+                                        let ry = Phaser.Math.Clamp(altar.y + Phaser.Math.Between(-150, 150), 120, mapH - 120);
                                         let key = 'shrine_coin_' + Date.now() + '_' + i;
                                         dropUpdates[`droppedCoins/${key}`] = { x: rx, y: ry, amount: coinValue };
                                     }
@@ -1101,6 +1104,16 @@ class MainScene extends Phaser.Scene {
         let evData = window.GameLogic.shrineEventData; let isPurifying = (this.sceneName === 'shrine' && evData && evData.state === 'purifying');
 
         this.processShrineEventLogic(time, delta);
+
+        // 修正4：心跳機制更新，每 5 秒上傳一次當前時間戳，用於徹底過濾斷線與幽靈人口
+        if (!this.lastHeartbeatSync || time - this.lastHeartbeatSync > 5000) {
+            this.lastHeartbeatSync = time;
+            update(ref(window.GameLogic.db, `onlinePlayers/${window.GameLogic.currentUser.uid}`), {
+                lastActive: Date.now(),
+                name: window.GameLogic.myProfile.name || '匿名',
+                color: window.GameLogic.myProfile.color || '#fff'
+            });
+        }
 
         if (this.localPlayer.isSweeping) {
             this.localPlayer.sprite.setVelocity(0, 0); this.localPlayer.sprite.play('clean', true); 
@@ -1138,7 +1151,7 @@ class MainScene extends Phaser.Scene {
                 if (f && f.sprite && f.sprite.active) {
                     f.sprite.setVelocity(vx, vy); this.cameras.main.startFollow(f.sprite, true, 0.1, 0.1); this.placePrompt.setPosition(f.sprite.x, f.sprite.y - 80).setVisible(true);
                     if (vx !== 0 || vy !== 0) { if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) { let path = this.isCafe ? `cafeFurniture/${window.GameLogic.placingFurnitureKey}` : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${window.GameLogic.placingFurnitureKey}` : `shrineFurniture/${window.GameLogic.placingFurnitureKey}`); update(ref(window.GameLogic.db, path), { x: f.sprite.x, y: f.sprite.y }); this.lastSyncTime = Date.now(); } }
-                } else { /* 等待 Firebase 同步建立 Sprite，不提早取消擺放模式 */ }
+                }
             } else {
                 this.placePrompt.setVisible(false); this.localPlayer.sprite.setVelocity(vx, vy); this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
                 let absX = Math.abs(vx); let absY = Math.abs(vy); if (absX < 1) vx = 0; if (absY < 1) vy = 0;
@@ -1189,7 +1202,7 @@ class MainScene extends Phaser.Scene {
                 if (uid === window.GameLogic.currentUser.uid) continue; if (!globalOnline[uid]) continue; 
                 let pd = playersData[uid]; pd.uid = uid; if (!this.otherPlayers[uid]) this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
                 let op = this.otherPlayers[uid]; let oldX = op.sprite.x; let oldY = op.sprite.y; op.sprite.x = Phaser.Math.Linear(op.sprite.x, pd.x, 0.2); op.sprite.y = Phaser.Math.Linear(op.sprite.y, pd.y, 0.2); let diffX = op.sprite.x - oldX; let diffY = op.sprite.y - oldY; let absX = Math.abs(diffX); let absY = Math.abs(diffY);
-               if (op.sprite.isStunned || op.sprite.isThrowing) { } else if (pd.isSeated) {
+                if (op.sprite.isStunned || op.sprite.isThrowing) { } else if (pd.isSeated) {
                     if (isPurifying) {
                         if (evData.targetUid === uid) {
                             op.sprite.play('purify-target', true);
