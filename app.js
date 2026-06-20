@@ -459,8 +459,36 @@ function joinShrine() {
         } else { spamUI.style.display = 'none'; }
     });
 }
-function leaveShrine() { if (window.GameLogic.currentUser) set(ref(db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), null); if (shrineUnsubscribe) { shrineUnsubscribe(); shrineUnsubscribe = null; } if (shrineEventUnsubscribe) { shrineEventUnsubscribe(); shrineEventUnsubscribe = null; } }
-function checkShrineVotingTrigger() { if (window.GameLogic.currentScene !== 'shrine') return; let players = window.GameLogic.shrinePlayers || {}; let uids = Object.keys(players); if (uids.length === 0) return; let allSeated = uids.every(uid => players[uid].isSeated); if (allSeated) { let isHost = uids.sort()[0] === window.GameLogic.currentUser.uid; if (isHost && (!window.GameLogic.shrineEventData || window.GameLogic.shrineEventData.state === 'finished')) { set(ref(db, 'shrineEvents/current'), { state: 'voting', startTime: Date.now() }); } } }
+function leaveShrine() { 
+    if (window.GameLogic.currentUser) set(ref(db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), null); 
+    if (shrineUnsubscribe) { shrineUnsubscribe(); shrineUnsubscribe = null; } 
+    if (shrineEventUnsubscribe) { shrineEventUnsubscribe(); shrineEventUnsubscribe = null; } 
+    // 修正：強制隱藏票選與狂點 UI，避免切換場景後殘留
+    document.getElementById('voting-modal').style.display = 'none';
+    document.getElementById('spam-ui').style.display = 'none';
+}
+
+function checkShrineVotingTrigger() { 
+    if (window.GameLogic.currentScene !== 'shrine') return; 
+    let players = window.GameLogic.shrinePlayers || {}; let uids = Object.keys(players); 
+    if (uids.length === 0) return; 
+    
+    let isHost = uids.sort()[0] === window.GameLogic.currentUser.uid;
+    let seatedCount = uids.filter(uid => players[uid].isSeated).length;
+    
+    // 修正：如果所有人都離開坐墊，且活動還卡在進行中，房主負責強制結束活動，避免符咒按鈕常駐
+    if (seatedCount === 0 && isHost && window.GameLogic.shrineEventData && window.GameLogic.shrineEventData.state !== 'finished') {
+        update(ref(db, 'shrineEvents/current'), { state: 'finished' });
+        return;
+    }
+    
+    let allSeated = seatedCount > 0 && seatedCount === uids.length; 
+    if (allSeated) { 
+        if (isHost && (!window.GameLogic.shrineEventData || window.GameLogic.shrineEventData.state === 'finished')) { 
+            set(ref(db, 'shrineEvents/current'), { state: 'voting', startTime: Date.now() }); 
+        } 
+    } 
+}
 
 function switchScene(sceneName) {
     if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if (scene) window.playSFX(scene, 'jump04'); }
