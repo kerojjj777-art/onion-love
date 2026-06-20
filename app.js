@@ -777,18 +777,40 @@ class MainScene extends Phaser.Scene {
     finishSweeping(success) { this.localPlayer.isSweeping = false; this.qteContainer.setVisible(false); if (this.sound.get('brooming1')) this.sound.stopByKey('brooming1'); if (success && this.closestTrash) { let px = this.localPlayer.sprite.x; let py = this.localPlayer.sprite.y - 40; let trashKey = this.closestTrash.key; let isOld = this.closestTrash.type === 'onion-skin-old'; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.remove(module.ref(window.GameLogic.db, 'cafeTrashes/' + trashKey)); }); this.closestTrash = null; let leveledUp = gainRewards(0, 10); if (leveledUp) { window.playSFX(this, 'chorus_of_angels1'); } let totalCoins = isOld ? Phaser.Math.Between(50, 60) : Phaser.Math.Between(10, 18); let coinAmounts = [Math.floor(totalCoins/3), Math.floor(totalCoins/3), totalCoins - 2*Math.floor(totalCoins/3)]; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { for(let i = 0; i < 3; i++) { let cx = this.localPlayer.sprite.x + Phaser.Math.Between(-30, 30); let cy = this.localPlayer.sprite.y + Phaser.Math.Between(-30, 30) + 20; module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: coinAmounts[i] }); } }); let txt = `✨ 打掃成功 ✨\n+10 EXP`; if (leveledUp) txt += `\n🆙 升級了!`; let successText = this.add.text(px, py, txt, { fontSize: '18px', color: '#c5a059', fontStyle: 'bold', stroke: '#fff', strokeThickness: 4, align:'center' }).setOrigin(0.5).setDepth(200); if (this.minimap) this.minimap.ignore(successText); this.tweens.add({ targets: successText, y: py - 60, alpha: { getStart: () => 1, getEnd: () => 0 }, delay: 1000, duration: 1500, ease: 'Power2', onComplete: () => successText.destroy() }); } }
 
     startPurifyEffects() {
-        if (this.purifyEffectsActive) return; this.purifyEffectsActive = true; this.cameras.main.setTint(0x444455); let mapW = this.cameras.main.width; let mapH = this.cameras.main.height;
+        if (this.purifyEffectsActive) return; this.purifyEffectsActive = true; 
+        let mapW = this.cameras.main.width; let mapH = this.cameras.main.height;
+        
+        // 修正：用半透明的深色遮罩取代 camera setTint，達到整體環境變暗的效果
+        if (!this.purifyOverlay) {
+            this.purifyOverlay = this.add.rectangle(mapW/2, mapH/2, mapW, mapH, 0x000022, 0.6).setScrollFactor(0).setDepth(185);
+        }
+        this.purifyOverlay.setVisible(true);
+
         this.rainEmitter = this.add.particles(0, 0, 'fw-particle', { x: { min: 0, max: this.physics.world.bounds.width }, y: 0, speedY: { min: 600, max: 900 }, speedX: { min: -50, max: 50 }, scale: { start: 0.8, end: 1.5 }, alpha: 0.5, tint: 0xaaaaee, lifespan: 1500, quantity: 15 }).setDepth(190);
         this.fireEmitter = this.add.particles(0, this.physics.world.bounds.height, 'fw-particle', { x: { min: 0, max: this.physics.world.bounds.width }, y: { min: this.physics.world.bounds.height - 50, max: this.physics.world.bounds.height }, speedY: { min: -100, max: -300 }, scale: { start: 3, end: 0 }, alpha: { start: 1, end: 0 }, tint: [0xff4500, 0xff8c00, 0xffd700], blendMode: 'ADD', lifespan: 2000, quantity: 8 }).setDepth(190);
-        this.thunderEvent = this.time.addEvent({ delay: 2500, loop: true, callback: () => { if (Math.random() < 0.4 && this.purifyEffectsActive) { this.cameras.main.clearTint(); this.time.delayedCall(100, () => this.cameras.main.setTint(0x444455)); } } });
         
-        // 修正5：橫置大型集氣條 + 火焰閃爍特效
+        // 修正：打雷閃爍改為控制遮罩的開關
+        this.thunderEvent = this.time.addEvent({ delay: 2500, loop: true, callback: () => { 
+            if (Math.random() < 0.4 && this.purifyEffectsActive) { 
+                if(this.purifyOverlay) this.purifyOverlay.setVisible(false); 
+                this.time.delayedCall(100, () => { 
+                    if(this.purifyEffectsActive && this.purifyOverlay) this.purifyOverlay.setVisible(true); 
+                }); 
+            } 
+        } });
+        
+        // 橫置大型集氣條 + 火焰閃爍特效
         this.purifyBarBg.clear().fillStyle(0x3e2723, 0.8).fillRoundedRect(mapW/2 - 200, mapH * 0.75 - 100, 400, 40, 20).lineStyle(5, 0xff0000).strokeRoundedRect(mapW/2 - 200, mapH * 0.75 - 100, 400, 40, 20).setVisible(true).setScrollFactor(0); 
         this.purifyBar.setVisible(true).setScrollFactor(0);
         if (!this.purifyBarTween) { this.purifyBarTween = this.tweens.add({ targets: this.purifyBarBg, alpha: 0.6, scaleX: 1.02, scaleY: 1.05, yoyo: true, repeat: -1, duration: 150 }); }
     }
+
     stopPurifyEffects(success) {
-        if (!this.purifyEffectsActive) return; this.purifyEffectsActive = false; this.cameras.main.clearTint();
+        if (!this.purifyEffectsActive) return; this.purifyEffectsActive = false; 
+        
+        // 修正：淨化結束時隱藏暗色遮罩
+        if (this.purifyOverlay) this.purifyOverlay.setVisible(false);
+
         if (this.rainEmitter) this.rainEmitter.destroy(); if (this.fireEmitter) this.fireEmitter.destroy(); if (this.thunderEvent) this.thunderEvent.remove();
         this.purifyBarBg.setVisible(false); this.purifyBar.setVisible(false);
         if (this.purifyBarTween) { this.purifyBarTween.stop(); this.purifyBarTween = null; this.purifyBarBg.setScale(1).setAlpha(1); }
