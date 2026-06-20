@@ -753,43 +753,42 @@ class MainScene extends Phaser.Scene {
         this.rainEmitter = this.add.particles(0, 0, 'fw-particle', { x: { min: 0, max: this.physics.world.bounds.width }, y: 0, speedY: { min: 600, max: 900 }, speedX: { min: -50, max: 50 }, scale: { start: 0.8, end: 1.5 }, alpha: 0.5, tint: 0xaaaaee, lifespan: 1500, quantity: 15 }).setDepth(190);
         this.fireEmitter = this.add.particles(0, this.physics.world.bounds.height, 'fw-particle', { x: { min: 0, max: this.physics.world.bounds.width }, y: { min: this.physics.world.bounds.height - 50, max: this.physics.world.bounds.height }, speedY: { min: -100, max: -300 }, scale: { start: 3, end: 0 }, alpha: { start: 1, end: 0 }, tint: [0xff4500, 0xff8c00, 0xffd700], blendMode: 'ADD', lifespan: 2000, quantity: 8 }).setDepth(190);
         this.thunderEvent = this.time.addEvent({ delay: 2500, loop: true, callback: () => { if (Math.random() < 0.4 && this.purifyEffectsActive) { this.cameras.main.clearTint(); this.time.delayedCall(100, () => this.cameras.main.setTint(0x444455)); } } });
-        this.purifyBarBg.clear().fillStyle(0x3e2723, 0.8).fillRoundedRect(mapW/2 - 150, 80, 300, 20, 10).lineStyle(3, 0xc5a059).strokeRoundedRect(mapW/2 - 150, 80, 300, 20, 10).setVisible(true).setScrollFactor(0); this.purifyBar.setVisible(true).setScrollFactor(0);
+        
+        // 修正5：橫置大型集氣條 + 火焰閃爍特效
+        this.purifyBarBg.clear().fillStyle(0x3e2723, 0.8).fillRoundedRect(mapW/2 - 200, mapH * 0.75 - 100, 400, 40, 20).lineStyle(5, 0xff0000).strokeRoundedRect(mapW/2 - 200, mapH * 0.75 - 100, 400, 40, 20).setVisible(true).setScrollFactor(0); 
+        this.purifyBar.setVisible(true).setScrollFactor(0);
+        if (!this.purifyBarTween) { this.purifyBarTween = this.tweens.add({ targets: this.purifyBarBg, alpha: 0.6, scaleX: 1.02, scaleY: 1.05, yoyo: true, repeat: -1, duration: 150 }); }
     }
     stopPurifyEffects(success) {
         if (!this.purifyEffectsActive) return; this.purifyEffectsActive = false; this.cameras.main.clearTint();
         if (this.rainEmitter) this.rainEmitter.destroy(); if (this.fireEmitter) this.fireEmitter.destroy(); if (this.thunderEvent) this.thunderEvent.remove();
         this.purifyBarBg.setVisible(false); this.purifyBar.setVisible(false);
+        if (this.purifyBarTween) { this.purifyBarTween.stop(); this.purifyBarTween = null; this.purifyBarBg.setScale(1).setAlpha(1); }
         if (success) { let rays = this.add.graphics().setDepth(195); rays.fillStyle(0xffffff, 0.3); for (let i=0; i<10; i++) { rays.fillTriangle( this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.localPlayer.sprite.x - 500 + Math.random()*1000, this.localPlayer.sprite.y - 800, this.localPlayer.sprite.x - 500 + Math.random()*1000, this.localPlayer.sprite.y - 800 ); } this.tweens.add({ targets: rays, alpha: 0, duration: 3000, onComplete: () => rays.destroy() }); }
     }
 
     processShrineEventLogic(time, delta) {
         if (this.sceneName !== 'shrine') return;
-        let eventData = window.GameLogic.shrineEventData;
-        let evState = eventData ? eventData.state : 'none';
+        let eventData = window.GameLogic.shrineEventData; let evState = eventData ? eventData.state : 'none';
 
-        // 儀式音效與狀態管理
+        // 修正6：嚴格控制各種階段的背景音樂播放邏輯
         if (window.GameLogic.shrineRitualActive && evState !== this.currentRitualState) {
             this.currentRitualState = evState;
             ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo'].forEach(k => this.sound.stopByKey(k));
 
             if (evState === 'voting') {
-                this.sound.play('shrine-selection', {loop: true});
-            }
-            if (evState === 'countdown') {
-                this.sound.stopByKey('shrine-selection');
-                this.sound.play('shrine-selection', {loop: false});
-            }
-            if (evState === 'purifying') {
-                this.sound.play('shrine-purify-fight', {loop: true});
-            }
-            if (evState === 'success') {
-                this.sound.stopByKey('shrine-purify-fight');
-                this.sound.stopByKey('shrine-wierd-people-sound');
-                let winSnd = this.sound.add('shrine-purify-success-win');
-                winSnd.play();
+                ['shrine-wierd-people-sound', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'].forEach(k => this.sound.stopByKey(k));
+                if (!this.sound.get('shrine-selection')?.isPlaying) this.sound.play('shrine-selection', {loop: true});
+            } else if (evState === 'countdown') {
+                this.sound.stopByKey('shrine-selection'); this.sound.play('shrine-selection', {loop: false});
+            } else if (evState === 'purifying') {
+                ['shrine-wierd-people-sound', 'shrine-selection'].forEach(k => this.sound.stopByKey(k));
+                if (!this.sound.get('shrine-purify-fight')?.isPlaying) this.sound.play('shrine-purify-fight', {loop: true});
+            } else if (evState === 'success') {
+                this.sound.stopByKey('shrine-purify-fight'); this.sound.stopByKey('shrine-wierd-people-sound');
+                let winSnd = this.sound.add('shrine-purify-success-win'); winSnd.play();
                 winSnd.once('complete', () => { if (this.currentRitualState === 'success') { this.sound.play('shrine-purify-success', {loop: true}); } });
-            }
-            if (evState === 'finished' || evState === 'none') {
+            } else if (evState === 'finished' || evState === 'none') {
                 ['shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'].forEach(k => this.sound.stopByKey(k));
                 window.GameLogic.shrineRitualActive = false;
                 let vol = document.getElementById('bgm-volume') ? document.getElementById('bgm-volume').value / 100 : 0.5;
@@ -840,7 +839,9 @@ class MainScene extends Phaser.Scene {
             }
             let progressVal = (totalClicks * 3) - currentDecay; if (progressVal < 0) progressVal = 0;
             let targetProgress = pUids.length * 50; let ratio = Phaser.Math.Clamp(progressVal / targetProgress, 0, 1);
-            this.purifyBar.clear().fillStyle(0xff8c00, 1).fillRoundedRect(this.cameras.main.width/2 - 148, 82, 296 * ratio, 16, 8);
+            
+            // 修正5：填滿大進度條
+            this.purifyBar.clear().fillStyle(0xff4500, 1).fillRoundedRect(this.cameras.main.width/2 - 196, this.cameras.main.height * 0.75 - 96, 392 * ratio, 32, 16);
             if (isHost && ratio >= 1) { update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'success', endTime: Date.now() }); }
 
             if (!this.pooBoss && this.furnitureSprites['altar']) {
@@ -849,9 +850,12 @@ class MainScene extends Phaser.Scene {
                 this.pooBoss.quotes = ["哇哈哈哈呷賽呷到飽！", "屎到臨頭還在吃！", "吃我的黃金大狂風啦！", "你的腦袋被本王侵佔啦！", "好香好香～再來一坨！", "愛吃屎的孩子都沒本王壞！", "看我的終極噴射括約肌！", "人生就是一場呷賽的過程！", "這坨屎就賞給你當宵夜！", "屎王駕到，通通閃開！", "滿城盡帶黃金屎！", "你身上有濃濃的屎味～", "我知道你愛本王,瞧你吃得起勁！", "把你的靈魂跟大便揉成一團！", "遇到本王算你好屎運！", "別掙扎了，乖乖呷賽吧！", "這點符咒也想超渡本屎王？", "再不點快點，我就讓你再拉20年！"];
                 this.pooBoss.lastQuoteTime = 0;
             }
+            
+            // 修正3：屎王精確追蹤「被票選者」飛行
             if (this.pooBoss && this.furnitureSprites['altar']) {
-                let ax = this.furnitureSprites['altar'].sprite.x; let ay = this.furnitureSprites['altar'].sprite.y;
-                this.pooBoss.x = ax + Math.cos(time * 0.005) * 100; this.pooBoss.y = ay + Math.sin(time * 0.008) * 60;
+                let targetSprite = (eventData.targetUid === window.GameLogic.currentUser.uid) ? this.localPlayer.sprite : (this.otherPlayers[eventData.targetUid] ? this.otherPlayers[eventData.targetUid].sprite : this.furnitureSprites['altar'].sprite);
+                let ax = targetSprite.x; let ay = targetSprite.y;
+                this.pooBoss.x = ax + Math.cos(time * 0.005) * 100; this.pooBoss.y = ay - 40 + Math.sin(time * 0.008) * 60; 
                 if (time - this.pooBoss.lastQuoteTime > 2500) { this.pooBoss.lastQuoteTime = time; this.pooBoss.bubbleText.setText(Phaser.Utils.Array.GetRandom(this.pooBoss.quotes)); }
                 let bBounds = this.pooBoss.bubbleText.getBounds(); let bW = bBounds.width + 16, bH = bBounds.height + 12; let bx = this.pooBoss.x, by = this.pooBoss.y - 60 - bH/2;
                 this.pooBoss.bubbleBg.clear().fillStyle(0x3e2723, 0.9).lineStyle(2, 0xffcc00, 1).fillRoundedRect(bx - bW/2, by - bH/2, bW, bH, 8).strokeRoundedRect(bx - bW/2, by - bH/2, bW, bH, 8); this.pooBoss.bubbleText.setPosition(bx, by);
