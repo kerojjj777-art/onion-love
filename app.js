@@ -128,11 +128,11 @@ function createSystemUI() {
             #chat-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 4px 4px 0 0; padding: 5px 10px; width: fit-content; cursor: pointer; font-size: 12px; font-weight: bold;}
             #chat-content { pointer-events: auto; transition: max-height 0.3s ease-in-out; overflow: hidden; display: flex; flex-direction: column; }
             #chat-box { max-height: 100px; overflow-y: auto; background: rgba(0, 0, 0, 0.5); color: #fff; padding: 8px; border-radius: 0 8px 0 0; margin-bottom: 5px; font-size: 13px; text-shadow: 1px 1px 2px #000; }            
+            // 前後文對齊：
             #chat-input-area { display: flex; height: 40px; box-shadow: 0 2px 5px rgba(0,0,0,0.5); border-radius: 4px;}
-            #chat-input { flex-grow: 1; padding: 8px; border: 2px solid var(--mucha-gold); border-radius: 4px 0 0 4px; background: rgba(244, 236, 216, 0.95); font-family: inherit;}
             #send-btn { padding: 8px 15px; background: var(--mucha-gold); color: white; border: 2px solid var(--mucha-gold); border-radius: 0 4px 4px 0; font-family: inherit; font-weight: bold; cursor: pointer;}
             .chat-collapsed #chat-content { max-height: 0px !important; }
-            #top-notification-bar { position: absolute; top: 0; left: 0; width: 100%; padding: 8px 0; background: rgba(0, 0, 0, 0.6); color: #fff; text-align: center; font-size: 14px; z-index: 500; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 1px 1px 2px #000; letter-spacing: 1px; }
+            #top-notification-bar { position: fixed; top: 0; left: 0; width: 100%; padding: 8px 0; background: rgba(0, 0, 0, 0.6); color: #fff; text-align: center; font-size: 14px; z-index: 500; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 1px 1px 2px #000; letter-spacing: 1px; }
             #online-players-list { position: absolute; right: 15px; top: 220px; background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 8px; color: white; display: none; z-index: 100; font-size: 13px; border: 1px solid var(--mucha-gold); pointer-events: none; min-width: 80px; text-shadow: 1px 1px 2px #000; }
             .sprite-waterball { width: 50px; height: 50px; background: url('shop-water-ball.png') left center; animation: play-waterball 0.8s steps(8) infinite; margin-bottom: 5px; }
             .sprite-onion-phone { width: 50px; height: 50px; background: url('tool-onion-phone.png') left center; animation: play-onion-phone 0.8s steps(8) infinite; margin-bottom: 5px; }
@@ -259,7 +259,29 @@ window.deleteManualPage = function() { if (window.manualPages.length === 0) retu
 window.moveManualPage = function(dir) { if (window.manualPages.length < 2) return; let idx1 = window.currentManualIndex; let idx2 = idx1 + dir; if (idx2 < 0 || idx2 >= window.manualPages.length) return; let p1 = window.manualPages[idx1]; let p2 = window.manualPages[idx2]; let tempTime = p1.timestamp; p1.timestamp = p2.timestamp; p2.timestamp = tempTime; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { let updates = {}; updates[`manuals/${p1.key}/timestamp`] = p1.timestamp; updates[`manuals/${p2.key}/timestamp`] = p2.timestamp; module.update(module.ref(window.GameLogic.db), updates).then(() => { window.currentManualIndex = idx2; }); }); };
 
 window.updateUnreadGlow = function() { if (!window.GameLogic.phaserGame) return; const uiScene = window.GameLogic.phaserGame.scene.getScene('UIScene'); if (!uiScene || !uiScene.itemBtn) return; const hasUnread = Object.keys(window.GameLogic.unreadPMs || {}).length > 0; if (hasUnread) { if (!uiScene.itemGlowTween) { uiScene.itemGlowTween = uiScene.tweens.add({ targets: uiScene.itemBtn, scaleX: 1.1, scaleY: 1.1, yoyo: true, repeat: -1, duration: 600 }); } uiScene.itemBtn.setStrokeStyle(4, 0xff0000); } else { if (uiScene.itemGlowTween) { uiScene.itemGlowTween.stop(); uiScene.itemGlowTween = null; uiScene.itemBtn.setScale(1); } uiScene.itemBtn.setStrokeStyle(3, 0xc5a059); } };
-window.updateOnlinePlayersUI = function() { const listEl = document.getElementById('online-players-list'); if (!listEl) return; listEl.style.display = 'block'; let html = '<div style="color:var(--mucha-gold); font-weight:bold; margin-bottom:5px; text-align:center; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 3px;">誰在線上</div>'; let players = window.GameLogic.onlinePlayers || {}; for (let uid in players) { let p = players[uid]; html += `<div style="margin-top:5px; display:flex; align-items:center;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${p.color || '#fff'}; margin-right:8px; border:1px solid #000;"></span>${p.name || '匿名'}</div>`; } listEl.innerHTML = html; };
+window.updateOnlinePlayersUI = function() {
+    const listEl = document.getElementById('online-players-list');
+    if (!listEl) return;
+    listEl.style.display = 'block';
+    
+    let html = '';
+    // 修正6：如果全域召喚計時大於 0，就在「誰在線上」上方顯示全服倒數通知
+    if (window.GameLogic.globalSummonCountdown > 0) {
+        html += `<div style="background: rgba(217, 83, 79, 0.9); color: white; font-weight: bold; padding: 6px; border-radius: 4px; margin-bottom: 8px; text-align: center; font-size: 12px; animation: purpleFire 1s infinite alternate;">🚨 儀式即將開始: ${window.GameLogic.globalSummonCountdown}秒</div>`;
+    }
+    
+    html += '<div style="color:var(--mucha-gold); font-weight:bold; margin-bottom:5px; text-align:center; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 3px;">誰在線上</div>';
+    let players = window.GameLogic.onlinePlayers || {};
+    let now = Date.now();
+    
+    for (let uid in players) {
+        let p = players[uid];
+        // 修正4：過濾掉沒有發送心跳，或心跳超過 20 秒未更新的幽靈人口
+        if (!p.lastActive || (now - p.lastActive > 20000)) continue;
+        html += `<div style="margin-top:5px; display:flex; align-items:center;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${p.color || '#fff'}; margin-right:8px; border:1px solid #000;"></span>${p.name || '匿名'}</div>`;
+    }
+    listEl.innerHTML = html;
+};
 
 // 新增：啟動神龕儀式的共用函式，停止背景音樂並開始詭異音效
 window.startShrineRitual = function() {
@@ -429,30 +451,37 @@ onAuthStateChanged(auth, async (user) => {
         // 全局強制召喚監聽與 60 秒倒數
         onValue(ref(db, 'serverEvents/summonShrine'), snap => {
             let data = snap.val();
-            if (data && Date.now() - data.time < 60000 && data.callerUid !== window.GameLogic.currentUser.uid) {
+            if (data && Date.now() - data.time < 60000) {
                 if (window.lastSummonTime !== data.time) {
                     window.lastSummonTime = data.time;
-                    if (window.GameLogic.currentScene !== 'shrine') {
-                        document.getElementById('summoner-name').innerText = data.callerName || '某某';
-                        document.getElementById('forced-summon-modal').style.display = 'block';
-                        
+                    
+                    if (window.globalSummonInterval) clearInterval(window.globalSummonInterval);
+                    
+                    const updateCountdown = () => {
                         let remain = 60 - Math.floor((Date.now() - data.time) / 1000);
-                        document.getElementById('summon-timer').innerText = remain;
-                        
-                        if (window.summonInterval) clearInterval(window.summonInterval);
-                        window.summonInterval = setInterval(() => {
-                            remain--;
+                        if (remain <= 0) {
+                            window.GameLogic.globalSummonCountdown = 0;
+                            clearInterval(window.globalSummonInterval);
+                            document.getElementById('forced-summon-modal').style.display = 'none';
+                        } else {
+                            window.GameLogic.globalSummonCountdown = remain;
                             let tEl = document.getElementById('summon-timer');
                             if (tEl) tEl.innerText = remain;
-                            if (remain <= 0) {
-                                clearInterval(window.summonInterval);
-                                document.getElementById('forced-summon-modal').style.display = 'none';
-                            }
-                        }, 1000);
-                    } else {
-                        window.startShrineRitual();
+                        }
+                        window.updateOnlinePlayersUI();
+                    };
+                    
+                    if (data.callerUid !== window.GameLogic.currentUser.uid && window.GameLogic.currentScene !== 'shrine') {
+                        document.getElementById('summoner-name').innerText = data.callerName || '某某';
+                        document.getElementById('forced-summon-modal').style.display = 'block';
                     }
+                    
+                    updateCountdown();
+                    window.globalSummonInterval = setInterval(updateCountdown, 1000);
                 }
+            } else {
+                window.GameLogic.globalSummonCountdown = 0;
+                window.updateOnlinePlayersUI();
             }
         });
 
@@ -524,13 +553,28 @@ function joinShrine() {
 
 function leaveShrine() { 
     if (window.GameLogic.currentUser) {
-        // 【新增機制】所有人離開神龕時宣告儀式失敗並重置，500元沒收
         let players = window.GameLogic.shrinePlayers || {};
-        let validUids = Object.keys(players).filter(uid => window.GameLogic.onlinePlayers && window.GameLogic.onlinePlayers[uid]);
-        if (validUids.length <= 1 && window.GameLogic.shrineEventData && window.GameLogic.shrineEventData.state !== 'finished') {
-            update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'finished' });
+        let now = Date.now();
+        // 篩選出真正在線且在神龕內的人
+        let validUids = Object.keys(players).filter(uid => window.GameLogic.onlinePlayers && window.GameLogic.onlinePlayers[uid] && (now - (window.GameLogic.onlinePlayers[uid].lastActive || 0) < 20000));
+        
+        // 修正3：當所有人（或最後一個有效在線玩家）離開神龕時，立刻清空地上沒被撿完的神龕法器金幣
+        if (validUids.length <= 1) {
+            if (window.GameLogic.shrineEventData && window.GameLogic.shrineEventData.state !== 'finished') {
+                update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'finished' });
+            }
+            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                module.get(module.ref(window.GameLogic.db, 'droppedCoins')).then(snap => {
+                    let coins = snap.val() || {};
+                    let updates = {};
+                    Object.keys(coins).forEach(k => {
+                        if (k.startsWith('shrine_coin_')) updates[`droppedCoins/${k}`] = null;
+                    });
+                    if (Object.keys(updates).length > 0) module.update(module.ref(window.GameLogic.db), updates);
+                });
+            });
         }
-        set(ref(window.GameLogic.db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), null); 
+        set(ref(db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), null); 
     }
     if (shrineUnsubscribe) { shrineUnsubscribe(); shrineUnsubscribe = null; } 
     if (shrineEventUnsubscribe) { shrineEventUnsubscribe(); shrineEventUnsubscribe = null; } 
@@ -756,8 +800,23 @@ class MainScene extends Phaser.Scene {
 
         this.otherPlayers = {}; this.furnitureSprites = {}; this.dummySprites = {}; this.coinSprites = {};
         
-        if (this.isCafe || this.sceneName === "7eonion" || this.sceneName === "shrine") { // 修正1：增加 shrine 使金幣可以被讀取
-            this.coinsListener = onValue(ref(window.GameLogic.db, 'droppedCoins'), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.coinSprites[key]) { let cData = data[key]; let coinSprite = this.physics.add.sprite(cData.x, cData.y, 'made-coin').setDepth(8); coinSprite.play('coin-anim', true); coinSprite.amount = cData.amount || 5; this.coinSprites[key] = coinSprite; } } for (let key in this.coinSprites) { if (!data[key]) { this.coinSprites[key].destroy(); delete this.coinSprites[key]; } } });
+        if (this.isCafe || this.sceneName === "7eonion" || this.sceneName === "shrine") { 
+            this.coinsListener = onValue(ref(window.GameLogic.db, 'droppedCoins'), (snap) => { 
+                let data = snap.val() || {}; 
+                for (let key in data) { 
+                    // 修正2：如果金幣是神龕發出的，且當前不在神龕場景，則直接過濾不渲染，解決商店殘留問題
+                    if (key.startsWith('shrine_coin_') && this.sceneName !== 'shrine') continue;
+                    
+                    if (!this.coinSprites[key]) { 
+                        let cData = data[key]; 
+                        let coinSprite = this.physics.add.sprite(cData.x, cData.y, 'made-coin').setDepth(8); 
+                        coinSprite.play('coin-anim', true); 
+                        coinSprite.amount = cData.amount || 5; 
+                        this.coinSprites[key] = coinSprite; 
+                    } 
+                } 
+                for (let key in this.coinSprites) { if (!data[key]) { this.coinSprites[key].destroy(); delete this.coinSprites[key]; } } 
+            });
             this.dummiesListener = onValue(ref(window.GameLogic.db, 'cafeDummies'), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.dummySprites[key]) { let dData = data[key]; let dummySprite = this.physics.add.sprite(dData.x, dData.y, 'dummy').setDepth(8); this.dummySprites[key] = dummySprite; } } for (let key in this.dummySprites) { if (!data[key]) { this.dummySprites[key].destroy(); delete this.dummySprites[key]; } } });
         }
 
