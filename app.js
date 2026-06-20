@@ -369,7 +369,15 @@ window.clickSpamBtn = function() {
         currentClicks++; window.GameLogic.myPurifyClicks = currentClicks;
         set(ref(db, `shrineEvents/current/clicks/${window.GameLogic.currentUser.uid}`), currentClicks);
         let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
-        if (ms && !window.GameLogic.muteSFX && currentClicks % 5 === 0) window.playSFX(ms, 'minimum_laser'); 
+        if (ms) {
+            if (!window.GameLogic.muteSFX && currentClicks % 5 === 0) window.playSFX(ms, 'minimum_laser'); 
+            
+            // 修正1：按下符咒按鈕時，立刻觸發施法動作並紀錄時間，讓點擊有真實回饋感
+            if (ms.localPlayer && ms.localPlayer.isSeated) {
+                ms.localPlayer.magicClickTime = Date.now();
+                ms.localPlayer.sprite.play('purify-magic', true);
+            }
+        }
     }
 };
 
@@ -1131,7 +1139,11 @@ class MainScene extends Phaser.Scene {
             this.qteProgress -= (delta * 0.02); if (this.qteProgress < 0) this.qteProgress = 0; this.updateQTEBar(this.qteProgress);
             if (this.closestTrash) this.qteContainer.setPosition(this.closestTrash.x, this.closestTrash.y + 40);
             this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
-        } else if (this.localPlayer.isSleeping || this.localPlayer.isStunned || this.localPlayer.isThrowing) {
+        } else if (this.localPlayer.isSleeping) {
+            this.localPlayer.sprite.setVelocity(0, 0); this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
+            // 修正2：將睡覺動畫放在 update 迴圈中強制維持，確保狀態不會被其他網路事件覆蓋而卡死
+            this.localPlayer.sprite.play('sleep', true);
+        } else if (this.localPlayer.isStunned || this.localPlayer.isThrowing) {
             this.localPlayer.sprite.setVelocity(0, 0); this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
         } else if (this.localPlayer.isSeated) {
             this.localPlayer.sprite.setVelocity(0, 0); this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
@@ -1141,7 +1153,12 @@ class MainScene extends Phaser.Scene {
                     this.localPlayer.sprite.play('purify-target', true);
                     if (this.localPlayer.lastBubbleState !== 'purify-target') { sendBubble("痾...我不敢再吃屎了...!!"); this.localPlayer.lastBubbleState = 'purify-target'; }
                 } else { 
-                    this.localPlayer.sprite.play('purify-magic', true); 
+                    // 修正1：根據點擊時間判斷是否播放施法動作，如果超過 300 毫秒沒按鈕，就回到入席發呆
+                    if (this.localPlayer.magicClickTime && Date.now() - this.localPlayer.magicClickTime < 300) {
+                        this.localPlayer.sprite.play('purify-magic', true);
+                    } else {
+                        this.localPlayer.sprite.play('seat-idle', true);
+                    }
                     if (this.localPlayer.lastBubbleState !== 'purify-magic') { sendBubble("退！退！退！"); this.localPlayer.lastBubbleState = 'purify-magic'; }
                 }
             } else { 
@@ -1218,7 +1235,17 @@ class MainScene extends Phaser.Scene {
                         if (evData.targetUid === uid) {
                             op.sprite.play('purify-target', true);
                             if (this.furnitureSprites['altar']) { op.sprite.x = this.furnitureSprites['altar'].sprite.x; op.sprite.y = this.furnitureSprites['altar'].sprite.y + 40; }
-                        } else { op.sprite.play('purify-magic', true); }
+                        } else { 
+                            // 修正：透過 Firebase 的點擊次數差值，判斷其他玩家是否正在狂點
+                            let pClicks = evData.clicks ? (evData.clicks[uid] || 0) : 0;
+                            if (op.lastClicks !== pClicks) { op.lastClicks = pClicks; op.magicClickTime = Date.now(); }
+                            
+                            if (op.magicClickTime && Date.now() - op.magicClickTime < 300) {
+                                op.sprite.play('purify-magic', true);
+                            } else {
+                                op.sprite.play('seat-idle', true);
+                            }
+                        }
                     } else { op.sprite.play('seat-idle', true); }
                 } else if (absX < 0.5 && absY < 0.5) { op.sprite.play('idle', true); } else if (absX >= absY) { op.sprite.setFlipX(diffX < 0); op.sprite.play('walk', true); } else { if (diffY < 0) { op.sprite.play('walk-up', true); } else { op.sprite.play('walk-down', true); } }
                 this.updatePlayerEntity(op, pd);
