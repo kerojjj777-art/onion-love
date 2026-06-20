@@ -176,7 +176,7 @@ function createSystemUI() {
             <button id="voting-confirm-btn" class="btn-primary" style="width:100%; margin-top:15px; background:#8a2be2; border-color:#ba55d3; font-size:16px; font-weight:bold;" onclick="window.submitVote()">確認</button>
         </div>
         <div id="spam-ui" style="display:none; position:absolute; top:75%; left:50%; transform:translate(-50%,-50%); z-index:400; text-align:center;">
-            <button id="spam-btn" style="width:80px; height:80px; border-radius:50%; background:var(--mucha-gold); border:3px solid #fff; box-shadow:0 0 20px #ffcc00; cursor:pointer; touch-action:manipulation; padding:0; overflow:hidden;" onpointerdown="window.clickSpamBtn()"></button>
+            <button id="spam-btn" style="width:80px; height:80px; border-radius:50%; background:var(--mucha-gold); border:3px solid #fff; box-shadow:0 0 20px #ffcc00; cursor:pointer; touch-action:manipulation; padding:0; overflow:hidden;" onclick="window.clickSpamBtn()"></button>
         </div>
         
         <div id="top-notification-bar">系統通知：歡迎來到洋蔥交誼廳！</div>
@@ -453,8 +453,8 @@ function joinShrine() {
                 let taliObj = talismans.find(x => x.id === myVote.talisman);
                 if (taliObj) {
                     let sBtn = document.getElementById('spam-btn');
-                    sBtn.innerHTML = `<img src="${taliObj.img}" style="width:100%; height:100%; object-fit:contain; border-radius:50%;">`;
-                }
+                    sBtn.innerHTML = `<img src="${taliObj.img}" style="width:100%; height:100%; object-fit:contain; border-radius:50%; pointer-events:none;">`;
+}
             }
         } else { spamUI.style.display = 'none'; }
     });
@@ -780,7 +780,7 @@ class MainScene extends Phaser.Scene {
         if (this.purifyEffectsActive) return; this.purifyEffectsActive = true; 
         let mapW = this.cameras.main.width; let mapH = this.cameras.main.height;
         
-        // 修正：用半透明的深色遮罩取代 camera setTint，達到整體環境變暗的效果
+        // 修正：用暗色遮罩取代會報錯的 setTint，並移除打雷特效
         if (!this.purifyOverlay) {
             this.purifyOverlay = this.add.rectangle(mapW/2, mapH/2, mapW, mapH, 0x000022, 0.6).setScrollFactor(0).setDepth(185);
         }
@@ -789,29 +789,33 @@ class MainScene extends Phaser.Scene {
         this.rainEmitter = this.add.particles(0, 0, 'fw-particle', { x: { min: 0, max: this.physics.world.bounds.width }, y: 0, speedY: { min: 600, max: 900 }, speedX: { min: -50, max: 50 }, scale: { start: 0.8, end: 1.5 }, alpha: 0.5, tint: 0xaaaaee, lifespan: 1500, quantity: 15 }).setDepth(190);
         this.fireEmitter = this.add.particles(0, this.physics.world.bounds.height, 'fw-particle', { x: { min: 0, max: this.physics.world.bounds.width }, y: { min: this.physics.world.bounds.height - 50, max: this.physics.world.bounds.height }, speedY: { min: -100, max: -300 }, scale: { start: 3, end: 0 }, alpha: { start: 1, end: 0 }, tint: [0xff4500, 0xff8c00, 0xffd700], blendMode: 'ADD', lifespan: 2000, quantity: 8 }).setDepth(190);
         
-        // 修正：打雷閃爍改為控制遮罩的開關
-        this.thunderEvent = this.time.addEvent({ delay: 2500, loop: true, callback: () => { 
-            if (Math.random() < 0.4 && this.purifyEffectsActive) { 
-                if(this.purifyOverlay) this.purifyOverlay.setVisible(false); 
-                this.time.delayedCall(100, () => { 
-                    if(this.purifyEffectsActive && this.purifyOverlay) this.purifyOverlay.setVisible(true); 
-                }); 
-            } 
-        } });
-        
-        // 橫置大型集氣條 + 火焰閃爍特效
+        // 大型集氣條外框閃爍
         this.purifyBarBg.clear().fillStyle(0x3e2723, 0.8).fillRoundedRect(mapW/2 - 200, mapH * 0.75 - 100, 400, 40, 20).lineStyle(5, 0xff0000).strokeRoundedRect(mapW/2 - 200, mapH * 0.75 - 100, 400, 40, 20).setVisible(true).setScrollFactor(0); 
         this.purifyBar.setVisible(true).setScrollFactor(0);
         if (!this.purifyBarTween) { this.purifyBarTween = this.tweens.add({ targets: this.purifyBarBg, alpha: 0.6, scaleX: 1.02, scaleY: 1.05, yoyo: true, repeat: -1, duration: 150 }); }
+        
+        // 修正：新增綁定在集氣條上的專屬火焰特效
+        this.barFireEmitter = this.add.particles(0, 0, 'fw-particle', {
+            x: { min: mapW/2 - 190, max: mapW/2 + 190 },
+            y: mapH * 0.75 - 75,
+            speedY: { min: -40, max: -100 },
+            scale: { start: 1.5, end: 0 },
+            alpha: { start: 0.8, end: 0 },
+            tint: [0xff4500, 0xff8c00, 0xffd700],
+            blendMode: 'ADD',
+            lifespan: 600,
+            quantity: 4
+        }).setDepth(202).setScrollFactor(0);
     }
 
     stopPurifyEffects(success) {
         if (!this.purifyEffectsActive) return; this.purifyEffectsActive = false; 
-        
-        // 修正：淨化結束時隱藏暗色遮罩
         if (this.purifyOverlay) this.purifyOverlay.setVisible(false);
 
-        if (this.rainEmitter) this.rainEmitter.destroy(); if (this.fireEmitter) this.fireEmitter.destroy(); if (this.thunderEvent) this.thunderEvent.remove();
+        if (this.rainEmitter) this.rainEmitter.destroy(); 
+        if (this.fireEmitter) this.fireEmitter.destroy(); 
+        if (this.barFireEmitter) this.barFireEmitter.destroy(); // 關閉集氣條火焰
+
         this.purifyBarBg.setVisible(false); this.purifyBar.setVisible(false);
         if (this.purifyBarTween) { this.purifyBarTween.stop(); this.purifyBarTween = null; this.purifyBarBg.setScale(1).setAlpha(1); }
         if (success) { let rays = this.add.graphics().setDepth(195); rays.fillStyle(0xffffff, 0.3); for (let i=0; i<10; i++) { rays.fillTriangle( this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.localPlayer.sprite.x - 500 + Math.random()*1000, this.localPlayer.sprite.y - 800, this.localPlayer.sprite.x - 500 + Math.random()*1000, this.localPlayer.sprite.y - 800 ); } this.tweens.add({ targets: rays, alpha: 0, duration: 3000, onComplete: () => rays.destroy() }); }
@@ -923,7 +927,11 @@ class MainScene extends Phaser.Scene {
             if (this.pooBoss && this.furnitureSprites['altar']) {
                 let targetSprite = (eventData.targetUid === window.GameLogic.currentUser.uid) ? this.localPlayer.sprite : (this.otherPlayers[eventData.targetUid] ? this.otherPlayers[eventData.targetUid].sprite : this.furnitureSprites['altar'].sprite);
                 let ax = targetSprite.x; let ay = targetSprite.y;
-                this.pooBoss.x = ax + Math.cos(time * 0.005) * 100; this.pooBoss.y = ay - 40 + Math.sin(time * 0.008) * 60; 
+                
+                // 修正：大幅調降屎王的飛行速度，並稍微擴大圍繞半徑避免遮擋對白
+                this.pooBoss.x = ax + Math.cos(time * 0.0015) * 120; 
+                this.pooBoss.y = ay - 40 + Math.sin(time * 0.002) * 80; 
+                
                 if (time - this.pooBoss.lastQuoteTime > 2500) { this.pooBoss.lastQuoteTime = time; this.pooBoss.bubbleText.setText(Phaser.Utils.Array.GetRandom(this.pooBoss.quotes)); }
                 let bBounds = this.pooBoss.bubbleText.getBounds(); let bW = bBounds.width + 16, bH = bBounds.height + 12; let bx = this.pooBoss.x, by = this.pooBoss.y - 60 - bH/2;
                 this.pooBoss.bubbleBg.clear().fillStyle(0x3e2723, 0.9).lineStyle(2, 0xffcc00, 1).fillRoundedRect(bx - bW/2, by - bH/2, bW, bH, 8).strokeRoundedRect(bx - bW/2, by - bH/2, bW, bH, 8); this.pooBoss.bubbleText.setPosition(bx, by);
