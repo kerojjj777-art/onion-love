@@ -166,6 +166,7 @@ function createSystemUI() {
         </div>
         <div id="forced-summon-modal" class="modal" style="z-index:500;">
             <h3 style="color:var(--mucha-green);">來自神龕的呼喚</h3><p><strong id="summoner-name" style="color:var(--mucha-gold);"></strong> 教友召喚了大家，是否出席？</p>
+            <p style="color:#d9534f; font-size:14px; font-weight:bold; margin-bottom:5px;">⏳ 倒數計時: <span id="summon-timer">60</span> 秒</p>
             <button class="btn-primary" style="width:100%; margin-top:10px;" onclick="window.acceptSummon()">無法拒絕</button>
         </div>
         <div id="voting-modal" class="modal purple-fire-border" style="z-index:500; background:#1a1a1a; color:#fff; width:90%; max-width:400px; padding:15px;">
@@ -288,10 +289,39 @@ window.confirmSummon = function(isYes) {
     window.startShrineRitual();
 };
 
+window.attemptJoinShrine = function() {
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.get(module.ref(window.GameLogic.db, 'shrineEvents/current')).then(snap => {
+            let ev = snap.val();
+            // 判斷是否已經有儀式在進行，且超過 60 秒或是狀態不是等待入座 (summoned)
+            if (ev && ev.state && ev.state !== 'finished' && ev.state !== 'none') {
+                let elapsed = Date.now() - (ev.startTime || 0);
+                if (elapsed > 60000 || ev.state !== 'summoned') {
+                    alert("已經正在進行儀式，請下次再來。"); return;
+                }
+            }
+            window.switchScene('shrine'); sendBubble("神龕發出耀眼的光芒...");
+        });
+    });
+};
+
 window.acceptSummon = function() {
     document.getElementById('forced-summon-modal').style.display = 'none';
-    window.startShrineRitual();
-    window.switchScene('shrine');
+    if (window.summonInterval) { clearInterval(window.summonInterval); window.summonInterval = null; }
+    
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.get(module.ref(window.GameLogic.db, 'shrineEvents/current')).then(snap => {
+            let ev = snap.val();
+            // 雙重驗證：如果點擊按鈕時已經超時或儀式已經開始，則拒絕進入
+            if (ev && ev.state && ev.state !== 'finished' && ev.state !== 'none') {
+                let elapsed = Date.now() - (ev.startTime || 0);
+                if (elapsed > 60000 || ev.state !== 'summoned') {
+                    alert("已經正在進行儀式，請下次再來。"); return;
+                }
+            }
+            window.startShrineRitual(); window.switchScene('shrine');
+        });
+    });
 };
 
 let voteTarget = null; let voteTalisman = null;
@@ -396,14 +426,29 @@ onAuthStateChanged(auth, async (user) => {
         onValue(ref(db, 'cafeFurniture'), snap => window.GameLogic.cafeFurniture = snap.val() || {});
 
         // 全局強制召喚監聽
+        // 全局強制召喚監聽與 60 秒倒數
         onValue(ref(db, 'serverEvents/summonShrine'), snap => {
             let data = snap.val();
-            if (data && Date.now() - data.time < 10000 && data.callerUid !== window.GameLogic.currentUser.uid) {
+            if (data && Date.now() - data.time < 60000 && data.callerUid !== window.GameLogic.currentUser.uid) {
                 if (window.lastSummonTime !== data.time) {
                     window.lastSummonTime = data.time;
                     if (window.GameLogic.currentScene !== 'shrine') {
                         document.getElementById('summoner-name').innerText = data.callerName || '某某';
                         document.getElementById('forced-summon-modal').style.display = 'block';
+                        
+                        let remain = 60 - Math.floor((Date.now() - data.time) / 1000);
+                        document.getElementById('summon-timer').innerText = remain;
+                        
+                        if (window.summonInterval) clearInterval(window.summonInterval);
+                        window.summonInterval = setInterval(() => {
+                            remain--;
+                            let tEl = document.getElementById('summon-timer');
+                            if (tEl) tEl.innerText = remain;
+                            if (remain <= 0) {
+                                clearInterval(window.summonInterval);
+                                document.getElementById('forced-summon-modal').style.display = 'none';
+                            }
+                        }, 1000);
                     } else {
                         window.startShrineRitual();
                     }
@@ -421,7 +466,8 @@ onAuthStateChanged(auth, async (user) => {
 
 function joinShrine() {
     const playerRef = ref(db, `shrinePlayers/${window.GameLogic.currentUser.uid}`);
-    set(playerRef, { x: window.GameLogic.myProfile.lastX || 640, y: window.GameLogic.myProfile.lastY || 360, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, isSeated: false });
+    // 【修正 BUG 2】補上 level 屬性，讓其他玩家能看見真實等級
+    set(playerRef, { x: window.GameLogic.myProfile.lastX || 640, y: window.GameLogic.myProfile.lastY || 360, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1, isSeated: false });
     onDisconnect(playerRef).remove();
     shrineUnsubscribe = onValue(ref(db, 'shrinePlayers'), (snapshot) => { window.GameLogic.shrinePlayers = snapshot.val() || {}; checkShrineVotingTrigger(); });
     shrineEventUnsubscribe = onValue(ref(db, 'shrineEvents/current'), snap => {
@@ -432,23 +478,24 @@ function joinShrine() {
         if (eventData.state === 'voting') {
             votingModal.style.display = 'block';
             let tHtml = ''; let seatedPlayers = window.GameLogic.shrinePlayers || {};
-            for (let uid in seatedPlayers) { if (!seatedPlayers[uid].isSeated) continue; let isSel = (voteTarget === uid) ? 'selected' : ''; tHtml += `<div id="vote-tgt-${uid}" class="vote-item ${isSel}" onclick="window.selectVoteTarget('${uid}')">👤 ${seatedPlayers[uid].name}</div>`; }
+            let onlineGlobal = window.GameLogic.onlinePlayers || {}; // 【修正 BUG 1】過濾出真正連線的玩家，避免斷線幽靈
+            for (let uid in seatedPlayers) { 
+                if (!seatedPlayers[uid].isSeated || !onlineGlobal[uid]) continue; 
+                let isSel = (voteTarget === uid) ? 'selected' : ''; 
+                tHtml += `<div id="vote-tgt-${uid}" class="vote-item ${isSel}" onclick="window.selectVoteTarget('${uid}')">👤 ${seatedPlayers[uid].name}</div>`; 
+            }
             tHtml += `<div id="vote-tgt-any" class="vote-item ${(voteTarget === 'any') ? 'selected' : ''}" onclick="window.selectVoteTarget('any')">🎲 都可以</div>`;
             document.getElementById('voting-targets').innerHTML = tHtml;
 
-            let talismans = [
-                {id: 'charm-1', img: 'shrine-chinese-charm-01.png', name: '符咒一'}, {id: 'charm-2', img: 'shrine-chinese-charm-02.png', name: '符咒二'},
-                {id: 'charm-3', img: 'shrine-chinese-charm-03.png', name: '符咒三'}, {id: 'charm-4', img: 'shrine-chinese-charm-04.png', name: '符咒四'},
-                {id: 'charm-5', img: 'shrine-chinese-charm-05.png', name: '符咒五'}
-            ];
+            let talismans = [ {id: 'charm-1', img: 'shrine-chinese-charm-01.png', name: '符咒一'}, {id: 'charm-2', img: 'shrine-chinese-charm-02.png', name: '符咒二'}, {id: 'charm-3', img: 'shrine-chinese-charm-03.png', name: '符咒三'}, {id: 'charm-4', img: 'shrine-chinese-charm-04.png', name: '符咒四'}, {id: 'charm-5', img: 'shrine-chinese-charm-05.png', name: '符咒五'} ];
             let taliHtml = '';
             talismans.forEach(t => { let isSel = (voteTalisman === t.id) ? 'selected' : ''; taliHtml += `<div id="vote-tali-${t.id}" class="vote-item ${isSel}" onclick="window.selectVoteTalisman('${t.id}')" style="display:flex; align-items:center; gap:10px;"><img src="${t.img}" style="width:40px; height:40px; object-fit:contain;"><span>${t.name}</span></div>`; });
             document.getElementById('voting-talismans').innerHTML = taliHtml;
 
-            // 修正4：重構 UI 以顯示其他人的即時選擇狀態
             let sHtml = '<div style="font-weight:bold; color:#ba55d3; margin-bottom:5px; text-align:center;">--- 大家正在猶豫什麼 ---</div>'; 
             let votes = eventData.votes || {};
             for (let uid in votes) {
+                if (!onlineGlobal[uid]) continue;
                 let v = votes[uid]; 
                 let tName = v.target === 'any' ? '都可以' : (seatedPlayers[v.target] ? seatedPlayers[v.target].name : '...');
                 let taliObj = talismans.find(x => x.id === v.talisman);
@@ -469,17 +516,22 @@ function joinShrine() {
             if (myVote && myVote.talisman) {
                 let talismans = [ {id: 'charm-1', img: 'shrine-chinese-charm-01.png'}, {id: 'charm-2', img: 'shrine-chinese-charm-02.png'}, {id: 'charm-3', img: 'shrine-chinese-charm-03.png'}, {id: 'charm-4', img: 'shrine-chinese-charm-04.png'}, {id: 'charm-5', img: 'shrine-chinese-charm-05.png'} ];
                 let taliObj = talismans.find(x => x.id === myVote.talisman);
-                if (taliObj) {
-                    let sBtn = document.getElementById('spam-btn');
-                    sBtn.innerHTML = `<img src="${taliObj.img}" style="width:100%; height:100%; object-fit:contain; border-radius:50%; pointer-events:none;">`;
-                }
+                if (taliObj) { let sBtn = document.getElementById('spam-btn'); sBtn.innerHTML = `<img src="${taliObj.img}" style="width:100%; height:100%; object-fit:contain; border-radius:50%; pointer-events:none;">`; }
             }
         } else { spamUI.style.display = 'none'; }
     });
 }
 
 function leaveShrine() { 
-    if (window.GameLogic.currentUser) set(ref(db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), null); 
+    if (window.GameLogic.currentUser) {
+        // 【新增機制】所有人離開神龕時宣告儀式失敗並重置，500元沒收
+        let players = window.GameLogic.shrinePlayers || {};
+        let validUids = Object.keys(players).filter(uid => window.GameLogic.onlinePlayers && window.GameLogic.onlinePlayers[uid]);
+        if (validUids.length <= 1 && window.GameLogic.shrineEventData && window.GameLogic.shrineEventData.state !== 'finished') {
+            update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'finished' });
+        }
+        set(ref(window.GameLogic.db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), null); 
+    }
     if (shrineUnsubscribe) { shrineUnsubscribe(); shrineUnsubscribe = null; } 
     if (shrineEventUnsubscribe) { shrineEventUnsubscribe(); shrineEventUnsubscribe = null; } 
     document.getElementById('voting-modal').style.display = 'none'; document.getElementById('spam-ui').style.display = 'none';
@@ -487,21 +539,18 @@ function leaveShrine() {
 
 function checkShrineVotingTrigger() { 
     if (window.GameLogic.currentScene !== 'shrine') return; 
-    let players = window.GameLogic.shrinePlayers || {}; let uids = Object.keys(players); 
-    if (uids.length === 0) return; 
+    let players = window.GameLogic.shrinePlayers || {}; 
+    let validUids = Object.keys(players).filter(uid => window.GameLogic.onlinePlayers && window.GameLogic.onlinePlayers[uid]);
+    if (validUids.length === 0) return; 
     
-    let isHost = uids.sort()[0] === window.GameLogic.currentUser.uid;
-    let seatedCount = uids.filter(uid => players[uid].isSeated).length;
+    let isHost = validUids.sort()[0] === window.GameLogic.currentUser.uid;
+    let seatedCount = validUids.filter(uid => players[uid].isSeated).length;
+    let currentState = window.GameLogic.shrineEventData ? window.GameLogic.shrineEventData.state : 'none';
     
-    if (seatedCount === 0 && isHost && window.GameLogic.shrineEventData && window.GameLogic.shrineEventData.state !== 'finished') {
-        update(ref(db, 'shrineEvents/current'), { state: 'finished' }); return;
-    }
-    
-    let allSeated = seatedCount > 0 && seatedCount === uids.length; 
+    let allSeated = seatedCount > 0 && seatedCount === validUids.length; 
     if (allSeated) { 
-        // 修正2：嚴格限制只有在 'summoned' (已付費號召) 的狀態下入座，才能開啟投票
-        if (isHost && window.GameLogic.shrineEventData && window.GameLogic.shrineEventData.state === 'summoned') { 
-            set(ref(db, 'shrineEvents/current'), { state: 'voting', startTime: Date.now() }); 
+        if (isHost && currentState === 'summoned') { 
+            set(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'voting', startTime: Date.now() }); 
         } 
     } 
 }
@@ -749,7 +798,7 @@ class MainScene extends Phaser.Scene {
 
             if (this.localPlayer.isSweeping) { if (!window.GameLogic.muteSFX && !this.sound.get('brooming1')?.isPlaying) { if (this.sound.get('brooming1')) this.sound.play('brooming1'); else this.sound.add('brooming1').play(); } this.qteProgress += (100 / this.qteTotalClicks); if (this.qteProgress >= 100) { this.qteProgress = 100; this.finishSweeping(true); } return; }
             if (this.sceneName === '7eonion' && this.storeManager) { let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.storeManager.x, this.storeManager.y); if (dist < 150) { window.GameLogic.isShopping = true; let storeCoinsEl = document.getElementById('store-current-coins'); if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins || 0}`; document.getElementById('store-modal').style.display = 'block'; return; } }
-            if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!"); let interacted = false; for (const key in this.furnitureSprites) { let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y); if (dist < 90) { if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block'; if (key.startsWith('memory')) document.getElementById('memory-modal').style.display = 'block'; if (key === 'shrine') { window.switchScene('shrine'); sendBubble("神龕發出耀眼的光芒..."); } interacted = true; break; } } if(!interacted) sendBubble("使用了 A 技能!");
+            if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!"); let interacted = false; for (const key in this.furnitureSprites) { let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y); if (dist < 90) { if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block'; if (key.startsWith('memory')) document.getElementById('memory-modal').style.display = 'block'; if (key === 'shrine') { window.attemptJoinShrine(); interacted = true; break; } } } if(!interacted) sendBubble("使用了 A 技能!");
         });
 
         this.events.on('action_B', () => {
