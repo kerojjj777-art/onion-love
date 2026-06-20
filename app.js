@@ -221,7 +221,12 @@ function createSystemUI() {
         
         <div id="portal-modal" class="modal" style="z-index: 260; padding: 15px;">
             <h3 style="margin-top:0; color:var(--mucha-brown);">🌀 空間傳送門</h3><div class="sprite-magic-gap-big" style="margin: 10px auto;"></div>
-            <div style="display:flex; flex-direction:column; gap:10px;"><button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('doghouse'); document.getElementById('portal-modal').style.display='none';">🏠 我的狗窩</button><button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('cafe'); document.getElementById('portal-modal').style.display='none';">☕ 洋蔥大廳</button><button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('farm'); document.getElementById('portal-modal').style.display='none';">🌱 我的蔥田</button><button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('7eonion'); document.getElementById('portal-modal').style.display='none';">🏪 7-EONION</button></div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('doghouse'); document.getElementById('portal-modal').style.display='none';">🏠 我的狗窩</button>
+                <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('cafe'); document.getElementById('portal-modal').style.display='none';">☕ 洋蔥大廳</button>
+                <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('farm'); document.getElementById('portal-modal').style.display='none';">🌱 我的蔥田</button>
+                <button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('7eonion'); document.getElementById('portal-modal').style.display='none';">🏪 7-EONION</button>
+            </div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('portal-modal').style.display='none'">關閉傳送門</button>
         </div>
 
@@ -478,10 +483,17 @@ function switchScene(sceneName) {
         if (scene && scene.localPlayer) {
             update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { lastScene: sceneName, lastX: scene.localPlayer.sprite.x, lastY: scene.localPlayer.sprite.y });
             window.GameLogic.myProfile.lastScene = sceneName; window.GameLogic.myProfile.lastX = scene.localPlayer.sprite.x; window.GameLogic.myProfile.lastY = scene.localPlayer.sprite.y;
+            
             let cam = scene.cameras.main; 
-            let blackBg = scene.add.rectangle(cam.width/2, cam.height/2, cam.width, cam.height, 0x000000).setDepth(9998).setScrollFactor(0); 
-            let tvLine = scene.add.rectangle(cam.width/2, cam.height/2, cam.width, cam.height, 0xffffff).setDepth(9999).setScrollFactor(0);
-            scene.tweens.add({ targets: tvLine, scaleY: 0.01, duration: 150, ease: 'Power2', onComplete: () => { scene.tweens.add({ targets: tvLine, scaleX: 0, duration: 150, onComplete: () => { tvLine.destroy(); blackBg.destroy(); doSwitch(); } }); } });
+            // 修正：正確加入黑底與正確跟隨攝影機中心
+            let blackBg = scene.add.rectangle(cam.scrollX + cam.width/2, cam.scrollY + cam.height/2, cam.width, cam.height, 0x000000).setDepth(9998); 
+            let tvLine = scene.add.rectangle(cam.scrollX + cam.width/2, cam.scrollY + cam.height/2, cam.width, cam.height, 0xffffff).setDepth(9999);
+            
+            scene.tweens.add({ targets: tvLine, scaleY: 0.01, duration: 150, ease: 'Power2', onComplete: () => { 
+                scene.tweens.add({ targets: tvLine, scaleX: 0, duration: 150, onComplete: () => { 
+                    tvLine.destroy(); blackBg.destroy(); doSwitch(); 
+                } }); 
+            } });
             return; 
         }
     }
@@ -928,7 +940,7 @@ class MainScene extends Phaser.Scene {
                 if (f && f.sprite && f.sprite.active) {
                     f.sprite.setVelocity(vx, vy); this.cameras.main.startFollow(f.sprite, true, 0.1, 0.1); this.placePrompt.setPosition(f.sprite.x, f.sprite.y - 80).setVisible(true);
                     if (vx !== 0 || vy !== 0) { if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) { let path = this.isCafe ? `cafeFurniture/${window.GameLogic.placingFurnitureKey}` : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${window.GameLogic.placingFurnitureKey}` : `shrineFurniture/${window.GameLogic.placingFurnitureKey}`); update(ref(window.GameLogic.db, path), { x: f.sprite.x, y: f.sprite.y }); this.lastSyncTime = Date.now(); } }
-                } else { let furnDataForPlace = this.isCafe ? window.GameLogic.cafeFurniture : (this.sceneName === 'doghouse' ? (window.GameLogic.doghouseFurniture || {}) : (this.sceneName === 'shrine' ? window.GameLogic.shrineFurniture : {})); if (!furnDataForPlace || !furnDataForPlace[window.GameLogic.placingFurnitureKey]) { window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); } }
+                } else { let furnDataForPlace = this.isCafe ? window.GameLogic.cafeFurniture : (this.sceneName === 'doghouse' ? (window.GameLogic.doghouseFurniture || {}) : (this.sceneName === 'shrine' ? window.GameLogic.shrineFurniture : {})); if (!furnDataForPlace || !furnDataForPlace[window.GameLogic.placingFurnitureKey]) { this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); } }
             } else {
                 this.placePrompt.setVisible(false); this.localPlayer.sprite.setVelocity(vx, vy); this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
                 let absX = Math.abs(vx); let absY = Math.abs(vy); if (absX < 1) vx = 0; if (absY < 1) vy = 0;
