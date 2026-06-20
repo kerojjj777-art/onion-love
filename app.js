@@ -292,8 +292,14 @@ window.acceptSummon = function() {
 };
 
 let voteTarget = null; let voteTalisman = null;
-window.selectVoteTarget = function(uid) { voteTarget = uid; document.querySelectorAll('.vote-target-btn').forEach(b => b.classList.remove('selected')); document.getElementById('vote-tgt-' + uid)?.classList.add('selected'); };
-window.selectVoteTalisman = function(tId) { voteTalisman = tId; document.querySelectorAll('.vote-tali-btn').forEach(b => b.classList.remove('selected')); document.getElementById('vote-tali-' + tId)?.classList.add('selected'); };
+window.selectVoteTarget = function(uid) { 
+    if (voteTarget === uid) { voteTarget = null; document.getElementById('vote-tgt-' + uid)?.classList.remove('selected'); return; }
+    voteTarget = uid; document.querySelectorAll('[id^="vote-tgt-"]').forEach(b => b.classList.remove('selected')); document.getElementById('vote-tgt-' + uid)?.classList.add('selected'); 
+};
+window.selectVoteTalisman = function(tId) { 
+    if (voteTalisman === tId) { voteTalisman = null; document.getElementById('vote-tali-' + tId)?.classList.remove('selected'); return; }
+    voteTalisman = tId; document.querySelectorAll('[id^="vote-tali-"]').forEach(b => b.classList.remove('selected')); document.getElementById('vote-tali-' + tId)?.classList.add('selected'); 
+};
 window.submitVote = function() {
     if (!voteTarget || !voteTalisman) return alert("請選擇一位淨化對象與一款符咒！");
     update(ref(db, `shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`), { target: voteTarget, talisman: voteTalisman, confirmed: true, name: window.GameLogic.myProfile.name });
