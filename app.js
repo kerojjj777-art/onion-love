@@ -784,26 +784,21 @@ class MainScene extends Phaser.Scene {
 
     startPurifyEffects() {
         if (this.purifyEffectsActive) return; this.purifyEffectsActive = true; 
-        let mapW = this.cameras.main.width; let mapH = this.cameras.main.height;
         
-        // 修正：用暗色遮罩取代會報錯的 setTint，並移除打雷特效
-        if (!this.purifyOverlay) {
-            this.purifyOverlay = this.add.rectangle(mapW/2, mapH/2, mapW, mapH, 0x000022, 0.6).setScrollFactor(0).setDepth(185);
-        }
-        this.purifyOverlay.setVisible(true);
-
+        let camW = this.cameras.main.width; let camH = this.cameras.main.height;
+        
+        // 保留下雨特效，移除暗色遮罩與四周火焰
         this.rainEmitter = this.add.particles(0, 0, 'fw-particle', { x: { min: 0, max: this.physics.world.bounds.width }, y: 0, speedY: { min: 600, max: 900 }, speedX: { min: -50, max: 50 }, scale: { start: 0.8, end: 1.5 }, alpha: 0.5, tint: 0xaaaaee, lifespan: 1500, quantity: 15 }).setDepth(190);
-        this.fireEmitter = this.add.particles(0, this.physics.world.bounds.height, 'fw-particle', { x: { min: 0, max: this.physics.world.bounds.width }, y: { min: this.physics.world.bounds.height - 50, max: this.physics.world.bounds.height }, speedY: { min: -100, max: -300 }, scale: { start: 3, end: 0 }, alpha: { start: 1, end: 0 }, tint: [0xff4500, 0xff8c00, 0xffd700], blendMode: 'ADD', lifespan: 2000, quantity: 8 }).setDepth(190);
         
-        // 大型集氣條外框閃爍
-        this.purifyBarBg.clear().fillStyle(0x3e2723, 0.8).fillRoundedRect(mapW/2 - 200, mapH * 0.75 - 100, 400, 40, 20).lineStyle(5, 0xff0000).strokeRoundedRect(mapW/2 - 200, mapH * 0.75 - 100, 400, 40, 20).setVisible(true).setScrollFactor(0); 
+        // 大型集氣條外框閃爍 (座標與進度條統一使用 camW, camH)
+        this.purifyBarBg.clear().fillStyle(0x3e2723, 0.8).fillRoundedRect(camW/2 - 200, camH * 0.75 - 100, 400, 40, 20).lineStyle(5, 0xff0000).strokeRoundedRect(camW/2 - 200, camH * 0.75 - 100, 400, 40, 20).setVisible(true).setScrollFactor(0); 
         this.purifyBar.setVisible(true).setScrollFactor(0);
         if (!this.purifyBarTween) { this.purifyBarTween = this.tweens.add({ targets: this.purifyBarBg, alpha: 0.6, scaleX: 1.02, scaleY: 1.05, yoyo: true, repeat: -1, duration: 150 }); }
         
-        // 修正：新增綁定在集氣條上的專屬火焰特效
+        // 集氣條專屬火焰特效
         this.barFireEmitter = this.add.particles(0, 0, 'fw-particle', {
-            x: { min: mapW/2 - 190, max: mapW/2 + 190 },
-            y: mapH * 0.75 - 75,
+            x: { min: camW/2 - 190, max: camW/2 + 190 },
+            y: camH * 0.75 - 75,
             speedY: { min: -40, max: -100 },
             scale: { start: 1.5, end: 0 },
             alpha: { start: 0.8, end: 0 },
@@ -816,11 +811,9 @@ class MainScene extends Phaser.Scene {
 
     stopPurifyEffects(success) {
         if (!this.purifyEffectsActive) return; this.purifyEffectsActive = false; 
-        if (this.purifyOverlay) this.purifyOverlay.setVisible(false);
 
         if (this.rainEmitter) this.rainEmitter.destroy(); 
-        if (this.fireEmitter) this.fireEmitter.destroy(); 
-        if (this.barFireEmitter) this.barFireEmitter.destroy(); // 關閉集氣條火焰
+        if (this.barFireEmitter) this.barFireEmitter.destroy(); 
 
         this.purifyBarBg.setVisible(false); this.purifyBar.setVisible(false);
         if (this.purifyBarTween) { this.purifyBarTween.stop(); this.purifyBarTween = null; this.purifyBarBg.setScale(1).setAlpha(1); }
@@ -904,19 +897,22 @@ class MainScene extends Phaser.Scene {
             this.startPurifyEffects();
             let clicks = eventData.clicks || {}; let totalClicks = Object.values(clicks).reduce((a, b) => a + b, 0); let currentDecay = eventData.decay || 0;
             if (isHost) {
-                // BUG修復：這裡原先判斷伺服器的時間差，導致延遲時一秒發送數十次，改為純本地判斷
                 if (!this.lastDecaySync || Date.now() - this.lastDecaySync > 500) {
                     this.lastDecaySync = Date.now();
-                    currentDecay += 8;
+                    currentDecay += 4; // 修正難度：將自然消退速度減半
                     update(ref(window.GameLogic.db, 'shrineEvents/current'), { decay: currentDecay, lastDecayTime: Date.now() });
                 }
             }
-            let progressVal = (totalClicks * 3) - currentDecay; if (progressVal < 0) progressVal = 0;
+            
+            // 修正難度：將每次點擊的威力提升為 5 倍
+            let progressVal = (totalClicks * 5) - currentDecay; if (progressVal < 0) progressVal = 0;
             let targetProgress = pUids.length * 50; let ratio = Phaser.Math.Clamp(progressVal / targetProgress, 0, 1);
             
-            this.purifyBar.clear().fillStyle(0xff4500, 1).fillRoundedRect(this.cameras.main.width/2 - 196, this.cameras.main.height * 0.75 - 96, 392 * ratio, 32, 16);
+            // 修正顯示：使用與外框完全相同的 camW, camH 以確保進度條內容不會跑位
+            let camW = this.cameras.main.width; let camH = this.cameras.main.height;
+            this.purifyBar.clear().fillStyle(0xff4500, 1).fillRoundedRect(camW/2 - 196, camH * 0.75 - 96, 392 * ratio, 32, 16);
+            
             if (isHost && ratio >= 1) {
-                // BUG修復：本地節流
                 if (!this.pendingStateChange || Date.now() - this.pendingStateChange > 2000) {
                     this.pendingStateChange = Date.now();
                     update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'success', endTime: Date.now() });
@@ -934,7 +930,6 @@ class MainScene extends Phaser.Scene {
                 let targetSprite = (eventData.targetUid === window.GameLogic.currentUser.uid) ? this.localPlayer.sprite : (this.otherPlayers[eventData.targetUid] ? this.otherPlayers[eventData.targetUid].sprite : this.furnitureSprites['altar'].sprite);
                 let ax = targetSprite.x; let ay = targetSprite.y;
                 
-                // 修正：大幅調降屎王的飛行速度，並稍微擴大圍繞半徑避免遮擋對白
                 this.pooBoss.x = ax + Math.cos(time * 0.0015) * 120; 
                 this.pooBoss.y = ay - 40 + Math.sin(time * 0.002) * 80; 
                 
@@ -942,7 +937,7 @@ class MainScene extends Phaser.Scene {
                 let bBounds = this.pooBoss.bubbleText.getBounds(); let bW = bBounds.width + 16, bH = bBounds.height + 12; let bx = this.pooBoss.x, by = this.pooBoss.y - 60 - bH/2;
                 this.pooBoss.bubbleBg.clear().fillStyle(0x3e2723, 0.9).lineStyle(2, 0xffcc00, 1).fillRoundedRect(bx - bW/2, by - bH/2, bW, bH, 8).strokeRoundedRect(bx - bW/2, by - bH/2, bW, bH, 8); this.pooBoss.bubbleText.setPosition(bx, by);
             }
-        } 
+        }
         else if (evState === 'success') {
             this.stopPurifyEffects(true); let tUid = eventData.targetUid;
             if (this.pooBoss) { this.pooBoss.bubbleText.setText("我還會再回來的..!!!!"); this.tweens.add({ targets: this.pooBoss, y: this.pooBoss.y - 300, alpha: 0, duration: 2000 }); this.pooBoss.bubbleBg.destroy(); this.pooBoss.bubbleText.destroy(); this.pooBoss = null; }
