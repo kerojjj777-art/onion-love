@@ -451,6 +451,7 @@ onAuthStateChanged(auth, async (user) => {
         // 全局強制召喚監聽與 60 秒倒數
         onValue(ref(db, 'serverEvents/summonShrine'), snap => {
             let data = snap.val();
+            // 當 data.time 被設為 0 (或超時) 時，就會跳到 else 區塊強制關閉視窗
             if (data && Date.now() - data.time < 60000) {
                 if (window.lastSummonTime !== data.time) {
                     window.lastSummonTime = data.time;
@@ -480,7 +481,11 @@ onAuthStateChanged(auth, async (user) => {
                     window.globalSummonInterval = setInterval(updateCountdown, 1000);
                 }
             } else {
+                // 修正：當收到終止訊號(time:0)時，不僅數值歸零，還要強制關閉全服的倒數視窗與計時器
                 window.GameLogic.globalSummonCountdown = 0;
+                if (window.globalSummonInterval) { clearInterval(window.globalSummonInterval); window.globalSummonInterval = null; }
+                let modal = document.getElementById('forced-summon-modal');
+                if (modal) modal.style.display = 'none';
                 window.updateOnlinePlayersUI();
             }
         });
@@ -595,6 +600,8 @@ function checkShrineVotingTrigger() {
     if (allSeated) { 
         if (isHost && currentState === 'summoned') { 
             set(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'voting', startTime: Date.now() }); 
+            // 修正：儀式正式進入投票階段！立刻將全服的召喚倒數歸零，瞬間關閉外面的 60 秒通知
+            update(ref(window.GameLogic.db, 'serverEvents/summonShrine'), { time: 0 });
         } 
     } 
 }
