@@ -850,6 +850,8 @@ class BootScene extends Phaser.Scene {
         this.load.audio('onion-sleep', 'onion-sleep.mp3');
         this.load.audio('sleep-wakeup', 'sleep-wakeup-rooster-call.mp3');
         this.load.spritesheet('onion-clean', 'onion-clean.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-sleep', 'onion-sleeping.png', { frameWidth: 75, frameHeight: 75 });
+        // 新增：載入蔥電飽充電器精靈圖
+        this.load.image('sleep-charger', 'sleep_onion_bao_charger.png');
         this.load.image('bg7Eonion', '7eonion-bg.jpg'); this.load.image('storeManager', 'store-manager.png'); this.load.spritesheet('onion-throw', 'onion-throw.png', { frameWidth: 90, frameHeight: 75 }); this.load.spritesheet('water-ball-blast', 'water-ball-blast.png', { frameWidth: 50, frameHeight: 50 }); this.load.spritesheet('onion-wet', 'onion-wet.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('made-coin', 'made-coin.png', { frameWidth: 50, frameHeight: 50 }); this.load.image('dummy', 'dummy.png'); this.load.spritesheet('dummy-wet', 'dummy-wet.png', { frameWidth: 75, frameHeight: 75 });
         this.load.image('fireworks', 'shop-fireworks.png'); this.load.spritesheet('onion-fireworks', 'onion-fireworks.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-got-shot', 'onion-got-shot.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('dummy-got-shot', 'dummy-got-shot.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('fireworks-shoot', 'fireworks-shoot.png', { frameWidth: 50, frameHeight: 50 });
         this.load.image('status-bg', 'character-status-bg.png');
@@ -984,34 +986,41 @@ class UIScene extends Phaser.Scene {
         this.time.delayedCall(1000, () => { emitter.destroy(); });
     }
 
-    // 修正3：Phaser 風格的睡眠結算面板
+    // 修正：重塑帶有充電器精靈圖的綠色系睡眠結算面板
     showSleepSummary(timeStr, energyGained, coinsGained) {
         let camW = this.cameras.main.width; let camH = this.cameras.main.height;
-        let panel = this.add.container(camW/2, -200).setDepth(1000).setScrollFactor(0);
+        let panel = this.add.container(camW/2, -300).setDepth(1000).setScrollFactor(0);
         
-        let bg = this.add.graphics().fillStyle(0xf4ecd8, 0.95).fillRoundedRect(-160, -110, 320, 220, 16).lineStyle(4, 0xc5a059).strokeRoundedRect(-160, -110, 320, 220, 16);
-        let title = this.add.text(0, -75, '⏰ 睡飽啦！', { fontSize: '24px', color: '#4caf50', fontStyle: 'bold', fontFamily: 'Georgia' }).setOrigin(0.5);
-        let t1 = this.add.text(0, -35, `你從 ${timeStr} 睡覺`, { fontSize: '15px', color: '#3e2723', fontFamily: 'Arial', fontStyle: 'bold' }).setOrigin(0.5);
-        let t2 = this.add.text(0, 5, `🔋 蔥電飽充了 +${energyGained}%`, { fontSize: '18px', color: '#2e7d32', fontStyle: 'bold', fontFamily: 'Arial' }).setOrigin(0.5);
-        let t3 = this.add.text(0, 40, `💰 銀行存入 +${coinsGained} 馬德幣`, { fontSize: '18px', color: '#d4af37', fontStyle: 'bold', fontFamily: 'Arial' }).setOrigin(0.5);
+        let bg = this.add.graphics().fillStyle(0x1b5e20, 0.95).fillRoundedRect(-160, -140, 320, 270, 16).lineStyle(4, 0x8bc34a).strokeRoundedRect(-160, -140, 320, 270, 16);
+        let img = this.add.image(0, -75, 'sleep-charger').setScale(0.9);
         
-        let btnBg = this.add.graphics().fillStyle(0xc5a059, 1).fillRoundedRect(-50, 65, 100, 35, 8);
-        let btnTxt = this.add.text(0, 82, '確定', { fontSize: '16px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
-        let btnZone = this.add.zone(0, 82, 100, 35).setInteractive();
+        let title = this.add.text(0, -15, '⏰ 睡飽啦！', { fontSize: '24px', color: '#b2ff59', fontStyle: 'bold', fontFamily: 'Georgia' }).setOrigin(0.5);
+        let t1 = this.add.text(0, 20, `你從 ${timeStr} 睡覺`, { fontSize: '15px', color: '#e8f5e9', fontFamily: 'Arial', fontStyle: 'bold' }).setOrigin(0.5);
+        let t2 = this.add.text(0, 50, `🔋 蔥電飽充了 +${energyGained}%`, { fontSize: '18px', color: '#b2ff59', fontStyle: 'bold', fontFamily: 'Arial' }).setOrigin(0.5);
+        let t3 = this.add.text(0, 80, `💰 銀行存入 +${coinsGained} 馬德幣`, { fontSize: '18px', color: '#ffcc00', fontStyle: 'bold', fontFamily: 'Arial' }).setOrigin(0.5);
         
-        panel.add([bg, title, t1, t2, t3, btnBg, btnTxt, btnZone]);
+        let btnBg = this.add.graphics().fillStyle(0x388e3c, 1).fillRoundedRect(-50, 105, 100, 35, 8);
+        let btnTxt = this.add.text(0, 122, '確定', { fontSize: '16px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
+        let btnZone = this.add.zone(0, 122, 100, 35).setInteractive();
         
-        // 彈跳動畫進場
+        panel.add([bg, img, title, t1, t2, t3, btnBg, btnTxt, btnZone]);
+        
         this.tweens.add({ targets: panel, y: camH/2, duration: 600, ease: 'Bounce.easeOut' });
         
-        // 點擊後退場
         btnZone.once('pointerdown', () => {
-            btnBg.clear().fillStyle(0xa6803c, 1).fillRoundedRect(-50, 65, 100, 35, 8); // 按下變暗
-            this.tweens.add({ targets: panel, y: -200, duration: 400, ease: 'Back.easeIn', onComplete: () => panel.destroy() });
+            btnBg.clear().fillStyle(0x2e7d32, 1).fillRoundedRect(-50, 105, 100, 35, 8); 
+            this.tweens.add({ targets: panel, y: -300, duration: 400, ease: 'Back.easeIn', onComplete: () => panel.destroy() });
         });
+        
+        // 綠色電流噴發粒子
+        let emitter = this.add.particles(camW/2, camH/2 - 75, 'fw-particle', {
+            speed: { min: 40, max: 120 }, scale: { start: 1, end: 0 },
+            tint: [0x8bc34a, 0x00ff00], blendMode: 'ADD', lifespan: 800, quantity: 25
+        }).setDepth(1001).setScrollFactor(0);
+        emitter.explode();
+        this.time.delayedCall(1000, () => emitter.destroy());
     }
 }
-
 class MainScene extends Phaser.Scene {
     constructor() { super('MainScene'); }
     create() {
@@ -1190,10 +1199,45 @@ class MainScene extends Phaser.Scene {
             }
             if (this.localPlayer.isSeated) return;
             if (this.sceneName === 'shrine') { for (let key in this.furnitureSprites) { if (key === 'altar') { let f = this.furnitureSprites[key]; if (f.sprite.isLocked && Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y) < 150) { document.getElementById('summon-confirm-modal').style.display = 'block'; return; } } } }
-            if (this.sceneName === 'doghouse') { for (let key in this.furnitureSprites) { if (key.includes('bed')) { let f = this.furnitureSprites[key]; if (f.sprite.isLocked && Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y) < 90) { this.localPlayer.isSleeping = true; this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y); this.localPlayer.sprite.play('sleep', true); this.sleepTopText.setVisible(true).setPosition(f.sprite.x, f.sprite.y - 100); this.sleepBotText.setVisible(true).setPosition(f.sprite.x, f.sprite.y - 65); this.sleepBotBg.setVisible(true); let bounds = this.sleepBotText.getBounds(); let w = bounds.width + 16, h = bounds.height + 12; let x = this.sleepBotText.x - w/2, y = this.sleepBotText.y - h/2; this.sleepBotBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(x, y, w, h, 8).strokeRoundedRect(x, y, w, h, 8); let vol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100; if (vol > 0) { if (this.sound.get('onion-sleep')) this.sound.play('onion-sleep', {loop: true, volume: vol}); else this.sound.add('onion-sleep', {loop: true, volume: vol}).play(); } window.GameLogic.myProfile.sleepStartTime = Date.now(); 
-            // 修正2：使用全域 update 同步儲存，避免玩家立刻關閉網頁時 import 斷線造成沒存到
-            update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { sleepStartTime: window.GameLogic.myProfile.sleepStartTime }); 
-            sendBubble("開始掛機充電囉..."); return; } } } }
+            if (this.sceneName === 'doghouse') { for (let key in this.furnitureSprites) { if (key.includes('bed')) { let f = this.furnitureSprites[key]; if (f.sprite.isLocked && Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y) < 90) { 
+                this.localPlayer.isSleeping = true; this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y); this.localPlayer.sprite.play('sleep', true); 
+                this.sleepTopText.setVisible(true).setPosition(f.sprite.x, f.sprite.y - 100); this.sleepBotText.setVisible(true).setPosition(f.sprite.x, f.sprite.y - 65); this.sleepBotBg.setVisible(true); 
+                let bounds = this.sleepBotText.getBounds(); let w = bounds.width + 16, h = bounds.height + 12; let x = this.sleepBotText.x - w/2, y = this.sleepBotText.y - h/2; 
+                this.sleepBotBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(x, y, w, h, 8).strokeRoundedRect(x, y, w, h, 8); 
+                let vol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100; 
+                if (vol > 0) { if (this.sound.get('onion-sleep')) this.sound.play('onion-sleep', {loop: true, volume: vol}); else this.sound.add('onion-sleep', {loop: true, volume: vol}).play(); } 
+                window.GameLogic.myProfile.sleepStartTime = Date.now(); 
+                
+                // 視覺等待防呆：繪製綠色提示框與精靈圖
+                let cam = this.cameras.main;
+                let guardContainer = this.add.container(cam.scrollX + cam.width/2, cam.scrollY + cam.height/2).setDepth(1000);
+                let gBg = this.add.graphics().fillStyle(0x1b5e20, 0.95).fillRoundedRect(-120, -80, 240, 160, 16).lineStyle(4, 0x8bc34a).strokeRoundedRect(-120, -80, 240, 160, 16);
+                let gImg = this.add.image(0, -20, 'sleep-charger').setScale(0.8);
+                let gText = this.add.text(0, 45, '蔥電飽連結中...', { fontSize: '18px', color: '#ffffff', fontStyle: 'bold', fontFamily: 'Arial' }).setOrigin(0.5);
+                guardContainer.add([gBg, gImg, gText]);
+                
+                // 動畫：連結中閃爍
+                let gTween = this.tweens.add({ targets: gImg, alpha: 0.4, yoyo: true, repeat: -1, duration: 400 });
+
+                // 強制等待 Firebase 回傳存檔成功的 Promise 訊號
+                update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { sleepStartTime: window.GameLogic.myProfile.sleepStartTime }).then(() => {
+                    gText.setText('蔥電飽已接上 zzZ').setColor('#b2ff59');
+                    gTween.stop(); gImg.setAlpha(1);
+                    
+                    // 電流噴發粒子
+                    let emitter = this.add.particles(cam.scrollX + cam.width/2, cam.scrollY + cam.height/2 - 20, 'fw-particle', {
+                        speed: { min: 50, max: 150 }, scale: { start: 1, end: 0 },
+                        tint: [0x8bc34a, 0x00ff00], blendMode: 'ADD', lifespan: 800, quantity: 30
+                    }).setDepth(1001);
+                    emitter.explode();
+                    
+                    this.time.delayedCall(1500, () => {
+                        guardContainer.destroy(); emitter.destroy();
+                        sendBubble("開始掛機充電囉..."); 
+                    });
+                });
+                return; 
+            } } } }
 
             if (window.GameLogic.armedItemState === 'ready') {
                 let itemName = window.GameLogic.armedItemName || '水球'; let inv = window.GameLogic.myProfile.inventory || {}; inv[itemName] = Math.max(0, (inv[itemName] || 0) - 1); update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv }); if (inv[itemName] > 0) { window.GameLogic.armedItemState = 'armed'; } else { window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; }
