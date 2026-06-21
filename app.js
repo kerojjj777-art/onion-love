@@ -804,10 +804,18 @@ function switchScene(sceneName) {
     if (window.GameLogic.currentUser && window.GameLogic.phaserGame && window.GameLogic.phaserLoaded) {
         let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
         if (scene && scene.localPlayer) {
-                update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { lastScene: sceneName, lastX: scene.localPlayer.sprite.x, lastY: scene.localPlayer.sprite.y });
-                window.GameLogic.myProfile.lastScene = sceneName; window.GameLogic.myProfile.lastX = scene.localPlayer.sprite.x; window.GameLogic.myProfile.lastY = scene.localPlayer.sprite.y;
-                
-                let cam = scene.cameras.main; 
+                    // 修正：切換場景時，不要帶入舊地圖的座標，改為新地圖的預設出生點
+                    let newMapW = (sceneName === 'cafe') ? 2048 : 1280;
+                    let newMapH = (sceneName === 'cafe') ? 2048 : 720;
+                    let entranceX = newMapW / 2 + 100;
+                    let entranceY = newMapH / 2;
+                    
+                    update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { lastScene: sceneName, lastX: entranceX, lastY: entranceY });
+                    window.GameLogic.myProfile.lastScene = sceneName; 
+                    window.GameLogic.myProfile.lastX = entranceX; 
+                    window.GameLogic.myProfile.lastY = entranceY;
+                    
+                    let cam = scene.cameras.main; 
                 let topBlack = scene.add.rectangle(cam.width/2, 0, cam.width, cam.height/2, 0x000000).setOrigin(0.5, 0).setDepth(9999).setScrollFactor(0);
                 let botBlack = scene.add.rectangle(cam.width/2, cam.height, cam.width, cam.height/2, 0x000000).setOrigin(0.5, 1).setDepth(9999).setScrollFactor(0);
                 topBlack.scaleY = 0; botBlack.scaleY = 0;
@@ -1144,7 +1152,9 @@ class MainScene extends Phaser.Scene {
             this.dummiesListener = onValue(ref(window.GameLogic.db, 'cafeDummies'), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.dummySprites[key]) { let dData = data[key]; let dummySprite = this.physics.add.sprite(dData.x, dData.y, 'dummy').setDepth(8); this.dummySprites[key] = dummySprite; } } for (let key in this.dummySprites) { if (!data[key]) { this.dummySprites[key].destroy(); delete this.dummySprites[key]; } } });
         }
 
-        let startX = mapW / 2 + 100; let startY = mapH / 2;
+        // 修正：尊重 Firebase 或本地保險中最後儲存的座標，不再強制鎖定於地圖正中央
+        let startX = window.GameLogic.myProfile.lastX || (mapW / 2 + 100); 
+        let startY = window.GameLogic.myProfile.lastY || (mapH / 2);
         this.localPlayer = this.createPlayerEntity(startX, startY, window.GameLogic.myProfile, true); this.localPlayer.isSweeping = false; this.localPlayer.isSleeping = false; this.localPlayer.isSeated = false;
         
         // 修正2：判斷剛登入睡覺時，強制鎖定睡覺狀態並隱藏，避免被 Update 迴圈抓去房間中央移動
@@ -1240,6 +1250,18 @@ class MainScene extends Phaser.Scene {
                 
                 // 動畫：連結中閃爍
                 let gTween = this.tweens.add({ targets: gImg, alpha: 0.4, yoyo: true, repeat: -1, duration: 400 });
+
+                // 修正：躺床時同步記錄床的精準座標，確保下次登入就在床上
+                window.GameLogic.myProfile.lastX = f.sprite.x;
+                window.GameLogic.myProfile.lastY = f.sprite.y;
+
+                // 強制等待 Firebase 回傳存檔成功的 Promise 訊號
+                update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { 
+                    sleepStartTime: window.GameLogic.myProfile.sleepStartTime,
+                    lastX: f.sprite.x,
+                    lastY: f.sprite.y
+                }).then(() => {
+                    gText.setText('蔥電飽已接上 zzZ').setColor('#b2ff59');
 
                 // 強制等待 Firebase 回傳存檔成功的 Promise 訊號
                 update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { sleepStartTime: window.GameLogic.myProfile.sleepStartTime }).then(() => {
