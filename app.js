@@ -147,6 +147,8 @@ function createSystemUI() {
             .sprite-music-box { width: 50px; height: 50px; background: url('music-box.png') left center; animation: play-music-box 0.8s steps(8) infinite; margin-bottom: 5px; }
             .sprite-magic-gap-big { width: 300px; height: 300px; background: url('magic-gap-big.png') left center; animation: play-magic-gap-big 0.8s steps(8) infinite; margin: -45px auto; display: block; transform: scale(0.75); }
             @keyframes play-waterball { 100% { background-position: -400px; } } @keyframes play-onion-phone { 100% { background-position: -400px; } } @keyframes play-magic-gap { 100% { background-position: -400px; } } @keyframes play-music-box { 100% { background-position: -400px; } } @keyframes play-magic-gap-big { 100% { background-position: -2400px; } }
+            @keyframes play-sleep-charger { 100% { background-position: -720px; } }
+            .sprite-sleep-charger { width: 90px; height: 90px; background: url('sleep_onion_bao_charger.png') left center; animation: play-sleep-charger 0.8s steps(8) infinite; margin: 0 auto 10px auto; }
             @keyframes flash-orange { 0% { transform: translate(-50%, -50%) scale(1); text-shadow: 0 0 10px orange; opacity: 1; } 50% { transform: translate(-50%, -50%) scale(1.2); text-shadow: 0 0 30px #ffcc00, 0 0 50px orange; opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); text-shadow: 0 0 10px orange; opacity: 0; } } .flash-text { animation: flash-orange 2s ease-out forwards; }
             @keyframes shake-gold { 0% { transform: translate(1px, 1px) rotate(0deg); } 10% { transform: translate(-1px, -2px) rotate(-1deg); } 20% { transform: translate(-3px, 0px) rotate(1deg); } 30% { transform: translate(3px, 2px) rotate(0deg); } 40% { transform: translate(1px, -1px) rotate(1deg); } 50% { transform: translate(-1px, 2px) rotate(-1deg); } 60% { transform: translate(-3px, 1px) rotate(0deg); } 70% { transform: translate(3px, 1px) rotate(-1deg); } 80% { transform: translate(-1px, -1px) rotate(1deg); } 90% { transform: translate(1px, 2px) rotate(0deg); } 100% { transform: translate(1px, -2px) rotate(-1deg); } } .shake-gold-text { animation: shake-gold 0.5s infinite; }
             .purple-fire-border { border: 3px solid #9400d3; animation: purpleFire 1.5s infinite alternate; }
@@ -161,6 +163,7 @@ function createSystemUI() {
 
         <div id="energy-modal" class="modal" style="z-index: 260;">
             <h3 style="color:var(--mucha-green); margin-top:0;">🔋 蔥電飽</h3>
+            <div class="sprite-sleep-charger"></div>
             <div style="margin-bottom:10px; color:#3e2723; font-weight:bold; font-size:14px;">當前體力</div>
             <div style="position:relative; width:90%; height:24px; background:#ccc; border-radius:12px; margin:0 auto; overflow:hidden; border:2px solid var(--mucha-gold);">
                 <div id="energy-modal-bar" class="energy-bar-spark" style="position:absolute; top:0; left:0; width:0%; height:100%; background:linear-gradient(90deg, #8bc34a, #4caf50); transition: width 0.3s;"></div>
@@ -305,11 +308,17 @@ window.openEnergyModal = function() {
 };
 window.claimEnergyBank = function() {
     let p = window.GameLogic.myProfile; let amount = Math.floor(p.energyBank || 0);
-    if (amount <= 0) return alert("銀行裡還沒有馬德幣喔！去睡一覺再來吧！");
+    if (amount <= 0) {
+        document.getElementById('energy-modal').style.display = 'none';
+        sendBubble("銀行裡還沒有馬德幣喔！去睡一覺再來吧！");
+        return;
+    }
     p.coins = (p.coins || 0) + amount; p.energyBank = 0;
     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins, energyBank: 0 }); });
     document.getElementById('energy-bank-val').innerText = '0'; let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins;
-    alert(`太棒了！成功領取 ${amount} 馬德幣！`);
+    
+    document.getElementById('energy-modal').style.display = 'none';
+    sendBubble(`太棒了！成功領取 ${amount} 馬德幣！`);
 };
 
 window.manualPages = []; window.currentManualIndex = 0;
@@ -557,6 +566,13 @@ onAuthStateChanged(auth, async (user) => {
         const profileSnap = await get(ref(db, `users/${user.uid}`));
         if (profileSnap.exists()) {
             window.GameLogic.myProfile = { ...window.GameLogic.myProfile, ...profileSnap.val() };
+            
+            let localSleep = localStorage.getItem('onion_sleepStartTime');
+            if (localSleep && parseInt(localSleep) > 0) {
+                window.GameLogic.myProfile.sleepStartTime = parseInt(localSleep);
+                window.GameLogic.myProfile.lastScene = 'doghouse';
+            }
+
             window.GameLogic.currentTrackIdx = window.GameLogic.myProfile.currentTrackIdx || 0;
             let playlist = [ { key: 'bgm', title: 'Sweet-Onion', cover: 'Sweet-Onion.png' }, { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' }, { key: 'bgm-inside', title: 'Inside-of-Onion', cover: 'Inside-of-Onion.png' }, { key: 'bgm-kyo', title: '귀엽다!귀엽다!Onion!', cover: 'kyo-kyo-onion.png' } ];
             let track = playlist[window.GameLogic.currentTrackIdx];
@@ -770,6 +786,7 @@ function switchScene(sceneName) {
     // 修正3：離開狗窩時同步中斷睡眠累積，並強制關閉打呼音效
     if (window.GameLogic.myProfile && window.GameLogic.myProfile.sleepStartTime > 0) {
         window.GameLogic.myProfile.sleepStartTime = 0;
+        localStorage.removeItem('onion_sleepStartTime');
         update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { sleepStartTime: 0 });
     }
     if (window.GameLogic.phaserGame) {
@@ -851,7 +868,7 @@ class BootScene extends Phaser.Scene {
         this.load.audio('sleep-wakeup', 'sleep-wakeup-rooster-call.mp3');
         this.load.spritesheet('onion-clean', 'onion-clean.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-sleep', 'onion-sleeping.png', { frameWidth: 75, frameHeight: 75 });
         // 新增：載入蔥電飽充電器精靈圖
-        this.load.image('sleep-charger', 'sleep_onion_bao_charger.png');
+        this.load.spritesheet('sleep-charger', 'sleep_onion_bao_charger.png', { frameWidth: 90, frameHeight: 90 });
         this.load.image('bg7Eonion', '7eonion-bg.jpg'); this.load.image('storeManager', 'store-manager.png'); this.load.spritesheet('onion-throw', 'onion-throw.png', { frameWidth: 90, frameHeight: 75 }); this.load.spritesheet('water-ball-blast', 'water-ball-blast.png', { frameWidth: 50, frameHeight: 50 }); this.load.spritesheet('onion-wet', 'onion-wet.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('made-coin', 'made-coin.png', { frameWidth: 50, frameHeight: 50 }); this.load.image('dummy', 'dummy.png'); this.load.spritesheet('dummy-wet', 'dummy-wet.png', { frameWidth: 75, frameHeight: 75 });
         this.load.image('fireworks', 'shop-fireworks.png'); this.load.spritesheet('onion-fireworks', 'onion-fireworks.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-got-shot', 'onion-got-shot.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('dummy-got-shot', 'dummy-got-shot.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('fireworks-shoot', 'fireworks-shoot.png', { frameWidth: 50, frameHeight: 50 });
         this.load.image('status-bg', 'character-status-bg.png');
@@ -870,6 +887,7 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('onion-up'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'walk', frames: this.anims.generateFrameNumbers('onion-walk', { start: 0, end: 5 }), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'idle', frames: this.anims.generateFrameNumbers('onion-idle'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'skin-anim', frames: this.anims.generateFrameNumbers('onion-skin', { start: 0, end: 3 }), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'skin-old-anim', frames: this.anims.generateFrameNumbers('onion-skin-old', { start: 0, end: 5 }), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'clean', frames: this.anims.generateFrameNumbers('onion-clean'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'throw', frames: this.anims.generateFrameNumbers('onion-throw'), frameRate: 10, repeat: 0 }); this.anims.create({ key: 'wb-blast', frames: this.anims.generateFrameNumbers('water-ball-blast'), frameRate: 15, repeat: -1 }); this.anims.create({ key: 'wet', frames: this.anims.generateFrameNumbers('onion-wet'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'coin-anim', frames: this.anims.generateFrameNumbers('made-coin'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'dummy-hit', frames: this.anims.generateFrameNumbers('dummy-got-shot'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'sleep', frames: this.anims.generateFrameNumbers('onion-sleep'), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'fw-throw', frames: this.anims.generateFrameNumbers('onion-fireworks'), frameRate: 8, repeat: 2 }); this.anims.create({ key: 'fw-hit', frames: this.anims.generateFrameNumbers('onion-got-shot'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'fw-shoot', frames: this.anims.generateFrameNumbers('fireworks-shoot'), frameRate: 15, repeat: -1 }); this.anims.create({ key: 'dummy-fw-hit', frames: this.anims.generateFrameNumbers('dummy-got-shot'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'seat-idle', frames: this.anims.generateFrameNumbers('onion-seat-shrine'), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'purify-target', frames: this.anims.generateFrameNumbers('onion-got-purify'), frameRate: 8, repeat: -1 }); this.anims.create({ key: 'purify-magic', frames: this.anims.generateFrameNumbers('onion-doing-purify'), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'charger-anim', frames: this.anims.generateFrameNumbers('sleep-charger'), frameRate: 8, repeat: -1 });
 
         this.scene.launch('UIScene'); this.scene.bringToTop('UIScene'); 
         window.GameLogic.phaserLoaded = true;
@@ -992,7 +1010,8 @@ class UIScene extends Phaser.Scene {
         let panel = this.add.container(camW/2, -300).setDepth(1000).setScrollFactor(0);
         
         let bg = this.add.graphics().fillStyle(0x1b5e20, 0.95).fillRoundedRect(-160, -140, 320, 270, 16).lineStyle(4, 0x8bc34a).strokeRoundedRect(-160, -140, 320, 270, 16);
-        let img = this.add.image(0, -75, 'sleep-charger').setScale(0.9);
+        let img = this.add.sprite(0, -75, 'sleep-charger').setScale(0.9);
+        img.play('charger-anim');
         
         let title = this.add.text(0, -15, '⏰ 睡飽啦！', { fontSize: '24px', color: '#b2ff59', fontStyle: 'bold', fontFamily: 'Georgia' }).setOrigin(0.5);
         let t1 = this.add.text(0, 20, `你從 ${timeStr} 睡覺`, { fontSize: '15px', color: '#e8f5e9', fontFamily: 'Arial', fontStyle: 'bold' }).setOrigin(0.5);
@@ -1190,12 +1209,13 @@ class MainScene extends Phaser.Scene {
                         }
                         
                         update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { energy: p.energy, energyBank: p.energyBank, sleepStartTime: 0 });
-                    } else {
+                   } else {
                         update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { sleepStartTime: 0 });
                     }
                     p.sleepStartTime = 0;
+                    localStorage.removeItem('onion_sleepStartTime');
                 }
-                return; 
+                return;
             }
             if (this.localPlayer.isSeated) return;
             if (this.sceneName === 'shrine') { for (let key in this.furnitureSprites) { if (key === 'altar') { let f = this.furnitureSprites[key]; if (f.sprite.isLocked && Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y) < 150) { document.getElementById('summon-confirm-modal').style.display = 'block'; return; } } } }
@@ -1207,12 +1227,14 @@ class MainScene extends Phaser.Scene {
                 let vol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100; 
                 if (vol > 0) { if (this.sound.get('onion-sleep')) this.sound.play('onion-sleep', {loop: true, volume: vol}); else this.sound.add('onion-sleep', {loop: true, volume: vol}).play(); } 
                 window.GameLogic.myProfile.sleepStartTime = Date.now(); 
+                localStorage.setItem('onion_sleepStartTime', window.GameLogic.myProfile.sleepStartTime);
                 
                 // 視覺等待防呆：繪製綠色提示框與精靈圖
                 let cam = this.cameras.main;
                 let guardContainer = this.add.container(cam.scrollX + cam.width/2, cam.scrollY + cam.height/2).setDepth(1000);
                 let gBg = this.add.graphics().fillStyle(0x1b5e20, 0.95).fillRoundedRect(-120, -80, 240, 160, 16).lineStyle(4, 0x8bc34a).strokeRoundedRect(-120, -80, 240, 160, 16);
-                let gImg = this.add.image(0, -20, 'sleep-charger').setScale(0.8);
+                let gImg = this.add.sprite(0, -20, 'sleep-charger').setScale(0.8);
+                gImg.play('charger-anim');
                 let gText = this.add.text(0, 45, '蔥電飽連結中...', { fontSize: '18px', color: '#ffffff', fontStyle: 'bold', fontFamily: 'Arial' }).setOrigin(0.5);
                 guardContainer.add([gBg, gImg, gText]);
                 
@@ -1823,7 +1845,10 @@ function openFurnitureCatalog() {
                     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
                         let seats = Object.keys(window.GameLogic.shrineFurniture || {}).filter(k => k.startsWith('seat_'));
                         let updates = {}; seats.forEach(s => updates[`shrineFurniture/${s}`] = null);
-                        module.update(module.ref(window.GameLogic.db), updates).then(() => { alert("已回收所有禁屎坐墊！"); modal.style.display = 'none'; });
+                        module.update(module.ref(window.GameLogic.db), updates).then(() => { 
+                            sendBubble("已回收所有禁屎坐墊！"); 
+                            modal.style.display = 'none'; 
+                        });
                     });
                 }
                 return;
