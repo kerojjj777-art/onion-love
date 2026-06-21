@@ -287,7 +287,7 @@ function createSystemUI() {
             <div style="display:flex; justify-content:space-around; margin-bottom:10px;">
                 <button class="btn-primary" onclick="window.renderLeaderboard(0)" style="width:45%; font-size:14px;">本週戰況</button>
                 <button class="btn-secondary" onclick="window.renderLeaderboard(-1)" style="width:45%; font-size:14px;">上週結算</button>
-            
+            </div>
             <div id="leaderboard-list" style="max-height: 40vh; overflow-y: auto; text-align: left; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 8px;"></div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('leaderboard-modal').style.display='none'">關閉</button>
         </div>
@@ -323,7 +323,16 @@ window.claimEnergyBank = function() {
         sendBubble("銀行裡還沒有馬德幣喔！去睡一覺再來吧！");
         return;
     }
-    // ====== 排行榜與週次計算系統 ======
+    p.coins = (p.coins || 0) + amount; p.energyBank = 0;
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins, energyBank: 0 }); });
+    document.getElementById('energy-bank-val').innerText = '0'; let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins;
+    
+    document.getElementById('energy-modal').style.display = 'none';
+    sendBubble(`太棒了！成功領取 ${amount} 馬德幣！`);
+    if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) { let ms = window.GameLogic.phaserGame.scene.getScene('MainScene'); if(ms) window.playSFX(ms, 'sleep-onion-bao-got-money'); }
+};
+
+// ====== 排行榜與週次計算系統 ======
 window.getWeekId = function(offsetWeeks = 0) {
     let d = new Date(); d.setHours(0,0,0,0); let day = d.getDay();
     let diff = d.getDate() - day + (day === 0 ? -6 : 1) + (offsetWeeks * 7);
@@ -359,15 +368,6 @@ window.renderLeaderboard = function(offset) {
     });
 };
 // ===================================
-  
-    p.coins = (p.coins || 0) + amount; p.energyBank = 0;
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins, energyBank: 0 }); });
-    document.getElementById('energy-bank-val').innerText = '0'; let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins;
-    
-    document.getElementById('energy-modal').style.display = 'none';
-    sendBubble(`太棒了！成功領取 ${amount} 馬德幣！`);
-    if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) { let ms = window.GameLogic.phaserGame.scene.getScene('MainScene'); if(ms) window.playSFX(ms, 'sleep-onion-bao-got-money'); }
-};
 
 window.manualPages = []; window.currentManualIndex = 0;
 window.openManualModal = function() { document.getElementById('manual-modal').style.display = 'block'; window.currentManualIndex = 0; if (window.GameLogic.currentUser && (window.GameLogic.currentUser.email === 'kerojjj777@gmail.com' || window.GameLogic.currentUser.email === 'kerojjj777@hotmail.com' || window.GameLogic.currentUser.email === 'onion@gmail.com')) { document.getElementById('manual-admin-area').style.display = 'block'; } else { document.getElementById('manual-admin-area').style.display = 'none'; } window.renderManualPage(); };
@@ -1411,7 +1411,20 @@ class MainScene extends Phaser.Scene {
         this.playersHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/waterHits'), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { opSprite.isStunned = true; opSprite.play('wet', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
         this.dummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/dummyHits'), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
 
-        this.events.on('shutdown', () => { if (this.leaderboardListener) this.leaderboardListener(); if (this.trashListener) this.trashListener(); if (this.coinsListener) this.coinsListener(); ...
+        this.events.on('shutdown', () => { 
+            if (this.leaderboardListener) this.leaderboardListener(); 
+            if (this.trashListener) this.trashListener(); 
+            if (this.coinsListener) this.coinsListener(); 
+            if (this.dummiesListener) this.dummiesListener(); 
+            if (this.hitListener) this.hitListener(); 
+            if (this.fwHitListener) this.fwHitListener(); 
+            if (this.fwPlayersHitListener) this.fwPlayersHitListener(); 
+            if (this.fwDummyHitListener) this.fwDummyHitListener(); 
+            if (this.globalFwListener) this.globalFwListener(); 
+            if (this.playersHitListener) this.playersHitListener(); 
+            if (this.dummyHitListener) this.dummyHitListener(); 
+            if (this.fwThrowsListener) this.fwThrowsListener(); 
+        });
     }
 
     createMiniExplosion(x, y) {
@@ -1904,7 +1917,7 @@ class MainScene extends Phaser.Scene {
         this.updatePlayerEntity(this.localPlayer, window.GameLogic.myProfile);
 
         const furnData = this.isCafe ? window.GameLogic.cafeFurniture : (this.sceneName === 'doghouse' ? (window.GameLogic.doghouseFurniture || {}) : (this.sceneName === 'shrine' ? window.GameLogic.shrineFurniture : {}));
-        for (let key in furnData) { let fd = furnData[key]; if (!this.furnitureSprites[key]) this.furnitureSprites[key] = this.createFurniture(key, fd); let f = this.furnitureSprites[key]; f.sprite.isLocked = fd.locked; if(window.GameLogic.placingFurnitureKey !== key) { f.sprite.x = Phaser.Math.Linear(f.sprite.x, fd.x, 0.3); f.sprite.y = Phaser.Math.Linear(f.sprite.y, fd.y, 0.3); } if (f.textContainer) f.textContainer.setPosition(f.sprite.x, f.sprite.y); f.sprite.setAlpha(!fd.locked ? 0.6 : 1); ...
+        for (let key in furnData) { let fd = furnData[key]; if (!this.furnitureSprites[key]) this.furnitureSprites[key] = this.createFurniture(key, fd); let f = this.furnitureSprites[key]; f.sprite.isLocked = fd.locked; if(window.GameLogic.placingFurnitureKey !== key) { f.sprite.x = Phaser.Math.Linear(f.sprite.x, fd.x, 0.3); f.sprite.y = Phaser.Math.Linear(f.sprite.y, fd.y, 0.3); } if (f.textContainer) f.textContainer.setPosition(f.sprite.x, f.sprite.y); f.sprite.setAlpha(!fd.locked ? 0.6 : 1); }
         for (let key in this.furnitureSprites) { if (!furnData[key]) { if (window.GameLogic.placingFurnitureKey === key) { window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); } if (this.furnitureSprites[key].textContainer) this.furnitureSprites[key].textContainer.destroy(); if (this.furnitureSprites[key].bubbleContainer) this.furnitureSprites[key].bubbleContainer.destroy(); this.furnitureSprites[key].sprite.destroy(); delete this.furnitureSprites[key]; } }
 
         if (this.isCafe || this.sceneName === 'shrine') {
