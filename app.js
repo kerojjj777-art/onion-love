@@ -950,7 +950,12 @@ class BootScene extends Phaser.Scene {
         this.load.audio('sleep-onion-bao-charge', 'sleep-onion-bao-charge.mp3');
         this.load.audio('sleep-onion-bao-got-money', 'sleep-onion-bao-got-money.mp3');
         this.load.image('hall-screen-in-list', 'hall-screen-in-list.png');
-        this.load.spritesheet('hall-screen', 'hall-screen.png', { frameWidth: 300, frameHeight: 300 });
+        this.load.image('hall-screen', 'hall-screen.png'); // 改為靜態圖
+
+        // 在記憶體中畫一個簡單的白色發光點紋理給粒子使用
+        let grd = this.make.graphics({x: 0, y: 0, add: false});
+        grd.fillStyle(0xffffff, 1); grd.fillCircle(4, 4, 4); // 畫一個半徑 4 的圓
+        grd.generateTexture('particle_flare', 8, 8); // 生成名為 'particle_flare' 的紋理
     }
    create() {
         // 修正2：經驗條改為橘紅漸層
@@ -958,7 +963,7 @@ class BootScene extends Phaser.Scene {
         let fwGr = this.make.graphics({ x:0, y:0, add:false }); fwGr.fillStyle(0xffffff, 1); fwGr.fillCircle(4, 4, 4); fwGr.generateTexture('fw-particle', 8, 8);
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('onion-up'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'walk', frames: this.anims.generateFrameNumbers('onion-walk', { start: 0, end: 5 }), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'idle', frames: this.anims.generateFrameNumbers('onion-idle'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'skin-anim', frames: this.anims.generateFrameNumbers('onion-skin', { start: 0, end: 3 }), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'skin-old-anim', frames: this.anims.generateFrameNumbers('onion-skin-old', { start: 0, end: 5 }), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'clean', frames: this.anims.generateFrameNumbers('onion-clean'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'throw', frames: this.anims.generateFrameNumbers('onion-throw'), frameRate: 10, repeat: 0 }); this.anims.create({ key: 'wb-blast', frames: this.anims.generateFrameNumbers('water-ball-blast'), frameRate: 15, repeat: -1 }); this.anims.create({ key: 'wet', frames: this.anims.generateFrameNumbers('onion-wet'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'coin-anim', frames: this.anims.generateFrameNumbers('made-coin'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'dummy-hit', frames: this.anims.generateFrameNumbers('dummy-got-shot'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'sleep', frames: this.anims.generateFrameNumbers('onion-sleep'), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'fw-throw', frames: this.anims.generateFrameNumbers('onion-fireworks'), frameRate: 8, repeat: 2 }); this.anims.create({ key: 'fw-hit', frames: this.anims.generateFrameNumbers('onion-got-shot'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'fw-shoot', frames: this.anims.generateFrameNumbers('fireworks-shoot'), frameRate: 15, repeat: -1 }); this.anims.create({ key: 'dummy-fw-hit', frames: this.anims.generateFrameNumbers('dummy-got-shot'), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'seat-idle', frames: this.anims.generateFrameNumbers('onion-seat-shrine'), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'purify-target', frames: this.anims.generateFrameNumbers('onion-got-purify'), frameRate: 8, repeat: -1 }); this.anims.create({ key: 'purify-magic', frames: this.anims.generateFrameNumbers('onion-doing-purify'), frameRate: 10, repeat: -1 });this.anims.create({ key: 'scoreboard-anim', frames: this.anims.generateFrameNumbers('hall-screen'), frameRate: 5, repeat: -1 });
+        this.anims.create({ key: 'seat-idle', frames: this.anims.generateFrameNumbers('onion-seat-shrine'), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'purify-target', frames: this.anims.generateFrameNumbers('onion-got-purify'), frameRate: 8, repeat: -1 }); this.anims.create({ key: 'purify-magic', frames: this.anims.generateFrameNumbers('onion-doing-purify'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'charger-anim', frames: this.anims.generateFrameNumbers('sleep-charger'), frameRate: 8, repeat: -1 });
 
         this.scene.launch('UIScene'); this.scene.bringToTop('UIScene'); 
@@ -1463,7 +1468,41 @@ class MainScene extends Phaser.Scene {
             f.bubbleContainer = this.add.container(data.x, data.y).setDepth(14).setVisible(false); f.bubbleBg = this.add.graphics(); f.bubbleText = this.add.text(0, 0, '', { fontSize: '12px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold', wordWrap: { width: 100, useAdvancedWrap: true }, align: 'center' }).setOrigin(0.5); f.bubbleContainer.add([f.bubbleBg, f.bubbleText]); f.lastBubbleData = ""; if (this.minimap) this.minimap.ignore(f.bubbleContainer); f.dummyMsgs = ["我在這幹嘛？", "怎麼有洋蔥？", "該不會要打我吧......"]; f.msgIndex = 0; f.lastMsgTime = 0; f.isHit = false; 
         } 
         if (imgKey === 'hall-screen') {
-            f.sprite.play('scoreboard-anim'); f.sprite.setOrigin(0.5, 0.5);
+            f.sprite.setOrigin(0.5, 0.5); // 靜態圖不需播放動畫
+
+            // ====== [新增] 邊框粒子特效邏輯 ======
+            const borderW = 300; const borderH = 300; // 看板尺寸
+            const hw = borderW / 2; const hh = borderH / 2;
+            
+            // 定義粒子沿著矩形邊框跑動的邊界 (相對於實體中心)
+            // 分別是：上、右、下、左 四條線段
+            f.particleZones = [
+                { source: new Phaser.Geom.Line(-hw, -hh, hw, -hh), type: 'edge', quantity: 20 }, // Top
+                { source: new Phaser.Geom.Line(hw, -hh, hw, hh), type: 'edge', quantity: 20 },   // Right
+                { source: new Phaser.Geom.Line(hw, hh, -hw, hh), type: 'edge', quantity: 20 },   // Bottom
+                { source: new Phaser.Geom.Line(-hw, hh, -hw, -hh), type: 'edge', quantity: 20 }  // Left
+            ];
+
+            // 建立粒子發射器，深度設在家具之下 (5)
+            f.particleEmitter = this.add.particles(data.x, data.y, 'particle_flare', {
+                lifespan: { min: 800, max: 1500 }, // 粒子存活時間
+                speed: { min: 10, max: 40 },       // 些微的擴散速度
+                scale: { start: 0.6, end: 0, ease: 'Sine.easeIn' }, // 逐漸變小消失
+                blendMode: 'ADD',                   // 屬性：相加，更閃亮
+                alpha: { start: 1, end: 0 },       // 逐漸透明
+                emitZone: f.particleZones,          // 指定發射區域為上面的邊框線段
+                // 顏色：白、藍、紫、粉 (使用更亮麗的色調)
+                color: [0xffffff, 0x00ccff, 0x9933ff, 0xff66cc],
+                colorEase: 'quad.out',
+                frequency: 50, // 發射頻率
+                // 不規律跳動：增加隨知的 Y 軸重力與 X 軸隨機震動
+                gravityY: -20,
+                x: { min: -5, max: 5 },
+            }).setDepth(4.5); // 深度設在實體 (5) 和文字 (6) 之下
+
+            if (this.minimap) this.minimap.ignore(f.particleEmitter);
+            // =====================================
+
             f.textContainer = this.add.container(data.x, data.y).setDepth(6);
             f.titleText = this.add.text(0, -60, '本週掃地王', { fontSize: '18px', fontStyle: 'bold', color: '#ffcc00', stroke: '#000', strokeThickness: 4 }).setOrigin(0.5);
             f.top1Text = this.add.text(0, -20, '1. ---', { fontSize: '16px', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
@@ -1917,8 +1956,29 @@ class MainScene extends Phaser.Scene {
         this.updatePlayerEntity(this.localPlayer, window.GameLogic.myProfile);
 
         const furnData = this.isCafe ? window.GameLogic.cafeFurniture : (this.sceneName === 'doghouse' ? (window.GameLogic.doghouseFurniture || {}) : (this.sceneName === 'shrine' ? window.GameLogic.shrineFurniture : {}));
-        for (let key in furnData) { let fd = furnData[key]; if (!this.furnitureSprites[key]) this.furnitureSprites[key] = this.createFurniture(key, fd); let f = this.furnitureSprites[key]; f.sprite.isLocked = fd.locked; if(window.GameLogic.placingFurnitureKey !== key) { f.sprite.x = Phaser.Math.Linear(f.sprite.x, fd.x, 0.3); f.sprite.y = Phaser.Math.Linear(f.sprite.y, fd.y, 0.3); } if (f.textContainer) f.textContainer.setPosition(f.sprite.x, f.sprite.y); f.sprite.setAlpha(!fd.locked ? 0.6 : 1); }
-        for (let key in this.furnitureSprites) { if (!furnData[key]) { if (window.GameLogic.placingFurnitureKey === key) { window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); } if (this.furnitureSprites[key].textContainer) this.furnitureSprites[key].textContainer.destroy(); if (this.furnitureSprites[key].bubbleContainer) this.furnitureSprites[key].bubbleContainer.destroy(); this.furnitureSprites[key].sprite.destroy(); delete this.furnitureSprites[key]; } }
+        for (let key in furnData) {
+            let fd = furnData[key];
+            if (!this.furnitureSprites[key]) this.furnitureSprites[key] = this.createFurniture(key, fd);
+            let f = this.furnitureSprites[key];
+            f.sprite.isLocked = fd.locked;
+            if(window.GameLogic.placingFurnitureKey !== key) {
+                f.sprite.x = Phaser.Math.Linear(f.sprite.x, fd.x, 0.3);
+                f.sprite.y = Phaser.Math.Linear(f.sprite.y, fd.y, 0.3);
+            }
+            if (f.textContainer) f.textContainer.setPosition(f.sprite.x, f.sprite.y);
+            if (f.particleEmitter) f.particleEmitter.setPosition(f.sprite.x, f.sprite.y); // [新增] 粒子跟隨實體
+            f.sprite.setAlpha(!fd.locked ? 0.6 : 1);
+        }
+        for (let key in this.furnitureSprites) {
+            if (!furnData[key]) {
+                if (window.GameLogic.placingFurnitureKey === key) { window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); }
+                if (this.furnitureSprites[key].particleEmitter) this.furnitureSprites[key].particleEmitter.destroy(); // [新增] 銷毀粒子
+                if (this.furnitureSprites[key].textContainer) this.furnitureSprites[key].textContainer.destroy();
+                if (this.furnitureSprites[key].bubbleContainer) this.furnitureSprites[key].bubbleContainer.destroy();
+                this.furnitureSprites[key].sprite.destroy();
+                delete this.furnitureSprites[key];
+            }
+        }
 
         if (this.isCafe || this.sceneName === 'shrine') {
             const playersData = this.isCafe ? window.GameLogic.cafePlayers : window.GameLogic.shrinePlayers; const globalOnline = window.GameLogic.onlinePlayers || {}; 
