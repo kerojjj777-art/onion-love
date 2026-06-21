@@ -1218,17 +1218,34 @@ class MainScene extends Phaser.Scene {
     createPlayerEntity(x, y, pData, isLocal = false) { let entity = { sprite: this.physics.add.sprite(x, y, 'onion').setCollideWorldBounds(true).setDepth(10) }; if (!isLocal) { entity.sprite.setInteractive(); entity.sprite.on('pointerdown', (pointer) => { const actionMenu = document.getElementById("action-menu"); actionMenu.style.display = "flex"; actionMenu.style.left = pointer.event.pageX + "px"; actionMenu.style.top = pointer.event.pageY + "px"; actionMenu.dataset.uid = pData.uid; }); } entity.nameBg = this.add.graphics().setDepth(11); entity.nameText = this.add.text(x, y, pData.name || '匿名', { fontSize: '13px', fontFamily: 'Georgia', color: pData.color || '#fff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(12); entity.bubbleBg = this.add.graphics().setDepth(13).setVisible(false); entity.bubbleText = this.add.text(x, y, '', { fontSize: '14px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold', wordWrap: { width: 160, useAdvancedWrap: true }, align: 'center' }).setOrigin(0.5).setDepth(14).setVisible(false); if (this.minimap) this.minimap.ignore([entity.nameBg, entity.nameText, entity.bubbleBg, entity.bubbleText]); return entity; }
     updatePlayerEntity(entity, pData) { let sx = entity.sprite.x; let sy = entity.sprite.y; let displayName = `${pData.name || '匿名'} Lv.${pData.level || 1}`; entity.nameText.setText(displayName); if(pData.color) entity.nameText.setColor(pData.color); const nameBounds = entity.nameText.getBounds(); const bgWidth = nameBounds.width + 16; entity.nameBg.clear().fillStyle(0x000000, 0.6).fillRoundedRect(sx - bgWidth / 2, sy - 55, bgWidth, 20, 4); entity.nameText.setPosition(sx, sy - 45); if (pData.bubbleMsg && (Date.now() - pData.bubbleTime < 10000)) { entity.bubbleBg.setVisible(true); entity.bubbleText.setVisible(true).setText(pData.bubbleMsg); const bounds = entity.bubbleText.getBounds(); const boxWidth = bounds.width + 20, boxHeight = bounds.height + 16, boxX = sx - boxWidth / 2, boxY = sy - 65 - boxHeight; entity.bubbleBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(boxX, boxY, boxWidth, boxHeight, 8).strokeRoundedRect(boxX, boxY, boxWidth, boxHeight, 8); entity.bubbleText.setPosition(sx, boxY + boxHeight / 2); } else { entity.bubbleBg.setVisible(false); entity.bubbleText.setVisible(false); } }
     createFurniture(key, data) { let imgKey = key.includes('fridge') ? 'fridge' : (key.includes('shrine') ? 'shrine' : (key.includes('dummy') ? 'dummy' : (key.includes('bed') ? 'doghouse-bed' : (key === 'altar' ? 'shrine-altar' : (key.startsWith('seat_') ? 'shrine-seat' : 'memory'))))); let f = { sprite: this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true) }; f.sprite.isLocked = data.locked; if (imgKey === 'dummy') { f.bubbleBg = this.add.graphics().setDepth(13).setVisible(false); f.bubbleText = this.add.text(data.x, data.y, '', { fontSize: '12px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold', wordWrap: { width: 100, useAdvancedWrap: true }, align: 'center' }).setOrigin(0.5).setDepth(14).setVisible(false); if (this.minimap) this.minimap.ignore([f.bubbleBg, f.bubbleText]); f.dummyMsgs = ["我在這幹嘛？", "怎麼有洋蔥？", "該不會要打我吧......"]; f.msgIndex = 0; f.lastMsgTime = 0; f.isHit = false; } return f; }
-    finishSweeping(success) { this.localPlayer.isSweeping = false; this.qteContainer.setVisible(false); if (this.sound.get('brooming1')) this.sound.stopByKey('brooming1'); if (success && this.closestTrash) { let px = this.localPlayer.sprite.x; let py = this.localPlayer.sprite.y - 40; let trashKey = this.closestTrash.key; let isOld = this.closestTrash.type === 'onion-skin-old'; 
-        
-        // 修正9：體力滿電啟動時，扣除 2% 體力，經驗 x2，金錢 x3
-        let expGain = 10; let totalCoins = isOld ? Phaser.Math.Between(50, 60) : Phaser.Math.Between(10, 18);
-        if (window.GameLogic.energyActive && (window.GameLogic.myProfile.energy || 0) >= 2) {
-            window.GameLogic.myProfile.energy -= 2;
-            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { energy: window.GameLogic.myProfile.energy }); });
-            expGain *= 2; totalCoins *= 3;
-        }
+    finishSweeping(success) { 
+        this.localPlayer.isSweeping = false; this.qteContainer.setVisible(false); 
+        if (this.sound.get('brooming1')) this.sound.stopByKey('brooming1'); 
+        if (success && this.closestTrash) { 
+            let px = this.localPlayer.sprite.x; let py = this.localPlayer.sprite.y - 40; 
+            let trashKey = this.closestTrash.key; let isOld = this.closestTrash.type === 'onion-skin-old'; 
+            
+            // 修正9：體力滿電啟動時，扣除 2% 體力，經驗 x2，金錢 x3
+            let expGain = 10; let totalCoins = isOld ? Phaser.Math.Between(50, 60) : Phaser.Math.Between(10, 18);
+            if (window.GameLogic.energyActive && (window.GameLogic.myProfile.energy || 0) >= 2) {
+                window.GameLogic.myProfile.energy -= 2;
+                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { energy: window.GameLogic.myProfile.energy }); });
+                expGain *= 2; totalCoins *= 3;
+            }
 
-        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.remove(module.ref(window.GameLogic.db, 'cafeTrashes/' + trashKey)); }); this.closestTrash = null; let leveledUp = gainRewards(0, expGain); if (leveledUp) { window.playSFX(this, 'chorus_of_angels1'); } let coinAmounts = [Math.floor(totalCoins/3), Math.floor(totalCoins/3), totalCoins - 2*Math.floor(totalCoins/3)];
+            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.remove(module.ref(window.GameLogic.db, 'cafeTrashes/' + trashKey)); }); 
+            this.closestTrash = null; let leveledUp = gainRewards(0, expGain); 
+            if (leveledUp) { window.playSFX(this, 'chorus_of_angels1'); } 
+            
+            let coinAmounts = [Math.floor(totalCoins/3), Math.floor(totalCoins/3), totalCoins - 2*Math.floor(totalCoins/3)];
+            // 補回遺失的噴發金幣邏輯與閉合括號
+            for (let i = 0; i < 3; i++) { 
+                let cx = px + Phaser.Math.Between(-40, 40); 
+                let cy = py + Phaser.Math.Between(-40, 40) + 20; 
+                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: coinAmounts[i] }); }); 
+            } 
+        } 
+    }
 
     startPurifyEffects() {
         if (this.purifyEffectsActive) return; this.purifyEffectsActive = true; 
