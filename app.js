@@ -447,9 +447,11 @@ window.clickSpamBtn = function() {
 };
 
 window.isWiping = false; window.poopWipeProgress = 0;
-window.startWiping = function(e) { window.isWiping = true; };
-window.stopWiping = function() { window.isWiping = false; };
+window.startWiping = function(e) { window.isWiping = true; if (e && e.cancelable) e.preventDefault(); };
+window.stopWiping = function(e) { window.isWiping = false; };
 window.wipePoop = function(e) {
+    // 修正：強制阻斷手機端滑動時的原生選取、拖曳與畫面平移行為
+    if (e && e.cancelable && e.type.includes('touch')) e.preventDefault(); 
     if (!window.isWiping && e.type !== 'touchmove') return;
     if (e.type.includes('touch')) window.isWiping = true;
     if (!window.isWiping) return;
