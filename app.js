@@ -179,7 +179,7 @@ function createSystemUI() {
             <button id="voting-confirm-btn" class="btn-primary" style="width:100%; margin-top:15px; background:#8a2be2; border-color:#ba55d3; font-size:16px; font-weight:bold;" onclick="window.submitVote()">確認</button>
         </div>
         <div id="spam-ui" style="display:none; position:absolute; top:75%; left:50%; transform:translate(-50%,-50%); z-index:400; text-align:center;">
-            <button id="spam-btn" style="width:140px; height:140px; background:none; border:none; outline:none; cursor:pointer; touch-action:manipulation; padding:0; filter: drop-shadow(0 0 15px #ffcc00); transition: transform 0.1s;" onclick="window.clickSpamBtn()"></button>
+            <button id="spam-btn" style="width:140px; height:140px; background:none; border:none; outline:none; cursor:pointer; touch-action:manipulation; padding:0; filter: drop-shadow(0 0 15px #ffcc00); transition: transform 0.1s; user-select: none; -webkit-user-select: none; -webkit-user-drag: none;" onclick="window.clickSpamBtn()"></button>
             
             <div id="poop-splatter-container" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:401; overflow:visible;"></div>
             <div id="poop-wipe-area" style="display:none; position:absolute; top:-30px; left:-30px; right:-30px; bottom:-30px; z-index:402; cursor:grab; touch-action:none;" onpointerdown="window.startWiping(event)" onpointerup="window.stopWiping()" onpointerleave="window.stopWiping()" onpointermove="window.wipePoop(event)" ontouchmove="window.wipePoop(event)"></div>
@@ -644,8 +644,8 @@ function joinShrine() {
                 let taliObj = talismans.find(x => x.id === myVote.talisman);
                 if (taliObj) { 
                     let sBtn = document.getElementById('spam-btn'); 
-                    // 修正1：取消 img 的 border-radius，讓它呈現原汁原味的符咒形狀
-                    sBtn.innerHTML = `<img src="${taliObj.img}" style="width:100%; height:100%; object-fit:contain; pointer-events:none; filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.5));">`; 
+                    // 修正：拔除圖片的預設反白選取與拖曳行為，狂點再也不會閃爍藍底了
+                    sBtn.innerHTML = `<img src="${taliObj.img}" style="width:100%; height:100%; object-fit:contain; pointer-events:none; filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.5)); user-select:none; -webkit-user-select:none; -webkit-user-drag:none;">`; 
                 }
             }
         } else { 
