@@ -199,11 +199,11 @@ function createSystemUI() {
             <div id="voting-status" style="margin-top:15px; font-size:12px; color:#aaa; max-height:80px; overflow-y:auto; text-align:left; background:rgba(0,0,0,0.5); padding:5px; border-radius:4px;"></div>
             <button id="voting-confirm-btn" class="btn-primary" style="width:100%; margin-top:15px; background:#8a2be2; border-color:#ba55d3; font-size:16px; font-weight:bold;" onclick="window.submitVote()">確認</button>
         </div>
-        <div id="spam-ui" style="display:none; position:absolute; top:75%; left:50%; transform:translate(-50%,-50%); z-index:400; text-align:center;">
+        <div id="spam-ui" style="display:none; position:absolute; top:75%; left:50%; transform:translate(-50%,-50%); z-index:400; text-align:center; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;">
             <button id="spam-btn" style="width:140px; height:140px; background:none; border:none; outline:none; cursor:pointer; touch-action:manipulation; padding:0; filter: drop-shadow(0 0 15px #ffcc00); transition: transform 0.1s; user-select: none; -webkit-user-select: none; -webkit-user-drag: none;" onclick="window.clickSpamBtn()"></button>
             
             <div id="poop-splatter-container" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:401; overflow:visible;"></div>
-            <div id="poop-wipe-area" style="display:none; position:absolute; top:-30px; left:-30px; right:-30px; bottom:-30px; z-index:402; cursor:grab; touch-action:none;" onpointerdown="window.startWiping(event)" onpointerup="window.stopWiping()" onpointerleave="window.stopWiping()" onpointermove="window.wipePoop(event)" ontouchmove="window.wipePoop(event)"></div>
+            <div id="poop-wipe-area" style="display:none; position:absolute; top:-30px; left:-30px; right:-30px; bottom:-30px; z-index:402; cursor:grab; touch-action:none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;" onpointerdown="window.startWiping(event)" onpointerup="window.stopWiping()" onpointerleave="window.stopWiping()" onpointermove="window.wipePoop(event)" ontouchmove="window.wipePoop(event)"></div>
         </div>
         
         <div id="top-notification-bar">系統通知：歡迎來到洋蔥愛！</div>
