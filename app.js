@@ -790,25 +790,36 @@ class MainScene extends Phaser.Scene {
         this.sceneName = window.GameLogic.currentScene;
         this.isCafe = this.sceneName === "cafe";
         
-        let trackKeys = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo'];
+        // 修正：徹底重構音樂切換邏輯，神龕擁有絕對獨立的背景音樂，不再與儀式狀態綁定
+        let allBgms = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo'];
+        let shrineBgms = ['shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'];
         
-        // 音樂系統管理
-        if (window.GameLogic.shrineRitualActive) {
-            trackKeys.forEach(k => this.sound.removeByKey(k));
-            if (!this.sound.get('shrine-wierd-people-sound')?.isPlaying) this.sound.play('shrine-wierd-people-sound', {loop: true});
-            this.currentRitualState = null; 
-        } else {
-            // 修正1：離開神龕後，將神龕系列音樂徹底清除，避免疊加帶出大廳
-            let shrineTracks = ['shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'];
-            shrineTracks.forEach(k => { if (this.sound.getAll(k)) this.sound.getAll(k).forEach(s => s.stop()); this.sound.removeByKey(k); });
+        let volControl = document.getElementById('bgm-volume');
+        let vol = volControl ? volControl.value / 100 : 0.5;
+        this.currentRitualState = null;
 
-            let currentTrackKey = trackKeys[window.GameLogic.currentTrackIdx] || 'bgm';
-            trackKeys.forEach(k => { if (k !== currentTrackKey) this.sound.removeByKey(k); });
+        if (this.sceneName === 'shrine') {
+            allBgms.forEach(k => { if (this.sound.getAll(k)) this.sound.getAll(k).forEach(s => s.stop()); this.sound.removeByKey(k); });
+            
+            let evData = window.GameLogic.shrineEventData;
+            let evState = evData ? evData.state : 'none';
+            if (evState !== 'voting' && evState !== 'countdown' && evState !== 'purifying' && evState !== 'success') {
+                shrineBgms.forEach(k => { if (k !== 'shrine-wierd-people-sound' && this.sound.getAll(k)) { this.sound.getAll(k).forEach(s => s.stop()); this.sound.removeByKey(k); } });
+                let sSnd = this.sound.get('shrine-wierd-people-sound');
+                if (!sSnd || !sSnd.isPlaying) {
+                    this.sound.removeByKey('shrine-wierd-people-sound');
+                    this.sound.add('shrine-wierd-people-sound', { loop: true, volume: vol }).play();
+                }
+            }
+        } else {
+            shrineBgms.forEach(k => { if (this.sound.getAll(k)) this.sound.getAll(k).forEach(s => s.stop()); this.sound.removeByKey(k); });
+
+            let currentTrackKey = allBgms[window.GameLogic.currentTrackIdx] || 'bgm';
+            allBgms.forEach(k => { if (k !== currentTrackKey && this.sound.getAll(k)) { this.sound.getAll(k).forEach(s => s.stop()); this.sound.removeByKey(k); } });
+            
             let currentSnd = this.sound.get(currentTrackKey);
             if (!currentSnd || !currentSnd.isPlaying) {
                 this.sound.removeByKey(currentTrackKey);
-                let volControl = document.getElementById('bgm-volume');
-                let vol = volControl ? volControl.value / 100 : 0.5;
                 this.sound.add(currentTrackKey, { loop: true, volume: vol }).play();
             }
         }
@@ -917,7 +928,7 @@ class MainScene extends Phaser.Scene {
         this.events.on('action_B', () => {
             if (window.GameLogic.armedItemState === 'armed') { window.GameLogic.armedItemState = 'ready'; return; }
             if (this.localPlayer.isSleeping) return;
-            if (this.sceneName === 'shrine') { if (this.localPlayer.isSeated) { this.localPlayer.isSeated = false; this.localPlayer.sprite.play('idle'); update(ref(window.GameLogic.db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), { isSeated: false }); return; } else { for (let key in this.furnitureSprites) { if (key.startsWith('seat_')) { let f = this.furnitureSprites[key]; if (f.sprite.isLocked && Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y) < 90) { this.localPlayer.isSeated = true; this.localPlayer.sprite.setVelocity(0, 0); this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y - 15); this.localPlayer.sprite.play('seat-idle', true); update(ref(window.GameLogic.db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), { isSeated: true, x: f.sprite.x, y: f.sprite.y - 15 }); return; } } } } }
+            if (this.sceneName === 'shrine') { if (this.localPlayer.isSeated) { this.localPlayer.isSeated = false; this.localPlayer.sprite.play('idle'); update(ref(window.GameLogic.db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), { isSeated: false }); return; } else { for (let key in this.furnitureSprites) { if (key.startsWith('seat_')) { let f = this.furnitureSprites[key]; if (f.sprite.isLocked && Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y) < 150) { this.localPlayer.isSeated = true; this.localPlayer.sprite.setVelocity(0, 0); this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y - 15); this.localPlayer.sprite.play('seat-idle', true); update(ref(window.GameLogic.db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), { isSeated: true, x: f.sprite.x, y: f.sprite.y - 15 }); return; } } } } }
             if (!this.localPlayer.isSweeping && this.closestTrash) { this.localPlayer.isSweeping = true; this.qteProgress = 0; this.qteTotalClicks = Phaser.Math.Between(5, 10); this.qteContainer.setVisible(true); } else if (!this.localPlayer.isSweeping) { sendBubble("使用了 B 技能!"); }
         });
 
@@ -1227,7 +1238,7 @@ class MainScene extends Phaser.Scene {
                 let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let d = Phaser.Math.Distance.Between(px, py, f.sprite.x, f.sprite.y);
                 if (this.sceneName === 'shrine') {
                     if (key === 'altar' && d < 150) { minDist = d; promptTarget = f.sprite; promptMsg = "按A召喚教友"; }
-                    if (key.startsWith('seat_') && d < 70) { minDist = d; promptTarget = f.sprite; promptMsg = "按B入席"; }
+                    if (key.startsWith('seat_') && d < 150) { minDist = d; promptTarget = f.sprite; promptMsg = "按B入席"; }
                 } else {
                     if (d < minDist) { minDist = d; promptTarget = f.sprite; if (key.includes('fridge')) promptMsg = "按A打開冰箱"; else if (key.includes('shrine')) promptMsg = "按A參拜神龕"; else if (key.includes('dummy')) promptMsg = "假人洋蔥 (裝飾中)"; else if (key.includes('bed')) promptMsg = "按A歐歐睏"; else promptMsg = "按A打開回憶錄"; }
                 }
