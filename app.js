@@ -905,6 +905,12 @@ class MainScene extends Phaser.Scene {
 
         this.sleepTopBg = this.add.graphics().setDepth(150).setVisible(false); this.sleepTopText = this.add.text(0, 0, '按A起床', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#fff', backgroundColor: 'rgba(74, 93, 78, 0.8)', padding: {x:8, y:4} }).setOrigin(0.5).setDepth(151).setVisible(false); this.sleepBotBg = this.add.graphics().setDepth(150).setVisible(false); this.sleepBotText = this.add.text(0, 0, 'zzZ', { fontSize: '16px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#3e2723' }).setOrigin(0.5).setDepth(151).setVisible(false); this.sleepZzzArray = ['zzZ', 'Zzz', 'zZz']; this.sleepZzzIdx = 0; this.time.addEvent({ delay: 1000, callback: () => { if (this.localPlayer && this.localPlayer.isSleeping) { this.sleepZzzIdx = (this.sleepZzzIdx + 1) % 3; this.sleepBotText.setText(this.sleepZzzArray[this.sleepZzzIdx]); let bounds = this.sleepBotText.getBounds(); let w = bounds.width + 16, h = bounds.height + 12; let x = this.sleepBotText.x - w/2, y = this.sleepBotText.y - h/2; this.sleepBotBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(x, y, w, h, 8).strokeRoundedRect(x, y, w, h, 8); } }, loop: true });
 
+        // 修正1：在註冊按鈕事件前，強制清除舊的監聽器，徹底解決場景切換導致「按一下變按兩下」的疊加 BUG
+        this.events.off('action_A_place');
+        this.events.off('action_A_short');
+        this.events.off('action_A_long');
+        this.events.off('action_B');
+
         this.events.on('action_A_place', () => { let key = window.GameLogic.placingFurnitureKey; if(key && this.furnitureSprites[key]) { let f = this.furnitureSprites[key]; f.sprite.setVelocity(0, 0); let path = this.isCafe ? `cafeFurniture/${key}` : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}` : `shrineFurniture/${key}`); update(ref(window.GameLogic.db, path), { locked: true, x: f.sprite.x, y: f.sprite.y, ownerUid: window.GameLogic.currentUser.uid }); window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); } });
 
         this.events.on('action_A_short', () => {
@@ -928,7 +934,34 @@ class MainScene extends Phaser.Scene {
         this.events.on('action_B', () => {
             if (window.GameLogic.armedItemState === 'armed') { window.GameLogic.armedItemState = 'ready'; return; }
             if (this.localPlayer.isSleeping) return;
-            if (this.sceneName === 'shrine') { if (this.localPlayer.isSeated) { this.localPlayer.isSeated = false; this.localPlayer.sprite.play('idle'); update(ref(window.GameLogic.db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), { isSeated: false }); return; } else { for (let key in this.furnitureSprites) { if (key.startsWith('seat_')) { let f = this.furnitureSprites[key]; if (f.sprite.isLocked && Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y) < 150) { this.localPlayer.isSeated = true; this.localPlayer.sprite.setVelocity(0, 0); this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y - 15); this.localPlayer.sprite.play('seat-idle', true); update(ref(window.GameLogic.db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), { isSeated: true, x: f.sprite.x, y: f.sprite.y - 15 }); return; } } } } }
+            
+            if (this.sceneName === 'shrine') { 
+                if (this.localPlayer.isSeated) { 
+                    this.localPlayer.isSeated = false; this.localPlayer.sprite.play('idle'); 
+                    update(ref(window.GameLogic.db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), { isSeated: false }); 
+                    return; 
+                } else { 
+                    // 修正2：尋找「距離最近」的坐墊，解決重疊或多個坐墊時被錯誤吸走的問題
+                    let closestSeat = null; let minSeatDist = 150;
+                    for (let key in this.furnitureSprites) { 
+                        if (key.startsWith('seat_')) { 
+                            let f = this.furnitureSprites[key]; 
+                            if (f.sprite.isLocked) {
+                                let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y);
+                                if (dist < minSeatDist) { minSeatDist = dist; closestSeat = f; }
+                            }
+                        } 
+                    }
+                    if (closestSeat) {
+                        this.localPlayer.isSeated = true; this.localPlayer.sprite.setVelocity(0, 0); 
+                        this.localPlayer.sprite.setPosition(closestSeat.sprite.x, closestSeat.sprite.y - 15); 
+                        this.localPlayer.sprite.play('seat-idle', true); 
+                        update(ref(window.GameLogic.db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), { isSeated: true, x: closestSeat.sprite.x, y: closestSeat.sprite.y - 15 }); 
+                        return; 
+                    }
+                } 
+            }
+            
             if (!this.localPlayer.isSweeping && this.closestTrash) { this.localPlayer.isSweeping = true; this.qteProgress = 0; this.qteTotalClicks = Phaser.Math.Between(5, 10); this.qteContainer.setVisible(true); } else if (!this.localPlayer.isSweeping) { sendBubble("使用了 B 技能!"); }
         });
 
