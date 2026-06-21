@@ -243,8 +243,8 @@ function createSystemUI() {
             <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; position: relative;">
                 <div style="display: flex; align-items: center; justify-content: center; gap: 15px;"><button class="btn-secondary" onclick="window.prevTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0;">&lt;</button><img id="music-cover" onclick="window.openFullscreen(this.src)" src="Sweet-Onion.png" alt="Music Cover" style="width: 150px; height: 150px; border-radius: 8px; border: 2px solid var(--mucha-gold); object-fit: cover; box-shadow: 0 4px 8px rgba(0,0,0,0.3); cursor: pointer;"><button class="btn-secondary" onclick="window.nextTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0;">&gt;</button></div>
                 <div id="music-title" style="font-weight: bold; color: var(--mucha-brown); font-size: 16px;">Sweet-Onion</div>
-                <div style="width: 100%; margin-top: 10px;"><label style="font-size: 14px; color: var(--mucha-brown); display: flex; justify-content: space-between;"><span>音樂音量</span> <span id="bgm-vol-text">50%</span></label><input type="range" id="bgm-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 5px;" oninput="window.updateBGMVolume(this.value)"></div>
-                <div style="width: 100%; margin-top: 10px;"><label style="font-size: 14px; color: var(--mucha-brown); display: flex; justify-content: space-between;"><span>特殊音效</span> <span id="sfx-vol-text">50%</span></label><input type="range" id="sfx-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 5px;" oninput="window.updateSFXVolume(this.value)"></div>
+                <div style="width: 100%; margin-top: 10px;"><label style="font-size: 14px; color: var(--mucha-brown); display: flex; justify-content: space-between;"><span>音樂音量</span> <span id="bgm-vol-text">100%</span></label><input type="range" id="bgm-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 5px;" oninput="window.updateBGMVolume(this.value)"></div>
+                <div style="width: 100%; margin-top: 10px;"><label style="font-size: 14px; color: var(--mucha-brown); display: flex; justify-content: space-between;"><span>特殊音效</span> <span id="sfx-vol-text">100%</span></label><input type="range" id="sfx-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 5px;" oninput="window.updateSFXVolume(this.value)"></div>
             </div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('settings-modal').style.display='none'">關閉播放器</button>
         </div>
@@ -1068,26 +1068,10 @@ class MainScene extends Phaser.Scene {
             this.minimap = this.cameras.add(this.cameras.main.width - mapSize - marginX, marginY, mapSize, mapSize).setZoom(mapSize / 2048).setName('minimap'); this.minimap.setBackgroundColor('rgba(26, 16, 8, 0.7)'); this.minimap.centerOn(1024, 1024);
             this.scale.on('resize', (gameSize) => { if (this.minimap) this.minimap.setPosition(gameSize.width - mapSize - marginX, marginY); });
             this.trashListener = onValue(ref(window.GameLogic.db, 'cafeTrashes'), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.trashes.find(t => t.key === key)) { let tData = data[key]; let isOld = tData.type === 'old'; let spriteKey = isOld ? 'onion-skin-old' : 'onion-skin'; let animKey = isOld ? 'skin-old-anim' : 'skin-anim'; let skin = this.physics.add.sprite(tData.x, tData.y, spriteKey).setDepth(4); skin.play(animKey); skin.type = isOld ? 'onion-skin-old' : 'onion-skin'; skin.key = key; this.trashes.push(skin); } } this.trashes = this.trashes.filter(t => { if (!data[t.key]) { t.destroy(); if (this.closestTrash === t) { this.closestTrash = null; if (this.localPlayer && this.localPlayer.isSweeping) { this.localPlayer.isSweeping = false; this.qteContainer.setVisible(false); if (this.sound.get('brooming1')) this.sound.stopByKey('brooming1'); } } return false; } return true; }); });
-        } else if (this.sceneName === "doghouse") {
+       } else if (this.sceneName === "doghouse") {
             this.add.image(mapW/2, mapH/2, 'bgDoghouse').setDisplaySize(mapW, mapH); 
             this.doghouseFurnListener = onValue(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}/doghouseFurniture`), (snap) => { 
                 window.GameLogic.doghouseFurniture = snap.val() || {}; 
-                
-                // 修正1：確保「收到家具資料後」才把你放到床上，就不會出生在房間正中央了
-                if (window.GameLogic.myProfile.sleepStartTime && window.GameLogic.myProfile.sleepStartTime > 0 && !this.sleepInitDone && this.localPlayer) {
-                    this.sleepInitDone = true;
-                    for (let key in window.GameLogic.doghouseFurniture) {
-                        if (key.includes('bed') && window.GameLogic.doghouseFurniture[key].locked) {
-                            let f = window.GameLogic.doghouseFurniture[key];
-                            this.localPlayer.isSleeping = true; this.localPlayer.sprite.setPosition(f.x, f.y); this.localPlayer.sprite.play('sleep', true);
-                            this.localPlayer.sprite.setAlpha(1); // 修正1：確定躺到床上了，才解除隱身
-                            this.sleepTopText.setVisible(true).setPosition(f.x, f.y - 100); this.sleepBotText.setVisible(true).setPosition(f.x, f.y - 65); this.sleepBotBg.setVisible(true);
-                            let bounds = this.sleepBotText.getBounds(); let w = bounds.width + 16, h = bounds.height + 12; let bx = this.sleepBotText.x - w/2, by = this.sleepBotText.y - h/2;
-                            this.sleepBotBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(bx, by, w, h, 8).strokeRoundedRect(bx, by, w, h, 8);
-                            break;
-                        }
-                    }
-                }
             });
         } else if (this.sceneName === "farm") {
             this.add.image(mapW/2, mapH/2, 'bgFarm').setDisplaySize(mapW, mapH);
@@ -1409,11 +1393,11 @@ class MainScene extends Phaser.Scene {
         let isHost = pUids.length > 0 && pUids.sort()[0] === window.GameLogic.currentUser.uid;
 
         if (!eventData || eventData.state === 'finished') {
-            if (this.pooBoss) { this.pooBoss.bubbleBg.destroy(); this.pooBoss.bubbleText.destroy(); this.pooBoss.destroy(); this.pooBoss = null; }
+            if (this.pooBoss) { if(this.pooBoss.bubbleContainer) this.pooBoss.bubbleContainer.destroy(); this.pooBoss.destroy(); this.pooBoss = null; }
             if (this.countdownText) this.countdownText.setVisible(false); this.stopPurifyEffects(false); 
-            // 恢復原本的鏡頭縮放與玩家跟隨
+            // 修正4：立即恢復正常鏡頭，不要奇怪的縮放漸變
             if (this.cameras.main.zoom !== 1) {
-                this.cameras.main.zoomTo(1, 1000, 'Sine.easeInOut', true);
+                this.cameras.main.setZoom(1);
                 this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
             }
             return;
@@ -1485,12 +1469,11 @@ class MainScene extends Phaser.Scene {
             }
             
             if (this.pooBoss && this.furnitureSprites['altar']) {
-                let targetSprite = (eventData.targetUid === window.GameLogic.currentUser.uid) ? this.localPlayer.sprite : (this.otherPlayers[eventData.targetUid] ? this.otherPlayers[eventData.targetUid].sprite : this.furnitureSprites['altar'].sprite);
-                
-                // 儀式進行中，鏡頭強制鎖定淨化對象並拉遠視野
-                this.cameras.main.startFollow(targetSprite, true, 0.05, 0.05);
+                // 修正4：鏡頭改為追蹤屎王，讓大家看清楚 Boss 的模樣
+                this.cameras.main.startFollow(this.pooBoss, true, 0.05, 0.05);
                 if (this.cameras.main.zoom !== 0.85) this.cameras.main.zoomTo(0.85, 1000, 'Sine.easeInOut', true);
 
+                let targetSprite = (eventData.targetUid === window.GameLogic.currentUser.uid) ? this.localPlayer.sprite : (this.otherPlayers[eventData.targetUid] ? this.otherPlayers[eventData.targetUid].sprite : this.furnitureSprites['altar'].sprite);
                 let ax = targetSprite.x; let ay = targetSprite.y;
                 this.pooBoss.x = ax + Math.cos(time * 0.0015) * 120; this.pooBoss.y = ay - 40 + Math.sin(time * 0.002) * 80; 
                 if (time - this.pooBoss.lastQuoteTime > 2500) { 
@@ -1498,11 +1481,11 @@ class MainScene extends Phaser.Scene {
                     this.pooBoss.bubbleText.setText(Phaser.Utils.Array.GetRandom(this.pooBoss.quotes)); 
                 }
                 
-                // 修正1：調降噴屎頻率，改為每 2.5 秒 40% 機率，保留連擊爽感
+                // 修正1：調整為每 1.8 秒有 55% 的機率噴屎，節奏更平均
                 if (!this.pooBoss.lastPoopTime) this.pooBoss.lastPoopTime = time;
-                if (time - this.pooBoss.lastPoopTime > 2500) {
+                if (time - this.pooBoss.lastPoopTime > 1800) {
                     this.pooBoss.lastPoopTime = time;
-                    if (Math.random() < 0.4) {
+                    if (Math.random() < 0.55) {
                         let camW = this.cameras.main.width;
                         let camH = this.cameras.main.height;
                         for (let i = 0; i < 15; i++) {
@@ -1529,9 +1512,12 @@ class MainScene extends Phaser.Scene {
         } 
         else if (evState === 'success') {
             this.stopPurifyEffects(true); let tUid = eventData.targetUid;
-            if (this.pooBoss) { this.pooBoss.bubbleText.setText("我還會再回來的..!!!!"); this.tweens.add({ targets: this.pooBoss, y: this.pooBoss.y - 300, alpha: 0, duration: 2000 }); this.pooBoss.bubbleBg.destroy(); this.pooBoss.bubbleText.destroy(); this.pooBoss = null; }
+            if (this.pooBoss) { this.pooBoss.bubbleText.setText("我還會再回來的..!!!!"); this.tweens.add({ targets: this.pooBoss, y: this.pooBoss.y - 300, alpha: 0, duration: 2000 }); if(this.pooBoss.bubbleContainer) this.pooBoss.bubbleContainer.destroy(); this.pooBoss = null; }
             if (!this.successTextShown) {
                 this.successTextShown = true;
+                // 修正4：儀式成功瞬間，鏡頭立即恢復追蹤玩家並取消縮放
+                this.cameras.main.setZoom(1);
+                this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
                 let st = this.add.text(cx, cy, "淨化成功！", { fontSize: '80px', fontStyle: 'bold', color: '#ffcc00', stroke: '#fff', strokeThickness: 10 }).setOrigin(0.5).setDepth(300);
                 this.tweens.add({ targets: st, scale: 1.2, yoyo: true, repeat: 3, duration: 500, onComplete: () => st.destroy() });
                 let targetSprite = (tUid === window.GameLogic.currentUser.uid) ? this.localPlayer.sprite : (this.otherPlayers[tUid] ? this.otherPlayers[tUid].sprite : null);
@@ -1595,6 +1581,27 @@ class MainScene extends Phaser.Scene {
         let evData = window.GameLogic.shrineEventData; let isPurifying = (this.sceneName === 'shrine' && evData && evData.state === 'purifying');
 
         this.processShrineEventLogic(time, delta);
+
+        // 修正2：確保進入狗窩後，等到家具完全載入並產生實體後，再把睡覺的玩家放到床上
+        if (this.sceneName === 'doghouse' && window.GameLogic.myProfile.sleepStartTime > 0 && !this.sleepInitDone && this.localPlayer) {
+            for (let key in this.furnitureSprites) {
+                if (key.includes('bed') && this.furnitureSprites[key].sprite.isLocked) {
+                    this.sleepInitDone = true;
+                    let f = this.furnitureSprites[key];
+                    this.localPlayer.isSleeping = true;
+                    this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y);
+                    this.localPlayer.sprite.play('sleep', true);
+                    this.localPlayer.sprite.setAlpha(1);
+                    this.sleepTopText.setVisible(true).setPosition(f.sprite.x, f.sprite.y - 100);
+                    this.sleepBotText.setVisible(true).setPosition(f.sprite.x, f.sprite.y - 65);
+                    this.sleepBotBg.setVisible(true);
+                    let bounds = this.sleepBotText.getBounds(); let w = bounds.width + 16, h = bounds.height + 12;
+                    let bx = this.sleepBotText.x - w/2, by = this.sleepBotText.y - h/2;
+                    this.sleepBotBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(bx, by, w, h, 8).strokeRoundedRect(bx, by, w, h, 8);
+                    break;
+                }
+            }
+        }
 
         // 修正4：心跳機制更新，每 5 秒上傳一次當前時間戳，用於徹底過濾斷線與幽靈人口
         if (!this.lastHeartbeatSync || time - this.lastHeartbeatSync > 5000) {
