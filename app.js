@@ -1475,11 +1475,10 @@ class MainScene extends Phaser.Scene {
                     update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'success', endTime: Date.now() });
                 }
             }
-        } 
 
-        if (!this.pooBoss && this.furnitureSprites['altar']) {
-            let ax = this.furnitureSprites['altar'].sprite.x; let ay = this.furnitureSprites['altar'].sprite.y;
-                this.pooBoss = this.physics.add.sprite(ax, ay - 100, 'poo-boss').setDepth(25); 
+            if (!this.pooBoss && this.furnitureSprites['altar']) {
+                let ax = this.furnitureSprites['altar'].sprite.x; let ay = this.furnitureSprites['altar'].sprite.y;
+                this.pooBoss = this.physics.add.sprite(ax, ay - 100, 'poo-boss').setDepth(25);
                 this.pooBoss.bubbleContainer = this.add.container(ax, ay - 100).setDepth(26); this.pooBoss.bubbleBg = this.add.graphics(); this.pooBoss.bubbleText = this.add.text(0, 0, '哇哈哈哈呷賽呷到飽！', { fontSize: '14px', fontFamily: 'Georgia', color: '#fff', fontStyle: 'bold', align: 'center', wordWrap: {width: 150} }).setOrigin(0.5); this.pooBoss.bubbleContainer.add([this.pooBoss.bubbleBg, this.pooBoss.bubbleText]); this.pooBoss.lastBubbleData = "";
                 this.pooBoss.quotes = ["哇哈哈哈呷賽呷到飽！", "屎到臨頭還在吃！", "吃我的黃金大狂風啦！", "你的腦袋被本王侵佔啦！", "好香好香～再來一坨！", "愛吃屎的孩子都沒本王壞！", "看我的終極噴射括約肌！", "人生就是一場呷賽的過程！", "這坨屎就賞給你當宵夜！", "屎王駕到，通通閃開！", "滿城盡帶黃金屎！", "你身上有濃濃的屎味～", "我知道你愛本王,瞧你吃得起勁！", "把你的靈魂跟大便揉成一團！", "遇到本王算你好屎運！", "別掙扎了，乖乖呷賽吧！", "這點符咒也想超渡本屎王？", "再不點快點，我就讓你再拉20年！"];
                 this.pooBoss.lastQuoteTime = 0;
