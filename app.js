@@ -281,6 +281,16 @@ function createSystemUI() {
             </div>
         </div>
         <div id="purchase-modal" class="modal" style="z-index: 260;"><h3 id="purchase-title" style="color:var(--mucha-green);">購買</h3><div id="purchase-desc" style="font-size:12px; color:var(--mucha-brown); background:rgba(255,255,255,0.8); padding:8px; border-radius:4px; border:1px dashed var(--mucha-gold); margin-bottom:10px; text-align:left; line-height:1.4;"></div><div style="display:flex; justify-content:center; align-items:center; gap:20px; margin: 15px 0;"><button class="btn-secondary" style="font-size:18px; padding:5px 15px;" onclick="window.adjustPurchaseQty(-1)">-</button><span id="purchase-qty" style="font-size:24px; font-weight:bold; color:var(--mucha-brown);">1</span><button class="btn-secondary" style="font-size:18px; padding:5px 15px;" onclick="window.adjustPurchaseQty(1)">+</button></div><div style="margin-bottom:15px; font-size:16px;">總計: <strong id="purchase-total" style="color:#d4af37; font-size:18px;">20</strong> 馬德幣</div><div class="modal-btns"><button class="btn-primary" onclick="window.confirmPurchase()">結帳</button><button class="btn-secondary" onclick="document.getElementById('purchase-modal').style.display='none'">取消</button></div></div>
+
+        <div id="leaderboard-modal" class="modal" style="z-index: 260; width: 90%; max-width: 350px;">
+            <h3 style="color:var(--mucha-green); margin-top:0;">🏆 洋蔥王排行榜</h3>
+            <div style="display:flex; justify-content:space-around; margin-bottom:10px;">
+                <button class="btn-primary" onclick="window.renderLeaderboard(0)" style="width:45%; font-size:14px;">本週戰況</button>
+                <button class="btn-secondary" onclick="window.renderLeaderboard(-1)" style="width:45%; font-size:14px;">上週結算</button>
+            
+            <div id="leaderboard-list" style="max-height: 40vh; overflow-y: auto; text-align: left; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 8px;"></div>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('leaderboard-modal').style.display='none'">關閉</button>
+        </div>
     `;
     setTimeout(() => { 
         document.querySelectorAll('.modal, .action-menu, #chat-section, #spam-ui').forEach(el => { ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'wheel', 'mousedown', 'mouseup', 'click'].forEach(evt => { el.addEventListener(evt, (e) => e.stopPropagation(), { passive: false }); }); }); 
@@ -313,12 +323,50 @@ window.claimEnergyBank = function() {
         sendBubble("銀行裡還沒有馬德幣喔！去睡一覺再來吧！");
         return;
     }
+    // ====== 排行榜與週次計算系統 ======
+window.getWeekId = function(offsetWeeks = 0) {
+    let d = new Date(); d.setHours(0,0,0,0); let day = d.getDay();
+    let diff = d.getDate() - day + (day === 0 ? -6 : 1) + (offsetWeeks * 7);
+    let monday = new Date(d.setDate(diff));
+    return monday.getFullYear() + '-' + (monday.getMonth()+1).toString().padStart(2,'0') + '-' + monday.getDate().toString().padStart(2,'0');
+};
+
+window.openLeaderboardModal = function() {
+    document.getElementById('leaderboard-modal').style.display = 'block';
+    window.renderLeaderboard(0);
+};
+
+window.renderLeaderboard = function(offset) {
+    let weekId = window.getWeekId(offset);
+    document.querySelector('#leaderboard-modal h3').innerText = offset === 0 ? '🏆 本週戰況' : '🏆 上週結算';
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.get(module.ref(window.GameLogic.db, `weeklySweeps/${weekId}`)).then(snap => {
+            let data = snap.val() || {};
+            let sorted = Object.values(data).sort((a, b) => b.count - a.count);
+            let html = '';
+            if (sorted.length === 0) { html = '<div style="text-align:center; color:#888; font-weight:bold; margin-top:20px;">目前尚無紀錄</div>'; } 
+            else {
+                sorted.forEach((item, idx) => {
+                    let medal = idx === 0 ? '🥇' : (idx === 1 ? '🥈' : (idx === 2 ? '🥉' : `<span style="display:inline-block; width:20px; text-align:center;">${idx + 1}.</span>`));
+                    html += `<div style="display:flex; justify-content:space-between; padding:10px 5px; border-bottom:1px solid #ccc; align-items:center;">
+                        <span style="font-weight:bold; color:var(--mucha-brown);">${medal} ${item.name}</span>
+                        <strong style="color:var(--mucha-green);">${item.count} 次</strong>
+                    </div>`;
+                });
+            }
+            document.getElementById('leaderboard-list').innerHTML = html;
+        });
+    });
+};
+// ===================================
+  
     p.coins = (p.coins || 0) + amount; p.energyBank = 0;
     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins, energyBank: 0 }); });
     document.getElementById('energy-bank-val').innerText = '0'; let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins;
     
     document.getElementById('energy-modal').style.display = 'none';
     sendBubble(`太棒了！成功領取 ${amount} 馬德幣！`);
+    if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) { let ms = window.GameLogic.phaserGame.scene.getScene('MainScene'); if(ms) window.playSFX(ms, 'sleep-onion-bao-got-money'); }
 };
 
 window.manualPages = []; window.currentManualIndex = 0;
@@ -839,8 +887,17 @@ function gainRewards(coins, exp) {
     let p = window.GameLogic.myProfile; p.coins = (p.coins || 0) + coins; p.exp = (p.exp || 0) + exp; p.sweeps = (p.sweeps || 0) + 1;
     let requiredExp = p.level * 100; let leveledUp = false;
     if (p.exp >= requiredExp) { p.level++; p.exp -= requiredExp; leveledUp = true; }
-    update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins, exp: p.exp, level: p.level, sweeps: p.sweeps });
+    update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins, exp: p.exp, level: p.level, sweeps: p.sweeps });
     
+    let weekId = window.getWeekId(0);
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        let sweepRef = module.ref(window.GameLogic.db, `weeklySweeps/${weekId}/${window.GameLogic.currentUser.uid}`);
+        module.get(sweepRef).then(snap => {
+            let currentCount = snap.exists() ? snap.val().count : 0;
+            module.update(sweepRef, { name: p.name, count: currentCount + 1 });
+        });
+    });
+
     if (exp > 0 && window.GameLogic.phaserGame) {
         let uiScene = window.GameLogic.phaserGame.scene.getScene('UIScene');
         if (uiScene && uiScene.playExpGainEffect) uiScene.playExpGainEffect();
@@ -889,6 +946,11 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('onion-seat-shrine', 'onion-seat-shrine.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-got-purify', 'onion-got-purify.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-doing-purify', 'onion-doing-purify-magic.png', { frameWidth: 75, frameHeight: 75 });
         
         this.load.audio('minimum_laser', 'minimum_laser.mp3'); this.load.audio('powerdown07', 'powerdown07.mp3'); this.load.audio('coin03', 'coin03.mp3'); this.load.audio('brooming1', 'brooming1.mp3'); this.load.audio('chorus_of_angels1', 'chorus_of_angels1.mp3');
+        
+        this.load.audio('sleep-onion-bao-charge', 'sleep-onion-bao-charge.mp3');
+        this.load.audio('sleep-onion-bao-got-money', 'sleep-onion-bao-got-money.mp3');
+        this.load.image('hall-screen-in-list', 'hall-screen-in-list.png');
+        this.load.spritesheet('hall-screen', 'hall-screen.png', { frameWidth: 300, frameHeight: 300 });
     }
    create() {
         // 修正2：經驗條改為橘紅漸層
@@ -896,7 +958,7 @@ class BootScene extends Phaser.Scene {
         let fwGr = this.make.graphics({ x:0, y:0, add:false }); fwGr.fillStyle(0xffffff, 1); fwGr.fillCircle(4, 4, 4); fwGr.generateTexture('fw-particle', 8, 8);
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('onion-up'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'walk', frames: this.anims.generateFrameNumbers('onion-walk', { start: 0, end: 5 }), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'idle', frames: this.anims.generateFrameNumbers('onion-idle'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'skin-anim', frames: this.anims.generateFrameNumbers('onion-skin', { start: 0, end: 3 }), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'skin-old-anim', frames: this.anims.generateFrameNumbers('onion-skin-old', { start: 0, end: 5 }), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'clean', frames: this.anims.generateFrameNumbers('onion-clean'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'throw', frames: this.anims.generateFrameNumbers('onion-throw'), frameRate: 10, repeat: 0 }); this.anims.create({ key: 'wb-blast', frames: this.anims.generateFrameNumbers('water-ball-blast'), frameRate: 15, repeat: -1 }); this.anims.create({ key: 'wet', frames: this.anims.generateFrameNumbers('onion-wet'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'coin-anim', frames: this.anims.generateFrameNumbers('made-coin'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'dummy-hit', frames: this.anims.generateFrameNumbers('dummy-got-shot'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'sleep', frames: this.anims.generateFrameNumbers('onion-sleep'), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'fw-throw', frames: this.anims.generateFrameNumbers('onion-fireworks'), frameRate: 8, repeat: 2 }); this.anims.create({ key: 'fw-hit', frames: this.anims.generateFrameNumbers('onion-got-shot'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'fw-shoot', frames: this.anims.generateFrameNumbers('fireworks-shoot'), frameRate: 15, repeat: -1 }); this.anims.create({ key: 'dummy-fw-hit', frames: this.anims.generateFrameNumbers('dummy-got-shot'), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'seat-idle', frames: this.anims.generateFrameNumbers('onion-seat-shrine'), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'purify-target', frames: this.anims.generateFrameNumbers('onion-got-purify'), frameRate: 8, repeat: -1 }); this.anims.create({ key: 'purify-magic', frames: this.anims.generateFrameNumbers('onion-doing-purify'), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'seat-idle', frames: this.anims.generateFrameNumbers('onion-seat-shrine'), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'purify-target', frames: this.anims.generateFrameNumbers('onion-got-purify'), frameRate: 8, repeat: -1 }); this.anims.create({ key: 'purify-magic', frames: this.anims.generateFrameNumbers('onion-doing-purify'), frameRate: 10, repeat: -1 });this.anims.create({ key: 'scoreboard-anim', frames: this.anims.generateFrameNumbers('hall-screen'), frameRate: 5, repeat: -1 });
         this.anims.create({ key: 'charger-anim', frames: this.anims.generateFrameNumbers('sleep-charger'), frameRate: 8, repeat: -1 });
 
         this.scene.launch('UIScene'); this.scene.bringToTop('UIScene'); 
@@ -1107,6 +1169,16 @@ class MainScene extends Phaser.Scene {
         this.trashes = [];
         
         if (this.isCafe) {
+            this.leaderboardListener = onValue(ref(window.GameLogic.db, `weeklySweeps/${window.getWeekId(0)}`), (snap) => {
+                let data = snap.val() || {}; let sorted = Object.values(data).sort((a, b) => b.count - a.count);
+                window.GameLogic.currentTop3 = sorted.slice(0, 3);
+                if (window.GameLogic.currentScoreboard) {
+                    let f = window.GameLogic.currentScoreboard;
+                    f.top1Text.setText('1. ' + (sorted[0] ? `${sorted[0].name} (${sorted[0].count})` : '---'));
+                    f.top2Text.setText('2. ' + (sorted[1] ? `${sorted[1].name} (${sorted[1].count})` : '---'));
+                    f.top3Text.setText('3. ' + (sorted[2] ? `${sorted[2].name} (${sorted[2].count})` : '---'));
+                }
+            });
             this.add.tileSprite(0, 0, mapW, mapH, 'bgCafe').setOrigin(0, 0); this.time.addEvent({ delay: 2000, callback: this.spawnTrash, callbackScope: this, loop: true });
             const mapSize = 120; const marginX = 20; const marginY = 60;
             this.minimap = this.cameras.add(this.cameras.main.width - mapSize - marginX, marginY, mapSize, mapSize).setZoom(mapSize / 2048).setName('minimap'); this.minimap.setBackgroundColor('rgba(26, 16, 8, 0.7)'); this.minimap.centerOn(1024, 1024);
@@ -1265,6 +1337,7 @@ class MainScene extends Phaser.Scene {
                 }).then(() => {
                     gText.setText('蔥電飽已接上 zzZ').setColor('#b2ff59');
                     gTween.stop(); gImg.setAlpha(1);
+                    window.playSFX(this, 'sleep-onion-bao-charge');
                     
                     // 電流噴發粒子
                     let emitter = this.add.particles(cam.scrollX + cam.width/2, cam.scrollY + cam.height/2 - 20, 'fw-particle', {
@@ -1290,7 +1363,7 @@ class MainScene extends Phaser.Scene {
 
             if (this.localPlayer.isSweeping) { if (!window.GameLogic.muteSFX && !this.sound.get('brooming1')?.isPlaying) { if (this.sound.get('brooming1')) this.sound.play('brooming1'); else this.sound.add('brooming1').play(); } this.qteProgress += (100 / this.qteTotalClicks); if (this.qteProgress >= 100) { this.qteProgress = 100; this.finishSweeping(true); } return; }
             if (this.sceneName === '7eonion' && this.storeManager) { let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.storeManager.x, this.storeManager.y); if (dist < 150) { window.GameLogic.isShopping = true; let storeCoinsEl = document.getElementById('store-current-coins'); if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins || 0}`; document.getElementById('store-modal').style.display = 'block'; return; } }
-            if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!"); let interacted = false; for (const key in this.furnitureSprites) { let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y); if (dist < 90) { if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block'; if (key.startsWith('memory')) document.getElementById('memory-modal').style.display = 'block'; if (key === 'shrine') { window.attemptJoinShrine(); interacted = true; break; } } } if(!interacted) sendBubble("使用了 A 技能!");
+            if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!"); let interacted = false; for (const key in this.furnitureSprites) { let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y); if (dist < 90) { if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block'; if (key.startsWith('memory')) document.getElementById('memory-modal').style.display = 'block'; if (key.includes('scoreboard')) { window.openLeaderboardModal(); interacted = true; break; } if (key === 'shrine') { window.attemptJoinShrine(); interacted = true; break; } } } if(!interacted) sendBubble("使用了 A 技能!");
         });
 
         this.events.on('action_B', () => {
@@ -1338,7 +1411,7 @@ class MainScene extends Phaser.Scene {
         this.playersHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/waterHits'), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { opSprite.isStunned = true; opSprite.play('wet', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
         this.dummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/dummyHits'), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
 
-        this.events.on('shutdown', () => { if (this.trashListener) this.trashListener(); if (this.coinsListener) this.coinsListener(); if (this.dummiesListener) this.dummiesListener(); if (this.hitListener) this.hitListener(); if (this.dummyHitListener) this.dummyHitListener(); if (this.playersHitListener) this.playersHitListener(); if (this.doghouseFurnListener) this.doghouseFurnListener(); if (this.shrineFurnListener) this.shrineFurnListener(); if (this.fwHitListener) this.fwHitListener(); if (this.fwPlayersHitListener) this.fwPlayersHitListener(); if (this.fwDummyHitListener) this.fwDummyHitListener(); if (this.globalFwListener) this.globalFwListener(); if (this.fwThrowsListener) this.fwThrowsListener(); });
+        this.events.on('shutdown', () => { if (this.leaderboardListener) this.leaderboardListener(); if (this.trashListener) this.trashListener(); if (this.coinsListener) this.coinsListener(); ...
     }
 
     createMiniExplosion(x, y) {
@@ -1369,7 +1442,32 @@ class MainScene extends Phaser.Scene {
             const bounds = entity.bubbleText.getBounds(); entity.bubbleContainer.setPosition(sx, sy - 65 - (bounds.height + 16) / 2);
         } else { entity.bubbleContainer.setVisible(false); } 
     }
-    createFurniture(key, data) { let imgKey = key.includes('fridge') ? 'fridge' : (key.includes('shrine') ? 'shrine' : (key.includes('dummy') ? 'dummy' : (key.includes('bed') ? 'doghouse-bed' : (key === 'altar' ? 'shrine-altar' : (key.startsWith('seat_') ? 'shrine-seat' : 'memory'))))); let f = { sprite: this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true) }; f.sprite.isLocked = data.locked; if (imgKey === 'dummy') { f.bubbleContainer = this.add.container(data.x, data.y).setDepth(14).setVisible(false); f.bubbleBg = this.add.graphics(); f.bubbleText = this.add.text(0, 0, '', { fontSize: '12px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold', wordWrap: { width: 100, useAdvancedWrap: true }, align: 'center' }).setOrigin(0.5); f.bubbleContainer.add([f.bubbleBg, f.bubbleText]); f.lastBubbleData = ""; if (this.minimap) this.minimap.ignore(f.bubbleContainer); f.dummyMsgs = ["我在這幹嘛？", "怎麼有洋蔥？", "該不會要打我吧......"]; f.msgIndex = 0; f.lastMsgTime = 0; f.isHit = false; } return f; }
+    createFurniture(key, data) { 
+        let imgKey = key.includes('scoreboard') ? 'hall-screen' : (key.includes('fridge') ? 'fridge' : (key.includes('shrine') ? 'shrine' : (key.includes('dummy') ? 'dummy' : (key.includes('bed') ? 'doghouse-bed' : (key === 'altar' ? 'shrine-altar' : (key.startsWith('seat_') ? 'shrine-seat' : 'memory')))))); 
+        let f = { sprite: this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true) }; 
+        f.sprite.isLocked = data.locked; 
+        if (imgKey === 'dummy') { 
+            f.bubbleContainer = this.add.container(data.x, data.y).setDepth(14).setVisible(false); f.bubbleBg = this.add.graphics(); f.bubbleText = this.add.text(0, 0, '', { fontSize: '12px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold', wordWrap: { width: 100, useAdvancedWrap: true }, align: 'center' }).setOrigin(0.5); f.bubbleContainer.add([f.bubbleBg, f.bubbleText]); f.lastBubbleData = ""; if (this.minimap) this.minimap.ignore(f.bubbleContainer); f.dummyMsgs = ["我在這幹嘛？", "怎麼有洋蔥？", "該不會要打我吧......"]; f.msgIndex = 0; f.lastMsgTime = 0; f.isHit = false; 
+        } 
+        if (imgKey === 'hall-screen') {
+            f.sprite.play('scoreboard-anim'); f.sprite.setOrigin(0.5, 0.5);
+            f.textContainer = this.add.container(data.x, data.y).setDepth(6);
+            f.titleText = this.add.text(0, -60, '本週掃地王', { fontSize: '18px', fontStyle: 'bold', color: '#ffcc00', stroke: '#000', strokeThickness: 4 }).setOrigin(0.5);
+            f.top1Text = this.add.text(0, -20, '1. ---', { fontSize: '16px', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
+            f.top2Text = this.add.text(0, 10, '2. ---', { fontSize: '14px', color: '#ccc', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
+            f.top3Text = this.add.text(0, 40, '3. ---', { fontSize: '14px', color: '#cd7f32', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
+            f.textContainer.add([f.titleText, f.top1Text, f.top2Text, f.top3Text]);
+            if (this.minimap) this.minimap.ignore(f.textContainer);
+            window.GameLogic.currentScoreboard = f;
+            if (window.GameLogic.currentTop3) {
+                let sorted = window.GameLogic.currentTop3;
+                f.top1Text.setText('1. ' + (sorted[0] ? `${sorted[0].name} (${sorted[0].count})` : '---'));
+                f.top2Text.setText('2. ' + (sorted[1] ? `${sorted[1].name} (${sorted[1].count})` : '---'));
+                f.top3Text.setText('3. ' + (sorted[2] ? `${sorted[2].name} (${sorted[2].count})` : '---'));
+            }
+        }
+        return f; 
+    }
     finishSweeping(success) { 
         this.localPlayer.isSweeping = false; this.qteContainer.setVisible(false); 
         if (this.sound.get('brooming1')) this.sound.stopByKey('brooming1'); 
@@ -1774,7 +1872,7 @@ class MainScene extends Phaser.Scene {
                     if (key === 'altar' && d < 150) { minDist = d; promptTarget = f.sprite; promptMsg = "按A召喚教友"; }
                     if (key.startsWith('seat_') && d < 150) { minDist = d; promptTarget = f.sprite; promptMsg = "按B入席"; }
                 } else {
-                    if (d < minDist) { minDist = d; promptTarget = f.sprite; if (key.includes('fridge')) promptMsg = "按A打開冰箱"; else if (key.includes('shrine')) promptMsg = "按A參拜神龕"; else if (key.includes('dummy')) promptMsg = "假人洋蔥 (裝飾中)"; else if (key.includes('bed')) promptMsg = "按A歐歐睏"; else promptMsg = "按A打開回憶錄"; }
+                    if (d < minDist) { minDist = d; promptTarget = f.sprite; if (key.includes('fridge')) promptMsg = "按A打開冰箱"; else if (key.includes('shrine')) promptMsg = "按A參拜神龕"; else if (key.includes('dummy')) promptMsg = "假人洋蔥 (裝飾中)"; else if (key.includes('bed')) promptMsg = "按A歐歐睏"; else if (key.includes('scoreboard')) promptMsg = "按A查看洋蔥王排行榜"; else promptMsg = "按A打開回憶錄"; }
                 }
             }
             for (let t of this.trashes) { if (!t.active) continue; let d = Phaser.Math.Distance.Between(px, py, t.x, t.y); if (d < minDist) { minDist = d; promptTarget = t; promptMsg = "按B使出掃地"; this.closestTrash = t; } }
@@ -1806,8 +1904,8 @@ class MainScene extends Phaser.Scene {
         this.updatePlayerEntity(this.localPlayer, window.GameLogic.myProfile);
 
         const furnData = this.isCafe ? window.GameLogic.cafeFurniture : (this.sceneName === 'doghouse' ? (window.GameLogic.doghouseFurniture || {}) : (this.sceneName === 'shrine' ? window.GameLogic.shrineFurniture : {}));
-        for (let key in furnData) { let fd = furnData[key]; if (!this.furnitureSprites[key]) this.furnitureSprites[key] = this.createFurniture(key, fd); let f = this.furnitureSprites[key]; f.sprite.isLocked = fd.locked; if(window.GameLogic.placingFurnitureKey !== key) { f.sprite.x = Phaser.Math.Linear(f.sprite.x, fd.x, 0.3); f.sprite.y = Phaser.Math.Linear(f.sprite.y, fd.y, 0.3); } f.sprite.setAlpha(!fd.locked ? 0.6 : 1); if (key.includes('dummy') && f.bubbleContainer) { f.bubbleContainer.setVisible(true); if (f.sprite.isStunned) { f.bubbleText.setText("真的打我QAQ"); f.isHit = true; } else { if (f.isHit) { f.isHit = false; f.lastMsgTime = 0; } if (time - f.lastMsgTime > 4000) { f.lastMsgTime = time; f.bubbleText.setText(f.dummyMsgs[f.msgIndex]); f.msgIndex = (f.msgIndex + 1) % f.dummyMsgs.length; } } let sx = f.sprite.x; let sy = f.sprite.y; if (f.lastBubbleData !== f.bubbleText.text) { f.lastBubbleData = f.bubbleText.text; const bounds = f.bubbleText.getBounds(); const boxWidth = bounds.width + 16, boxHeight = bounds.height + 12; f.bubbleBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 6).strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 6); } const bounds = f.bubbleText.getBounds(); const boxHeight = bounds.height + 12; f.bubbleContainer.setPosition(sx, sy - 60 - boxHeight / 2); } }
-        for (let key in this.furnitureSprites) { if (!furnData[key]) { if (window.GameLogic.placingFurnitureKey === key) { window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); } if (this.furnitureSprites[key].bubbleContainer) this.furnitureSprites[key].bubbleContainer.destroy(); this.furnitureSprites[key].sprite.destroy(); delete this.furnitureSprites[key]; } }
+        for (let key in furnData) { let fd = furnData[key]; if (!this.furnitureSprites[key]) this.furnitureSprites[key] = this.createFurniture(key, fd); let f = this.furnitureSprites[key]; f.sprite.isLocked = fd.locked; if(window.GameLogic.placingFurnitureKey !== key) { f.sprite.x = Phaser.Math.Linear(f.sprite.x, fd.x, 0.3); f.sprite.y = Phaser.Math.Linear(f.sprite.y, fd.y, 0.3); } if (f.textContainer) f.textContainer.setPosition(f.sprite.x, f.sprite.y); f.sprite.setAlpha(!fd.locked ? 0.6 : 1); ...
+        for (let key in this.furnitureSprites) { if (!furnData[key]) { if (window.GameLogic.placingFurnitureKey === key) { window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); } if (this.furnitureSprites[key].textContainer) this.furnitureSprites[key].textContainer.destroy(); if (this.furnitureSprites[key].bubbleContainer) this.furnitureSprites[key].bubbleContainer.destroy(); this.furnitureSprites[key].sprite.destroy(); delete this.furnitureSprites[key]; } }
 
         if (this.isCafe || this.sceneName === 'shrine') {
             const playersData = this.isCafe ? window.GameLogic.cafePlayers : window.GameLogic.shrinePlayers; const globalOnline = window.GameLogic.onlinePlayers || {}; 
@@ -1845,7 +1943,7 @@ function initPhaser() { const config = { type: Phaser.AUTO, parent: 'phaser-app'
 function openFurnitureCatalog() {
     const modal = document.getElementById('furniture-catalog-modal'); const list = document.getElementById('catalog-list'); const title = document.getElementById('catalog-title'); list.innerHTML = "";
     let items = [];
-    if (window.GameLogic.currentScene === "cafe") { title.innerText = "📦 大廳家俱目錄"; items = [ { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' }, { key: 'memory', name: '📖 洋蔥回憶錄', img: 'memory.png' }, { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' }, { key: 'dummy', name: '🧍 假人洋蔥', img: 'dummy.png' } ]; }
+    if (window.GameLogic.currentScene === "cafe") { title.innerText = "📦 大廳家俱目錄"; items = [ { key: 'scoreboard', name: '🏆 戰況看板', img: 'hall-screen-in-list.png' }, { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' }, { key: 'memory', name: '📖 洋蔥回憶錄', img: 'memory.png' }, { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' }, { key: 'dummy', name: '🧍 假人洋蔥', img: 'dummy.png' } ]; }
     else if (window.GameLogic.currentScene === "doghouse") { title.innerText = "🏠 房間家具擺設"; items = [ { key: 'bed', name: '🛏️ 狗窩床鋪', img: 'doghouse-bed.png' } ]; }
     else if (window.GameLogic.currentScene === "shrine") { 
         title.innerText = "☯️ 神龕法器目錄"; 
