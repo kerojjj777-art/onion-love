@@ -1255,16 +1255,12 @@ class MainScene extends Phaser.Scene {
                 window.GameLogic.myProfile.lastX = f.sprite.x;
                 window.GameLogic.myProfile.lastY = f.sprite.y;
 
-                // 強制等待 Firebase 回傳存檔成功的 Promise 訊號
+                // 強制等待 Firebase 回傳存檔成功的 Promise 訊號，並儲存精準座標
                 update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { 
                     sleepStartTime: window.GameLogic.myProfile.sleepStartTime,
                     lastX: f.sprite.x,
                     lastY: f.sprite.y
                 }).then(() => {
-                    gText.setText('蔥電飽已接上 zzZ').setColor('#b2ff59');
-
-                // 強制等待 Firebase 回傳存檔成功的 Promise 訊號
-                update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { sleepStartTime: window.GameLogic.myProfile.sleepStartTime }).then(() => {
                     gText.setText('蔥電飽已接上 zzZ').setColor('#b2ff59');
                     gTween.stop(); gImg.setAlpha(1);
                     
