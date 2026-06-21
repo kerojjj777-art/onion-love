@@ -896,7 +896,8 @@ class UIScene extends Phaser.Scene {
 
         this.equipText.on('pointerdown', () => { if (window.GameLogic.armedItemState === 'armed' || window.GameLogic.armedItemState === 'ready') { const confModal = document.getElementById('ingame-confirm'); confModal.style.display = 'block'; document.getElementById('ingame-confirm-yes').onclick = () => { confModal.style.display = 'none'; window.stopUsingItem(window.GameLogic.armedItemName || '水球'); }; document.getElementById('ingame-confirm-no').onclick = () => { confModal.style.display = 'none'; }; } });
         this.statusToggleBtn.on('pointerdown', () => { this.isStatusCollapsed = !this.isStatusCollapsed; const gameSize = this.scale.gameSize; const bgW = this.statusBg.displayWidth; const targetX = this.isStatusCollapsed ? 20 - bgW + 10 : 20; this.tweens.add({ targets: this.statusContainer, x: targetX, duration: 300, ease: 'Power2' }); });
-        this.statusContainer.add([ this.statusBg, this.portrait, this.nameLevelText, this.expBarBg, this.expLiquid, this.expText, this.statusText, this.equipText, this.statusToggleBtn ]);
+        // 修正4：確實將體力條的三個元件加入狀態容器中，才會跟隨頭像正確顯示
+        this.statusContainer.add([ this.statusBg, this.portrait, this.nameLevelText, this.energyBg, this.energyLiquid, this.energyZone, this.expBarBg, this.expLiquid, this.expText, this.statusText, this.equipText, this.statusToggleBtn ]);
         this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, { radius: 40, base: this.add.circle(0, 0, 40, 0xc5a059, 0.2).setStrokeStyle(2, 0xc5a059), thumb: this.add.circle(0, 0, 20, 0xc5a059, 0.8) });
         this.btnA = this.add.circle(0, 0, 30, 0xd9534f).setStrokeStyle(3, 0xffffff).setInteractive(); this.txtA = this.add.text(0, 0, 'A', { fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
         this.btnB = this.add.circle(0, 0, 30, 0x0077cc).setStrokeStyle(3, 0xffffff).setInteractive(); this.txtB = this.add.text(0, 0, 'B', { fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
@@ -963,6 +964,33 @@ class UIScene extends Phaser.Scene {
         emitter.explode();
         this.time.delayedCall(1000, () => { emitter.destroy(); });
     }
+
+    // 修正3：Phaser 風格的睡眠結算面板
+    showSleepSummary(timeStr, energyGained, coinsGained) {
+        let camW = this.cameras.main.width; let camH = this.cameras.main.height;
+        let panel = this.add.container(camW/2, -200).setDepth(1000).setScrollFactor(0);
+        
+        let bg = this.add.graphics().fillStyle(0xf4ecd8, 0.95).fillRoundedRect(-160, -110, 320, 220, 16).lineStyle(4, 0xc5a059).strokeRoundedRect(-160, -110, 320, 220, 16);
+        let title = this.add.text(0, -75, '⏰ 睡飽啦！', { fontSize: '24px', color: '#4caf50', fontStyle: 'bold', fontFamily: 'Georgia' }).setOrigin(0.5);
+        let t1 = this.add.text(0, -35, `你從 ${timeStr} 睡覺`, { fontSize: '15px', color: '#3e2723', fontFamily: 'Arial', fontStyle: 'bold' }).setOrigin(0.5);
+        let t2 = this.add.text(0, 5, `🔋 蔥電飽充了 +${energyGained}%`, { fontSize: '18px', color: '#2e7d32', fontStyle: 'bold', fontFamily: 'Arial' }).setOrigin(0.5);
+        let t3 = this.add.text(0, 40, `💰 銀行存入 +${coinsGained} 馬德幣`, { fontSize: '18px', color: '#d4af37', fontStyle: 'bold', fontFamily: 'Arial' }).setOrigin(0.5);
+        
+        let btnBg = this.add.graphics().fillStyle(0xc5a059, 1).fillRoundedRect(-50, 65, 100, 35, 8);
+        let btnTxt = this.add.text(0, 82, '確定', { fontSize: '16px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
+        let btnZone = this.add.zone(0, 82, 100, 35).setInteractive();
+        
+        panel.add([bg, title, t1, t2, t3, btnBg, btnTxt, btnZone]);
+        
+        // 彈跳動畫進場
+        this.tweens.add({ targets: panel, y: camH/2, duration: 600, ease: 'Bounce.easeOut' });
+        
+        // 點擊後退場
+        btnZone.once('pointerdown', () => {
+            btnBg.clear().fillStyle(0xa6803c, 1).fillRoundedRect(-50, 65, 100, 35, 8); // 按下變暗
+            this.tweens.add({ targets: panel, y: -200, duration: 400, ease: 'Back.easeIn', onComplete: () => panel.destroy() });
+        });
+    }
 }
 
 class MainScene extends Phaser.Scene {
@@ -1028,7 +1056,25 @@ class MainScene extends Phaser.Scene {
             this.scale.on('resize', (gameSize) => { if (this.minimap) this.minimap.setPosition(gameSize.width - mapSize - marginX, marginY); });
             this.trashListener = onValue(ref(window.GameLogic.db, 'cafeTrashes'), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.trashes.find(t => t.key === key)) { let tData = data[key]; let isOld = tData.type === 'old'; let spriteKey = isOld ? 'onion-skin-old' : 'onion-skin'; let animKey = isOld ? 'skin-old-anim' : 'skin-anim'; let skin = this.physics.add.sprite(tData.x, tData.y, spriteKey).setDepth(4); skin.play(animKey); skin.type = isOld ? 'onion-skin-old' : 'onion-skin'; skin.key = key; this.trashes.push(skin); } } this.trashes = this.trashes.filter(t => { if (!data[t.key]) { t.destroy(); if (this.closestTrash === t) { this.closestTrash = null; if (this.localPlayer && this.localPlayer.isSweeping) { this.localPlayer.isSweeping = false; this.qteContainer.setVisible(false); if (this.sound.get('brooming1')) this.sound.stopByKey('brooming1'); } } return false; } return true; }); });
         } else if (this.sceneName === "doghouse") {
-            this.add.image(mapW/2, mapH/2, 'bgDoghouse').setDisplaySize(mapW, mapH); this.doghouseFurnListener = onValue(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}/doghouseFurniture`), (snap) => { window.GameLogic.doghouseFurniture = snap.val() || {}; });
+            this.add.image(mapW/2, mapH/2, 'bgDoghouse').setDisplaySize(mapW, mapH); 
+            this.doghouseFurnListener = onValue(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}/doghouseFurniture`), (snap) => { 
+                window.GameLogic.doghouseFurniture = snap.val() || {}; 
+                
+                // 修正1：確保「收到家具資料後」才把你放到床上，就不會出生在房間正中央了
+                if (window.GameLogic.myProfile.sleepStartTime && window.GameLogic.myProfile.sleepStartTime > 0 && !this.sleepInitDone && this.localPlayer) {
+                    this.sleepInitDone = true;
+                    for (let key in window.GameLogic.doghouseFurniture) {
+                        if (key.includes('bed') && window.GameLogic.doghouseFurniture[key].locked) {
+                            let f = window.GameLogic.doghouseFurniture[key];
+                            this.localPlayer.isSleeping = true; this.localPlayer.sprite.setPosition(f.x, f.y); this.localPlayer.sprite.play('sleep', true);
+                            this.sleepTopText.setVisible(true).setPosition(f.x, f.y - 100); this.sleepBotText.setVisible(true).setPosition(f.x, f.y - 65); this.sleepBotBg.setVisible(true);
+                            let bounds = this.sleepBotText.getBounds(); let w = bounds.width + 16, h = bounds.height + 12; let bx = this.sleepBotText.x - w/2, by = this.sleepBotText.y - h/2;
+                            this.sleepBotBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(bx, by, w, h, 8).strokeRoundedRect(bx, by, w, h, 8);
+                            break;
+                        }
+                    }
+                }
+            });
         } else if (this.sceneName === "farm") {
             this.add.image(mapW/2, mapH/2, 'bgFarm').setDisplaySize(mapW, mapH);
         } else if (this.sceneName === "shrine") {
@@ -1069,19 +1115,6 @@ class MainScene extends Phaser.Scene {
         let startX = mapW / 2 + 100; let startY = mapH / 2;
         this.localPlayer = this.createPlayerEntity(startX, startY, window.GameLogic.myProfile, true); this.localPlayer.isSweeping = false; this.localPlayer.isSleeping = false; this.localPlayer.isSeated = false;
         
-        // 修正6：登入時若處於離線睡覺狀態，直接躺在床上
-        if (this.sceneName === 'doghouse' && window.GameLogic.myProfile.sleepStartTime && window.GameLogic.myProfile.sleepStartTime > 0) {
-            for (let key in window.GameLogic.doghouseFurniture) {
-                if (key.includes('bed') && window.GameLogic.doghouseFurniture[key].locked) {
-                    let f = window.GameLogic.doghouseFurniture[key];
-                    this.localPlayer.isSleeping = true; this.localPlayer.sprite.setPosition(f.x, f.y); this.localPlayer.sprite.play('sleep', true);
-                    this.sleepTopText.setVisible(true).setPosition(f.x, f.y - 100); this.sleepBotText.setVisible(true).setPosition(f.x, f.y - 65); this.sleepBotBg.setVisible(true);
-                    let bounds = this.sleepBotText.getBounds(); let w = bounds.width + 16, h = bounds.height + 12; let bx = this.sleepBotText.x - w/2, by = this.sleepBotText.y - h/2;
-                    this.sleepBotBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(bx, by, w, h, 8).strokeRoundedRect(bx, by, w, h, 8);
-                    break;
-                }
-            }
-        }
         this.tweens.add({ targets: this.localPlayer.sprite, alpha: 0, yoyo: true, repeat: 5, duration: 100, onComplete: () => { this.localPlayer.sprite.setAlpha(1); } });
         if (this.sceneName === "7eonion" && this.storeManager) this.physics.add.collider(this.localPlayer.sprite, this.storeManager);
         this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
@@ -1130,7 +1163,12 @@ class MainScene extends Phaser.Scene {
                         let sD = new Date(p.sleepStartTime); let eD = new Date();
                         let timeStr = `${pad(sD.getHours())}:${pad(sD.getMinutes())} ~ ${pad(eD.getHours())}:${pad(eD.getMinutes())}`;
                         
-                        alert(`⏰ 睡飽啦！\n你從 ${timeStr} 睡覺\n🔋 蔥電飽充了 +${addEnergy.toFixed(1)}%\n💰 蔥電飽銀行存入了 +${Math.floor(addMoney)} 馬德幣！`);
+                        // 修正3：呼叫 UIScene 的 Phaser 介面，取代原生 alert
+                        let uiScene = this.scene.manager.getScene('UIScene');
+                        if (uiScene && uiScene.showSleepSummary) {
+                            uiScene.showSleepSummary(timeStr, addEnergy.toFixed(1), Math.floor(addMoney));
+                        }
+                        
                         import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { energy: p.energy, energyBank: p.energyBank, sleepStartTime: 0 }); });
                     }
                     p.sleepStartTime = 0;
