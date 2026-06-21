@@ -134,7 +134,7 @@ function createSystemUI() {
             #send-btn { padding: 5px 15px; background: var(--mucha-gold); color: white; border: none; border-radius: 0 0 8px 0; font-family: inherit; font-weight: bold; cursor: pointer; transition: 0.2s;}
             .chat-collapsed #chat-content { max-height: 0px !important; border: none; box-shadow: none; }
             #top-notification-bar { position: fixed; top: 0; left: 0; width: 100%; padding: 8px 0; background: rgba(0, 0, 0, 0.6); color: #fff; text-align: center; font-size: 14px; z-index: 500; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 1px 1px 2px #000; letter-spacing: 1px; }
-            #online-players-container { position: fixed; right: 0px; top: 120px; z-index: 550; display: flex; align-items: flex-start; }
+            #online-players-container { position: fixed; right: 0px; top: 220px; z-index: 550; display: flex; align-items: flex-start; }
             #online-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 8px 0 0 8px; padding: 10px 8px; cursor: pointer; font-size: 18px; box-shadow: -2px 0 5px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; transition: background 0.3s;}
             #online-list-wrapper { overflow: hidden; transition: max-width 0.3s ease-in-out; max-width: 250px; }
             .online-collapsed #online-list-wrapper { max-width: 0px; }
@@ -940,8 +940,8 @@ class UIScene extends Phaser.Scene {
         const bgW = this.statusBg.displayWidth; const bgH = this.statusBg.displayHeight; const statusX = 20; const statusY = joystickY - 60; const targetX = this.isStatusCollapsed ? statusX - bgW + 10 : statusX;
         this.statusContainer.setPosition(targetX, statusY); this.portrait.setPosition(bgW * 0.5, -bgH * 0.62); this.nameLevelText.setPosition(bgW * 0.5, -bgH * 0.16); this.nameLevelText.setFontSize(`${Math.max(14, 18 * scaleRatio)}px`);
         
-        // 蔥電飽能量條位置
-        let enW = 8; let enH = 55 * scaleRatio; let enX = bgW * 0.22; let enY = -bgH * 0.62;
+        // 蔥電飽能量條位置 (修正2：拉長計量條並向下對齊)
+        let enW = 8; let enH = 85 * scaleRatio; let enX = bgW * 0.22; let enY = -bgH * 0.55;
         this.energyBg.clear().fillStyle(0x3e2723, 0.8).fillRoundedRect(enX - enW/2, enY - enH/2, enW, enH, 4).lineStyle(2, 0xc5a059).strokeRoundedRect(enX - enW/2, enY - enH/2, enW, enH, 4);
         this.energyZone.setPosition(enX, enY).setSize(enW * 3, enH * 1.5);
         this.energyBarH = enH; this.energyBarW = enW; this.energyBarX = enX; this.energyBarY = enY;
@@ -1067,6 +1067,7 @@ class MainScene extends Phaser.Scene {
                         if (key.includes('bed') && window.GameLogic.doghouseFurniture[key].locked) {
                             let f = window.GameLogic.doghouseFurniture[key];
                             this.localPlayer.isSleeping = true; this.localPlayer.sprite.setPosition(f.x, f.y); this.localPlayer.sprite.play('sleep', true);
+                            this.localPlayer.sprite.setAlpha(1); // 修正1：確定躺到床上了，才解除隱身
                             this.sleepTopText.setVisible(true).setPosition(f.x, f.y - 100); this.sleepBotText.setVisible(true).setPosition(f.x, f.y - 65); this.sleepBotBg.setVisible(true);
                             let bounds = this.sleepBotText.getBounds(); let w = bounds.width + 16, h = bounds.height + 12; let bx = this.sleepBotText.x - w/2, by = this.sleepBotText.y - h/2;
                             this.sleepBotBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(bx, by, w, h, 8).strokeRoundedRect(bx, by, w, h, 8);
@@ -1115,7 +1116,13 @@ class MainScene extends Phaser.Scene {
         let startX = mapW / 2 + 100; let startY = mapH / 2;
         this.localPlayer = this.createPlayerEntity(startX, startY, window.GameLogic.myProfile, true); this.localPlayer.isSweeping = false; this.localPlayer.isSleeping = false; this.localPlayer.isSeated = false;
         
-        this.tweens.add({ targets: this.localPlayer.sprite, alpha: 0, yoyo: true, repeat: 5, duration: 100, onComplete: () => { this.localPlayer.sprite.setAlpha(1); } });
+        // 修正1：判斷是否為剛登入且在睡覺，若是則初始隱藏，直到確定床的位置才顯示
+        let isInitSleeping = this.sceneName === 'doghouse' && window.GameLogic.myProfile.sleepStartTime && window.GameLogic.myProfile.sleepStartTime > 0;
+        if (isInitSleeping) {
+            this.localPlayer.sprite.setAlpha(0);
+        } else {
+            this.tweens.add({ targets: this.localPlayer.sprite, alpha: 0, yoyo: true, repeat: 5, duration: 100, onComplete: () => { this.localPlayer.sprite.setAlpha(1); } });
+        }
         if (this.sceneName === "7eonion" && this.storeManager) this.physics.add.collider(this.localPlayer.sprite, this.storeManager);
         this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
 
@@ -1462,9 +1469,13 @@ class MainScene extends Phaser.Scene {
                 if (time - this.pooBoss.lastQuoteTime > 2500) { 
                     this.pooBoss.lastQuoteTime = time; 
                     this.pooBoss.bubbleText.setText(Phaser.Utils.Array.GetRandom(this.pooBoss.quotes)); 
-                    
-                    // 修正2：屎王發動噴屎攻擊！每 2.5 秒有 30% 機率向下方玩家噴射 Phaser 實體大便特效
-                    if (Math.random() < 0.3) {
+                }
+                
+                // 修正3：將噴屎攻擊的計時獨立出來，每 1.2 秒有 60% 機率噴發，大幅提高干擾頻率
+                if (!this.pooBoss.lastPoopTime) this.pooBoss.lastPoopTime = time;
+                if (time - this.pooBoss.lastPoopTime > 1200) {
+                    this.pooBoss.lastPoopTime = time;
+                    if (Math.random() < 0.6) {
                         let camW = this.cameras.main.width;
                         let camH = this.cameras.main.height;
                         for (let i = 0; i < 15; i++) {
