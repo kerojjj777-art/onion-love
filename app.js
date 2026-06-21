@@ -43,21 +43,19 @@ window.updateBGMVolume = function(val) {
     }
 };
 
-window.toggleSFX = function() {
-    window.GameLogic.muteSFX = !window.GameLogic.muteSFX;
-    let btn = document.getElementById('mute-sfx-btn');
-    if (window.GameLogic.muteSFX) {
-        btn.innerText = "關閉特殊音效"; btn.style.backgroundColor = "#ccc"; btn.style.color = "#333";
-    } else {
-        btn.innerText = "開啟特殊音效"; btn.style.backgroundColor = "var(--mucha-green)"; btn.style.color = "white";
-    }
+window.updateSFXVolume = function(val) {
+    window.GameLogic.sfxVolume = val;
+    window.GameLogic.muteSFX = (val == 0);
+    let volText = document.getElementById('sfx-vol-text');
+    if(volText) volText.innerText = val + '%';
 };
 
 // 新增：強制開啟音效與恢復音量的邏輯
 window.forceAudioNormal = function() {
     window.GameLogic.muteSFX = false;
-    let sfxBtn = document.getElementById('mute-sfx-btn');
-    if (sfxBtn) { sfxBtn.innerText = "關閉特殊音效"; sfxBtn.style.backgroundColor = "var(--mucha-green)"; sfxBtn.style.color = "white"; }
+    window.GameLogic.sfxVolume = 50;
+    let sfxVolControl = document.getElementById('sfx-volume');
+    if (sfxVolControl) { sfxVolControl.value = 50; window.updateSFXVolume(50); }
     let volControl = document.getElementById('bgm-volume');
     if (volControl && volControl.value < 50) {
         volControl.value = 50; window.updateBGMVolume(50);
@@ -68,8 +66,11 @@ window.forceAudioNormal = function() {
 
 window.playSFX = function(scene, key) {
     if (window.GameLogic.muteSFX) return;
-    if (scene.sound.get(key)) scene.sound.play(key);
-    else scene.sound.add(key).play();
+    let vol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 50) / 100;
+    if (vol <= 0) return;
+    let snd = scene.sound.get(key);
+    if (snd) { snd.setVolume(vol); snd.play(); }
+    else scene.sound.add(key, { volume: vol }).play();
 };
 
 window.changeTrack = function(dir) {
@@ -167,7 +168,7 @@ function createSystemUI() {
         <div id="forced-summon-modal" class="modal" style="z-index:500;">
             <h3 style="color:var(--mucha-green);">來自神龕的呼喚</h3><p><strong id="summoner-name" style="color:var(--mucha-gold);"></strong> 教友召喚了大家，是否出席？</p>
             <p style="color:#d9534f; font-size:14px; font-weight:bold; margin-bottom:5px;">⏳ 倒數計時: <span id="summon-timer">60</span> 秒</p>
-            <button class="btn-primary" style="width:100%; margin-top:10px;" onclick="window.acceptSummon()">無法拒絕</button>
+            <button class="btn-primary" style="width:100%; margin-top:10px; font-size: 28px; padding: 15px; font-weight: bold; background: #8a2be2; border: 2px solid #ff00ff; letter-spacing: 2px; animation: purpleFire 1s infinite alternate;" onclick="window.acceptSummon()">無法拒絕</button>
         </div>
         <div id="voting-modal" class="modal purple-fire-border" style="z-index:500; background:#1a1a1a; color:#fff; width:90%; max-width:400px; padding:15px;">
             <h3 style="color:#ba55d3; border-bottom:1px solid #ba55d3; margin-top:0;">今天要淨化誰？</h3>
@@ -201,7 +202,17 @@ function createSystemUI() {
 
         <div id="furniture-catalog-modal" class="modal"><h3 id="catalog-title">📦 家俱目錄</h3><div id="catalog-list" class="catalog-grid"></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('furniture-catalog-modal').style.display='none'">關閉</button></div>
         <div id="fridge-modal" class="modal"><h3>❄️ 公用大冰箱</h3><p style="color:#888; font-size: 14px;">冰箱目前空空如也... 等待下次採買中</p><button class="close-modal-btn btn-primary" onclick="document.getElementById('fridge-modal').style.display='none'">關上冰箱</button></div>
-        <div id="memory-modal" class="modal"><h3>📖 咖啡廳回憶錄</h3><div id="memory-feed"></div><div id="memory-upload-area"><input type="file" id="memory-file" accept="image/*"><input type="text" id="memory-text" placeholder="寫下這張照片的回憶筆記..."><button class="btn-primary" id="upload-memory-btn">留存回憶</button></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('memory-modal').style.display='none'">闔上回憶錄</button></div>
+        <div id="memory-modal" class="modal">
+            <h3>📖 洋蔥回憶錄</h3>
+            <button class="btn-primary" style="width:100%; margin-bottom:10px; font-weight:bold;" onclick="let el = document.getElementById('memory-upload-area'); el.style.display = el.style.display === 'none' ? 'flex' : 'none';">➕ 新增回憶</button>
+            <div id="memory-upload-area" style="display:none; flex-direction: column; gap: 10px; border: 2px dashed var(--mucha-gold); padding: 10px; border-radius: 8px; margin-bottom: 15px; background: rgba(255,255,255,0.5);">
+                <input type="file" id="memory-file" accept="image/*">
+                <input type="text" id="memory-text" placeholder="寫下這張照片的回憶筆記...">
+                <button class="btn-primary" id="upload-memory-btn">留存回憶</button>
+            </div>
+            <div id="memory-feed"></div>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('memory-modal').style.display='none'">闔上回憶錄</button>
+        </div>
 
         <div id="settings-modal" class="modal" style="width: 85%; max-width: 320px; box-sizing: border-box; z-index: 260;">
             <h3 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">🎵 蔥Music</h3>
@@ -209,7 +220,7 @@ function createSystemUI() {
                 <div style="display: flex; align-items: center; justify-content: center; gap: 15px;"><button class="btn-secondary" onclick="window.prevTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0;">&lt;</button><img id="music-cover" onclick="window.openFullscreen(this.src)" src="Sweet-Onion.png" alt="Music Cover" style="width: 150px; height: 150px; border-radius: 8px; border: 2px solid var(--mucha-gold); object-fit: cover; box-shadow: 0 4px 8px rgba(0,0,0,0.3); cursor: pointer;"><button class="btn-secondary" onclick="window.nextTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0;">&gt;</button></div>
                 <div id="music-title" style="font-weight: bold; color: var(--mucha-brown); font-size: 16px;">Sweet-Onion</div>
                 <div style="width: 100%; margin-top: 10px;"><label style="font-size: 14px; color: var(--mucha-brown); display: flex; justify-content: space-between;"><span>音樂音量</span> <span id="bgm-vol-text">50%</span></label><input type="range" id="bgm-volume" min="0" max="100" value="50" style="width: 100%; margin-top: 5px;" oninput="window.updateBGMVolume(this.value)"></div>
-                <button id="mute-sfx-btn" class="btn-primary" style="margin-top: 10px; width: 100%; background-color: var(--mucha-green); border-radius: 25px;" onclick="window.toggleSFX()">關閉特殊音效</button>
+                <div style="width: 100%; margin-top: 10px;"><label style="font-size: 14px; color: var(--mucha-brown); display: flex; justify-content: space-between;"><span>特殊音效</span> <span id="sfx-vol-text">50%</span></label><input type="range" id="sfx-volume" min="0" max="100" value="50" style="width: 100%; margin-top: 5px;" oninput="window.updateSFXVolume(this.value)"></div>
             </div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('settings-modal').style.display='none'">關閉播放器</button>
         </div>
@@ -1339,7 +1350,7 @@ function initPhaser() { const config = { type: Phaser.AUTO, parent: 'phaser-app'
 function openFurnitureCatalog() {
     const modal = document.getElementById('furniture-catalog-modal'); const list = document.getElementById('catalog-list'); const title = document.getElementById('catalog-title'); list.innerHTML = "";
     let items = [];
-    if (window.GameLogic.currentScene === "cafe") { title.innerText = "📦 大廳家俱目錄"; items = [ { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' }, { key: 'memory', name: '📖 咖啡廳回憶錄', img: 'memory.png' }, { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' }, { key: 'dummy', name: '🧍 假人洋蔥', img: 'dummy.png' } ]; }
+    if (window.GameLogic.currentScene === "cafe") { title.innerText = "📦 大廳家俱目錄"; items = [ { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' }, { key: 'memory', name: '📖 洋蔥回憶錄', img: 'memory.png' }, { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' }, { key: 'dummy', name: '🧍 假人洋蔥', img: 'dummy.png' } ]; }
     else if (window.GameLogic.currentScene === "doghouse") { title.innerText = "🏠 房間家具擺設"; items = [ { key: 'bed', name: '🛏️ 狗窩床鋪', img: 'doghouse-bed.png' } ]; }
     else if (window.GameLogic.currentScene === "shrine") { 
         title.innerText = "☯️ 神龕法器目錄"; 
