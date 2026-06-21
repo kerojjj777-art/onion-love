@@ -783,15 +783,17 @@ function switchScene(sceneName) {
     if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if (scene) window.playSFX(scene, 'jump04'); }
     if (sceneName !== 'shrine') window.GameLogic.shrineRitualActive = false;
     
-    // 修正3：離開狗窩時同步中斷睡眠累積，並強制關閉打呼音效
-    if (window.GameLogic.myProfile && window.GameLogic.myProfile.sleepStartTime > 0) {
-        window.GameLogic.myProfile.sleepStartTime = 0;
-        localStorage.removeItem('onion_sleepStartTime');
-        update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { sleepStartTime: 0 });
-    }
-    if (window.GameLogic.phaserGame) {
-        let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
-        if (ms && ms.sound && ms.sound.get('onion-sleep')) ms.sound.stopByKey('onion-sleep');
+    // 修正：只有在「切換到其他場景」時，才中斷睡眠。如果是剛登入直接進入狗窩，則保留睡眠狀態
+    if (sceneName !== 'doghouse') {
+        if (window.GameLogic.myProfile && window.GameLogic.myProfile.sleepStartTime > 0) {
+            window.GameLogic.myProfile.sleepStartTime = 0;
+            localStorage.removeItem('onion_sleepStartTime');
+            update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { sleepStartTime: 0 });
+        }
+        if (window.GameLogic.phaserGame) {
+            let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
+            if (ms && ms.sound && ms.sound.get('onion-sleep')) ms.sound.stopByKey('onion-sleep');
+        }
     }
 
     const doSwitch = () => {
