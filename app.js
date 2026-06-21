@@ -180,6 +180,9 @@ function createSystemUI() {
         </div>
         <div id="spam-ui" style="display:none; position:absolute; top:75%; left:50%; transform:translate(-50%,-50%); z-index:400; text-align:center;">
             <button id="spam-btn" style="width:80px; height:80px; border-radius:50%; background:var(--mucha-gold); border:3px solid #fff; box-shadow:0 0 20px #ffcc00; cursor:pointer; touch-action:manipulation; padding:0; overflow:hidden;" onclick="window.clickSpamBtn()"></button>
+            <div id="poop-overlay" style="display:none; position:absolute; top:0; left:0; width:80px; height:80px; border-radius:50%; background: repeating-linear-gradient(45deg, #5c4033 0, #5c4033 10px, #8b5a2b 10px, #8b5a2b 20px); border:3px solid #3e2723; box-sizing: border-box; z-index:401; cursor:grab; opacity:1; touch-action:none;" onpointerdown="window.startWiping(event)" onpointerup="window.stopWiping()" onpointerleave="window.stopWiping()" onpointermove="window.wipePoop(event)" ontouchmove="window.wipePoop(event)">
+                <span style="font-size:14px; color:#fff; font-weight:bold; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:100%; pointer-events:none; text-shadow: 2px 2px 2px #000;">來回擦拭!</span>
+            </div>
         </div>
         
         <div id="top-notification-bar">系統通知：歡迎來到洋蔥交誼廳！</div>
@@ -392,6 +395,28 @@ window.clickSpamBtn = function() {
     }
 };
 
+window.isWiping = false; window.poopWipeProgress = 0;
+window.startWiping = function(e) { window.isWiping = true; };
+window.stopWiping = function() { window.isWiping = false; };
+window.wipePoop = function(e) {
+    if (!window.isWiping && e.type !== 'touchmove') return;
+    if (e.type.includes('touch')) window.isWiping = true;
+    if (!window.isWiping) return;
+
+    window.poopWipeProgress += 1;
+    let overlay = document.getElementById('poop-overlay');
+    let requiredWipes = 35; // 擦拭的難度門檻
+    if (overlay) overlay.style.opacity = 1 - (window.poopWipeProgress / requiredWipes);
+    
+    if (window.poopWipeProgress >= requiredWipes) {
+        overlay.style.display = 'none';
+        window.isWiping = false;
+        window.poopWipeProgress = 0;
+        overlay.style.opacity = 1;
+        sendBubble("呼... 終於擦掉大便了！");
+    }
+};
+
 window.currentPurchaseItem = null; window.currentPurchasePrice = 0; window.currentPurchaseQty = 1;
 window.useItem = function(itemName) { let inv = window.GameLogic.myProfile.inventory || {}; if (inv[itemName] && inv[itemName] > 0) { if (itemName === '水球' || itemName === '煙火') { window.GameLogic.armedItemState = 'armed'; window.GameLogic.armedItemName = itemName; document.getElementById('inventory-modal').style.display = 'none'; return; } inv[itemName] -= 1; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv }); }); alert(`你成功使用了 ${itemName}！`); window.openInventoryModal(); } };
 window.stopUsingItem = function(itemName) { if (itemName === '水球' || itemName === '煙火') { window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; } };
@@ -590,7 +615,11 @@ function joinShrine() {
                 let taliObj = talismans.find(x => x.id === myVote.talisman);
                 if (taliObj) { let sBtn = document.getElementById('spam-btn'); sBtn.innerHTML = `<img src="${taliObj.img}" style="width:100%; height:100%; object-fit:contain; border-radius:50%; pointer-events:none;">`; }
             }
-        } else { spamUI.style.display = 'none'; }
+        } else { 
+            spamUI.style.display = 'none'; 
+            let po = document.getElementById('poop-overlay'); 
+            if (po) po.style.display = 'none'; 
+        }
     });
 }
 
@@ -1127,7 +1156,7 @@ class MainScene extends Phaser.Scene {
                 }
             }
             let progressVal = (totalClicks * 5) - currentDecay; if (progressVal < 0) progressVal = 0;
-            let targetProgress = pUids.length * 50; let ratio = Phaser.Math.Clamp(progressVal / targetProgress, 0, 1);
+            let targetProgress = pUids.length * 150; let ratio = Phaser.Math.Clamp(progressVal / targetProgress, 0, 1);
             let camW = this.cameras.main.width; let camH = this.cameras.main.height;
             this.purifyBar.clear().fillStyle(0xff4500, 1).fillRoundedRect(camW/2 - 196, camH * 0.75 - 96, 392 * ratio, 32, 16);
             
@@ -1149,7 +1178,21 @@ class MainScene extends Phaser.Scene {
                 let targetSprite = (eventData.targetUid === window.GameLogic.currentUser.uid) ? this.localPlayer.sprite : (this.otherPlayers[eventData.targetUid] ? this.otherPlayers[eventData.targetUid].sprite : this.furnitureSprites['altar'].sprite);
                 let ax = targetSprite.x; let ay = targetSprite.y;
                 this.pooBoss.x = ax + Math.cos(time * 0.0015) * 120; this.pooBoss.y = ay - 40 + Math.sin(time * 0.002) * 80; 
-                if (time - this.pooBoss.lastQuoteTime > 2500) { this.pooBoss.lastQuoteTime = time; this.pooBoss.bubbleText.setText(Phaser.Utils.Array.GetRandom(this.pooBoss.quotes)); }
+                if (time - this.pooBoss.lastQuoteTime > 2500) { 
+                    this.pooBoss.lastQuoteTime = time; 
+                    this.pooBoss.bubbleText.setText(Phaser.Utils.Array.GetRandom(this.pooBoss.quotes)); 
+                    
+                    // 修正：屎王的逆襲技能！每 2.5 秒有 30% 機率噴發大便馬賽克遮擋玩家的按鈕
+                    if (Math.random() < 0.3) {
+                        let po = document.getElementById('poop-overlay');
+                        if (po && po.style.display === 'none') {
+                            po.style.display = 'block';
+                            window.poopWipeProgress = 0;
+                            po.style.opacity = 1;
+                            sendBubble("可惡！按鈕被屎王大便擋住了！");
+                        }
+                    }
+                }
                 let bBounds = this.pooBoss.bubbleText.getBounds(); let bW = bBounds.width + 16, bH = bBounds.height + 12; let bx = this.pooBoss.x, by = this.pooBoss.y - 60 - bH/2;
                 this.pooBoss.bubbleBg.clear().fillStyle(0x3e2723, 0.9).lineStyle(2, 0xffcc00, 1).fillRoundedRect(bx - bW/2, by - bH/2, bW, bH, 8).strokeRoundedRect(bx - bW/2, by - bH/2, bW, bH, 8); this.pooBoss.bubbleText.setPosition(bx, by);
             }
