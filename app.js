@@ -179,10 +179,10 @@ function createSystemUI() {
             <button id="voting-confirm-btn" class="btn-primary" style="width:100%; margin-top:15px; background:#8a2be2; border-color:#ba55d3; font-size:16px; font-weight:bold;" onclick="window.submitVote()">確認</button>
         </div>
         <div id="spam-ui" style="display:none; position:absolute; top:75%; left:50%; transform:translate(-50%,-50%); z-index:400; text-align:center;">
-            <button id="spam-btn" style="width:80px; height:80px; border-radius:50%; background:var(--mucha-gold); border:3px solid #fff; box-shadow:0 0 20px #ffcc00; cursor:pointer; touch-action:manipulation; padding:0; overflow:hidden;" onclick="window.clickSpamBtn()"></button>
-            <div id="poop-overlay" style="display:none; position:absolute; top:0; left:0; width:80px; height:80px; border-radius:50%; background: repeating-linear-gradient(45deg, #5c4033 0, #5c4033 10px, #8b5a2b 10px, #8b5a2b 20px); border:3px solid #3e2723; box-sizing: border-box; z-index:401; cursor:grab; opacity:1; touch-action:none;" onpointerdown="window.startWiping(event)" onpointerup="window.stopWiping()" onpointerleave="window.stopWiping()" onpointermove="window.wipePoop(event)" ontouchmove="window.wipePoop(event)">
-                <span style="font-size:14px; color:#fff; font-weight:bold; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:100%; pointer-events:none; text-shadow: 2px 2px 2px #000;">來回擦拭!</span>
-            </div>
+            <button id="spam-btn" style="width:140px; height:140px; background:none; border:none; outline:none; cursor:pointer; touch-action:manipulation; padding:0; filter: drop-shadow(0 0 15px #ffcc00); transition: transform 0.1s;" onclick="window.clickSpamBtn()"></button>
+            
+            <div id="poop-splatter-container" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:401; overflow:visible;"></div>
+            <div id="poop-wipe-area" style="display:none; position:absolute; top:-30px; left:-30px; right:-30px; bottom:-30px; z-index:402; cursor:grab; touch-action:none;" onpointerdown="window.startWiping(event)" onpointerup="window.stopWiping()" onpointerleave="window.stopWiping()" onpointermove="window.wipePoop(event)" ontouchmove="window.wipePoop(event)"></div>
         </div>
         
         <div id="top-notification-bar">系統通知：歡迎來到洋蔥交誼廳！</div>
@@ -404,17 +404,46 @@ window.wipePoop = function(e) {
     if (!window.isWiping) return;
 
     window.poopWipeProgress += 1;
-    let overlay = document.getElementById('poop-overlay');
-    let requiredWipes = 35; // 擦拭的難度門檻
-    if (overlay) overlay.style.opacity = 1 - (window.poopWipeProgress / requiredWipes);
+    let container = document.getElementById('poop-splatter-container');
+    let splatters = container ? container.children : [];
+    let requiredWipes = 35; // 擦拭的次數門檻
+    
+    // 修正3：隨機縮小或淡化某幾坨屎塊，營造「真實逐漸擦掉」的視覺回饋
+    if (splatters.length > 0 && Math.random() < 0.3) {
+        let target = splatters[Math.floor(Math.random() * splatters.length)];
+        let currentScale = parseFloat(target.style.transform.replace(/.*scale\((.*?)\).*/, '$1')) || 1;
+        let currentOp = parseFloat(target.style.opacity) || 1;
+        target.style.transform = target.style.transform.replace(/scale\(.*?\)/, '') + ` scale(${currentScale * 0.7})`;
+        target.style.opacity = currentOp * 0.7;
+    }
     
     if (window.poopWipeProgress >= requiredWipes) {
-        overlay.style.display = 'none';
-        window.isWiping = false;
-        window.poopWipeProgress = 0;
-        overlay.style.opacity = 1;
+        document.getElementById('poop-wipe-area').style.display = 'none';
+        if (container) container.innerHTML = '';
+        window.isWiping = false; window.poopWipeProgress = 0;
         sendBubble("呼... 終於擦掉大便了！");
     }
+};
+
+window.triggerPoopSplatter = function() {
+    let wipeArea = document.getElementById('poop-wipe-area');
+    let container = document.getElementById('poop-splatter-container');
+    if (!wipeArea || !container || wipeArea.style.display === 'block') return; 
+    
+    container.innerHTML = '';
+    // 產生 8~12 坨隨機大小、位置、角度的屎塊黏在符咒上
+    let count = Math.floor(Math.random() * 5) + 8;
+    for (let i = 0; i < count; i++) {
+        let splatter = document.createElement('div');
+        let size = Math.random() * 30 + 25;
+        let left = Math.random() * 100 - 10; 
+        let top = Math.random() * 100 - 10;
+        let rot = Math.random() * 360;
+        splatter.style.cssText = `position:absolute; width:${size}px; height:${size}px; left:${left}%; top:${top}%; background:#5c4033; border-radius:40% 60% 70% 30%; transform:rotate(${rot}deg) scale(1); box-shadow: inset -3px -3px 6px rgba(0,0,0,0.5), 2px 2px 4px rgba(0,0,0,0.4); opacity:1; transition: transform 0.2s, opacity 0.2s; pointer-events:none;`;
+        container.appendChild(splatter);
+    }
+    wipeArea.style.display = 'block'; window.poopWipeProgress = 0;
+    sendBubble("可惡！符咒被大便黏住了！");
 };
 
 window.currentPurchaseItem = null; window.currentPurchasePrice = 0; window.currentPurchaseQty = 1;
@@ -613,12 +642,18 @@ function joinShrine() {
             if (myVote && myVote.talisman) {
                 let talismans = [ {id: 'charm-1', img: 'shrine-chinese-charm-01.png'}, {id: 'charm-2', img: 'shrine-chinese-charm-02.png'}, {id: 'charm-3', img: 'shrine-chinese-charm-03.png'}, {id: 'charm-4', img: 'shrine-chinese-charm-04.png'}, {id: 'charm-5', img: 'shrine-chinese-charm-05.png'} ];
                 let taliObj = talismans.find(x => x.id === myVote.talisman);
-                if (taliObj) { let sBtn = document.getElementById('spam-btn'); sBtn.innerHTML = `<img src="${taliObj.img}" style="width:100%; height:100%; object-fit:contain; border-radius:50%; pointer-events:none;">`; }
+                if (taliObj) { 
+                    let sBtn = document.getElementById('spam-btn'); 
+                    // 修正1：取消 img 的 border-radius，讓它呈現原汁原味的符咒形狀
+                    sBtn.innerHTML = `<img src="${taliObj.img}" style="width:100%; height:100%; object-fit:contain; pointer-events:none; filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.5));">`; 
+                }
             }
         } else { 
             spamUI.style.display = 'none'; 
-            let po = document.getElementById('poop-overlay'); 
-            if (po) po.style.display = 'none'; 
+            let wipeArea = document.getElementById('poop-wipe-area');
+            let container = document.getElementById('poop-splatter-container');
+            if (wipeArea) wipeArea.style.display = 'none'; 
+            if (container) container.innerHTML = '';
         }
     });
 }
@@ -1182,14 +1217,25 @@ class MainScene extends Phaser.Scene {
                     this.pooBoss.lastQuoteTime = time; 
                     this.pooBoss.bubbleText.setText(Phaser.Utils.Array.GetRandom(this.pooBoss.quotes)); 
                     
-                    // 修正：屎王的逆襲技能！每 2.5 秒有 30% 機率噴發大便馬賽克遮擋玩家的按鈕
+                    // 修正2：屎王發動噴屎攻擊！每 2.5 秒有 30% 機率向下方玩家噴射 Phaser 實體大便特效
                     if (Math.random() < 0.3) {
-                        let po = document.getElementById('poop-overlay');
-                        if (po && po.style.display === 'none') {
-                            po.style.display = 'block';
-                            window.poopWipeProgress = 0;
-                            po.style.opacity = 1;
-                            sendBubble("可惡！按鈕被屎王大便擋住了！");
+                        let camW = this.cameras.main.width;
+                        let camH = this.cameras.main.height;
+                        for (let i = 0; i < 15; i++) {
+                            let poopDrop = this.add.circle(this.pooBoss.x, this.pooBoss.y + 20, Phaser.Math.Between(5, 12), 0x5c4033).setDepth(210);
+                            this.tweens.add({
+                                targets: poopDrop,
+                                x: camW / 2 + Phaser.Math.Between(-80, 80),
+                                y: camH * 0.8 + Phaser.Math.Between(-50, 50),
+                                scale: Phaser.Math.FloatBetween(1.5, 3),
+                                duration: Phaser.Math.Between(400, 700),
+                                ease: 'Cubic.easeIn',
+                                onComplete: () => {
+                                    poopDrop.destroy();
+                                    // 落地瞬間，呼叫 DOM 產生零碎的黏附屎塊，並啟動擦拭屏障擋住符咒
+                                    if (i === 14) { if (window.triggerPoopSplatter) window.triggerPoopSplatter(); }
+                                }
+                            });
                         }
                     }
                 }
