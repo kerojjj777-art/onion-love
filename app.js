@@ -106,6 +106,22 @@ window.closeProfileModal = function() {
 };
 window.openPortalModal = function() { document.getElementById('inventory-modal').style.display = 'none'; document.getElementById('portal-modal').style.display = 'block'; };
 
+// 新增：空間傳送門點擊時的粒子噴發效果
+window.popPortalParticles = function(e) {
+    let x = e.clientX; let y = e.clientY;
+    for(let i=0; i<12; i++) {
+        let p = document.createElement('div');
+        p.style.cssText = `position:fixed; width:6px; height:6px; background:#fff; border-radius:50%; left:${x}px; top:${y}px; pointer-events:none; z-index:9999; transition: all 0.4s cubic-bezier(0.1, 0.8, 0.3, 1); transform: translate(-50%, -50%); box-shadow: 0 0 8px #fff, 0 0 15px #d8bfd8;`;
+        document.body.appendChild(p);
+        setTimeout(() => {
+            let angle = Math.random() * Math.PI * 2; let dist = Math.random() * 60 + 20;
+            p.style.transform = `translate(calc(-50% + ${Math.cos(angle)*dist}px), calc(-50% + ${Math.sin(angle)*dist}px)) scale(0)`;
+            p.style.opacity = 0;
+        }, 10);
+        setTimeout(() => p.remove(), 400);
+    }
+};
+
 function createSystemUI() {
     const appContainer = document.getElementById('app-container');
     if (!appContainer) return;
@@ -180,6 +196,23 @@ function createSystemUI() {
             #quick-items-container::-webkit-scrollbar { display: none; }
             .quick-item { flex: 0 0 60px; height: 60px; border: none; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; background: rgba(255,255,255,0.8); position: relative; transition: 0.3s; scroll-snap-align: center; box-shadow: 0 0 10px rgba(135,206,235,0.5); }
             .quick-item.staged { transform: scale(1.35); box-shadow: 0 0 20px rgba(255,255,255,1), 0 0 15px rgba(0,191,255,0.8); background: #fff; z-index: 10; }
+            
+            /* 新增：空間傳送門 Modal 特效 */
+            #portal-modal { background: #1a0033 !important; border-radius: 140px / 200px !important; border: 4px solid #4b0082 !important; box-shadow: inset 0 0 50px #000, 0 0 20px #8a2be2 !important; overflow: hidden; }
+            .portal-particle { position: absolute; border-radius: 50%; }
+            @keyframes portal-spin { 100% { transform: rotate(360deg); } }
+            
+            /* 新增：蔥Music Modal 特效 */
+            #settings-modal { background: #0d0d0d !important; border-radius: 50% !important; border: 4px solid #333 !important; box-shadow: inset 0 0 40px #000, 0 0 15px rgba(255,255,255,0.1) !important; overflow: hidden; display: flex !important; flex-direction: column; justify-content: center; align-items: center; }
+            .record-ring { position:absolute; border: 1px dashed rgba(255,255,255,0.3); border-radius: 50%; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none; animation: record-spin linear infinite; z-index: 0;}
+            @keyframes record-spin { 100% { transform: translate(-50%,-50%) rotate(360deg); } }
+            .music-note { position: absolute; color: #fff; font-size: 18px; animation: floatNote 4s ease-in infinite; opacity: 0; pointer-events:none; z-index:0; }
+            @keyframes floatNote { 0% { transform: translateY(0) scale(0.8) rotate(-10deg); opacity: 0; } 20% { opacity: 0.8; } 100% { transform: translateY(-120px) scale(1.5) rotate(20deg); opacity: 0; } }
+            
+            /* 新增：法寶庫存 Modal 特效 */
+            #magic-modal { background: linear-gradient(180deg, #02111d 0%, #003a5e 100%) !important; border: 2px solid #0088cc !important; box-shadow: inset 0 0 30px #00aaff !important; overflow: hidden; }
+            .water-drop { position: absolute; width: 3px; height: 15px; background: linear-gradient(to bottom, transparent, rgba(135,206,235,0.8)); border-radius: 50%; animation: drip linear infinite; pointer-events:none; z-index:0;}
+            @keyframes drip { 0% { transform: translateY(-30px); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(300px); opacity: 0; } }
         </style>
 
         <div id="energy-modal" class="modal" style="z-index: 260;">
@@ -262,15 +295,21 @@ function createSystemUI() {
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('memory-modal').style.display='none'">闔上回憶錄</button>
         </div>
 
-        <div id="settings-modal" class="modal" style="width: 85%; max-width: 320px; box-sizing: border-box; z-index: 260;">
-            <h3 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">🎵 蔥Music</h3>
-            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; position: relative;">
-                <div style="display: flex; align-items: center; justify-content: center; gap: 15px;"><button class="btn-secondary" onclick="window.prevTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0;">&lt;</button><img id="music-cover" onclick="window.openFullscreen(this.src)" src="Sweet-Onion.png" alt="Music Cover" style="width: 150px; height: 150px; border-radius: 8px; border: 2px solid var(--mucha-gold); object-fit: cover; box-shadow: 0 4px 8px rgba(0,0,0,0.3); cursor: pointer;"><button class="btn-secondary" onclick="window.nextTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0;">&gt;</button></div>
-                <div id="music-title" style="font-weight: bold; color: var(--mucha-brown); font-size: 16px;">Sweet-Onion</div>
-                <div style="width: 100%; margin-top: 10px;"><label style="font-size: 14px; color: var(--mucha-brown); display: flex; justify-content: space-between;"><span>音樂音量</span> <span id="bgm-vol-text">100%</span></label><input type="range" id="bgm-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 5px;" oninput="window.updateBGMVolume(this.value)"></div>
-                <div style="width: 100%; margin-top: 10px;"><label style="font-size: 14px; color: var(--mucha-brown); display: flex; justify-content: space-between;"><span>特殊音效</span> <span id="sfx-vol-text">100%</span></label><input type="range" id="sfx-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 5px;" oninput="window.updateSFXVolume(this.value)"></div>
+        <div id="settings-modal" class="modal" style="width: 350px; height: 350px; box-sizing: border-box; z-index: 260; padding: 25px;">
+            <div class="record-ring" style="width: 290px; height: 290px; animation-duration: 8s;"></div>
+            <div class="record-ring" style="width: 320px; height: 320px; animation-duration: 12s; border-style: dotted;"></div>
+            <div class="music-note" style="bottom: 20%; left: 30%; animation-delay: 0s;">🎵</div>
+            <div class="music-note" style="bottom: 15%; left: 60%; animation-delay: 1.5s;">🎶</div>
+            <div class="music-note" style="bottom: 35%; left: 80%; animation-delay: 3s;">🎵</div>
+            
+            <h3 style="color: #fff; border-bottom: 1px dashed rgba(255,255,255,0.3); padding-bottom: 5px; margin-top: 0; z-index:1; width:80%;">🎵 蔥Music</h3>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; position: relative; z-index:1; width:95%;">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 15px;"><button class="btn-secondary" onclick="window.prevTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0;">&lt;</button><img id="music-cover" onclick="window.openFullscreen(this.src)" src="Sweet-Onion.png" alt="Music Cover" style="width: 130px; height: 130px; border-radius: 50%; border: 4px solid #444; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.8); cursor: pointer; animation: record-spin 5s linear infinite;"><button class="btn-secondary" onclick="window.nextTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0;">&gt;</button></div>
+                <div id="music-title" style="font-weight: bold; color: #fff; font-size: 16px; text-shadow: 0 2px 4px rgba(0,0,0,0.8);">Sweet-Onion</div>
+                <div style="width: 100%; margin-top: 5px;"><label style="font-size: 13px; color: #ccc; display: flex; justify-content: space-between;"><span>音樂音量</span> <span id="bgm-vol-text">100%</span></label><input type="range" id="bgm-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 3px;" oninput="window.updateBGMVolume(this.value)"></div>
+                <div style="width: 100%; margin-top: 5px;"><label style="font-size: 13px; color: #ccc; display: flex; justify-content: space-between;"><span>特殊音效</span> <span id="sfx-vol-text">100%</span></label><input type="range" id="sfx-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 3px;" oninput="window.updateSFXVolume(this.value)"></div>
             </div>
-            <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('settings-modal').style.display='none'">關閉播放器</button>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 10px; width: 50%; z-index:1; border-radius: 20px; padding: 6px;" onclick="document.getElementById('settings-modal').style.display='none'">關閉</button>
         </div>
 
         <div id="manual-modal" class="modal" style="width: 90%; max-width: none; height: 90vh; max-height: none; top: 5%; left: 5%; transform: none; box-sizing: border-box; z-index: 260;">
@@ -280,19 +319,36 @@ function createSystemUI() {
             <button class="close-modal-btn btn-secondary" style="margin-top: 30px; width: 100%;" onclick="document.getElementById('manual-modal').style.display='none'">關閉說明書</button>
         </div>
         
-        <div id="portal-modal" class="modal" style="z-index: 260; padding: 15px;">
-            <h3 style="margin-top:0; color:var(--mucha-brown);">🌀 空間傳送門</h3><div class="sprite-magic-gap-big" style="margin: 10px auto;"></div>
-            <div style="display:flex; flex-direction:column; gap:10px;"><button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('doghouse'); document.getElementById('portal-modal').style.display='none';">🏠 我的狗窩</button><button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('cafe'); document.getElementById('portal-modal').style.display='none';">☕ 洋蔥大廳</button><button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('farm'); document.getElementById('portal-modal').style.display='none';">🌱 我的蔥田</button><button class="btn-primary" style="padding:12px; font-size:16px;" onclick="window.switchScene('7eonion'); document.getElementById('portal-modal').style.display='none';">🏪 7-EONION</button></div>
-            <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('portal-modal').style.display='none'">關閉傳送門</button>
+        <div id="portal-modal" class="modal" style="z-index: 260; padding: 40px 20px; display:flex; flex-direction:column; justify-content:center; align-items:center; width: 280px; height: 440px; box-sizing: border-box;">
+            <div style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:0; pointer-events:none; animation: portal-spin 6s linear infinite; transform-origin: center;">
+                <div class="portal-particle" style="top:10%; left:20%; width:6px; height:6px; background:#d8bfd8; box-shadow:0 0 8px #d8bfd8;"></div>
+                <div class="portal-particle" style="top:80%; left:70%; width:4px; height:4px; background:#fff; box-shadow:0 0 8px #fff;"></div>
+                <div class="portal-particle" style="top:30%; left:80%; width:8px; height:8px; background:#000; box-shadow:0 0 5px #000, 0 0 10px #8a2be2;"></div>
+                <div class="portal-particle" style="top:70%; left:10%; width:5px; height:5px; background:#d8bfd8; box-shadow:0 0 8px #d8bfd8;"></div>
+            </div>
+            
+            <h3 style="margin-top:0; color:#fff; z-index:1; border:none; text-shadow: 0 0 10px #8a2be2, 0 0 20px #8a2be2; font-size: 22px;">🌀 空間傳送門</h3>
+            <div style="display:flex; flex-direction:column; gap:12px; width: 100%; z-index:1; padding: 0 15px; box-sizing:border-box; margin-top: 10px;">
+                <button class="btn-primary" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); setTimeout(() => { window.switchScene('doghouse'); document.getElementById('portal-modal').style.display='none'; }, 250);">🏠 我的狗窩</button>
+                <button class="btn-primary" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); setTimeout(() => { window.switchScene('cafe'); document.getElementById('portal-modal').style.display='none'; }, 250);">☕ 洋蔥大廳</button>
+                <button class="btn-primary" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); setTimeout(() => { window.switchScene('farm'); document.getElementById('portal-modal').style.display='none'; }, 250);">🌱 我的蔥田</button>
+                <button class="btn-primary" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); setTimeout(() => { window.switchScene('7eonion'); document.getElementById('portal-modal').style.display='none'; }, 250);">🏪 7-EONION</button>
+            </div>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 25px; width: 70%; z-index:1; border-radius: 20px;" onclick="document.getElementById('portal-modal').style.display='none'">關閉傳送門</button>
         </div>
 
         <div id="game-layout-container"><div id="phaser-app"></div><div id="chat-section"><button id="chat-toggle-btn">收起對話 ▲</button><div id="chat-content"><div id="chat-box"></div><div id="chat-input-area"><input type="text" id="chat-input" placeholder="說點什麼..."><button id="send-btn">發送</button></div></div></div></div>
         
-        <div id="magic-modal" class="modal" style="z-index: 260; width: 85%; max-width: 320px;">
-            <h3 style="color: var(--mucha-brown); margin-top: 0; border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">✨ 法寶庫存</h3>
-            <div class="magic-grid" id="magic-grid-container"></div>
-            <div id="magic-desc" style="margin-top: 15px; font-size: 13px; color: #fff; text-align: left; min-height: 60px; background: rgba(62, 39, 35, 0.85); padding: 10px; border-radius: 6px; border: 1px solid var(--mucha-gold); line-height: 1.4;">點擊法寶查看說明...</div>
-            <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('magic-modal').style.display='none'">關上法寶庫</button>
+        <div id="magic-modal" class="modal" style="z-index: 260; width: 85%; max-width: 320px; position:relative;">
+            <div class="water-drop" style="left: 15%; animation-duration: 2s; animation-delay: 0.1s;"></div>
+            <div class="water-drop" style="left: 45%; animation-duration: 2.5s; animation-delay: 1s;"></div>
+            <div class="water-drop" style="left: 75%; animation-duration: 1.8s; animation-delay: 0.5s;"></div>
+            <div class="water-drop" style="left: 90%; animation-duration: 2.2s; animation-delay: 1.2s;"></div>
+
+            <h3 style="color: #fff; margin-top: 0; border-bottom: 2px solid #00aaff; padding-bottom: 10px; position:relative; z-index:1; text-shadow: 0 0 5px #00aaff;">✨ 法寶庫存</h3>
+            <div class="magic-grid" id="magic-grid-container" style="position:relative; z-index:1;"></div>
+            <div id="magic-desc" style="position:relative; z-index:1; margin-top: 15px; font-size: 13px; color: #fff; text-align: left; min-height: 60px; background: rgba(0, 31, 63, 0.85); padding: 10px; border-radius: 6px; border: 1px solid #00aaff; box-shadow: 0 0 10px rgba(0,170,255,0.3); line-height: 1.4;">點擊法寶查看說明...</div>
+            <button class="close-modal-btn btn-secondary" style="position:relative; z-index:1; margin-top: 15px; width: 100%;" onclick="document.getElementById('magic-modal').style.display='none'">關上法寶庫</button>
         </div>
         <div id="magic-menu-blocker" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; z-index: 290; pointer-events: auto; touch-action: none;" onpointerdown="event.stopPropagation(); event.preventDefault(); window.closeQuickMenu();" ontouchstart="event.stopPropagation(); event.preventDefault(); window.closeQuickMenu();"></div>
         <div id="quick-select-menu" onpointerdown="event.stopPropagation()" ontouchmove="event.stopPropagation()" onwheel="event.stopPropagation()">
