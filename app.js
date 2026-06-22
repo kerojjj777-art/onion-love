@@ -1820,10 +1820,8 @@ class MainScene extends Phaser.Scene {
         this.playerEnergyEmitter.isEnergyEmitting = false; // 自製旗標防呆，避免頻繁呼叫 start 導致卡頓
 
         this.events.on('shutdown', () => {
-
-        this.events.on('shutdown', () => {
             if (this.leaderboardListener) this.leaderboardListener(); 
-            if (this.trashListener) this.trashListener(); 
+            if (this.trashListener) this.trashListener();
             if (this.coinsListener) this.coinsListener(); 
             if (this.dummiesListener) this.dummiesListener(); 
             
