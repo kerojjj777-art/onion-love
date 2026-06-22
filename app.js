@@ -282,7 +282,7 @@ function createSystemUI() {
             <div id="magic-desc" style="margin-top: 15px; font-size: 13px; color: #fff; text-align: left; min-height: 60px; background: rgba(62, 39, 35, 0.85); padding: 10px; border-radius: 6px; border: 1px solid var(--mucha-gold); line-height: 1.4;">點擊法寶查看說明...</div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('magic-modal').style.display='none'">關上法寶庫</button>
         </div>
-        <div id="magic-menu-blocker" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; z-index: 290;" onpointerdown="event.stopPropagation(); window.closeQuickMenu();"></div>
+        <div id="magic-menu-blocker" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; z-index: 290; pointer-events: auto; touch-action: none;" onpointerdown="event.stopPropagation(); event.preventDefault(); window.closeQuickMenu();" ontouchstart="event.stopPropagation(); event.preventDefault(); window.closeQuickMenu();"></div>
         <div id="quick-select-menu" onpointerdown="event.stopPropagation()" ontouchmove="event.stopPropagation()" onwheel="event.stopPropagation()">
             <div style="font-weight: bold; color: #87ceeb; margin-bottom: 0px; font-size: 13px; text-shadow: 0 0 3px #000, 0 0 5px #000; letter-spacing: 1px;">左右滑動或點擊法寶選定</div>
             <div id="quick-items-container"></div>
@@ -1122,9 +1122,9 @@ class UIScene extends Phaser.Scene {
         
         // 建立法寶選單的華麗粒子背景
         this.magicMenuEmitter = this.add.particles(0, 0, 'particle_flare', {
-            speed: { min: 20, max: 80 }, angle: { min: 0, max: 360 }, scale: { start: 1.5, end: 0 },
-            tint: [0x00ccff, 0xffffff, 0xffff00], blendMode: 'ADD', lifespan: { min: 800, max: 1500 }, quantity: 6,
-            emitZone: { type: 'random', source: new Phaser.Geom.Rectangle(-160, -45, 320, 90) }
+            speed: { min: 10, max: 40 }, angle: { min: 0, max: 360 }, scale: { start: 0.8, end: 0 },
+            tint: [0x00ccff, 0xffffff, 0x00ffff], blendMode: 'ADD', lifespan: { min: 600, max: 1200 }, quantity: 8,
+            emitZone: { type: 'edge', source: new Phaser.Geom.Rectangle(-160, -50, 320, 100), quantity: 30 }
         }).setDepth(500).stop();
 
         this.btnB.on('pointerdown', () => { 
@@ -1728,7 +1728,16 @@ class MainScene extends Phaser.Scene {
             if (blocker) blocker.style.display = 'block';
             if (uiScene && uiScene.magicMenuEmitter) uiScene.magicMenuEmitter.start();
             
-            setTimeout(() => { container.scrollLeft = 0; container.dispatchEvent(new Event('scroll')); }, 50);
+            setTimeout(() => { 
+                let sel = window.GameLogic.armedItemName || 'none';
+                let targetEl = container.querySelector(`[data-magic="${sel}"]`);
+                if (targetEl) {
+                    container.scrollTo({ left: targetEl.offsetLeft - container.offsetWidth/2 + targetEl.offsetWidth/2 });
+                } else {
+                    container.scrollLeft = 0; 
+                }
+                container.dispatchEvent(new Event('scroll')); 
+            }, 50);
         });
 
         this.events.on('action_B', () => {
@@ -1800,7 +1809,15 @@ class MainScene extends Phaser.Scene {
         this.playersHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/waterHits'), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { opSprite.isStunned = true; opSprite.play('wet', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
         this.dummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/dummyHits'), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
 
-        this.events.on('shutdown', () => { 
+        // 建立蔥電寶專屬綠色往上飄特效
+        this.playerEnergyEmitter = this.add.particles(0, 0, 'fw-particle', {
+            speedY: { min: -20, max: -60 }, speedX: { min: -10, max: 10 },
+            scale: { start: 1.2, end: 0 }, alpha: { start: 0.8, end: 0 },
+            tint: [0x8bc34a, 0xadff2f, 0x00ff00], blendMode: 'ADD',
+            lifespan: 800, quantity: 1, frequency: 150
+        }).setDepth(15).stop();
+
+        this.events.on('shutdown', () => {
             if (this.leaderboardListener) this.leaderboardListener(); 
             if (this.trashListener) this.trashListener(); 
             if (this.coinsListener) this.coinsListener(); 
@@ -2318,32 +2335,45 @@ class MainScene extends Phaser.Scene {
                             update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'walk' });
                         }
                     } else if (mData.state === 'laughing' && mData.hp > 0) {
-                        if (Date.now() - mData.laughTime > 3000) update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'chase', randomAngle: Math.random() * Math.PI * 2 });
+                        if (Date.now() - mData.laughTime > 3000) {
+                            let unrobbedExist = pUids.some(uid => !(mData.stolenUids && mData.stolenUids[uid]));
+                            if (unrobbedExist) update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'walk' });
+                            else update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'chase', randomAngle: Math.random() * Math.PI * 2 });
+                        }
                     } else if (mData.state === 'chase' && mData.hp > 0) {
-                        let minDistToPlayer = 9999; let nearestP = null;
-                        pUids.forEach(uid => {
-                            let op = this.otherPlayers[uid] ? this.otherPlayers[uid].sprite : (uid === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null);
-                            if (op) { let d = Phaser.Math.Distance.Between(mData.x, mData.y, op.x, op.y); if (d < minDistToPlayer) { minDistToPlayer = d; nearestP = op; } }
-                        });
-                        
-                        let angle = mData.randomAngle || 0;
-                        if (nearestP && minDistToPlayer < 400) {
-                            angle = Phaser.Math.Angle.Between(nearestP.x, nearestP.y, mData.x, mData.y);
-                            angle += Phaser.Math.FloatBetween(-0.3, 0.3); 
-                        } else if (Math.random() < 0.05) {
-                            angle += Phaser.Math.FloatBetween(-0.5, 0.5); 
+                        let unrobbedExist = pUids.some(uid => !(mData.stolenUids && mData.stolenUids[uid]));
+                        if (unrobbedExist) {
+                            update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'walk' });
+                        } else {
+                            let minDistToPlayer = 9999; let nearestP = null;
+                            pUids.forEach(uid => {
+                                let op = this.otherPlayers[uid] ? this.otherPlayers[uid].sprite : (uid === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null);
+                                if (op) { let d = Phaser.Math.Distance.Between(mData.x, mData.y, op.x, op.y); if (d < minDistToPlayer) { minDistToPlayer = d; nearestP = op; } }
+                            });
+                            
+                            let angle = mData.randomAngle || 0;
+                            let boostSpeed = mData.speedBoost || 250; 
+                            
+                            if (nearestP && minDistToPlayer < 400) {
+                                angle = Phaser.Math.Angle.Between(nearestP.x, nearestP.y, mData.x, mData.y);
+                                angle += Phaser.Math.FloatBetween(-0.3, 0.3); 
+                            } else if (Math.random() < 0.05) {
+                                angle += Phaser.Math.FloatBetween(-0.5, 0.5); 
+                            }
+                            
+                            targetX = mData.x + Math.cos(angle) * (delta / 1000) * boostSpeed; 
+                            targetY = mData.y + Math.sin(angle) * (delta / 1000) * boostSpeed;
+                            
+                            if (targetX < 50 || targetX > 1998 || targetY < 50 || targetY > 1998) { 
+                                targetX = Phaser.Math.Clamp(targetX, 50, 1998); 
+                                targetY = Phaser.Math.Clamp(targetY, 50, 1998); 
+                                angle = angle + Math.PI + Phaser.Math.FloatBetween(-0.5, 0.5);
+                                boostSpeed = 800; // 邊緣大反彈與衝刺
+                            } else {
+                                boostSpeed = 250;
+                            }
+                            update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX > mData.x), randomAngle: angle, speedBoost: boostSpeed });
                         }
-                        
-                        targetX = mData.x + Math.cos(angle) * (delta / 1000) * 180; 
-                        targetY = mData.y + Math.sin(angle) * (delta / 1000) * 180;
-                        
-                        if (targetX < 50 || targetX > 1998 || targetY < 50 || targetY > 1998) { 
-                            targetX = Phaser.Math.Clamp(targetX, 50, 1998); 
-                            targetY = Phaser.Math.Clamp(targetY, 50, 1998); 
-                            angle = Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024) + Phaser.Math.FloatBetween(-1, 1);
-                        }
-                        // 【修正3】：向右跑才翻轉
-                        update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX > mData.x), randomAngle: angle });
                     } else if (mData.state === 'down') {
                         if (!mData.downTime) update(ref(window.GameLogic.db, 'cafeMimi'), { downTime: Date.now() });
                         else if (Date.now() - mData.downTime > 3000) update(ref(window.GameLogic.db, 'cafeMimi'), { active: false, state: 'none' });
@@ -2494,8 +2524,27 @@ class MainScene extends Phaser.Scene {
                 this.localPlayer.sprite.setAlpha(1); 
             }
         }
-        for (let key in this.coinSprites) { let coin = this.coinSprites[key]; let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, coin.x, coin.y); if (dist < 30) { window.playSFX(this, 'coin03'); let coinAmount = coin.amount; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { let coinRef = module.ref(window.GameLogic.db, `droppedCoins/${key}`); module.get(coinRef).then((coinSnap) => { if (coinSnap.exists()) { module.remove(coinRef).then(() => { let p = window.GameLogic.myProfile; p.coins = (p.coins || 0) + coinAmount; module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins; let px = this.localPlayer.sprite.x; let py = this.localPlayer.sprite.y - 40; let pickupText = this.add.text(px, py, `+${coinAmount} 💰`, { fontSize: '16px', color: '#d4af37', fontStyle: 'bold', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5).setDepth(200); this.tweens.add({ targets: pickupText, y: py - 40, alpha: 0, duration: 1000, onComplete: () => pickupText.destroy() }); }); } }); }); } }
+        
+        let mw = this.physics.world.bounds.width; let mh = this.physics.world.bounds.height;
+        for (let key in this.coinSprites) { 
+            let coin = this.coinSprites[key]; 
+            // 防呆：強制將噴太遠的金幣拉回安全範圍
+            if (coin.x < 60 || coin.x > mw - 60 || coin.y < 60 || coin.y > mh - 60) {
+                let tgtX = Phaser.Math.Clamp(coin.x, 80, mw - 80);
+                let tgtY = Phaser.Math.Clamp(coin.y, 80, mh - 80);
+                coin.x = Phaser.Math.Linear(coin.x, tgtX, 0.1);
+                coin.y = Phaser.Math.Linear(coin.y, tgtY, 0.1);
+            }
+            let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, coin.x, coin.y); if (dist < 30) { window.playSFX(this, 'coin03'); let coinAmount = coin.amount; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { let coinRef = module.ref(window.GameLogic.db, `droppedCoins/${key}`); module.get(coinRef).then((coinSnap) => { if (coinSnap.exists()) { module.remove(coinRef).then(() => { let p = window.GameLogic.myProfile; p.coins = (p.coins || 0) + coinAmount; module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins; let px = this.localPlayer.sprite.x; let py = this.localPlayer.sprite.y - 40; let pickupText = this.add.text(px, py, `+${coinAmount} 💰`, { fontSize: '16px', color: '#d4af37', fontStyle: 'bold', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5).setDepth(200); this.tweens.add({ targets: pickupText, y: py - 40, alpha: 0, duration: 1000, onComplete: () => pickupText.destroy() }); }); } }); }); } 
+        }
         this.updatePlayerEntity(this.localPlayer, window.GameLogic.myProfile);
+
+        if (window.GameLogic.energyActive && this.localPlayer.sprite.active) {
+            this.playerEnergyEmitter.setPosition(this.localPlayer.sprite.x, this.localPlayer.sprite.y + 20);
+            if (!this.playerEnergyEmitter.on) this.playerEnergyEmitter.start();
+        } else {
+            if (this.playerEnergyEmitter.on) this.playerEnergyEmitter.stop();
+        }
 
         const furnData = this.isCafe ? window.GameLogic.cafeFurniture : (this.sceneName === 'doghouse' ? (window.GameLogic.doghouseFurniture || {}) : (this.sceneName === 'shrine' ? window.GameLogic.shrineFurniture : {}));
         for (let key in furnData) {
