@@ -159,6 +159,13 @@ function createSystemUI() {
             #pm-chat-box { height: 250px; overflow-y: auto; background: #fffdf5; border: 1px solid var(--mucha-gold); border-radius: 4px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; font-size: 14px;}
             .pm-bubble-me { background: #fff; color: #3e2723; border-radius: 12px 12px 0 12px; padding: 8px 12px; display: inline-block; max-width: 80%; text-align: left; border: 1px solid var(--mucha-gold); box-shadow: 1px 1px 3px rgba(0,0,0,0.1); word-break: break-word; }
             .pm-bubble-other { background: #dcedc8; color: #3e2723; border-radius: 12px 12px 12px 0; padding: 8px 12px; display: inline-block; max-width: 80%; text-align: left; border: 1px solid #aed581; box-shadow: 1px 1px 3px rgba(0,0,0,0.1); word-break: break-word; }
+            .magic-grid { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); gap: 5px; min-height: 250px; }
+            .magic-slot { border: 2px solid var(--mucha-gold); border-radius: 8px; background: rgba(255,255,255,0.5); display: flex; justify-content: center; align-items: center; cursor: pointer; position: relative; }
+            .magic-slot:hover { background: rgba(197, 160, 89, 0.3); }
+            .magic-qty { position: absolute; bottom: 2px; right: 5px; font-size: 12px; font-weight: bold; color: var(--mucha-brown); }
+            #quick-select-menu { display: none; position: absolute; bottom: 130px; right: 20px; width: 180px; background: linear-gradient(to top, rgba(197, 160, 89, 0.95), rgba(255, 255, 255, 0.95)); border: 2px solid var(--mucha-gold); border-radius: 12px; padding: 15px; z-index: 300; flex-direction: column; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5); pointer-events: auto; }
+            .quick-item { width: 50px; height: 50px; border: 2px solid var(--mucha-brown); border-radius: 8px; cursor: pointer; display: flex; justify-content: center; align-items: center; background: #fff; position: relative; margin: 5px; transition: 0.2s; }
+            .quick-item:active { transform: scale(0.9); }
         </style>
 
         <div id="energy-modal" class="modal" style="z-index: 260;">
@@ -266,6 +273,20 @@ function createSystemUI() {
         </div>
 
         <div id="game-layout-container"><div id="phaser-app"></div><div id="chat-section"><button id="chat-toggle-btn">收起對話 ▲</button><div id="chat-content"><div id="chat-box"></div><div id="chat-input-area"><input type="text" id="chat-input" placeholder="說點什麼..."><button id="send-btn">發送</button></div></div></div></div>
+        
+        <div id="magic-modal" class="modal" style="z-index: 260; width: 85%; max-width: 320px;">
+            <h3 style="color: var(--mucha-brown); margin-top: 0; border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">✨ 法寶庫存</h3>
+            <div class="magic-grid" id="magic-grid-container"></div>
+            <div id="magic-desc" style="margin-top: 15px; font-size: 13px; color: #fff; text-align: left; min-height: 60px; background: rgba(62, 39, 35, 0.85); padding: 10px; border-radius: 6px; border: 1px solid var(--mucha-gold); line-height: 1.4;">點擊法寶查看說明...</div>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('magic-modal').style.display='none'">關上法寶庫</button>
+        </div>
+        <div id="quick-select-menu" onpointerdown="event.stopPropagation()">
+            <div style="font-weight: bold; color: var(--mucha-brown); margin-bottom: 10px; font-size: 14px; border-bottom: 1px solid var(--mucha-brown); padding-bottom: 5px;">快速選擇法寶</div>
+            <div id="quick-items-container" style="display: flex; flex-wrap: wrap; justify-content: center;"></div>
+            <button class="btn-secondary" style="width: 100%; margin-top: 10px; padding: 8px; font-size: 13px;" onclick="document.getElementById('quick-select-menu').style.display='none'">關閉選單</button>
+        </div>
+
+        <div id="inventory-modal" class="modal"><div id="inventory-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--mucha-gold); padding-bottom: 5px; margin-bottom: 15px;"><h3 style="margin:0; border:none; color: var(--mucha-brown);">🎒 我的給西</h3><button id="inventory-edit-btn" class="btn-edit" onclick="window.toggleInventoryEdit()" style="padding:4px 8px; font-size:12px;">編輯排序</button></div><div id="inventory-list" class="catalog-grid" style="max-height: 50vh; overflow-y: auto; padding-right: 5px;"></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('inventory-modal').style.display='none'">關閉</button></div>
         <div id="inventory-modal" class="modal"><div id="inventory-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--mucha-gold); padding-bottom: 5px; margin-bottom: 15px;"><h3 style="margin:0; border:none; color: var(--mucha-brown);">🎒 我的給西</h3><button id="inventory-edit-btn" class="btn-edit" onclick="window.toggleInventoryEdit()" style="padding:4px 8px; font-size:12px;">編輯排序</button></div><div id="inventory-list" class="catalog-grid" style="max-height: 50vh; overflow-y: auto; padding-right: 5px;"></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('inventory-modal').style.display='none'">關閉</button></div>
         <div id="phone-modal" class="modal"><h3 style="color: var(--mucha-green);">📱 洋蔥手機</h3><p style="font-size: 12px; color: #666; margin-top: 0;">點擊聯絡人發送私訊</p><div id="phone-contacts" class="catalog-grid" style="display: flex; flex-direction: column; gap: 5px;"></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('phone-modal').style.display='none'">收起手機</button></div>
         <div id="pm-modal" class="modal" style="z-index: 260;"><h3 id="pm-title" style="color: var(--mucha-green);">私訊</h3><div id="pm-chat-box"></div><div style="display:flex; gap: 5px;"><input type="text" id="pm-input" style="flex-grow:1; padding:5px; border: 1px solid var(--mucha-gold); border-radius: 4px;" placeholder="輸入訊息..."><button class="btn-primary" onclick="window.sendPM()">發送</button></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="window.closePM()">返回聯絡人</button></div>
@@ -572,7 +593,27 @@ window.useItem = function(itemName) { let inv = window.GameLogic.myProfile.inven
 window.stopUsingItem = function(itemName) { if (itemName === '水球' || itemName === '煙火') { window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; } };
 window.toggleInventoryEdit = function() { window.GameLogic.inventoryEditMode = !window.GameLogic.inventoryEditMode; let btn = document.getElementById('inventory-edit-btn'); if (btn) { btn.innerText = window.GameLogic.inventoryEditMode ? '完成' : '編輯排序'; btn.className = window.GameLogic.inventoryEditMode ? 'btn-primary' : 'btn-edit'; } window.openInventoryModal(); };
 window.moveInvItem = function(index, dir) { let order = window.GameLogic.myProfile.inventoryOrder || []; if (index + dir >= 0 && index + dir < order.length) { let temp = order[index]; order[index] = order[index + dir]; order[index + dir] = temp; window.GameLogic.myProfile.inventoryOrder = order; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventoryOrder: order }); }); window.openInventoryModal(); } };
-window.clickSysItem = function(key) { document.getElementById('inventory-modal').style.display = 'none'; if (key === 'phone') { window.openPhoneModal(); } else if (key === 'portal') { window.openPortalModal(); } else if (key === 'energy') { window.openEnergyModal(); } else if (key === 'profile') { window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); } else if (key === 'music') { document.getElementById('settings-modal').style.display = 'block'; } else if (key === 'manual') { window.openManualModal(); } else if (key === 'dev') { document.getElementById('dev-modal').style.display = 'block'; } else if (key === 'logout') { window.leaveCafe(); if (window.GameLogic.currentUser) { import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.remove(module.ref(window.GameLogic.db, 'onlinePlayers/' + window.GameLogic.currentUser.uid)); }); } window.signOut(window.auth); } };
+
+window.clickSysItem = function(key) { document.getElementById('inventory-modal').style.display = 'none'; if (key === 'magic_items') { window.openMagicModal(); } else if (key === 'phone') { window.openPhoneModal(); } else if (key === 'portal') { window.openPortalModal(); } else if (key === 'energy') { window.openEnergyModal(); } else if (key === 'profile') { window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); } else if (key === 'music') { document.getElementById('settings-modal').style.display = 'block'; } else if (key === 'manual') { window.openManualModal(); } else if (key === 'dev') { document.getElementById('dev-modal').style.display = 'block'; } else if (key === 'logout') { window.leaveCafe(); if (window.GameLogic.currentUser) { import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.remove(module.ref(window.GameLogic.db, 'onlinePlayers/' + window.GameLogic.currentUser.uid)); }); } window.signOut(window.auth); } };
+
+window.openMagicModal = function() {
+    let inv = window.GameLogic.myProfile.inventory || {};
+    let container = document.getElementById('magic-grid-container');
+    let html = '';
+    let magics = [
+        { name: '水球', icon: '<div class="sprite-waterball" style="transform: scale(0.8); transform-origin: center;"></div>', desc: '聞說水是生命的起源，洋蔥喜歡感受生命，使勁地丟吧！\n按B填充後按A擲出' },
+        { name: '煙火', icon: '<img src="shop-fireworks.png" style="width:40px; height:40px; object-fit:contain;">', desc: '喜歡煙火咻蹦的美麗光彩，但也喜歡拿來朝著其他洋蔥丟～\n按B填充後按A擲出，鎖定目標與不鎖定目標會有不同的效果。' }
+    ];
+    for(let i = 0; i < 16; i++) {
+        if (i < magics.length) {
+            let m = magics[i]; let qty = inv[m.name] || 0; let descSafe = m.desc.replace(/\n/g, '<br>');
+            html += `<div class="magic-slot" onclick="document.getElementById('magic-desc').innerHTML = '<strong style=\\'color:#ffcc00; font-size:16px;\\'>${m.name}</strong><br><br>${descSafe}'">
+                        ${m.icon}<div class="magic-qty">x${qty}</div>
+                     </div>`;
+        } else { html += `<div class="magic-slot"></div>`; }
+    }
+    container.innerHTML = html; document.getElementById('magic-desc').innerText = "點擊法寶查看說明..."; document.getElementById('magic-modal').style.display = 'block';
+};
 
 // 【新增】開發者一鍵測試：在交誼廳中央直接生成米米
 window.devSummonMimi = function() {
@@ -600,7 +641,7 @@ window.devSummonMimi = function() {
 
 window.openInventoryModal = function() {
     const list = document.getElementById('inventory-list'); let hasUnread = Object.keys(window.GameLogic.unreadPMs || {}).length > 0; let dotHtml = hasUnread ? '<div style="position:absolute; top:5px; right:5px; width:12px; height:12px; background:red; border-radius:50%; box-shadow:0 0 5px red; z-index:10;"></div>' : '';
-    let rawItems = {}; let isEdit = window.GameLogic.inventoryEditMode; let inv = window.GameLogic.myProfile.inventory || {}; let sysKeys = ['phone', 'portal', 'profile', 'music', 'manual', 'logout', 'dev']; let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥' && !sysKeys.includes(k));
+    let rawItems = {}; let isEdit = window.GameLogic.inventoryEditMode; let inv = window.GameLogic.myProfile.inventory || {}; let sysKeys = ['phone', 'portal', 'profile', 'music', 'manual', 'logout', 'dev', 'magic_items']; let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥' && !sysKeys.includes(k) && k !== '水球' && k !== '煙火');
     keys.forEach(k => {
         let iconHtml = (k === '水球') ? '<div class="sprite-waterball"></div>' : (k === '煙火' ? '<img src="shop-fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">' : '<span style="font-size:24px; margin-bottom:5px;">📦</span>');
         let isUsing = ((k === '水球' || k === '煙火') && window.GameLogic.armedItemState != null && window.GameLogic.armedItemName === k);
@@ -613,6 +654,7 @@ window.openInventoryModal = function() {
     rawItems['profile'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'profile\')"' : ''}><img src="tools-id-card.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0;">洋蔥身分證</span></div>`;
     rawItems['music'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'music\')"' : ''}><div class="sprite-music-box"></div><span style="margin:5px 0;">蔥Music</span></div>`;
     rawItems['manual'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'manual\')"' : ''}><img src="tools-manual.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0;">說明書</span></div>`;
+    rawItems['magic_items'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'magic_items\')"' : ''}><span style="font-size:24px; margin-bottom:5px;">✨</span><span style="margin:5px 0; color:var(--mucha-brown); font-weight:bold;">法寶</span></div>`;
     rawItems['logout'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'logout\')"' : ''}><img src="tools-leave.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0;">登出大廳</span></div>`;if (window.GameLogic.currentUser && window.GameLogic.currentUser.email === 'onion@gmail.com') {
         rawItems['dev'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'dev\')"' : ''}><span style="font-size:24px; margin-bottom:5px;">🛠️</span><span style="margin:5px 0; font-weight:bold; color:var(--mucha-green);">洋蔥精靈</span></div>`;
     }
@@ -1073,8 +1115,18 @@ class UIScene extends Phaser.Scene {
         this.aPressTime = 0;
         this.btnA.on('pointerdown', () => { this.btnA.setFillStyle(0xb52b27); this.aPressTime = Date.now(); });
         this.btnA.on('pointerup', () => { this.btnA.setFillStyle(0xd9534f); let duration = Date.now() - this.aPressTime; const mainScene = this.scene.manager.getScene('MainScene'); if(mainScene) { if (window.GameLogic.placingFurnitureKey) mainScene.events.emit('action_A_place'); else if (duration > 500) mainScene.events.emit('action_A_long'); else mainScene.events.emit('action_A_short'); } });
-        this.btnB.on('pointerdown', () => { this.btnB.setFillStyle(0x005599); const mainScene = this.scene.manager.getScene('MainScene'); if (mainScene) mainScene.events.emit('action_B'); });
-        this.btnB.on('pointerup', () => this.btnB.setFillStyle(0x0077cc));
+        
+        this.bPressTime = 0;
+        this.btnB.on('pointerdown', () => { this.btnB.setFillStyle(0x005599); this.bPressTime = Date.now(); });
+        this.btnB.on('pointerup', () => { 
+            this.btnB.setFillStyle(0x0077cc);
+            let duration = Date.now() - this.bPressTime;
+            const mainScene = this.scene.manager.getScene('MainScene');
+            if (mainScene) {
+                if (duration > 400) mainScene.events.emit('action_B_long');
+                else mainScene.events.emit('action_B');
+            }
+        });
         
         this.scale.on('resize', this.resizeUI, this); this.resizeUI(this.scale.gameSize); window.updateUnreadGlow();
     }
@@ -1474,7 +1526,7 @@ class MainScene extends Phaser.Scene {
                 let inv = window.GameLogic.myProfile.inventory || {};
                 inv[itemName] = Math.max(0, (inv[itemName] || 0) - 1);
                 update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
-                if (inv[itemName] > 0) { window.GameLogic.armedItemState = 'armed'; } else { window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; }
+                if (inv[itemName] > 0) { window.GameLogic.armedItemState = 'ready'; } else { window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; sendBubble("法寶已耗盡！"); }
                 
                 let targetUid = window.GameLogic.currentTargetUid;
                 let targetSprite = window.GameLogic.currentTargetSprite;
@@ -1553,8 +1605,44 @@ class MainScene extends Phaser.Scene {
             if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!"); let interacted = false; for (const key in this.furnitureSprites) { let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y); if (dist < 90) { if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block'; if (key.startsWith('memory')) document.getElementById('memory-modal').style.display = 'block'; if (key.includes('scoreboard')) { window.openLeaderboardModal(); interacted = true; break; } if (key === 'shrine') { window.attemptJoinShrine(); interacted = true; break; } } } if(!interacted) sendBubble("使用了 A 技能!");
         });
 
+        this.events.off('action_B_long');
+        this.events.on('action_B_long', () => {
+            let menu = document.getElementById('quick-select-menu');
+            if (menu.style.display === 'flex') {
+                menu.style.display = 'none';
+            } else {
+                let inv = window.GameLogic.myProfile.inventory || {};
+                let container = document.getElementById('quick-items-container');
+                let magics = [
+                    { name: '水球', icon: '<div class="sprite-waterball" style="transform: scale(0.7); transform-origin: center;"></div>' },
+                    { name: '煙火', icon: '<img src="shop-fireworks.png" style="width:35px; height:35px; object-fit:contain;">' }
+                ];
+                let html = '';
+                magics.forEach(m => {
+                    let qty = inv[m.name] || 0;
+                    html += `<div class="quick-item" onclick="window.GameLogic.selectedMagicItem = '${m.name}'; document.getElementById('quick-select-menu').style.display='none'; sendBubble('已選定：${m.name}，按B填充');">
+                                ${m.icon}<div style="position:absolute; bottom:2px; right:4px; font-size:12px; font-weight:bold; color:#3e2723;">x${qty}</div>
+                             </div>`;
+                });
+                html += `<div class="quick-item" onclick="window.GameLogic.selectedMagicItem = null; window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; document.getElementById('quick-select-menu').style.display='none'; sendBubble('已卸下法寶');"><span style="font-size:24px;">❌</span></div>`;
+                container.innerHTML = html; menu.style.display = 'flex';
+            }
+        });
+
         this.events.on('action_B', () => {
-            if (window.GameLogic.armedItemState === 'armed') { window.GameLogic.armedItemState = 'ready'; return; }
+            if (window.GameLogic.selectedMagicItem) {
+                if (window.GameLogic.armedItemState === 'ready') {
+                    window.GameLogic.armedItemState = null;
+                    window.GameLogic.armedItemName = null;
+                } else {
+                    let inv = window.GameLogic.myProfile.inventory || {};
+                    if (inv[window.GameLogic.selectedMagicItem] > 0) {
+                        window.GameLogic.armedItemState = 'ready';
+                        window.GameLogic.armedItemName = window.GameLogic.selectedMagicItem;
+                    } else { sendBubble("法寶庫存不足！"); }
+                }
+                return;
+            }
             if (this.localPlayer.isSleeping) return;
             
             if (this.sceneName === 'shrine') { 
@@ -2262,7 +2350,7 @@ class MainScene extends Phaser.Scene {
             } else { this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false); }
 
             if (window.GameLogic.armedItemState) {
-                let itemName = window.GameLogic.armedItemName || '水球'; let msg = window.GameLogic.armedItemState === 'armed' ? "按B填充" + itemName : "按A施放" + itemName; let lockOnDist = 150; let lockTargetUid = null; let lockTargetSprite = null; let isDummy = false;
+                let itemName = window.GameLogic.armedItemName || '水球'; let msg = "按A施放" + itemName; let lockOnDist = (window.GameLogic.energyActive && (window.GameLogic.myProfile.energy || 0) > 0) ? 350 : 150; let lockTargetUid = null; let lockTargetSprite = null; let isDummy = false;
                 let isMimi = false;
                 for (let uid in this.otherPlayers) { let op = this.otherPlayers[uid].sprite; let d = Phaser.Math.Distance.Between(px, py, op.x, op.y); if (d < lockOnDist) { lockOnDist = d; lockTargetUid = uid; lockTargetSprite = op; isDummy = false; isMimi = false; } }
                 for (let key in this.furnitureSprites) { if (key.includes('dummy')) { let fDummy = this.furnitureSprites[key].sprite; let d = Phaser.Math.Distance.Between(px, py, fDummy.x, fDummy.y); if (d < lockOnDist) { lockOnDist = d; lockTargetUid = key; lockTargetSprite = fDummy; isDummy = true; isMimi = false; } } }
