@@ -201,13 +201,23 @@ function createSystemUI() {
             #portal-modal { background: #1a0033 !important; border-radius: 140px / 200px !important; border: 4px solid #4b0082 !important; box-shadow: inset 0 0 50px #000, 0 0 20px #8a2be2 !important; overflow: hidden; }
             .portal-particle { position: absolute; border-radius: 50%; }
             @keyframes portal-spin { 100% { transform: rotate(360deg); } }
+            @keyframes portal-btn-glow { 0% { box-shadow: 0 0 5px #fff, 0 0 10px #fff; } 50% { box-shadow: 0 0 15px #fff, 0 0 25px #00ffff; } 100% { box-shadow: 0 0 5px #fff, 0 0 10px #fff; } }
+            .portal-btn-style { background: #fff !important; color: #000 !important; font-weight: bold; text-shadow: 0 0 5px #aaa, 0 0 8px #000; animation: portal-btn-glow 2.5s infinite ease-in-out; border: none !important; border-radius: 20px; transition: transform 0.2s; cursor: pointer; }
+            .portal-btn-style:active { transform: scale(0.95); }
             
             /* 新增：蔥Music Modal 特效 */
-            #settings-modal { background: #0d0d0d !important; border-radius: 50% !important; border: 4px solid #333 !important; box-shadow: inset 0 0 40px #000, 0 0 15px rgba(255,255,255,0.1) !important; overflow: hidden; display: flex !important; flex-direction: column; justify-content: center; align-items: center; }
+            #settings-modal { background: #0d0d0d !important; border-radius: 50% !important; border: 4px solid #333 !important; box-shadow: inset 0 0 40px #000, 0 0 15px rgba(255,255,255,0.1) !important; overflow: hidden; }
             .record-ring { position:absolute; border: 1px dashed rgba(255,255,255,0.3); border-radius: 50%; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none; animation: record-spin linear infinite; z-index: 0;}
             @keyframes record-spin { 100% { transform: translate(-50%,-50%) rotate(360deg); } }
+            @keyframes simple-spin { 100% { transform: rotate(360deg); } }
             .music-note { position: absolute; color: #fff; font-size: 18px; animation: floatNote 4s ease-in infinite; opacity: 0; pointer-events:none; z-index:0; }
             @keyframes floatNote { 0% { transform: translateY(0) scale(0.8) rotate(-10deg); opacity: 0; } 20% { opacity: 0.8; } 100% { transform: translateY(-120px) scale(1.5) rotate(20deg); opacity: 0; } }
+            
+            /* 新增：蔥電飽 Modal 特效 */
+            #energy-modal { background: #051a05 !important; border: 2px solid #00ff00 !important; box-shadow: 0 0 20px #00ff00, inset 0 0 30px #003300 !important; color: #ccffcc; overflow: hidden; }
+            .electric-border { position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: conic-gradient(transparent, transparent, transparent, #00ff00); animation: electric-spin 2s linear infinite; opacity: 0.5; z-index: 0; pointer-events: none; }
+            .electric-inner { position: absolute; top: 4px; left: 4px; right: 4px; bottom: 4px; background: #051a05; border-radius: 8px; z-index: 0; pointer-events: none; }
+            @keyframes electric-spin { 100% { transform: rotate(360deg); } }
             
             /* 新增：法寶庫存 Modal 特效 */
             #magic-modal { background: linear-gradient(180deg, #02111d 0%, #003a5e 100%) !important; border: 2px solid #0088cc !important; box-shadow: inset 0 0 30px #00aaff !important; overflow: hidden; }
@@ -215,20 +225,23 @@ function createSystemUI() {
             @keyframes drip { 0% { transform: translateY(-30px); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(300px); opacity: 0; } }
         </style>
 
-        <div id="energy-modal" class="modal" style="z-index: 260;">
-            <h3 style="color:var(--mucha-green); margin-top:0;">🔋 蔥電飽</h3>
-            <div class="sprite-sleep-charger"></div>
-            <div style="margin-bottom:10px; color:#3e2723; font-weight:bold; font-size:14px;">當前體力</div>
-            <div style="position:relative; width:90%; height:24px; background:#ccc; border-radius:12px; margin:0 auto; overflow:hidden; border:2px solid var(--mucha-gold);">
-                <div id="energy-modal-bar" class="energy-bar-spark" style="position:absolute; top:0; left:0; width:0%; height:100%; background:linear-gradient(90deg, #8bc34a, #4caf50); transition: width 0.3s;"></div>
+        <div id="energy-modal" class="modal" style="z-index: 260; position: relative; padding: 25px;">
+            <div class="electric-border"></div><div class="electric-inner"></div>
+            <div style="position: relative; z-index: 1;">
+                <h3 style="color:#00ff00; margin-top:0; text-shadow: 0 0 5px #00ff00;">🔋 蔥電飽</h3>
+                <div class="sprite-sleep-charger" style="filter: drop-shadow(0 0 5px #00ff00);"></div>
+                <div style="margin-bottom:10px; color:#ccffcc; font-weight:bold; font-size:14px; text-shadow: 0 0 3px #00ff00;">當前體力</div>
+                <div style="position:relative; width:90%; height:24px; background:#001a00; border-radius:12px; margin:0 auto; overflow:hidden; border:2px solid #00ff00; box-shadow: 0 0 10px #00ff00;">
+                    <div id="energy-modal-bar" class="energy-bar-spark" style="position:absolute; top:0; left:0; width:0%; height:100%; background:linear-gradient(90deg, #00cc00, #00ff00); transition: width 0.3s; box-shadow: 0 0 10px #00ff00;"></div>
+                </div>
+                <div id="energy-modal-text" style="font-weight:bold; color:#00ff00; margin-top:5px; font-size:18px; text-shadow: 0 0 5px #00ff00;">0%</div>
+                <hr style="border:1px dashed #00ff00; margin:20px 0; opacity: 0.5;">
+                <h4 style="margin:0 0 10px 0; color:#33ff33; font-size:16px; text-shadow: 0 0 5px #00ff00;">🏦 蔥電飽銀行</h4>
+                <p style="font-size:12px; color:#99ff99; margin:0 0 10px 0;">(睡覺時每分鐘賺取3馬德幣)</p>
+                <div style="font-size:28px; font-weight:bold; color:#ffcc00; text-shadow:0 0 10px #ffcc00; margin-bottom:15px;">💰 <span id="energy-bank-val">0</span></div>
+                <button class="btn-primary" style="width:80%; font-size:16px; padding:10px; background: #006600; border: 1px solid #00ff00; color: #fff; box-shadow: 0 0 8px #00ff00; border-radius: 8px; font-weight: bold;" onclick="window.claimEnergyBank()">領取入帳</button>
+                <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%; background: #003300; border: 1px solid #009900; color: #ccffcc; border-radius: 8px;" onclick="document.getElementById('energy-modal').style.display='none'">關閉</button>
             </div>
-            <div id="energy-modal-text" style="font-weight:bold; color:var(--mucha-brown); margin-top:5px; font-size:18px;">0%</div>
-            <hr style="border:1px dashed var(--mucha-gold); margin:20px 0;">
-            <h4 style="margin:0 0 10px 0; color:#d4af37; font-size:16px;">🏦 蔥電飽銀行</h4>
-            <p style="font-size:12px; color:#888; margin:0 0 10px 0;">(睡覺時每分鐘賺取3馬德幣)</p>
-            <div style="font-size:28px; font-weight:bold; color:#ffcc00; text-shadow:1px 1px 2px #000; margin-bottom:15px;">💰 <span id="energy-bank-val">0</span></div>
-            <button class="btn-primary" style="width:80%; font-size:16px; padding:10px;" onclick="window.claimEnergyBank()">領取入帳</button>
-            <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('energy-modal').style.display='none'">關閉</button>
         </div>
         
         <div id="fullscreen-viewer" onclick="window.closeFullscreen()" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; cursor:pointer;">
@@ -295,21 +308,23 @@ function createSystemUI() {
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('memory-modal').style.display='none'">闔上回憶錄</button>
         </div>
 
-        <div id="settings-modal" class="modal" style="width: 350px; height: 350px; box-sizing: border-box; z-index: 260; padding: 25px;">
-            <div class="record-ring" style="width: 290px; height: 290px; animation-duration: 8s;"></div>
-            <div class="record-ring" style="width: 320px; height: 320px; animation-duration: 12s; border-style: dotted;"></div>
+        <div id="settings-modal" class="modal" style="width: 380px; height: 380px; box-sizing: border-box; z-index: 260; padding: 0;">
+            <div class="record-ring" style="width: 310px; height: 310px; animation-duration: 8s;"></div>
+            <div class="record-ring" style="width: 350px; height: 350px; animation-duration: 12s; border-style: dotted;"></div>
             <div class="music-note" style="bottom: 20%; left: 30%; animation-delay: 0s;">🎵</div>
             <div class="music-note" style="bottom: 15%; left: 60%; animation-delay: 1.5s;">🎶</div>
             <div class="music-note" style="bottom: 35%; left: 80%; animation-delay: 3s;">🎵</div>
             
-            <h3 style="color: #fff; border-bottom: 1px dashed rgba(255,255,255,0.3); padding-bottom: 5px; margin-top: 0; z-index:1; width:80%;">🎵 蔥Music</h3>
-            <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; position: relative; z-index:1; width:95%;">
-                <div style="display: flex; align-items: center; justify-content: center; gap: 15px;"><button class="btn-secondary" onclick="window.prevTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0;">&lt;</button><img id="music-cover" onclick="window.openFullscreen(this.src)" src="Sweet-Onion.png" alt="Music Cover" style="width: 130px; height: 130px; border-radius: 50%; border: 4px solid #444; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.8); cursor: pointer; animation: record-spin 5s linear infinite;"><button class="btn-secondary" onclick="window.nextTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0;">&gt;</button></div>
-                <div id="music-title" style="font-weight: bold; color: #fff; font-size: 16px; text-shadow: 0 2px 4px rgba(0,0,0,0.8);">Sweet-Onion</div>
-                <div style="width: 100%; margin-top: 5px;"><label style="font-size: 13px; color: #ccc; display: flex; justify-content: space-between;"><span>音樂音量</span> <span id="bgm-vol-text">100%</span></label><input type="range" id="bgm-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 3px;" oninput="window.updateBGMVolume(this.value)"></div>
-                <div style="width: 100%; margin-top: 5px;"><label style="font-size: 13px; color: #ccc; display: flex; justify-content: space-between;"><span>特殊音效</span> <span id="sfx-vol-text">100%</span></label><input type="range" id="sfx-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 3px;" oninput="window.updateSFXVolume(this.value)"></div>
+            <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; padding: 15px; box-sizing: border-box; position: relative; z-index: 1;">
+                <h3 style="color: #fff; border-bottom: 1px dashed rgba(255,255,255,0.3); padding-bottom: 5px; margin-top: 0; margin-bottom: 10px; width:80%;">🎵 蔥Music</h3>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; width:90%;">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 15px;"><button class="btn-secondary" onclick="window.prevTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0; position:relative; z-index:10;">&lt;</button><img id="music-cover" onclick="window.openFullscreen(this.src)" src="Sweet-Onion.png" alt="Music Cover" style="width: 140px; height: 140px; border-radius: 50%; border: 4px solid #444; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.8); cursor: pointer; animation: simple-spin 5s linear infinite; position:relative; z-index:10;"><button class="btn-secondary" onclick="window.nextTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0; position:relative; z-index:10;">&gt;</button></div>
+                    <div id="music-title" style="font-weight: bold; color: #fff; font-size: 16px; text-shadow: 0 2px 4px rgba(0,0,0,0.8); margin-top: 5px;">Sweet-Onion</div>
+                    <div style="width: 100%; margin-top: 5px;"><label style="font-size: 13px; color: #ccc; display: flex; justify-content: space-between;"><span>音樂音量</span> <span id="bgm-vol-text">100%</span></label><input type="range" id="bgm-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 3px; position:relative; z-index:10;" oninput="window.updateBGMVolume(this.value)"></div>
+                    <div style="width: 100%; margin-top: 5px;"><label style="font-size: 13px; color: #ccc; display: flex; justify-content: space-between;"><span>特殊音效</span> <span id="sfx-vol-text">100%</span></label><input type="range" id="sfx-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 3px; position:relative; z-index:10;" oninput="window.updateSFXVolume(this.value)"></div>
+                </div>
+                <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 60%; border-radius: 20px; padding: 8px; position: relative; z-index: 20;" onclick="document.getElementById('settings-modal').style.display='none'">關閉播放器</button>
             </div>
-            <button class="close-modal-btn btn-secondary" style="margin-top: 10px; width: 50%; z-index:1; border-radius: 20px; padding: 6px;" onclick="document.getElementById('settings-modal').style.display='none'">關閉</button>
         </div>
 
         <div id="manual-modal" class="modal" style="width: 90%; max-width: none; height: 90vh; max-height: none; top: 5%; left: 5%; transform: none; box-sizing: border-box; z-index: 260;">
@@ -319,7 +334,7 @@ function createSystemUI() {
             <button class="close-modal-btn btn-secondary" style="margin-top: 30px; width: 100%;" onclick="document.getElementById('manual-modal').style.display='none'">關閉說明書</button>
         </div>
         
-        <div id="portal-modal" class="modal" style="z-index: 260; padding: 40px 20px; display:flex; flex-direction:column; justify-content:center; align-items:center; width: 280px; height: 440px; box-sizing: border-box;">
+        <div id="portal-modal" class="modal" style="z-index: 260; padding: 0; width: 280px; height: 440px; box-sizing: border-box;">
             <div style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:0; pointer-events:none; animation: portal-spin 6s linear infinite; transform-origin: center;">
                 <div class="portal-particle" style="top:10%; left:20%; width:6px; height:6px; background:#d8bfd8; box-shadow:0 0 8px #d8bfd8;"></div>
                 <div class="portal-particle" style="top:80%; left:70%; width:4px; height:4px; background:#fff; box-shadow:0 0 8px #fff;"></div>
@@ -327,14 +342,16 @@ function createSystemUI() {
                 <div class="portal-particle" style="top:70%; left:10%; width:5px; height:5px; background:#d8bfd8; box-shadow:0 0 8px #d8bfd8;"></div>
             </div>
             
-            <h3 style="margin-top:0; color:#fff; z-index:1; border:none; text-shadow: 0 0 10px #8a2be2, 0 0 20px #8a2be2; font-size: 22px;">🌀 空間傳送門</h3>
-            <div style="display:flex; flex-direction:column; gap:12px; width: 100%; z-index:1; padding: 0 15px; box-sizing:border-box; margin-top: 10px;">
-                <button class="btn-primary" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); setTimeout(() => { window.switchScene('doghouse'); document.getElementById('portal-modal').style.display='none'; }, 250);">🏠 我的狗窩</button>
-                <button class="btn-primary" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); setTimeout(() => { window.switchScene('cafe'); document.getElementById('portal-modal').style.display='none'; }, 250);">☕ 洋蔥大廳</button>
-                <button class="btn-primary" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); setTimeout(() => { window.switchScene('farm'); document.getElementById('portal-modal').style.display='none'; }, 250);">🌱 我的蔥田</button>
-                <button class="btn-primary" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); setTimeout(() => { window.switchScene('7eonion'); document.getElementById('portal-modal').style.display='none'; }, 250);">🏪 7-EONION</button>
+            <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; width:100%; height:100%; padding: 40px 20px; box-sizing: border-box; position: relative; z-index: 1;">
+                <h3 style="margin-top:0; color:#fff; border:none; text-shadow: 0 0 10px #8a2be2, 0 0 20px #8a2be2; font-size: 22px;">🌀 空間傳送門</h3>
+                <div style="display:flex; flex-direction:column; gap:12px; width: 100%; padding: 0 15px; box-sizing:border-box; margin-top: 10px;">
+                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); setTimeout(() => { window.switchScene('doghouse'); document.getElementById('portal-modal').style.display='none'; }, 250);">🏠 我的狗窩</button>
+                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); setTimeout(() => { window.switchScene('cafe'); document.getElementById('portal-modal').style.display='none'; }, 250);">☕ 洋蔥大廳</button>
+                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); setTimeout(() => { window.switchScene('farm'); document.getElementById('portal-modal').style.display='none'; }, 250);">🌱 我的蔥田</button>
+                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); setTimeout(() => { window.switchScene('7eonion'); document.getElementById('portal-modal').style.display='none'; }, 250);">🏪 7-EONION</button>
+                </div>
+                <button class="close-modal-btn btn-secondary" style="margin-top: 25px; width: 70%; border-radius: 20px; position:relative; z-index:10;" onclick="document.getElementById('portal-modal').style.display='none'">關閉傳送門</button>
             </div>
-            <button class="close-modal-btn btn-secondary" style="margin-top: 25px; width: 70%; z-index:1; border-radius: 20px;" onclick="document.getElementById('portal-modal').style.display='none'">關閉傳送門</button>
         </div>
 
         <div id="game-layout-container"><div id="phaser-app"></div><div id="chat-section"><button id="chat-toggle-btn">收起對話 ▲</button><div id="chat-content"><div id="chat-box"></div><div id="chat-input-area"><input type="text" id="chat-input" placeholder="說點什麼..."><button id="send-btn">發送</button></div></div></div></div>
