@@ -1988,20 +1988,27 @@ class MainScene extends Phaser.Scene {
             module.get(module.ref(window.GameLogic.db, 'cafeMimi/hp')).then(snap => {
                 let chp = snap.val() || 0;
                 if (chp > 0) {
-                    let newHp = chp - 1; module.update(module.ref(module.ref(window.GameLogic.db, 'cafeMimi')), { hp: newHp });
+                    let newHp = chp - 1; 
+                    // 這裡修正了重複包裝 module.ref 的錯誤
+                    module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { hp: newHp });
                     
-                    // 【新增】老鼠被水球或煙火砸中時，立刻播放一次受擊/尖叫聲
+                    // 老鼠被水球或煙火砸中時，立刻播放一次受擊/尖叫聲
                     window.playSFX(this, 'mimi-thief-stealing');
 
                     if (newHp <= 0) {
                         module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { state: 'down', active: false });
                         
-                        // 【新增】確定完全擊倒老鼠時，播放終結倒地音效
+                        // 確定完全擊倒老鼠時，播放終結倒地音效
                         window.playSFX(this, 'mimi-thief-get-down');
 
-                        let mData = window.GameLogic.cafeMimiData || {}; let baseCoins = 300 * (mData.playersInvolved || 1); let totalValue = baseCoins + (mData.stolenPool || 0); let coinValue = Math.floor(totalValue / 10);
+                        let mData = window.GameLogic.cafeMimiData || {}; 
+                        let baseCoins = 300 * (mData.playersInvolved || 1); 
+                        let totalValue = baseCoins + (mData.stolenPool || 0); 
+                        let coinValue = Math.floor(totalValue / 10);
                         let dropUpdates = {};
-                        for(let i=0; i<10; i++) { dropUpdates[`droppedCoins/mimi_coin_${Date.now()}_${i}`] = { x: x + Phaser.Math.Between(-60, 60), y: y + Phaser.Math.Between(-60, 60) + 20, amount: coinValue }; }
+                        for(let i=0; i<10; i++) { 
+                            dropUpdates[`droppedCoins/mimi_coin_${Date.now()}_${i}`] = { x: x + Phaser.Math.Between(-60, 60), y: y + Phaser.Math.Between(-60, 60) + 20, amount: coinValue }; 
+                        }
                         dropUpdates['serverEvents/mimiNextSpawn'] = Date.now() + Phaser.Math.Between(600000, 900000);
                         module.update(module.ref(window.GameLogic.db), dropUpdates);
                         sendBubble("打倒鼠偷米米啦！掉出滿地金幣！");
@@ -2352,5 +2359,32 @@ function listenToChat() { onValue(ref(db, 'chats'), (snapshot) => { const chatBo
 
 document.getElementById("upload-memory-btn").onclick = () => { const fileInput = document.getElementById("memory-file"); const textInput = document.getElementById("memory-text"); const file = fileInput.files[0]; const text = textInput.value.trim(); if (!file && !text) return alert("請上傳圖片或填寫文字！"); if (file) { const reader = new FileReader(); reader.onload = e => { const img = new Image(); img.onload = () => { const cvs = document.createElement('canvas'); let w = img.width, h = img.height; if (w > 300) { h *= 300 / w; w = 300; } cvs.width = w; cvs.height = h; cvs.getContext('2d').drawImage(img, 0, 0, w, h); saveMemoryToDB(cvs.toDataURL('image/jpeg', 0.7), text); }; img.src = e.target.result; }; reader.readAsDataURL(file); } else saveMemoryToDB("", text); fileInput.value = ""; textInput.value = ""; };
 function saveMemoryToDB(imgBase64, text) { push(ref(db, 'memories'), { uid: window.GameLogic.currentUser.uid, author: window.GameLogic.myProfile.name, img: imgBase64, text: text, time: new Date().toLocaleDateString('zh-TW') }); }
-window.deleteMemory = async function(key) { const snap = await get(ref(db, `memories/${key}`)); if (snap.exists()) { let m = snap.val(); let isMine = (m.uid === window.GameLogic.currentUser.uid) || (m.author === window.GameLogic.myProfile.name); if (isMine) { if (confirm("確定要刪除這條回憶嗎？")) remove(ref(db, `memories/${key}`)); } else { alert("您沒有權限刪除這篇回憶喔！"); } } };
-function listenToMemories() { onValue(ref(db, 'memories'), snap => { const feed = document.getElementById("memory-feed"); feed.innerHTML = ""; const data = snap.val(); if (data) { Object.keys(data).reverse().forEach(key => { let m = data[key]; let isMine = (m.uid === window.GameLogic.currentUser.uid) || (m.author === window.GameLogic.myProfile.name); let delBtnHtml = isMine ? `<button class="del-btn" onclick="window.deleteMemory('${key}')">刪除</button>` : ''; feed.innerHTML += `<div class="memory-card">${delBtnHtml}<div class="author">${m.author} - ${m.time}</div>${m.img ? `<img src="${m.img}" alt="回憶照片">` : ''}${m.text ? `<div class="text">${m.text}</div>` : ''}</div>`; }); } }); 
+window.deleteMemory = async function(key) { 
+    const snap = await get(ref(db, `memories/${key}`)); 
+    if (snap.exists()) { 
+        let m = snap.val(); 
+        let isMine = (m.uid === window.GameLogic.currentUser.uid) || (m.author === window.GameLogic.myProfile.name); 
+        if (isMine) { 
+            if (confirm("確定要刪除這條回憶嗎？")) remove(ref(db, `memories/${key}`)); 
+        } else { 
+            alert("您沒有權限刪除這篇回憶喔！"); 
+        } 
+    } 
+};
+
+function listenToMemories() { 
+    onValue(ref(db, 'memories'), snap => { 
+        const feed = document.getElementById("memory-feed"); 
+        feed.innerHTML = ""; 
+        const data = snap.val(); 
+        if (data) { 
+            Object.keys(data).reverse().forEach(key => { 
+                let m = data[key]; 
+                let isMine = (m.uid === window.GameLogic.currentUser.uid) || (m.author === window.GameLogic.myProfile.name); 
+                let delBtnHtml = isMine ? `<button class="del-btn" onclick="window.deleteMemory('${key}')">刪除</button>` : ''; 
+                feed.innerHTML += `<div class="memory-card">${delBtnHtml}<div class="author">${m.author} - ${m.time}</div>${m.img ? `<img src="${m.img}" alt="回憶照片">` : ''}${m.text ? `<div class="text">${m.text}</div>` : ''}</div>`; 
+            }); 
+        } 
+    }); 
+}
+// (這必須是整份檔案的最後一行！)
