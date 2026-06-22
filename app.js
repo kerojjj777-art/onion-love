@@ -656,7 +656,7 @@ window.openInventoryModal = function() {
     rawItems['profile'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'profile\')"' : ''}><img src="tools-id-card.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0;">洋蔥身分證</span></div>`;
     rawItems['music'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'music\')"' : ''}><div class="sprite-music-box"></div><span style="margin:5px 0;">蔥Music</span></div>`;
     rawItems['manual'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'manual\')"' : ''}><img src="tools-manual.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0;">說明書</span></div>`;
-    rawItems['magic_items'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'magic_items\')"' : ''}><span style="font-size:24px; margin-bottom:5px;">✨</span><span style="margin:5px 0; color:var(--mucha-brown); font-weight:bold;">法寶</span></div>`;
+    rawItems['magic_items'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'magic_items\')"' : ''}><img src="tools-magic-weapon.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0; color:var(--mucha-brown); font-weight:bold;">法寶</span></div>`;
     rawItems['logout'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'logout\')"' : ''}><img src="tools-leave.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0;">登出大廳</span></div>`;if (window.GameLogic.currentUser && window.GameLogic.currentUser.email === 'onion@gmail.com') {
         rawItems['dev'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'dev\')"' : ''}><span style="font-size:24px; margin-bottom:5px;">🛠️</span><span style="margin:5px 0; font-weight:bold; color:var(--mucha-green);">洋蔥精靈</span></div>`;
     }
@@ -1023,7 +1023,7 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('onion-clean', 'onion-clean.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-sleep', 'onion-sleeping.png', { frameWidth: 75, frameHeight: 75 });
         // 新增：載入蔥電飽充電器精靈圖
         this.load.spritesheet('sleep-charger', 'sleep_onion_bao_charger.png', { frameWidth: 90, frameHeight: 90 });
-        this.load.image('bg7Eonion', '7eonion-bg.jpg'); this.load.image('storeManager', 'store-manager.png'); this.load.spritesheet('onion-throw', 'onion-throw.png', { frameWidth: 90, frameHeight: 75 }); this.load.spritesheet('water-ball-blast', 'water-ball-blast.png', { frameWidth: 50, frameHeight: 50 }); this.load.spritesheet('onion-wet', 'onion-wet.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('made-coin', 'made-coin.png', { frameWidth: 50, frameHeight: 50 }); this.load.image('dummy', 'dummy.png'); this.load.spritesheet('dummy-wet', 'dummy-wet.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.image('bg7Eonion', '7eonion-bg.jpg'); this.load.image('storeManager', 'store-manager.png'); this.load.spritesheet('onion-throw', 'onion-throw.png', { frameWidth: 90, frameHeight: 75 }); this.load.spritesheet('water-ball-blast', 'water-ball-blast.png', { frameWidth: 50, frameHeight: 50 }); this.load.spritesheet('onion-wet', 'onion-wet.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('made-coin', 'made-coin.png', { frameWidth: 50, frameHeight: 50 }); this.load.image('dummy', 'dummy.png'); this.load.spritesheet('dummy-wet', 'dummy-wet.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('dummy-got-shot', 'dummy-got-shot.png', { frameWidth: 75, frameHeight: 75 });
         this.load.image('fireworks', 'shop-fireworks.png'); this.load.spritesheet('onion-fireworks', 'onion-fireworks.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-got-shot', 'onion-got-shot.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('mimi-thief-walk', 'mimi-thief-walk.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('fireworks-shoot', 'fireworks-shoot.png', { frameWidth: 50, frameHeight: 50 });
         this.load.spritesheet('mimi-thief-stealing', 'mimi-thief-stealing.png', { frameWidth: 75, frameHeight: 75 });
@@ -1052,7 +1052,7 @@ class BootScene extends Phaser.Scene {
         // 修正2：經驗條改為橘紅漸層
         let expGr = this.make.graphics({ x:0, y:0, add:false }); expGr.fillStyle(0xff5722, 1); expGr.fillRect(0, 0, 64, 16); expGr.fillStyle(0xff8a65, 0.6); for(let i = -16; i < 64; i += 16) { expGr.beginPath(); expGr.moveTo(i, 0); expGr.lineTo(i+8, 0); expGr.lineTo(i+16, 16); expGr.lineTo(i+8, 16); expGr.closePath(); expGr.fillPath(); } expGr.generateTexture('exp-liquid', 64, 16);
         let fwGr = this.make.graphics({ x:0, y:0, add:false }); fwGr.fillStyle(0xffffff, 1); fwGr.fillCircle(4, 4, 4); fwGr.generateTexture('fw-particle', 8, 8);
-        this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('onion-up'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'walk', frames: this.anims.generateFrameNumbers('onion-walk', { start: 0, end: 5 }), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'idle', frames: this.anims.generateFrameNumbers('onion-idle'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'skin-anim', frames: this.anims.generateFrameNumbers('onion-skin', { start: 0, end: 3 }), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'skin-old-anim', frames: this.anims.generateFrameNumbers('onion-skin-old', { start: 0, end: 5 }), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'clean', frames: this.anims.generateFrameNumbers('onion-clean'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'throw', frames: this.anims.generateFrameNumbers('onion-throw'), frameRate: 10, repeat: 0 }); this.anims.create({ key: 'wb-blast', frames: this.anims.generateFrameNumbers('water-ball-blast'), frameRate: 15, repeat: -1 }); this.anims.create({ key: 'wet', frames: this.anims.generateFrameNumbers('onion-wet'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'coin-anim', frames: this.anims.generateFrameNumbers('made-coin'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'dummy-hit', frames: this.anims.generateFrameNumbers('dummy-got-shot'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'sleep', frames: this.anims.generateFrameNumbers('onion-sleep'), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('onion-up'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'walk', frames: this.anims.generateFrameNumbers('onion-walk', { start: 0, end: 5 }), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'idle', frames: this.anims.generateFrameNumbers('onion-idle'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'skin-anim', frames: this.anims.generateFrameNumbers('onion-skin', { start: 0, end: 3 }), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'skin-old-anim', frames: this.anims.generateFrameNumbers('onion-skin-old', { start: 0, end: 5 }), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'clean', frames: this.anims.generateFrameNumbers('onion-clean'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'throw', frames: this.anims.generateFrameNumbers('onion-throw'), frameRate: 10, repeat: 0 }); this.anims.create({ key: 'wb-blast', frames: this.anims.generateFrameNumbers('water-ball-blast'), frameRate: 15, repeat: -1 }); this.anims.create({ key: 'wet', frames: this.anims.generateFrameNumbers('onion-wet'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'coin-anim', frames: this.anims.generateFrameNumbers('made-coin'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'dummy-fw-hit', frames: this.anims.generateFrameNumbers('dummy-got-shot'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'sleep', frames: this.anims.generateFrameNumbers('onion-sleep'), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'fw-throw', frames: this.anims.generateFrameNumbers('onion-fireworks'), frameRate: 8, repeat: 2 }); this.anims.create({ key: 'fw-hit', frames: this.anims.generateFrameNumbers('onion-got-shot'), frameRate: 10, repeat: -1 }); 
         this.anims.create({ key: 'fw-shoot', frames: this.anims.generateFrameNumbers('fireworks-shoot'), frameRate: 15, repeat: -1 });
         this.anims.create({ key: 'mimi-walk', frames: this.anims.generateFrameNumbers('mimi-thief-walk'), frameRate: 15, repeat: -1 });
@@ -1120,11 +1120,11 @@ class UIScene extends Phaser.Scene {
         this.btnA.on('pointerdown', () => { this.btnA.setFillStyle(0xb52b27); this.aPressTime = Date.now(); });
         this.btnA.on('pointerup', () => { this.btnA.setFillStyle(0xd9534f); let duration = Date.now() - this.aPressTime; const mainScene = this.scene.manager.getScene('MainScene'); if(mainScene) { if (window.GameLogic.placingFurnitureKey) mainScene.events.emit('action_A_place'); else if (duration > 500) mainScene.events.emit('action_A_long'); else mainScene.events.emit('action_A_short'); } });
         
-        // 建立法寶選單的華麗粒子背景
+        // 建立法寶選單的華麗粒子背景 (修正偏移與外框範圍)
         this.magicMenuEmitter = this.add.particles(0, 0, 'particle_flare', {
             speed: { min: 10, max: 40 }, angle: { min: 0, max: 360 }, scale: { start: 0.8, end: 0 },
             tint: [0x00ccff, 0xffffff, 0x00ffff], blendMode: 'ADD', lifespan: { min: 600, max: 1200 }, quantity: 8,
-            emitZone: { type: 'edge', source: new Phaser.Geom.Rectangle(-160, -50, 320, 100), quantity: 30 }
+            emitZone: { type: 'edge', source: new Phaser.Geom.Rectangle(-160, -55, 320, 110), quantity: 30 }
         }).setDepth(500).stop();
 
         this.btnB.on('pointerdown', () => { 
@@ -1189,7 +1189,7 @@ class UIScene extends Phaser.Scene {
         this.statusText.setPosition(bgW * 0.32, -bgH * 0.30).setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); this.equipText.setPosition(bgW * 0.75, -bgH * 0.30).setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); this.statusToggleBtn.setPosition(bgW, -bgH * 0.30);
         let clusterX = gameSize.width - 90; let clusterY = gameSize.height - bottomOffset - 70; let d = 45; 
         this.itemBtn.setPosition(clusterX, clusterY - d); this.itemText.setPosition(this.itemBtn.x, this.itemBtn.y); this.btnA.setPosition(clusterX + d, clusterY); this.txtA.setPosition(this.btnA.x, this.btnA.y); this.btnB.setPosition(clusterX, clusterY + d); this.txtB.setPosition(this.btnB.x, this.btnB.y); this.furnBtn.setPosition(clusterX - d, clusterY); this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
-        if (this.magicMenuEmitter) this.magicMenuEmitter.setPosition(gameSize.width / 2, gameSize.height - 150);
+        if (this.magicMenuEmitter) this.magicMenuEmitter.setPosition(gameSize.width / 2, gameSize.height - 165);
     }
 
     playExpGainEffect() {
@@ -1809,13 +1809,17 @@ class MainScene extends Phaser.Scene {
         this.playersHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/waterHits'), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { opSprite.isStunned = true; opSprite.play('wet', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
         this.dummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/dummyHits'), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
 
-        // 建立蔥電寶專屬綠色往上飄特效
+        // 建立蔥電飽專屬綠色往上飄特效 (優化效能並確保隨身顯示)
         this.playerEnergyEmitter = this.add.particles(0, 0, 'fw-particle', {
-            speedY: { min: -20, max: -60 }, speedX: { min: -10, max: 10 },
-            scale: { start: 1.2, end: 0 }, alpha: { start: 0.8, end: 0 },
+            speedY: { min: -15, max: -40 }, speedX: { min: -5, max: 5 },
+            scale: { start: 0.8, end: 0 }, alpha: { start: 0.6, end: 0 },
             tint: [0x8bc34a, 0xadff2f, 0x00ff00], blendMode: 'ADD',
-            lifespan: 800, quantity: 1, frequency: 150
-        }).setDepth(15).stop();
+            lifespan: 600, frequency: 250
+        }).setDepth(15);
+        this.playerEnergyEmitter.stop();
+        this.playerEnergyEmitter.isEnergyEmitting = false; // 自製旗標防呆，避免頻繁呼叫 start 導致卡頓
+
+        this.events.on('shutdown', () => {
 
         this.events.on('shutdown', () => {
             if (this.leaderboardListener) this.leaderboardListener(); 
@@ -2301,7 +2305,7 @@ class MainScene extends Phaser.Scene {
                         let targetUid = null; let minDist = 9999; let stolenUids = mData.stolenUids || {};
                         let stolenCount = Object.keys(stolenUids).length;
                         
-                        let walkSpeed = (stolenCount === 0) ? 320 : 550; 
+                        let walkSpeed = (stolenCount === 0) ? 200 : 350; // 修正3：整體降速
                         
                         pUids.forEach(uid => { if (!stolenUids[uid]) { let op = this.otherPlayers[uid] ? this.otherPlayers[uid].sprite : (uid === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null); if (op) { let d = Phaser.Math.Distance.Between(mData.x, mData.y, op.x, op.y); if (d < minDist) { minDist = d; targetUid = uid; targetX = op.x; targetY = op.y; } } } });
                         if (targetUid) {
@@ -2309,22 +2313,28 @@ class MainScene extends Phaser.Scene {
                                 let angle = Phaser.Math.Angle.Between(mData.x, mData.y, targetX, targetY); 
                                 targetX = mData.x + Math.cos(angle) * (delta / 1000) * walkSpeed; 
                                 targetY = mData.y + Math.sin(angle) * (delta / 1000) * walkSpeed; 
-                                // 【修正3】：米米原圖面朝左，所以向右跑 (targetX > mData.x) 時才需要鏡像翻轉
                                 update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX > mData.x) }); 
                             } else {
                                 update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'stealing', stealingFrom: targetUid }); 
                             }
                         } else {
+                            // 當逃避時，讓米米傾向於往中央跑
                             let sumX = 0, sumY = 0; pUids.forEach(u => { let op = this.otherPlayers[u] ? this.otherPlayers[u].sprite : (u === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null); if (op) { sumX += op.x; sumY += op.y; } });
                             let cX = sumX / pUids.length; let cY = sumY / pUids.length;
+                            
                             let angleAway = Phaser.Math.Angle.Between(cX, cY, mData.x, mData.y);
+                            let angleToCenter = Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024);
+                            
                             let safeX = Phaser.Math.Clamp(cX + Math.cos(angleAway) * 200, 100, 1948); let safeY = Phaser.Math.Clamp(cY + Math.sin(angleAway) * 200, 100, 1948);
                             let distToSafe = Phaser.Math.Distance.Between(mData.x, mData.y, safeX, safeY);
                             if (distToSafe > 20) { 
+                                // 修正3：取靠近中心與遠離玩家的折衷角度，讓牠不要一直卡在邊緣
                                 let angle = Phaser.Math.Angle.Between(mData.x, mData.y, safeX, safeY); 
-                                targetX = mData.x + Math.cos(angle) * (delta / 1000) * 180; 
-                                targetY = mData.y + Math.sin(angle) * (delta / 1000) * 180; 
-                                // 【修正3】：向右跑才翻轉
+                                let centerWeight = Phaser.Math.Distance.Between(mData.x, mData.y, 1024, 1024) / 1000;
+                                angle = Phaser.Math.Angle.RotateTo(angle, angleToCenter, centerWeight * 0.5);
+                                
+                                targetX = mData.x + Math.cos(angle) * (delta / 1000) * 150; 
+                                targetY = mData.y + Math.sin(angle) * (delta / 1000) * 150; 
                                 update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX > mData.x) }); 
                             } else { 
                                 update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'laughing', laughTime: Date.now() }); 
@@ -2338,7 +2348,7 @@ class MainScene extends Phaser.Scene {
                         if (Date.now() - mData.laughTime > 3000) {
                             let unrobbedExist = pUids.some(uid => !(mData.stolenUids && mData.stolenUids[uid]));
                             if (unrobbedExist) update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'walk' });
-                            else update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'chase', randomAngle: Math.random() * Math.PI * 2 });
+                            else update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'chase', randomAngle: Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024) });
                         }
                     } else if (mData.state === 'chase' && mData.hp > 0) {
                         let unrobbedExist = pUids.some(uid => !(mData.stolenUids && mData.stolenUids[uid]));
@@ -2352,13 +2362,16 @@ class MainScene extends Phaser.Scene {
                             });
                             
                             let angle = mData.randomAngle || 0;
-                            let boostSpeed = mData.speedBoost || 250; 
+                            let boostSpeed = mData.speedBoost || 200; // 降低衝刺基礎速度
                             
                             if (nearestP && minDistToPlayer < 400) {
                                 angle = Phaser.Math.Angle.Between(nearestP.x, nearestP.y, mData.x, mData.y);
                                 angle += Phaser.Math.FloatBetween(-0.3, 0.3); 
-                            } else if (Math.random() < 0.05) {
-                                angle += Phaser.Math.FloatBetween(-0.5, 0.5); 
+                            } else {
+                                // 如果附近沒有人，引導牠往地圖中央跑
+                                let angleToCenter = Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024);
+                                angle = Phaser.Math.Angle.RotateTo(angle, angleToCenter, 0.1);
+                                if (Math.random() < 0.05) angle += Phaser.Math.FloatBetween(-0.5, 0.5); 
                             }
                             
                             targetX = mData.x + Math.cos(angle) * (delta / 1000) * boostSpeed; 
@@ -2367,13 +2380,15 @@ class MainScene extends Phaser.Scene {
                             if (targetX < 50 || targetX > 1998 || targetY < 50 || targetY > 1998) { 
                                 targetX = Phaser.Math.Clamp(targetX, 50, 1998); 
                                 targetY = Phaser.Math.Clamp(targetY, 50, 1998); 
-                                angle = angle + Math.PI + Phaser.Math.FloatBetween(-0.5, 0.5);
-                                boostSpeed = 800; // 邊緣大反彈與衝刺
+                                // 反彈時也給一個向中心的傾向
+                                angle = Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024) + Phaser.Math.FloatBetween(-0.5, 0.5);
+                                boostSpeed = 500; // 降低邊緣大反彈極限速度
                             } else {
-                                boostSpeed = 250;
+                                boostSpeed = 200;
                             }
                             update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX > mData.x), randomAngle: angle, speedBoost: boostSpeed });
                         }
+                    }
                     } else if (mData.state === 'down') {
                         if (!mData.downTime) update(ref(window.GameLogic.db, 'cafeMimi'), { downTime: Date.now() });
                         else if (Date.now() - mData.downTime > 3000) update(ref(window.GameLogic.db, 'cafeMimi'), { active: false, state: 'none' });
@@ -2540,10 +2555,16 @@ class MainScene extends Phaser.Scene {
         this.updatePlayerEntity(this.localPlayer, window.GameLogic.myProfile);
 
         if (window.GameLogic.energyActive && this.localPlayer.sprite.active) {
-            this.playerEnergyEmitter.setPosition(this.localPlayer.sprite.x, this.localPlayer.sprite.y + 20);
-            if (!this.playerEnergyEmitter.on) this.playerEnergyEmitter.start();
+            this.playerEnergyEmitter.setPosition(this.localPlayer.sprite.x, this.localPlayer.sprite.y + 10);
+            if (!this.playerEnergyEmitter.isEnergyEmitting) {
+                this.playerEnergyEmitter.start();
+                this.playerEnergyEmitter.isEnergyEmitting = true;
+            }
         } else {
-            if (this.playerEnergyEmitter.on) this.playerEnergyEmitter.stop();
+            if (this.playerEnergyEmitter.isEnergyEmitting) {
+                this.playerEnergyEmitter.stop();
+                this.playerEnergyEmitter.isEnergyEmitting = false;
+            }
         }
 
         const furnData = this.isCafe ? window.GameLogic.cafeFurniture : (this.sceneName === 'doghouse' ? (window.GameLogic.doghouseFurniture || {}) : (this.sceneName === 'shrine' ? window.GameLogic.shrineFurniture : {}));
