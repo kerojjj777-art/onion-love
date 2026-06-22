@@ -1006,8 +1006,9 @@ class BootScene extends Phaser.Scene {
         let expGr = this.make.graphics({ x:0, y:0, add:false }); expGr.fillStyle(0xff5722, 1); expGr.fillRect(0, 0, 64, 16); expGr.fillStyle(0xff8a65, 0.6); for(let i = -16; i < 64; i += 16) { expGr.beginPath(); expGr.moveTo(i, 0); expGr.lineTo(i+8, 0); expGr.lineTo(i+16, 16); expGr.lineTo(i+8, 16); expGr.closePath(); expGr.fillPath(); } expGr.generateTexture('exp-liquid', 64, 16);
         let fwGr = this.make.graphics({ x:0, y:0, add:false }); fwGr.fillStyle(0xffffff, 1); fwGr.fillCircle(4, 4, 4); fwGr.generateTexture('fw-particle', 8, 8);
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('onion-up'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'walk', frames: this.anims.generateFrameNumbers('onion-walk', { start: 0, end: 5 }), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'idle', frames: this.anims.generateFrameNumbers('onion-idle'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'skin-anim', frames: this.anims.generateFrameNumbers('onion-skin', { start: 0, end: 3 }), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'skin-old-anim', frames: this.anims.generateFrameNumbers('onion-skin-old', { start: 0, end: 5 }), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'clean', frames: this.anims.generateFrameNumbers('onion-clean'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'throw', frames: this.anims.generateFrameNumbers('onion-throw'), frameRate: 10, repeat: 0 }); this.anims.create({ key: 'wb-blast', frames: this.anims.generateFrameNumbers('water-ball-blast'), frameRate: 15, repeat: -1 }); this.anims.create({ key: 'wet', frames: this.anims.generateFrameNumbers('onion-wet'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'coin-anim', frames: this.anims.generateFrameNumbers('made-coin'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'dummy-hit', frames: this.anims.generateFrameNumbers('dummy-got-shot'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'sleep', frames: this.anims.generateFrameNumbers('onion-sleep'), frameRate: 8, repeat: -1 });
-        this.anims.create({ key: 'fw-throw', frames: this.anims.generateFrameNumbers('onion-fireworks'), frameRate: 8, repeat: 2 }); this.anims.create({ key: 'fw-hit', frames: this.anims.generateFrameNumbers('onion-got-shot'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'mimi-walk', frames: this.anims.generateFrameNumbers('mimi-thief-walk'), frameRate: 15, repeat: -1 });
-        this.anims.create({ key: 'mimi-steal', frames: this.anims.generateFrameNumbers('mimi-thief-stealing'), frameRate: 20, repeat: -1 });
+        this.anims.create({ key: 'fw-throw', frames: this.anims.generateFrameNumbers('onion-fireworks'), frameRate: 8, repeat: 2 }); this.anims.create({ key: 'fw-hit', frames: this.anims.generateFrameNumbers('onion-got-shot'), frameRate: 10, repeat: -1 }); 
+        this.anims.create({ key: 'mimi-walk', frames: this.anims.generateFrameNumbers('mimi-thief-walk'), frameRate: 15, repeat: -1 });
+        this.anims.create({ key: 'mimi-steal', frames: this.anims.generateFrameNumbers('mimi-thief-stealing'), frameRate: 12, repeat: -1 });
         this.anims.create({ key: 'mimi-laugh', frames: this.anims.generateFrameNumbers('mimi-laugh'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'mimi-down', frames: this.anims.generateFrameNumbers('mimi-thief-get-down'), frameRate: 10, repeat: 0 });
         this.anims.create({ key: 'seat-idle', frames: this.anims.generateFrameNumbers('onion-seat-shrine'), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'purify-target', frames: this.anims.generateFrameNumbers('onion-got-purify'), frameRate: 8, repeat: -1 }); this.anims.create({ key: 'purify-magic', frames: this.anims.generateFrameNumbers('onion-doing-purify'), frameRate: 10, repeat: -1 });
@@ -1292,9 +1293,11 @@ class MainScene extends Phaser.Scene {
                     this.mimiSprite.setFlipX(data.flipX);
 
                     if (data.state === 'stealing' && data.stealingFrom === window.GameLogic.currentUser.uid && !this.localPlayer.isMimiRobbed) {
-                        this.localPlayer.isMimiRobbed = true; this.localPlayer.isStunned = true; this.localPlayer.sprite.play('fw-hit', true);
-                      // 【新增】當老鼠成功突襲並拍打當前玩家搶錢時播放打擊聲
+                        // 修正2：加上 this.localPlayer.isInvincible = true; 讓角色呈現閃爍狀態
+                        this.localPlayer.isMimiRobbed = true; this.localPlayer.isStunned = true; this.localPlayer.isInvincible = true; this.localPlayer.sprite.play('fw-hit', true);
+                        
                         window.playSFX(this, 'mimi-thief-stealing');
+
                         let p = window.GameLogic.myProfile; let amt = Math.min(Phaser.Math.Between(20, 100), p.coins || 0); p.coins -= amt;
                         let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins;
                         import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
@@ -1302,9 +1305,14 @@ class MainScene extends Phaser.Scene {
                             module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { stolenPool: (data.stolenPool || 0) + amt });
                             module.update(module.ref(window.GameLogic.db, `cafeMimi/stolenUids`), { [window.GameLogic.currentUser.uid]: true });
                         });
-                        sendBubble(`被老鼠偷走了 ${amt} 元！`); this.time.delayedCall(2000, () => { this.localPlayer.isStunned = false; });
+                        // 修正2：延遲後關閉閃爍
+                        sendBubble(`被老鼠偷走了 ${amt} 元！`); this.time.delayedCall(2000, () => { this.localPlayer.isStunned = false; this.localPlayer.isInvincible = false; });
                     }
                     if (data.state !== 'stealing' && this.localPlayer.isMimiRobbed) this.localPlayer.isMimiRobbed = false;
+
+                    // 修正6：狀態切換到嘲諷時，播放一次竊笑聲
+                    if (data.state === 'laughing' && !this.mimiLaughed) { this.mimiLaughed = true; window.playSFX(this, 'mimi-laugh'); }
+                    if (data.state !== 'laughing') this.mimiLaughed = false;
 
                     if (data.state === 'stealing') this.mimiSprite.play('mimi-steal', true);
                     else if (data.state === 'laughing') this.mimiSprite.play('mimi-laugh', true);
@@ -1996,7 +2004,8 @@ class MainScene extends Phaser.Scene {
                     window.playSFX(this, 'mimi-thief-stealing');
 
                     if (newHp <= 0) {
-                        module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { state: 'down', active: false });
+                        // 修正4：先不設定 active: false，只切換 state，讓倒地動畫可以順利播放
+                        module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { state: 'down' });
                         
                         // 確定完全擊倒老鼠時，播放終結倒地音效
                         window.playSFX(this, 'mimi-thief-get-down');
@@ -2047,31 +2056,47 @@ class MainScene extends Phaser.Scene {
                 }
                 
                 let mData = window.GameLogic.cafeMimiData;
-                if (mData && mData.active && mData.hp > 0) {
+                if (mData && mData.active) {
                     let speed = (mData.state === 'stealing') ? 550 : 180; let targetX = mData.x, targetY = mData.y;
                     
-                    if (mData.state === 'walk') {
+                    if (mData.state === 'walk' && mData.hp > 0) {
                         let targetUid = null; let minDist = 9999; let stolenUids = mData.stolenUids || {};
                         pUids.forEach(uid => { if (!stolenUids[uid]) { let op = this.otherPlayers[uid] ? this.otherPlayers[uid].sprite : (uid === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null); if (op) { let d = Phaser.Math.Distance.Between(mData.x, mData.y, op.x, op.y); if (d < minDist) { minDist = d; targetUid = uid; targetX = op.x; targetY = op.y; } } } });
                         if (targetUid) {
-                            if (minDist > 35) { let angle = Phaser.Math.Angle.Between(mData.x, mData.y, targetX, targetY); targetX = mData.x + Math.cos(angle) * (delta / 1000) * speed; targetY = mData.y + Math.sin(angle) * (delta / 1000) * speed; update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (Math.cos(angle) < 0), state: 'stealing', stealingFrom: targetUid }); }
+                            if (minDist > 35) { 
+                                // 修正1&3：還沒摸到玩家前，保持 walk 狀態並快速移動
+                                let angle = Phaser.Math.Angle.Between(mData.x, mData.y, targetX, targetY); 
+                                targetX = mData.x + Math.cos(angle) * (delta / 1000) * 550; 
+                                targetY = mData.y + Math.sin(angle) * (delta / 1000) * 550; 
+                                update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (Math.cos(angle) < 0) }); 
+                            } else {
+                                // 修正1&5：摸到玩家了！瞬間轉換為 stealing 狀態
+                                update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'stealing', stealingFrom: targetUid }); 
+                            }
                         } else {
+                            // 修正1：偷完所有人後，退回安全距離
                             let sumX = 0, sumY = 0; pUids.forEach(u => { let op = this.otherPlayers[u] ? this.otherPlayers[u].sprite : (u === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null); if (op) { sumX += op.x; sumY += op.y; } });
                             let cX = sumX / pUids.length; let cY = sumY / pUids.length;
                             let angleAway = Phaser.Math.Angle.Between(cX, cY, mData.x, mData.y);
                             let safeX = Phaser.Math.Clamp(cX + Math.cos(angleAway) * 200, 100, 1948); let safeY = Phaser.Math.Clamp(cY + Math.sin(angleAway) * 200, 100, 1948);
                             let distToSafe = Phaser.Math.Distance.Between(mData.x, mData.y, safeX, safeY);
-                            if (distToSafe > 20) { let angle = Phaser.Math.Angle.Between(mData.x, mData.y, safeX, safeY); targetX = mData.x + Math.cos(angle) * (delta / 1000) * speed; targetY = mData.y + Math.sin(angle) * (delta / 1000) * speed; update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (Math.cos(angle) < 0), state: 'walk' }); } else { update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'laughing', laughTime: Date.now() }); }
+                            if (distToSafe > 20) { let angle = Phaser.Math.Angle.Between(mData.x, mData.y, safeX, safeY); targetX = mData.x + Math.cos(angle) * (delta / 1000) * speed; targetY = mData.y + Math.sin(angle) * (delta / 1000) * speed; update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (Math.cos(angle) < 0) }); } else { update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'laughing', laughTime: Date.now() }); }
                         }
-                    } else if (mData.state === 'stealing') {
-                        let op = this.otherPlayers[mData.stealingFrom] ? this.otherPlayers[mData.stealingFrom].sprite : (mData.stealingFrom === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null);
-                        if (op) { let d = Phaser.Math.Distance.Between(mData.x, mData.y, op.x, op.y); if (d > 30) { let angle = Phaser.Math.Angle.Between(mData.x, mData.y, op.x, op.y); targetX = mData.x + Math.cos(angle) * (delta / 1000) * speed; targetY = mData.y + Math.sin(angle) * (delta / 1000) * speed; update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (Math.cos(angle) < 0) }); } } else { update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'walk' }); }
-                    } else if (mData.state === 'laughing') {
+                    } else if (mData.state === 'stealing' && mData.hp > 0) {
+                        // 修正1：檢查受害者端是否已經完成扣款，完成後迅速退回 walk 狀態繼續流程
+                        if (mData.stolenUids && mData.stolenUids[mData.stealingFrom]) {
+                            update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'walk' });
+                        }
+                    } else if (mData.state === 'laughing' && mData.hp > 0) {
                         if (Date.now() - mData.laughTime > 3000) update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'chase', randomAngle: Math.random() * Math.PI * 2 });
-                    } else if (mData.state === 'chase') {
+                    } else if (mData.state === 'chase' && mData.hp > 0) {
                         let angle = mData.randomAngle || 0; targetX = mData.x + Math.cos(angle) * (delta / 1000) * speed; targetY = mData.y + Math.sin(angle) * (delta / 1000) * speed;
                         if (targetX < 50 || targetX > 1998 || targetY < 50 || targetY > 1998) { angle += Math.PI; targetX = Phaser.Math.Clamp(targetX, 50, 1998); targetY = Phaser.Math.Clamp(targetY, 50, 1998); }
                         if (Math.random() < 0.02) angle += Phaser.Math.Between(-1, 1); update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (Math.cos(angle) < 0), randomAngle: angle });
+                    } else if (mData.state === 'down') {
+                        // 修正4：倒地後保留屍體3秒才完全消失，並停止移動
+                        if (!mData.downTime) update(ref(window.GameLogic.db, 'cafeMimi'), { downTime: Date.now() });
+                        else if (Date.now() - mData.downTime > 3000) update(ref(window.GameLogic.db, 'cafeMimi'), { active: false, state: 'none' });
                     }
                 }
             } else {
