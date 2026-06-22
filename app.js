@@ -2388,7 +2388,6 @@ class MainScene extends Phaser.Scene {
                             }
                             update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX > mData.x), randomAngle: angle, speedBoost: boostSpeed });
                         }
-                    }
                     } else if (mData.state === 'down') {
                         if (!mData.downTime) update(ref(window.GameLogic.db, 'cafeMimi'), { downTime: Date.now() });
                         else if (Date.now() - mData.downTime > 3000) update(ref(window.GameLogic.db, 'cafeMimi'), { active: false, state: 'none' });
