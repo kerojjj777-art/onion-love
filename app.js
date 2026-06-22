@@ -580,11 +580,11 @@ window.devSummonMimi = function() {
         let pUids = Object.keys(window.GameLogic.cafePlayers || {}).filter(uid => window.GameLogic.onlinePlayers && window.GameLogic.onlinePlayers[uid]);
         let requiredHp = Math.min(6, 2 + pUids.length);
         
-        // 繞過冷卻計時器，直接將狀態寫入 Firebase 資料庫 (座標 1024, 1024 為大廳中心，利於測試)
+        // 繞過冷卻計時器，改為從地圖左側外緣隨機高度生成
         module.set(module.ref(window.GameLogic.db, 'cafeMimi'), {
             active: true,
-            x: 1024,
-            y: 1024,
+            x: -50,
+            y: Phaser.Math.Between(200, 1800),
             state: 'walk',
             hp: requiredHp,
             playersInvolved: pUids.length,
@@ -964,6 +964,8 @@ class BootScene extends Phaser.Scene {
         this.load.audio('mimi-laugh', 'mimi-laugh.mp3');
         this.load.audio('mimi-thief-stealing', 'mimi-thief-stealing.mp3');
         this.load.audio('mimi-thief-get-down', 'mimi-thief-get-down.mp3');
+        this.load.audio('mimi-jab-onion-hurt', 'mimi-jab-onion-hurt.mp3');
+        this.load.audio('mimi-walk', 'mimi-walk.mp3');
       
         // 神龕專用音樂
         this.load.audio('shrine-wierd-people-sound', 'shrine-wierd-people-sound.mp3');
@@ -1280,23 +1282,26 @@ class MainScene extends Phaser.Scene {
           this.mimiListener = onValue(ref(window.GameLogic.db, 'cafeMimi'), (snap) => {
                 let data = snap.val(); window.GameLogic.cafeMimiData = data;
                 if (data && data.active) {
-                    if (!this.mimiSprite) {
+                   if (!this.mimiSprite) {
                         this.mimiSprite = this.physics.add.sprite(data.x, data.y, 'mimi-thief-walk').setDepth(11);
                         this.mimiNameBg = this.add.graphics().setDepth(12);
                         this.mimiNameText = this.add.text(0, 0, '鼠偷米米', { fontSize: '12px', color: '#ffcc00', fontStyle: 'bold' }).setOrigin(0.5).setDepth(12);
                         this.mimiHpText = this.add.text(0, 0, '', { fontSize: '14px', color: '#ff0000', fontStyle: 'bold', stroke: '#fff', strokeThickness: 2 }).setOrigin(0.5).setDepth(12);
-                      // 【新增】當老鼠第一次出現在畫面上時播放出現竊笑聲
                         window.playSFX(this, 'mimi-laugh');
+                        
+                        // 【新增】只要他還在場上，就自動無限循環走路音效
+                        if (this.sound.get('mimi-walk')) this.sound.play('mimi-walk', {loop: true, volume: (window.GameLogic.sfxVolume || 100) / 100});
+                        else this.sound.add('mimi-walk', {loop: true, volume: (window.GameLogic.sfxVolume || 100) / 100}).play();
                     }
                     if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; this.mimiSprite.y = data.y; }
                     else { this.mimiSprite.x = Phaser.Math.Linear(this.mimiSprite.x, data.x, 0.3); this.mimiSprite.y = Phaser.Math.Linear(this.mimiSprite.y, data.y, 0.3); }
                     this.mimiSprite.setFlipX(data.flipX);
 
                     if (data.state === 'stealing' && data.stealingFrom === window.GameLogic.currentUser.uid && !this.localPlayer.isMimiRobbed) {
-                        // 修正2：加上 this.localPlayer.isInvincible = true; 讓角色呈現閃爍狀態
                         this.localPlayer.isMimiRobbed = true; this.localPlayer.isStunned = true; this.localPlayer.isInvincible = true; this.localPlayer.sprite.play('fw-hit', true);
                         
                         window.playSFX(this, 'mimi-thief-stealing');
+                        window.playSFX(this, 'mimi-jab-onion-hurt'); // 角色被痛扁的音效
 
                         let p = window.GameLogic.myProfile; let amt = Math.min(Phaser.Math.Between(20, 100), p.coins || 0); p.coins -= amt;
                         let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins;
@@ -1305,25 +1310,33 @@ class MainScene extends Phaser.Scene {
                             module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { stolenPool: (data.stolenPool || 0) + amt });
                             module.update(module.ref(window.GameLogic.db, `cafeMimi/stolenUids`), { [window.GameLogic.currentUser.uid]: true });
                         });
-                        // 修正2：延遲後關閉閃爍
-                        sendBubble(`被老鼠偷走了 ${amt} 元！`); this.time.delayedCall(2000, () => { this.localPlayer.isStunned = false; this.localPlayer.isInvincible = false; });
+                        
+                        // 修正：延長玩家被打劫後的閃爍與僵直時間為 3 秒
+                        sendBubble(`被老鼠偷走了 ${amt} 元！`); 
+                        this.time.delayedCall(3000, () => { this.localPlayer.isStunned = false; this.localPlayer.isInvincible = false; });
                     }
                     if (data.state !== 'stealing' && this.localPlayer.isMimiRobbed) this.localPlayer.isMimiRobbed = false;
 
-                    // 修正6：狀態切換到嘲諷時，播放一次竊笑聲
                     if (data.state === 'laughing' && !this.mimiLaughed) { this.mimiLaughed = true; window.playSFX(this, 'mimi-laugh'); }
                     if (data.state !== 'laughing') this.mimiLaughed = false;
 
                     if (data.state === 'stealing') this.mimiSprite.play('mimi-steal', true);
                     else if (data.state === 'laughing') this.mimiSprite.play('mimi-laugh', true);
-                    else if (data.state === 'down') { this.mimiSprite.play('mimi-down', true); this.mimiSprite.setAlpha(0.6); }
+                    else if (data.state === 'down') { 
+                        this.mimiSprite.play('mimi-down', true); this.mimiSprite.setAlpha(0.6); 
+                        if (this.sound.get('mimi-walk')) this.sound.stopByKey('mimi-walk'); 
+                    }
                     else this.mimiSprite.play('mimi-walk', true);
 
                     let nmY = this.mimiSprite.y - 40; this.mimiNameText.setPosition(this.mimiSprite.x, nmY);
                     this.mimiNameBg.clear().fillStyle(0x000, 0.6).fillRoundedRect(this.mimiSprite.x - 30, nmY - 10, 60, 20, 4);
                     this.mimiHpText.setPosition(this.mimiSprite.x, nmY - 20).setText(data.hp > 0 ? `HP: ${data.hp}` : '');
                 } else {
-                    if (this.mimiSprite) { this.mimiSprite.destroy(); this.mimiNameText.destroy(); this.mimiNameBg.destroy(); this.mimiHpText.destroy(); this.mimiSprite = null; }
+                    if (this.mimiSprite) { 
+                        this.mimiSprite.destroy(); this.mimiNameText.destroy(); this.mimiNameBg.destroy(); this.mimiHpText.destroy(); this.mimiSprite = null; 
+                        // 徹底斷開走路音效
+                        if (this.sound.get('mimi-walk')) this.sound.stopByKey('mimi-walk');
+                    }
                 }
             });
         }
@@ -2004,10 +2017,8 @@ class MainScene extends Phaser.Scene {
                     window.playSFX(this, 'mimi-thief-stealing');
 
                     if (newHp <= 0) {
-                        // 修正4：先不設定 active: false，只切換 state，讓倒地動畫可以順利播放
                         module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { state: 'down' });
                         
-                        // 確定完全擊倒老鼠時，播放終結倒地音效
                         window.playSFX(this, 'mimi-thief-get-down');
 
                         let mData = window.GameLogic.cafeMimiData || {}; 
@@ -2016,7 +2027,10 @@ class MainScene extends Phaser.Scene {
                         let coinValue = Math.floor(totalValue / 10);
                         let dropUpdates = {};
                         for(let i=0; i<10; i++) { 
-                            dropUpdates[`droppedCoins/mimi_coin_${Date.now()}_${i}`] = { x: x + Phaser.Math.Between(-60, 60), y: y + Phaser.Math.Between(-60, 60) + 20, amount: coinValue }; 
+                            // 修正：強行限制噴濺的錢幣座標在安全範圍 [100, 1948] 內，保證一定撿得到
+                            let cx = Phaser.Math.Clamp(x + Phaser.Math.Between(-80, 80), 100, 1948);
+                            let cy = Phaser.Math.Clamp(y + Phaser.Math.Between(-80, 80) + 20, 100, 1948);
+                            dropUpdates[`droppedCoins/mimi_coin_${Date.now()}_${i}`] = { x: cx, y: cy, amount: coinValue }; 
                         }
                         dropUpdates['serverEvents/mimiNextSpawn'] = Date.now() + Phaser.Math.Between(600000, 900000);
                         module.update(module.ref(window.GameLogic.db), dropUpdates);
@@ -2057,44 +2071,77 @@ class MainScene extends Phaser.Scene {
                 
                 let mData = window.GameLogic.cafeMimiData;
                 if (mData && mData.active) {
-                    let speed = (mData.state === 'stealing') ? 550 : 180; let targetX = mData.x, targetY = mData.y;
+                    let targetX = mData.x, targetY = mData.y;
                     
                     if (mData.state === 'walk' && mData.hp > 0) {
                         let targetUid = null; let minDist = 9999; let stolenUids = mData.stolenUids || {};
+                        let stolenCount = Object.keys(stolenUids).length;
+                        
+                        // 變速機制：找第一個目標速度為 320(比玩家略快)，偷到後發狂變 550
+                        let walkSpeed = (stolenCount === 0) ? 320 : 550; 
+                        
                         pUids.forEach(uid => { if (!stolenUids[uid]) { let op = this.otherPlayers[uid] ? this.otherPlayers[uid].sprite : (uid === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null); if (op) { let d = Phaser.Math.Distance.Between(mData.x, mData.y, op.x, op.y); if (d < minDist) { minDist = d; targetUid = uid; targetX = op.x; targetY = op.y; } } } });
                         if (targetUid) {
                             if (minDist > 35) { 
-                                // 修正1&3：還沒摸到玩家前，保持 walk 狀態並快速移動
                                 let angle = Phaser.Math.Angle.Between(mData.x, mData.y, targetX, targetY); 
-                                targetX = mData.x + Math.cos(angle) * (delta / 1000) * 550; 
-                                targetY = mData.y + Math.sin(angle) * (delta / 1000) * 550; 
-                                update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (Math.cos(angle) < 0) }); 
+                                targetX = mData.x + Math.cos(angle) * (delta / 1000) * walkSpeed; 
+                                targetY = mData.y + Math.sin(angle) * (delta / 1000) * walkSpeed; 
+                                // 精準判斷左翻：如果目標座標 X 小於當前座標 X，就鏡像翻轉
+                                update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX < mData.x) }); 
                             } else {
-                                // 修正1&5：摸到玩家了！瞬間轉換為 stealing 狀態
                                 update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'stealing', stealingFrom: targetUid }); 
                             }
                         } else {
-                            // 修正1：偷完所有人後，退回安全距離
+                            // 偷完所有人後，計算安全距離撤退
                             let sumX = 0, sumY = 0; pUids.forEach(u => { let op = this.otherPlayers[u] ? this.otherPlayers[u].sprite : (u === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null); if (op) { sumX += op.x; sumY += op.y; } });
                             let cX = sumX / pUids.length; let cY = sumY / pUids.length;
                             let angleAway = Phaser.Math.Angle.Between(cX, cY, mData.x, mData.y);
                             let safeX = Phaser.Math.Clamp(cX + Math.cos(angleAway) * 200, 100, 1948); let safeY = Phaser.Math.Clamp(cY + Math.sin(angleAway) * 200, 100, 1948);
                             let distToSafe = Phaser.Math.Distance.Between(mData.x, mData.y, safeX, safeY);
-                            if (distToSafe > 20) { let angle = Phaser.Math.Angle.Between(mData.x, mData.y, safeX, safeY); targetX = mData.x + Math.cos(angle) * (delta / 1000) * speed; targetY = mData.y + Math.sin(angle) * (delta / 1000) * speed; update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (Math.cos(angle) < 0) }); } else { update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'laughing', laughTime: Date.now() }); }
+                            // 用正常速度 180 撤退
+                            if (distToSafe > 20) { 
+                                let angle = Phaser.Math.Angle.Between(mData.x, mData.y, safeX, safeY); 
+                                targetX = mData.x + Math.cos(angle) * (delta / 1000) * 180; 
+                                targetY = mData.y + Math.sin(angle) * (delta / 1000) * 180; 
+                                update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX < mData.x) }); 
+                            } else { 
+                                update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'laughing', laughTime: Date.now() }); 
+                            }
                         }
                     } else if (mData.state === 'stealing' && mData.hp > 0) {
-                        // 修正1：檢查受害者端是否已經完成扣款，完成後迅速退回 walk 狀態繼續流程
                         if (mData.stolenUids && mData.stolenUids[mData.stealingFrom]) {
                             update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'walk' });
                         }
                     } else if (mData.state === 'laughing' && mData.hp > 0) {
                         if (Date.now() - mData.laughTime > 3000) update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'chase', randomAngle: Math.random() * Math.PI * 2 });
                     } else if (mData.state === 'chase' && mData.hp > 0) {
-                        let angle = mData.randomAngle || 0; targetX = mData.x + Math.cos(angle) * (delta / 1000) * speed; targetY = mData.y + Math.sin(angle) * (delta / 1000) * speed;
-                        if (targetX < 50 || targetX > 1998 || targetY < 50 || targetY > 1998) { angle += Math.PI; targetX = Phaser.Math.Clamp(targetX, 50, 1998); targetY = Phaser.Math.Clamp(targetY, 50, 1998); }
-                        if (Math.random() < 0.02) angle += Phaser.Math.Between(-1, 1); update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (Math.cos(angle) < 0), randomAngle: angle });
+                        // 鬼抓人智能迴避機制：反推離自己最近的玩家
+                        let minDistToPlayer = 9999; let nearestP = null;
+                        pUids.forEach(uid => {
+                            let op = this.otherPlayers[uid] ? this.otherPlayers[uid].sprite : (uid === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null);
+                            if (op) { let d = Phaser.Math.Distance.Between(mData.x, mData.y, op.x, op.y); if (d < minDistToPlayer) { minDistToPlayer = d; nearestP = op; } }
+                        });
+                        
+                        let angle = mData.randomAngle || 0;
+                        if (nearestP && minDistToPlayer < 400) {
+                            // 如果玩家在 400 距離內，鎖定遠離玩家的角度，並微調避免直線卡死
+                            angle = Phaser.Math.Angle.Between(nearestP.x, nearestP.y, mData.x, mData.y);
+                            angle += Phaser.Math.FloatBetween(-0.3, 0.3); 
+                        } else if (Math.random() < 0.05) {
+                            angle += Phaser.Math.FloatBetween(-0.5, 0.5); // 沒人追時的隨機漫步
+                        }
+                        
+                        targetX = mData.x + Math.cos(angle) * (delta / 1000) * 180; 
+                        targetY = mData.y + Math.sin(angle) * (delta / 1000) * 180;
+                        
+                        // 撞牆反彈：如果即將跑出邊界，將其座標強行限制在牆壁內側，並讓他彈射往地圖中央跑
+                        if (targetX < 50 || targetX > 1998 || targetY < 50 || targetY > 1998) { 
+                            targetX = Phaser.Math.Clamp(targetX, 50, 1998); 
+                            targetY = Phaser.Math.Clamp(targetY, 50, 1998); 
+                            angle = Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024) + Phaser.Math.FloatBetween(-1, 1);
+                        }
+                        update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX < mData.x), randomAngle: angle });
                     } else if (mData.state === 'down') {
-                        // 修正4：倒地後保留屍體3秒才完全消失，並停止移動
                         if (!mData.downTime) update(ref(window.GameLogic.db, 'cafeMimi'), { downTime: Date.now() });
                         else if (Date.now() - mData.downTime > 3000) update(ref(window.GameLogic.db, 'cafeMimi'), { active: false, state: 'none' });
                     }
@@ -2223,8 +2270,9 @@ class MainScene extends Phaser.Scene {
                     if (!this.nextMimiRandomSfxTime || time > this.nextMimiRandomSfxTime) {
                         this.nextMimiRandomSfxTime = time + Phaser.Math.Between(5000, 9000);
                         let currentState = window.GameLogic.cafeMimiData.state;
-                        if (currentState === 'chase' || currentState === 'walk' || currentState === 'laughing') {
-                            window.playSFX(this, 'mimi-thief-stealing');
+                        // 改為只有逃亡與原地竊笑時，會發出反覆的笑聲
+                        if (currentState === 'chase' || currentState === 'laughing') {
+                            window.playSFX(this, 'mimi-laugh');
                         }
                     }
                     let d = Phaser.Math.Distance.Between(px, py, this.mimiSprite.x, this.mimiSprite.y);
