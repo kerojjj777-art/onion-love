@@ -48,6 +48,18 @@ window.updateSFXVolume = function(val) {
     window.GameLogic.muteSFX = (val == 0);
     let volText = document.getElementById('sfx-vol-text');
     if(volText) volText.innerText = val + '%';
+    
+    if (window.GameLogic.phaserGame) {
+        let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
+        if (ms) {
+            let loopSFXs = ['onion-sleep', 'mimi-walk', 'brooming1'];
+            let actualVol = val / 100;
+            loopSFXs.forEach(k => {
+                let sndList = ms.sound.getAll(k);
+                sndList.forEach(snd => snd.setVolume(actualVol));
+            });
+        }
+    }
 };
 
 // 新增：強制開啟音效與恢復音量的邏輯
@@ -1364,8 +1376,9 @@ class MainScene extends Phaser.Scene {
                         window.playSFX(this, 'mimi-laugh');
                         
                         // 【新增】只要他還在場上，就自動無限循環走路音效
-                        if (this.sound.get('mimi-walk')) this.sound.play('mimi-walk', {loop: true, volume: (window.GameLogic.sfxVolume || 100) / 100});
-                        else this.sound.add('mimi-walk', {loop: true, volume: (window.GameLogic.sfxVolume || 100) / 100}).play();
+                        let mVol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100;
+                        if (this.sound.get('mimi-walk')) this.sound.play('mimi-walk', {loop: true, volume: mVol});
+                        else this.sound.add('mimi-walk', {loop: true, volume: mVol}).play();
                     }
                     if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; this.mimiSprite.y = data.y; }
                     else { this.mimiSprite.x = Phaser.Math.Linear(this.mimiSprite.x, data.x, 0.3); this.mimiSprite.y = Phaser.Math.Linear(this.mimiSprite.y, data.y, 0.3); }
@@ -1648,7 +1661,7 @@ class MainScene extends Phaser.Scene {
                 return; 
             }
 
-            if (this.localPlayer.isSweeping) { if (!window.GameLogic.muteSFX && !this.sound.get('brooming1')?.isPlaying) { if (this.sound.get('brooming1')) this.sound.play('brooming1'); else this.sound.add('brooming1').play(); } this.qteProgress += (100 / this.qteTotalClicks); if (this.qteProgress >= 100) { this.qteProgress = 100; this.finishSweeping(true); } return; }
+            if (this.localPlayer.isSweeping) { let vol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100; if (!window.GameLogic.muteSFX && !this.sound.get('brooming1')?.isPlaying && vol > 0) { if (this.sound.get('brooming1')) this.sound.play('brooming1', {volume: vol}); else this.sound.add('brooming1', {volume: vol}).play(); } this.qteProgress += (100 / this.qteTotalClicks); if (this.qteProgress >= 100) { this.qteProgress = 100; this.finishSweeping(true); } return; }
             if (this.sceneName === '7eonion' && this.storeManager) { let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.storeManager.x, this.storeManager.y); if (dist < 150) { window.GameLogic.isShopping = true; let storeCoinsEl = document.getElementById('store-current-coins'); if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins || 0}`; document.getElementById('store-modal').style.display = 'block'; return; } }
             if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!"); let interacted = false; for (const key in this.furnitureSprites) { let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y); if (dist < 90) { if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block'; if (key.startsWith('memory')) document.getElementById('memory-modal').style.display = 'block'; if (key.includes('scoreboard')) { window.openLeaderboardModal(); interacted = true; break; } if (key === 'shrine') { window.attemptJoinShrine(); interacted = true; break; } } } if(!interacted) sendBubble("使用了 A 技能!");
         });
