@@ -291,6 +291,16 @@ function createSystemUI() {
             <div id="leaderboard-list" style="max-height: 40vh; overflow-y: auto; text-align: left; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 8px;"></div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('leaderboard-modal').style.display='none'">關閉</button>
         </div>
+
+        <div id="dev-modal" class="modal" style="z-index: 260;">
+            <h3 style="color:var(--mucha-green); margin-top:0;">🛠️ 洋蔥精靈 (開發者模式)</h3>
+            <div class="catalog-grid" style="display: flex; flex-direction: column; gap: 10px;">
+                <div class="catalog-item" onclick="window.devSummonMimi()" style="flex-direction:row; justify-content:center; padding: 15px; font-weight:bold; background:rgba(197, 160, 89, 0.1); width:100%; box-sizing:border-box;">
+                    <span>🐭 召喚米米 (測試用)</span>
+                </div>
+            </div>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('dev-modal').style.display='none'; document.getElementById('inventory-modal').style.display='block';">返回背包</button>
+        </div>
     `;
     setTimeout(() => { 
         document.querySelectorAll('.modal, .action-menu, #chat-section, #spam-ui').forEach(el => { ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'wheel', 'mousedown', 'mouseup', 'click'].forEach(evt => { el.addEventListener(evt, (e) => e.stopPropagation(), { passive: false }); }); }); 
@@ -562,11 +572,35 @@ window.useItem = function(itemName) { let inv = window.GameLogic.myProfile.inven
 window.stopUsingItem = function(itemName) { if (itemName === '水球' || itemName === '煙火') { window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; } };
 window.toggleInventoryEdit = function() { window.GameLogic.inventoryEditMode = !window.GameLogic.inventoryEditMode; let btn = document.getElementById('inventory-edit-btn'); if (btn) { btn.innerText = window.GameLogic.inventoryEditMode ? '完成' : '編輯排序'; btn.className = window.GameLogic.inventoryEditMode ? 'btn-primary' : 'btn-edit'; } window.openInventoryModal(); };
 window.moveInvItem = function(index, dir) { let order = window.GameLogic.myProfile.inventoryOrder || []; if (index + dir >= 0 && index + dir < order.length) { let temp = order[index]; order[index] = order[index + dir]; order[index + dir] = temp; window.GameLogic.myProfile.inventoryOrder = order; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventoryOrder: order }); }); window.openInventoryModal(); } };
-window.clickSysItem = function(key) { document.getElementById('inventory-modal').style.display = 'none'; if (key === 'phone') { window.openPhoneModal(); } else if (key === 'portal') { window.openPortalModal(); } else if (key === 'energy') { window.openEnergyModal(); } else if (key === 'profile') { window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); } else if (key === 'music') { document.getElementById('settings-modal').style.display = 'block'; } else if (key === 'manual') { window.openManualModal(); } else if (key === 'logout') { window.leaveCafe(); if (window.GameLogic.currentUser) { import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.remove(module.ref(window.GameLogic.db, 'onlinePlayers/' + window.GameLogic.currentUser.uid)); }); } window.signOut(window.auth); } };
+window.clickSysItem = function(key) { document.getElementById('inventory-modal').style.display = 'none'; if (key === 'phone') { window.openPhoneModal(); } else if (key === 'portal') { window.openPortalModal(); } else if (key === 'energy') { window.openEnergyModal(); } else if (key === 'profile') { window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); } else if (key === 'music') { document.getElementById('settings-modal').style.display = 'block'; } else if (key === 'manual') { window.openManualModal(); } else if (key === 'dev') { document.getElementById('dev-modal').style.display = 'block'; } else if (key === 'logout') { window.leaveCafe(); if (window.GameLogic.currentUser) { import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.remove(module.ref(window.GameLogic.db, 'onlinePlayers/' + window.GameLogic.currentUser.uid)); }); } window.signOut(window.auth); } };
+
+// 【新增】開發者一鍵測試：在交誼廳中央直接生成米米
+window.devSummonMimi = function() {
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        let pUids = Object.keys(window.GameLogic.cafePlayers || {}).filter(uid => window.GameLogic.onlinePlayers && window.GameLogic.onlinePlayers[uid]);
+        let requiredHp = Math.min(6, 2 + pUids.length);
+        
+        // 繞過冷卻計時器，直接將狀態寫入 Firebase 資料庫 (座標 1024, 1024 為大廳中心，利於測試)
+        module.set(module.ref(window.GameLogic.db, 'cafeMimi'), {
+            active: true,
+            x: 1024,
+            y: 1024,
+            state: 'walk',
+            hp: requiredHp,
+            playersInvolved: pUids.length,
+            stolenPool: 0,
+            flipX: false,
+            stolenUids: null
+        }).then(() => {
+            alert("【開發者測試模式】已在交誼廳中央成功喚出鼠偷米米！");
+            document.getElementById('dev-modal').style.display = 'none';
+        });
+    });
+};
 
 window.openInventoryModal = function() {
     const list = document.getElementById('inventory-list'); let hasUnread = Object.keys(window.GameLogic.unreadPMs || {}).length > 0; let dotHtml = hasUnread ? '<div style="position:absolute; top:5px; right:5px; width:12px; height:12px; background:red; border-radius:50%; box-shadow:0 0 5px red; z-index:10;"></div>' : '';
-    let rawItems = {}; let isEdit = window.GameLogic.inventoryEditMode; let inv = window.GameLogic.myProfile.inventory || {}; let sysKeys = ['phone', 'portal', 'profile', 'music', 'manual', 'logout']; let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥' && !sysKeys.includes(k));
+    let rawItems = {}; let isEdit = window.GameLogic.inventoryEditMode; let inv = window.GameLogic.myProfile.inventory || {}; let sysKeys = ['phone', 'portal', 'profile', 'music', 'manual', 'logout', 'dev']; let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥' && !sysKeys.includes(k));
     keys.forEach(k => {
         let iconHtml = (k === '水球') ? '<div class="sprite-waterball"></div>' : (k === '煙火' ? '<img src="shop-fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">' : '<span style="font-size:24px; margin-bottom:5px;">📦</span>');
         let isUsing = ((k === '水球' || k === '煙火') && window.GameLogic.armedItemState != null && window.GameLogic.armedItemName === k);
@@ -579,7 +613,9 @@ window.openInventoryModal = function() {
     rawItems['profile'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'profile\')"' : ''}><img src="tools-id-card.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0;">洋蔥身分證</span></div>`;
     rawItems['music'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'music\')"' : ''}><div class="sprite-music-box"></div><span style="margin:5px 0;">蔥Music</span></div>`;
     rawItems['manual'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'manual\')"' : ''}><img src="tools-manual.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0;">說明書</span></div>`;
-    rawItems['logout'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'logout\')"' : ''}><img src="tools-leave.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0;">登出大廳</span></div>`;
+    rawItems['logout'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'logout\')"' : ''}><img src="tools-leave.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0;">登出大廳</span></div>`;if (window.GameLogic.currentUser && window.GameLogic.currentUser.email === 'onion@gmail.com') {
+        rawItems['dev'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'dev\')"' : ''}><span style="font-size:24px; margin-bottom:5px;">🛠️</span><span style="margin:5px 0; font-weight:bold; color:var(--mucha-green);">洋蔥精靈</span></div>`;
+    }
     let activeKeys = Object.keys(rawItems); let order = Array.isArray(window.GameLogic.myProfile.inventoryOrder) ? window.GameLogic.myProfile.inventoryOrder.filter(k => k && typeof k === 'string') : []; let finalOrder = order.filter(k => activeKeys.includes(k)); activeKeys.forEach(k => { if (!finalOrder.includes(k)) finalOrder.push(k); }); window.GameLogic.myProfile.inventoryOrder = finalOrder;
     let invHTML = ''; finalOrder.forEach((k, i) => { let inner = rawItems[k]; if (window.GameLogic.inventoryEditMode) { invHTML += `<div style="display:flex; flex-direction:column; align-items:center; background: rgba(0,0,0,0.05); padding: 5px; border-radius: 8px;">${inner}<div style="display:flex; justify-content:space-around; width:100%; margin-top:5px;"><button class="btn-secondary" style="padding:2px 10px;" onclick="window.moveInvItem(${i}, -1)" ${i === 0 ? 'disabled' : ''}>◀</button><button class="btn-secondary" style="padding:2px 10px;" onclick="window.moveInvItem(${i}, 1)" ${i === finalOrder.length - 1 ? 'disabled' : ''}>▶</button></div></div>`; } else { invHTML += inner; } });
     list.style.display = 'grid'; list.style.gridTemplateColumns = '1fr 1fr'; list.style.gap = '10px'; list.style.maxHeight = '60vh'; list.style.overflowY = 'auto'; list.style.padding = '5px'; list.style.alignItems = 'start'; list.innerHTML = invHTML; document.getElementById('inventory-modal').style.display = 'block';
