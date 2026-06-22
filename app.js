@@ -923,7 +923,12 @@ class BootScene extends Phaser.Scene {
         
         this.load.audio('bgm', 'Sweet-Onion.mp3'); this.load.audio('bgm-heart', 'Onion-Heart.mp3'); this.load.audio('bgm-inside', 'Inside-of-Onion.mp3'); this.load.audio('bgm-kyo', 'kyo-kyo-onion.mp3'); this.load.audio('bgm-world', "OMusic-World'll-roll.mp3"); this.load.audio('bgm-lazy', 'OMusic-Onion-Lazy-Cat.mp3'); this.load.audio('bgm-way', 'OMusic-Onion-go-my-way.mp3');
         this.load.audio('jump04', 'jump04.mp3'); this.load.audio('launcher1', 'launcher1.mp3'); this.load.audio('bomb', 'bomb.mp3'); this.load.audio('fireworks-in-the-sky', 'fireworks-in-the-sky.mp3'); this.load.audio('shop-boss-thank-you', 'shop-boss-thank-you.mp3'); this.load.audio('shop-check-buying', 'shop-check-buying.mp3');
-        
+
+        // 載入米米專屬音效
+        this.load.audio('mimi-laugh', 'mimi-laugh.mp3');
+        this.load.audio('mimi-thief-stealing', 'mimi-thief-stealing.mp3');
+        this.load.audio('mimi-thief-get-down', 'mimi-thief-get-down.mp3');
+      
         // 神龕專用音樂
         this.load.audio('shrine-wierd-people-sound', 'shrine-wierd-people-sound.mp3');
         this.load.audio('shrine-selection', 'shrine-selection.mp3');
@@ -937,7 +942,10 @@ class BootScene extends Phaser.Scene {
         // 新增：載入蔥電飽充電器精靈圖
         this.load.spritesheet('sleep-charger', 'sleep_onion_bao_charger.png', { frameWidth: 90, frameHeight: 90 });
         this.load.image('bg7Eonion', '7eonion-bg.jpg'); this.load.image('storeManager', 'store-manager.png'); this.load.spritesheet('onion-throw', 'onion-throw.png', { frameWidth: 90, frameHeight: 75 }); this.load.spritesheet('water-ball-blast', 'water-ball-blast.png', { frameWidth: 50, frameHeight: 50 }); this.load.spritesheet('onion-wet', 'onion-wet.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('made-coin', 'made-coin.png', { frameWidth: 50, frameHeight: 50 }); this.load.image('dummy', 'dummy.png'); this.load.spritesheet('dummy-wet', 'dummy-wet.png', { frameWidth: 75, frameHeight: 75 });
-        this.load.image('fireworks', 'shop-fireworks.png'); this.load.spritesheet('onion-fireworks', 'onion-fireworks.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-got-shot', 'onion-got-shot.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('dummy-got-shot', 'dummy-got-shot.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('fireworks-shoot', 'fireworks-shoot.png', { frameWidth: 50, frameHeight: 50 });
+        this.load.image('fireworks', 'shop-fireworks.png'); this.load.spritesheet('onion-fireworks', 'onion-fireworks.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-got-shot', 'onion-got-shot.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('mimi-thief-walk', 'mimi-thief-walk.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.spritesheet('mimi-thief-stealing', 'mimi-thief-stealing.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.spritesheet('mimi-laugh', 'mimi-laugh.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.spritesheet('mimi-thief-get-down', 'mimi-thief-get-down.png', { frameWidth: 75, frameHeight: 75 });
         this.load.image('status-bg', 'character-status-bg.png');
         
         // 神龕符咒與法器資源
@@ -962,7 +970,10 @@ class BootScene extends Phaser.Scene {
         let expGr = this.make.graphics({ x:0, y:0, add:false }); expGr.fillStyle(0xff5722, 1); expGr.fillRect(0, 0, 64, 16); expGr.fillStyle(0xff8a65, 0.6); for(let i = -16; i < 64; i += 16) { expGr.beginPath(); expGr.moveTo(i, 0); expGr.lineTo(i+8, 0); expGr.lineTo(i+16, 16); expGr.lineTo(i+8, 16); expGr.closePath(); expGr.fillPath(); } expGr.generateTexture('exp-liquid', 64, 16);
         let fwGr = this.make.graphics({ x:0, y:0, add:false }); fwGr.fillStyle(0xffffff, 1); fwGr.fillCircle(4, 4, 4); fwGr.generateTexture('fw-particle', 8, 8);
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('onion-up'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'walk', frames: this.anims.generateFrameNumbers('onion-walk', { start: 0, end: 5 }), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'idle', frames: this.anims.generateFrameNumbers('onion-idle'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'skin-anim', frames: this.anims.generateFrameNumbers('onion-skin', { start: 0, end: 3 }), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'skin-old-anim', frames: this.anims.generateFrameNumbers('onion-skin-old', { start: 0, end: 5 }), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'clean', frames: this.anims.generateFrameNumbers('onion-clean'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'throw', frames: this.anims.generateFrameNumbers('onion-throw'), frameRate: 10, repeat: 0 }); this.anims.create({ key: 'wb-blast', frames: this.anims.generateFrameNumbers('water-ball-blast'), frameRate: 15, repeat: -1 }); this.anims.create({ key: 'wet', frames: this.anims.generateFrameNumbers('onion-wet'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'coin-anim', frames: this.anims.generateFrameNumbers('made-coin'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'dummy-hit', frames: this.anims.generateFrameNumbers('dummy-got-shot'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'sleep', frames: this.anims.generateFrameNumbers('onion-sleep'), frameRate: 8, repeat: -1 });
-        this.anims.create({ key: 'fw-throw', frames: this.anims.generateFrameNumbers('onion-fireworks'), frameRate: 8, repeat: 2 }); this.anims.create({ key: 'fw-hit', frames: this.anims.generateFrameNumbers('onion-got-shot'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'fw-shoot', frames: this.anims.generateFrameNumbers('fireworks-shoot'), frameRate: 15, repeat: -1 }); this.anims.create({ key: 'dummy-fw-hit', frames: this.anims.generateFrameNumbers('dummy-got-shot'), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'fw-throw', frames: this.anims.generateFrameNumbers('onion-fireworks'), frameRate: 8, repeat: 2 }); this.anims.create({ key: 'fw-hit', frames: this.anims.generateFrameNumbers('onion-got-shot'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'mimi-walk', frames: this.anims.generateFrameNumbers('mimi-thief-walk'), frameRate: 15, repeat: -1 });
+        this.anims.create({ key: 'mimi-steal', frames: this.anims.generateFrameNumbers('mimi-thief-stealing'), frameRate: 20, repeat: -1 });
+        this.anims.create({ key: 'mimi-laugh', frames: this.anims.generateFrameNumbers('mimi-laugh'), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'mimi-down', frames: this.anims.generateFrameNumbers('mimi-thief-get-down'), frameRate: 10, repeat: 0 });
         this.anims.create({ key: 'seat-idle', frames: this.anims.generateFrameNumbers('onion-seat-shrine'), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'purify-target', frames: this.anims.generateFrameNumbers('onion-got-purify'), frameRate: 8, repeat: -1 }); this.anims.create({ key: 'purify-magic', frames: this.anims.generateFrameNumbers('onion-doing-purify'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'charger-anim', frames: this.anims.generateFrameNumbers('sleep-charger'), frameRate: 8, repeat: -1 });
 
@@ -1229,6 +1240,48 @@ class MainScene extends Phaser.Scene {
                 for (let key in this.coinSprites) { if (!data[key]) { this.coinSprites[key].destroy(); delete this.coinSprites[key]; } } 
             });
             this.dummiesListener = onValue(ref(window.GameLogic.db, 'cafeDummies'), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.dummySprites[key]) { let dData = data[key]; let dummySprite = this.physics.add.sprite(dData.x, dData.y, 'dummy').setDepth(8); this.dummySprites[key] = dummySprite; } } for (let key in this.dummySprites) { if (!data[key]) { this.dummySprites[key].destroy(); delete this.dummySprites[key]; } } });
+          this.mimiListener = onValue(ref(window.GameLogic.db, 'cafeMimi'), (snap) => {
+                let data = snap.val(); window.GameLogic.cafeMimiData = data;
+                if (data && data.active) {
+                    if (!this.mimiSprite) {
+                        this.mimiSprite = this.physics.add.sprite(data.x, data.y, 'mimi-thief-walk').setDepth(11);
+                        this.mimiNameBg = this.add.graphics().setDepth(12);
+                        this.mimiNameText = this.add.text(0, 0, '鼠偷米米', { fontSize: '12px', color: '#ffcc00', fontStyle: 'bold' }).setOrigin(0.5).setDepth(12);
+                        this.mimiHpText = this.add.text(0, 0, '', { fontSize: '14px', color: '#ff0000', fontStyle: 'bold', stroke: '#fff', strokeThickness: 2 }).setOrigin(0.5).setDepth(12);
+                      // 【新增】當老鼠第一次出現在畫面上時播放出現竊笑聲
+                        window.playSFX(this, 'mimi-laugh');
+                    }
+                    if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; this.mimiSprite.y = data.y; }
+                    else { this.mimiSprite.x = Phaser.Math.Linear(this.mimiSprite.x, data.x, 0.3); this.mimiSprite.y = Phaser.Math.Linear(this.mimiSprite.y, data.y, 0.3); }
+                    this.mimiSprite.setFlipX(data.flipX);
+
+                    if (data.state === 'stealing' && data.stealingFrom === window.GameLogic.currentUser.uid && !this.localPlayer.isMimiRobbed) {
+                        this.localPlayer.isMimiRobbed = true; this.localPlayer.isStunned = true; this.localPlayer.sprite.play('fw-hit', true);
+                      // 【新增】當老鼠成功突襲並拍打當前玩家搶錢時播放打擊聲
+                        window.playSFX(this, 'mimi-thief-stealing');
+                        let p = window.GameLogic.myProfile; let amt = Math.min(Phaser.Math.Between(20, 100), p.coins || 0); p.coins -= amt;
+                        let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins;
+                        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                            module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins });
+                            module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { stolenPool: (data.stolenPool || 0) + amt });
+                            module.update(module.ref(window.GameLogic.db, `cafeMimi/stolenUids`), { [window.GameLogic.currentUser.uid]: true });
+                        });
+                        sendBubble(`被老鼠偷走了 ${amt} 元！`); this.time.delayedCall(2000, () => { this.localPlayer.isStunned = false; });
+                    }
+                    if (data.state !== 'stealing' && this.localPlayer.isMimiRobbed) this.localPlayer.isMimiRobbed = false;
+
+                    if (data.state === 'stealing') this.mimiSprite.play('mimi-steal', true);
+                    else if (data.state === 'laughing') this.mimiSprite.play('mimi-laugh', true);
+                    else if (data.state === 'down') { this.mimiSprite.play('mimi-down', true); this.mimiSprite.setAlpha(0.6); }
+                    else this.mimiSprite.play('mimi-walk', true);
+
+                    let nmY = this.mimiSprite.y - 40; this.mimiNameText.setPosition(this.mimiSprite.x, nmY);
+                    this.mimiNameBg.clear().fillStyle(0x000, 0.6).fillRoundedRect(this.mimiSprite.x - 30, nmY - 10, 60, 20, 4);
+                    this.mimiHpText.setPosition(this.mimiSprite.x, nmY - 20).setText(data.hp > 0 ? `HP: ${data.hp}` : '');
+                } else {
+                    if (this.mimiSprite) { this.mimiSprite.destroy(); this.mimiNameText.destroy(); this.mimiNameBg.destroy(); this.mimiHpText.destroy(); this.mimiSprite = null; }
+                }
+            });
         }
 
         // 修正：尊重 Firebase 或本地保險中最後儲存的座標，不再強制鎖定於地圖正中央
@@ -1362,7 +1415,7 @@ class MainScene extends Phaser.Scene {
             if (window.GameLogic.armedItemState === 'ready') {
                 let itemName = window.GameLogic.armedItemName || '水球'; let inv = window.GameLogic.myProfile.inventory || {}; inv[itemName] = Math.max(0, (inv[itemName] || 0) - 1); update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv }); if (inv[itemName] > 0) { window.GameLogic.armedItemState = 'armed'; } else { window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; }
                 let targetUid = window.GameLogic.currentTargetUid; let targetSprite = window.GameLogic.currentTargetSprite; let targetType = window.GameLogic.currentTargetType; if (targetSprite) { this.localPlayer.sprite.setFlipX(targetSprite.x < this.localPlayer.sprite.x); }
-                if (itemName === '煙火') { window.playSFX(this, 'launcher1'); this.localPlayer.sprite.play('fw-throw', true); this.localPlayer.isThrowing = true; this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; }); update(ref(window.GameLogic.db, `serverEvents/fireworkThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), scene: this.sceneName }); if (targetUid && targetSprite) { let fw = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'fireworks-shoot').setDepth(15); fw.play('fw-shoot', true); this.tweens.add({ targets: fw, x: targetSprite.x, y: targetSprite.y, duration: 300, onComplete: () => { fw.destroy(); this.createMiniExplosion(targetSprite.x, targetSprite.y); if (targetType === 'player') { update(ref(window.GameLogic.db, `serverEvents/fireworksHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid }); } else if (targetType === 'dummy') { update(ref(window.GameLogic.db, `serverEvents/fireworksDummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid }); for (let i = 0; i < 3; i++) { let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: 15 }); }); } } } }); } else { update(ref(window.GameLogic.db, 'serverEvents/globalFireworks'), { time: Date.now(), scene: this.sceneName, initiator: window.GameLogic.currentUser.uid }); sendBubble("施放了全頻煙火！"); } } else { window.playSFX(this, 'minimum_laser'); this.localPlayer.sprite.play('throw', true); this.localPlayer.isThrowing = true; this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; }); if (targetUid && targetSprite) { let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15); wb.setFrame(0); this.tweens.add({ targets: wb, x: targetSprite.x, y: targetSprite.y, duration: 200, onComplete: () => { window.playSFX(this, 'powerdown07'); wb.play('wb-blast', true); this.time.delayedCall(300, () => { wb.destroy(); }); if (targetType === 'player') { update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid }); } else if (targetType === 'dummy') { update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid }); for (let i = 0; i < 3; i++) { let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: 5 }); }); } } } }); } else { sendBubble("把水球砸向了空地..."); } }
+                if (itemName === '煙火') { window.playSFX(this, 'launcher1'); this.localPlayer.sprite.play('fw-throw', true); this.localPlayer.isThrowing = true; this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; }); update(ref(window.GameLogic.db, `serverEvents/fireworkThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), scene: this.sceneName }); if (targetUid && targetSprite) { let fw = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'fireworks-shoot').setDepth(15); fw.play('fw-shoot', true); this.tweens.add({ targets: fw, x: targetSprite.x, y: targetSprite.y, duration: 300, onComplete: () => { fw.destroy(); this.createMiniExplosion(targetSprite.x, targetSprite.y); if (targetType === 'player') { update(ref(window.GameLogic.db, `serverEvents/fireworksHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid }); } else if (targetType === 'dummy') { update(ref(window.GameLogic.db, `serverEvents/fireworksDummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid }); for (let i = 0; i < 3; i++) { let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: 15 }); }); } } } }); } } else if (targetType === 'mimi') { this.handleMimiHit(targetSprite.x, targetSprite.y); } } }); } else { update(ref(window.GameLogic.db, 'serverEvents/globalFireworks'), { time: Date.now(), scene: this.sceneName, initiator: window.GameLogic.currentUser.uid }); sendBubble("施放了全頻煙火！"); } } else { window.playSFX(this, 'minimum_laser'); this.localPlayer.sprite.play('throw', true); this.localPlayer.isThrowing = true; this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; }); if (targetUid && targetSprite) { let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15); wb.setFrame(0); this.tweens.add({ targets: wb, x: targetSprite.x, y: targetSprite.y, duration: 200, onComplete: () => { window.playSFX(this, 'powerdown07'); wb.play('wb-blast', true); this.time.delayedCall(300, () => { wb.destroy(); }); if (targetType === 'player') { update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid }); } else if (targetType === 'dummy') { update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid }); for (let i = 0; i < 3; i++) { let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: 5 }); }); } } } }); } else { sendBubble("把水球砸向了空地..."); } }
                 return; 
             }
 
@@ -1822,12 +1875,97 @@ class MainScene extends Phaser.Scene {
         }
     }
 
+    handleMimiHit(x, y) {
+        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+            module.get(module.ref(window.GameLogic.db, 'cafeMimi/hp')).then(snap => {
+                let chp = snap.val() || 0;
+                if (chp > 0) {
+                    let newHp = chp - 1; module.update(module.ref(module.ref(window.GameLogic.db, 'cafeMimi')), { hp: newHp });
+                    
+                    // 【新增】老鼠被水球或煙火砸中時，立刻播放一次受擊/尖叫聲
+                    window.playSFX(this, 'mimi-thief-stealing');
+
+                    if (newHp <= 0) {
+                        module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { state: 'down', active: false });
+                        
+                        // 【新增】確定完全擊倒老鼠時，播放終結倒地音效
+                        window.playSFX(this, 'mimi-thief-get-down');
+
+                        let mData = window.GameLogic.cafeMimiData || {}; let baseCoins = 300 * (mData.playersInvolved || 1); let totalValue = baseCoins + (mData.stolenPool || 0); let coinValue = Math.floor(totalValue / 10);
+                        let dropUpdates = {};
+                        for(let i=0; i<10; i++) { dropUpdates[`droppedCoins/mimi_coin_${Date.now()}_${i}`] = { x: x + Phaser.Math.Between(-60, 60), y: y + Phaser.Math.Between(-60, 60) + 20, amount: coinValue }; }
+                        dropUpdates['serverEvents/mimiNextSpawn'] = Date.now() + Phaser.Math.Between(600000, 900000);
+                        module.update(module.ref(window.GameLogic.db), dropUpdates);
+                        sendBubble("打倒鼠偷米米啦！掉出滿地金幣！");
+                    }
+                }
+            });
+        });
+    }
+
     update(time, delta) {
         if (!window.GameLogic.currentUser) return;
         let vx = 0; let vy = 0; let speed = 180; const uiScene = this.scene.manager.getScene('UIScene'); let px = this.localPlayer.sprite.x; let py = this.localPlayer.sprite.y;
         let evData = window.GameLogic.shrineEventData; let isPurifying = (this.sceneName === 'shrine' && evData && evData.state === 'purifying');
 
         this.processShrineEventLogic(time, delta);
+
+      if (this.isCafe) {
+            let pUids = Object.keys(window.GameLogic.cafePlayers || {}).filter(uid => window.GameLogic.onlinePlayers && window.GameLogic.onlinePlayers[uid]);
+            let isHost = pUids.length > 0 && pUids.sort()[0] === window.GameLogic.currentUser.uid;
+            
+            if (isHost) {
+                if (!this.mimiCheckTime || time - this.mimiCheckTime > 3000) {
+                    this.mimiCheckTime = time;
+                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                        module.get(module.ref(window.GameLogic.db, 'serverEvents/mimiNextSpawn')).then(snap => {
+                            let nextSpawn = snap.val(); let now = Date.now();
+                            if (!nextSpawn || now > nextSpawn) {
+                                let mimiData = window.GameLogic.cafeMimiData;
+                                if (!mimiData || (!mimiData.active && mimiData.state !== 'down')) {
+                                    let requiredHp = Math.min(6, 2 + pUids.length);
+                                    module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { active: true, x: -50, y: Phaser.Math.Between(200, 1800), state: 'walk', hp: requiredHp, playersInvolved: pUids.length, stolenPool: 0, flipX: false, stolenUids: null });
+                                }
+                            }
+                        });
+                    });
+                }
+                
+                let mData = window.GameLogic.cafeMimiData;
+                if (mData && mData.active && mData.hp > 0) {
+                    let speed = (mData.state === 'stealing') ? 550 : 180; let targetX = mData.x, targetY = mData.y;
+                    
+                    if (mData.state === 'walk') {
+                        let targetUid = null; let minDist = 9999; let stolenUids = mData.stolenUids || {};
+                        pUids.forEach(uid => { if (!stolenUids[uid]) { let op = this.otherPlayers[uid] ? this.otherPlayers[uid].sprite : (uid === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null); if (op) { let d = Phaser.Math.Distance.Between(mData.x, mData.y, op.x, op.y); if (d < minDist) { minDist = d; targetUid = uid; targetX = op.x; targetY = op.y; } } } });
+                        if (targetUid) {
+                            if (minDist > 35) { let angle = Phaser.Math.Angle.Between(mData.x, mData.y, targetX, targetY); targetX = mData.x + Math.cos(angle) * (delta / 1000) * speed; targetY = mData.y + Math.sin(angle) * (delta / 1000) * speed; update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (Math.cos(angle) < 0), state: 'stealing', stealingFrom: targetUid }); }
+                        } else {
+                            let sumX = 0, sumY = 0; pUids.forEach(u => { let op = this.otherPlayers[u] ? this.otherPlayers[u].sprite : (u === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null); if (op) { sumX += op.x; sumY += op.y; } });
+                            let cX = sumX / pUids.length; let cY = sumY / pUids.length;
+                            let angleAway = Phaser.Math.Angle.Between(cX, cY, mData.x, mData.y);
+                            let safeX = Phaser.Math.Clamp(cX + Math.cos(angleAway) * 200, 100, 1948); let safeY = Phaser.Math.Clamp(cY + Math.sin(angleAway) * 200, 100, 1948);
+                            let distToSafe = Phaser.Math.Distance.Between(mData.x, mData.y, safeX, safeY);
+                            if (distToSafe > 20) { let angle = Phaser.Math.Angle.Between(mData.x, mData.y, safeX, safeY); targetX = mData.x + Math.cos(angle) * (delta / 1000) * speed; targetY = mData.y + Math.sin(angle) * (delta / 1000) * speed; update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (Math.cos(angle) < 0), state: 'walk' }); } else { update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'laughing', laughTime: Date.now() }); }
+                        }
+                    } else if (mData.state === 'stealing') {
+                        let op = this.otherPlayers[mData.stealingFrom] ? this.otherPlayers[mData.stealingFrom].sprite : (mData.stealingFrom === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null);
+                        if (op) { let d = Phaser.Math.Distance.Between(mData.x, mData.y, op.x, op.y); if (d > 30) { let angle = Phaser.Math.Angle.Between(mData.x, mData.y, op.x, op.y); targetX = mData.x + Math.cos(angle) * (delta / 1000) * speed; targetY = mData.y + Math.sin(angle) * (delta / 1000) * speed; update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (Math.cos(angle) < 0) }); } } else { update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'walk' }); }
+                    } else if (mData.state === 'laughing') {
+                        if (Date.now() - mData.laughTime > 3000) update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'chase', randomAngle: Math.random() * Math.PI * 2 });
+                    } else if (mData.state === 'chase') {
+                        let angle = mData.randomAngle || 0; targetX = mData.x + Math.cos(angle) * (delta / 1000) * speed; targetY = mData.y + Math.sin(angle) * (delta / 1000) * speed;
+                        if (targetX < 50 || targetX > 1998 || targetY < 50 || targetY > 1998) { angle += Math.PI; targetX = Phaser.Math.Clamp(targetX, 50, 1998); targetY = Phaser.Math.Clamp(targetY, 50, 1998); }
+                        if (Math.random() < 0.02) angle += Phaser.Math.Between(-1, 1); update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (Math.cos(angle) < 0), randomAngle: angle });
+                    }
+                }
+            } else {
+                // 如果房間內已無人，清除米米
+                if (pUids.length === 0 && window.GameLogic.cafeMimiData && window.GameLogic.cafeMimiData.active) {
+                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { active: false }));
+                }
+            }
+        }
 
         // 修正2：確保進入狗窩後，等到家具完全載入並產生實體後，再把睡覺的玩家放到床上
         if (this.sceneName === 'doghouse' && window.GameLogic.myProfile.sleepStartTime > 0 && !this.sleepInitDone && this.localPlayer) {
@@ -1937,12 +2075,25 @@ class MainScene extends Phaser.Scene {
 
             if (window.GameLogic.armedItemState) {
                 let itemName = window.GameLogic.armedItemName || '水球'; let msg = window.GameLogic.armedItemState === 'armed' ? "按B填充" + itemName : "按A施放" + itemName; let lockOnDist = 150; let lockTargetUid = null; let lockTargetSprite = null; let isDummy = false;
-                for (let uid in this.otherPlayers) { let op = this.otherPlayers[uid].sprite; let d = Phaser.Math.Distance.Between(px, py, op.x, op.y); if (d < lockOnDist) { lockOnDist = d; lockTargetUid = uid; lockTargetSprite = op; isDummy = false; } }
-                for (let key in this.furnitureSprites) { if (key.includes('dummy')) { let fDummy = this.furnitureSprites[key].sprite; let d = Phaser.Math.Distance.Between(px, py, fDummy.x, fDummy.y); if (d < lockOnDist) { lockOnDist = d; lockTargetUid = key; lockTargetSprite = fDummy; isDummy = true; } } }
+                let isMimi = false;
+                for (let uid in this.otherPlayers) { let op = this.otherPlayers[uid].sprite; let d = Phaser.Math.Distance.Between(px, py, op.x, op.y); if (d < lockOnDist) { lockOnDist = d; lockTargetUid = uid; lockTargetSprite = op; isDummy = false; isMimi = false; } }
+                for (let key in this.furnitureSprites) { if (key.includes('dummy')) { let fDummy = this.furnitureSprites[key].sprite; let d = Phaser.Math.Distance.Between(px, py, fDummy.x, fDummy.y); if (d < lockOnDist) { lockOnDist = d; lockTargetUid = key; lockTargetSprite = fDummy; isDummy = true; isMimi = false; } } }
+                if (this.mimiSprite && window.GameLogic.cafeMimiData && window.GameLogic.cafeMimiData.hp > 0) {
+                  // 【新增】時不時發出竄逃或等待的怪笑聲 (每 5 ~ 9 秒隨機觸發一次)
+                    if (!this.nextMimiRandomSfxTime || time > this.nextMimiRandomSfxTime) {
+                        this.nextMimiRandomSfxTime = time + Phaser.Math.Between(5000, 9000);
+                        let currentState = window.GameLogic.cafeMimiData.state;
+                        if (currentState === 'chase' || currentState === 'walk' || currentState === 'laughing') {
+                            window.playSFX(this, 'mimi-thief-stealing');
+                        }
+                    }
+                    let d = Phaser.Math.Distance.Between(px, py, this.mimiSprite.x, this.mimiSprite.y);
+                    if (d < lockOnDist) { lockOnDist = d; lockTargetUid = 'mimi'; lockTargetSprite = this.mimiSprite; isDummy = false; isMimi = true; }
+                }
                 if (itemName === '煙火' && window.GameLogic.armedItemState === 'ready' && !lockTargetSprite) { msg = "按A施放全頻煙火"; }
                 this.waterPromptText.setText(msg).setVisible(true); const wpBounds = this.waterPromptText.getBounds(); const wpWidth = wpBounds.width + 20, wpHeight = wpBounds.height + 10; const wptX = px, wptY = py + 45; 
                 this.waterPromptBg.clear().fillStyle(0x0077cc, 0.8).lineStyle(2, 0xffffff, 1).fillRoundedRect(wptX - wpWidth/2, wptY - wpHeight/2, wpWidth, wpHeight, 6).strokeRoundedRect(wptX - wpWidth/2, wptY - wpHeight/2, wpWidth, wpHeight, 6).setVisible(true); this.waterPromptText.setPosition(wptX, wptY);
-                if (lockTargetSprite) { this.lockOnTarget.setPosition(lockTargetSprite.x, lockTargetSprite.y - 40).setVisible(true); window.GameLogic.currentTargetSprite = lockTargetSprite; window.GameLogic.currentTargetUid = lockTargetUid; window.GameLogic.currentTargetType = isDummy ? 'dummy' : 'player'; } else { this.lockOnTarget.setVisible(false); window.GameLogic.currentTargetSprite = null; window.GameLogic.currentTargetUid = null; }
+                if (lockTargetSprite) { this.lockOnTarget.setPosition(lockTargetSprite.x, lockTargetSprite.y - 40).setVisible(true); window.GameLogic.currentTargetSprite = lockTargetSprite; window.GameLogic.currentTargetUid = lockTargetUid; window.GameLogic.currentTargetType = isMimi ? 'mimi' : (isDummy ? 'dummy' : 'player'); } else { this.lockOnTarget.setVisible(false); window.GameLogic.currentTargetSprite = null; window.GameLogic.currentTargetUid = null; }
             } else { if (this.waterPromptBg) { this.waterPromptBg.setVisible(false); this.waterPromptText.setVisible(false); this.lockOnTarget.setVisible(false); } }
         }
         
