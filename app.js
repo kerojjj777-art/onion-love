@@ -333,6 +333,9 @@ function createSystemUI() {
                 <div class="catalog-item" onclick="window.devSummonMimi()" style="flex-direction:row; justify-content:center; padding: 15px; font-weight:bold; background:rgba(197, 160, 89, 0.1); width:100%; box-sizing:border-box;">
                     <span>🐭 召喚米米 (測試用)</span>
                 </div>
+                <div class="catalog-item" onclick="window.devFillMagic()" style="flex-direction:row; justify-content:center; padding: 15px; font-weight:bold; background:rgba(197, 160, 89, 0.1); width:100%; box-sizing:border-box;">
+                    <span>✨ 法寶填充 (100個)</span>
+                </div>
             </div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('dev-modal').style.display='none'; document.getElementById('inventory-modal').style.display='block';">返回背包</button>
         </div>
@@ -647,7 +650,17 @@ window.devSummonMimi = function() {
             flipX: false,
             stolenUids: null
         }).then(() => {
-            alert("【開發者測試模式】已在交誼廳中央成功喚出鼠偷米米！");
+            document.getElementById('dev-modal').style.display = 'none';
+        });
+    });
+};
+
+window.devFillMagic = function() {
+    let inv = window.GameLogic.myProfile.inventory || {};
+    inv['水球'] = 100;
+    inv['煙火'] = 100;
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv }).then(() => {
             document.getElementById('dev-modal').style.display = 'none';
         });
     });
@@ -670,7 +683,7 @@ window.openInventoryModal = function() {
     rawItems['manual'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'manual\')"' : ''}><img src="tools-manual.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0;">說明書</span></div>`;
     rawItems['magic_items'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'magic_items\')"' : ''}><img src="tools-magic-weapon.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0; color:var(--mucha-brown); font-weight:bold;">法寶</span></div>`;
     rawItems['logout'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'logout\')"' : ''}><img src="tools-leave.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0;">登出大廳</span></div>`;if (window.GameLogic.currentUser && window.GameLogic.currentUser.email === 'onion@gmail.com') {
-        rawItems['dev'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'dev\')"' : ''}><span style="font-size:24px; margin-bottom:5px;">🛠️</span><span style="margin:5px 0; font-weight:bold; color:var(--mucha-green);">洋蔥精靈</span></div>`;
+        rawItems['dev'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'dev\')"' : ''}><img src="tools-master-onion.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0; font-weight:bold; color:var(--mucha-green);">洋蔥精靈</span></div>`;
     }
     let activeKeys = Object.keys(rawItems); let order = Array.isArray(window.GameLogic.myProfile.inventoryOrder) ? window.GameLogic.myProfile.inventoryOrder.filter(k => k && typeof k === 'string') : []; let finalOrder = order.filter(k => activeKeys.includes(k)); activeKeys.forEach(k => { if (!finalOrder.includes(k)) finalOrder.push(k); }); window.GameLogic.myProfile.inventoryOrder = finalOrder;
     let invHTML = ''; finalOrder.forEach((k, i) => { let inner = rawItems[k]; if (window.GameLogic.inventoryEditMode) { invHTML += `<div style="display:flex; flex-direction:column; align-items:center; background: rgba(0,0,0,0.05); padding: 5px; border-radius: 8px;">${inner}<div style="display:flex; justify-content:space-around; width:100%; margin-top:5px;"><button class="btn-secondary" style="padding:2px 10px;" onclick="window.moveInvItem(${i}, -1)" ${i === 0 ? 'disabled' : ''}>◀</button><button class="btn-secondary" style="padding:2px 10px;" onclick="window.moveInvItem(${i}, 1)" ${i === finalOrder.length - 1 ? 'disabled' : ''}>▶</button></div></div>`; } else { invHTML += inner; } });
@@ -1103,7 +1116,7 @@ class UIScene extends Phaser.Scene {
             if (isActive) {
                 if (!this.energyEmitter) {
                     this.energyEmitter = this.add.particles(0, 0, 'fw-particle', {
-                        y: { min: -10, max: 30 }, x: { min: -5, max: 5 }, speedY: { min: -30, max: -60 }, scale: { start: 1, end: 0 }, tint: [0xadff2f, 0xffff00], blendMode: 'ADD', lifespan: 700, quantity: 2
+                        y: { min: -10, max: 30 }, x: { min: -5, max: 5 }, speedY: { min: -15, max: -30 }, scale: { start: 0.8, end: 0 }, tint: [0x8bc34a, 0xadff2f], blendMode: 'NORMAL', lifespan: 1200, frequency: 300
                     });
                     this.statusContainer.add(this.energyEmitter);
                 }
@@ -1824,10 +1837,10 @@ class MainScene extends Phaser.Scene {
 
         // 建立蔥電飽專屬綠色往上飄特效 (優化效能並確保隨身顯示)
         this.playerEnergyEmitter = this.add.particles(0, 0, 'fw-particle', {
-            speedY: { min: -15, max: -40 }, speedX: { min: -5, max: 5 },
-            scale: { start: 0.8, end: 0 }, alpha: { start: 0.6, end: 0 },
-            tint: [0x8bc34a, 0xadff2f, 0x00ff00], blendMode: 'ADD',
-            lifespan: 600, frequency: 250
+            speedY: { min: -10, max: -25 }, x: { min: -25, max: 25 },
+            scale: { start: 0.8, end: 0 }, alpha: { start: 1, end: 0 },
+            tint: [0x8bc34a, 0xadff2f, 0xffcc00], blendMode: 'NORMAL',
+            lifespan: 1200, frequency: 400
         }).setDepth(15);
         this.playerEnergyEmitter.stop();
         this.playerEnergyEmitter.isEnergyEmitting = false; // 自製旗標防呆，避免頻繁呼叫 start 導致卡頓
@@ -2565,7 +2578,7 @@ class MainScene extends Phaser.Scene {
         this.updatePlayerEntity(this.localPlayer, window.GameLogic.myProfile);
 
         if (window.GameLogic.energyActive && this.localPlayer.sprite.active) {
-            this.playerEnergyEmitter.setPosition(this.localPlayer.sprite.x, this.localPlayer.sprite.y + 10);
+            this.playerEnergyEmitter.setPosition(this.localPlayer.sprite.x, this.localPlayer.sprite.y + 35);
             if (!this.playerEnergyEmitter.isEnergyEmitting) {
                 this.playerEnergyEmitter.start();
                 this.playerEnergyEmitter.isEnergyEmitting = true;
