@@ -163,10 +163,10 @@ function createSystemUI() {
             .magic-slot { border: 2px solid var(--mucha-gold); border-radius: 8px; background: rgba(255,255,255,0.5); display: flex; justify-content: center; align-items: center; cursor: pointer; position: relative; }
             .magic-slot:hover { background: rgba(197, 160, 89, 0.3); }
             .magic-qty { position: absolute; bottom: 2px; right: 5px; font-size: 12px; font-weight: bold; color: var(--mucha-brown); }
-            #quick-select-menu { display: none; position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); width: 300px; background: radial-gradient(circle, rgba(173,216,230,0.8) 0%, rgba(135,206,235,0.3) 70%, transparent 100%); border: none; border-radius: 20px; padding: 15px 5px; z-index: 300; flex-direction: column; align-items: center; box-shadow: 0 0 25px rgba(135,206,235,0.8), inset 0 0 15px rgba(255,255,255,0.6); pointer-events: auto; touch-action: pan-x; }
+            #quick-select-menu { display: none; position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); width: 300px; background: rgba(0, 15, 30, 0.4); border: 1px solid rgba(135,206,235,0.3); border-radius: 20px; padding: 15px 5px; z-index: 300; flex-direction: column; align-items: center; box-shadow: 0 0 20px rgba(0, 191, 255, 0.3); pointer-events: auto; touch-action: pan-x; }
             #quick-items-container { display: flex; flex-direction: row; overflow-x: auto; scroll-snap-type: x mandatory; gap: 15px; width: 100%; padding: 15px 10px; box-sizing: border-box; scrollbar-width: none; align-items: center; }
             #quick-items-container::-webkit-scrollbar { display: none; }
-            .quick-item { flex: 0 0 60px; height: 60px; border: none; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; background: rgba(255,255,255,0.7); position: relative; transition: 0.3s; scroll-snap-align: center; box-shadow: 0 0 10px rgba(135,206,235,0.5); }
+            .quick-item { flex: 0 0 60px; height: 60px; border: none; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; background: rgba(255,255,255,0.8); position: relative; transition: 0.3s; scroll-snap-align: center; box-shadow: 0 0 10px rgba(135,206,235,0.5); }
             .quick-item.staged { transform: scale(1.35); box-shadow: 0 0 20px rgba(255,255,255,1), 0 0 15px rgba(0,191,255,0.8); background: #fff; z-index: 10; }
         </style>
 
@@ -282,8 +282,9 @@ function createSystemUI() {
             <div id="magic-desc" style="margin-top: 15px; font-size: 13px; color: #fff; text-align: left; min-height: 60px; background: rgba(62, 39, 35, 0.85); padding: 10px; border-radius: 6px; border: 1px solid var(--mucha-gold); line-height: 1.4;">點擊法寶查看說明...</div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('magic-modal').style.display='none'">關上法寶庫</button>
         </div>
+        <div id="magic-menu-blocker" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; z-index: 290;" onpointerdown="event.stopPropagation(); window.closeQuickMenu();"></div>
         <div id="quick-select-menu" onpointerdown="event.stopPropagation()" ontouchmove="event.stopPropagation()" onwheel="event.stopPropagation()">
-            <div style="font-weight: bold; color: #005599; margin-bottom: 0px; font-size: 13px; text-shadow: 0 0 5px #fff, 0 0 10px #fff; letter-spacing: 1px;">左右滑動，單按B選定</div>
+            <div style="font-weight: bold; color: #87ceeb; margin-bottom: 0px; font-size: 13px; text-shadow: 0 0 3px #000, 0 0 5px #000; letter-spacing: 1px;">左右滑動或點擊法寶選定</div>
             <div id="quick-items-container"></div>
         </div>
 
@@ -1024,6 +1025,7 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('sleep-charger', 'sleep_onion_bao_charger.png', { frameWidth: 90, frameHeight: 90 });
         this.load.image('bg7Eonion', '7eonion-bg.jpg'); this.load.image('storeManager', 'store-manager.png'); this.load.spritesheet('onion-throw', 'onion-throw.png', { frameWidth: 90, frameHeight: 75 }); this.load.spritesheet('water-ball-blast', 'water-ball-blast.png', { frameWidth: 50, frameHeight: 50 }); this.load.spritesheet('onion-wet', 'onion-wet.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('made-coin', 'made-coin.png', { frameWidth: 50, frameHeight: 50 }); this.load.image('dummy', 'dummy.png'); this.load.spritesheet('dummy-wet', 'dummy-wet.png', { frameWidth: 75, frameHeight: 75 });
         this.load.image('fireworks', 'shop-fireworks.png'); this.load.spritesheet('onion-fireworks', 'onion-fireworks.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-got-shot', 'onion-got-shot.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('mimi-thief-walk', 'mimi-thief-walk.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.spritesheet('fireworks-shoot', 'fireworks-shoot.png', { frameWidth: 50, frameHeight: 50 });
         this.load.spritesheet('mimi-thief-stealing', 'mimi-thief-stealing.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('mimi-laugh', 'mimi-laugh.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('mimi-thief-get-down', 'mimi-thief-get-down.png', { frameWidth: 75, frameHeight: 75 });
@@ -1052,6 +1054,7 @@ class BootScene extends Phaser.Scene {
         let fwGr = this.make.graphics({ x:0, y:0, add:false }); fwGr.fillStyle(0xffffff, 1); fwGr.fillCircle(4, 4, 4); fwGr.generateTexture('fw-particle', 8, 8);
         this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('onion-down'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('onion-up'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'walk', frames: this.anims.generateFrameNumbers('onion-walk', { start: 0, end: 5 }), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'idle', frames: this.anims.generateFrameNumbers('onion-idle'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'skin-anim', frames: this.anims.generateFrameNumbers('onion-skin', { start: 0, end: 3 }), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'skin-old-anim', frames: this.anims.generateFrameNumbers('onion-skin-old', { start: 0, end: 5 }), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'clean', frames: this.anims.generateFrameNumbers('onion-clean'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'throw', frames: this.anims.generateFrameNumbers('onion-throw'), frameRate: 10, repeat: 0 }); this.anims.create({ key: 'wb-blast', frames: this.anims.generateFrameNumbers('water-ball-blast'), frameRate: 15, repeat: -1 }); this.anims.create({ key: 'wet', frames: this.anims.generateFrameNumbers('onion-wet'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'coin-anim', frames: this.anims.generateFrameNumbers('made-coin'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'dummy-hit', frames: this.anims.generateFrameNumbers('dummy-got-shot'), frameRate: 10, repeat: -1 }); this.anims.create({ key: 'sleep', frames: this.anims.generateFrameNumbers('onion-sleep'), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'fw-throw', frames: this.anims.generateFrameNumbers('onion-fireworks'), frameRate: 8, repeat: 2 }); this.anims.create({ key: 'fw-hit', frames: this.anims.generateFrameNumbers('onion-got-shot'), frameRate: 10, repeat: -1 }); 
+        this.anims.create({ key: 'fw-shoot', frames: this.anims.generateFrameNumbers('fireworks-shoot'), frameRate: 15, repeat: -1 });
         this.anims.create({ key: 'mimi-walk', frames: this.anims.generateFrameNumbers('mimi-thief-walk'), frameRate: 15, repeat: -1 });
         this.anims.create({ key: 'mimi-steal', frames: this.anims.generateFrameNumbers('mimi-thief-stealing'), frameRate: 12, repeat: -1 });
         this.anims.create({ key: 'mimi-laugh', frames: this.anims.generateFrameNumbers('mimi-laugh'), frameRate: 10, repeat: -1 });
@@ -1117,16 +1120,33 @@ class UIScene extends Phaser.Scene {
         this.btnA.on('pointerdown', () => { this.btnA.setFillStyle(0xb52b27); this.aPressTime = Date.now(); });
         this.btnA.on('pointerup', () => { this.btnA.setFillStyle(0xd9534f); let duration = Date.now() - this.aPressTime; const mainScene = this.scene.manager.getScene('MainScene'); if(mainScene) { if (window.GameLogic.placingFurnitureKey) mainScene.events.emit('action_A_place'); else if (duration > 500) mainScene.events.emit('action_A_long'); else mainScene.events.emit('action_A_short'); } });
         
-        this.bPressTime = 0;
-        this.btnB.on('pointerdown', () => { this.btnB.setFillStyle(0x005599); this.bPressTime = Date.now(); });
+        // 建立法寶選單的華麗粒子背景
+        this.magicMenuEmitter = this.add.particles(0, 0, 'particle_flare', {
+            speed: { min: 20, max: 80 }, angle: { min: 0, max: 360 }, scale: { start: 1.5, end: 0 },
+            tint: [0x00ccff, 0xffffff, 0xffff00], blendMode: 'ADD', lifespan: { min: 800, max: 1500 }, quantity: 6,
+            emitZone: { type: 'random', source: new Phaser.Geom.Rectangle(-160, -45, 320, 90) }
+        }).setDepth(500).stop();
+
+        this.btnB.on('pointerdown', () => { 
+            this.btnB.setFillStyle(0x005599); 
+            this.bLongPressTriggered = false;
+            this.bLongPressTimer = this.time.delayedCall(300, () => {
+                this.bLongPressTriggered = true;
+                const mainScene = this.scene.manager.getScene('MainScene');
+                if (mainScene) mainScene.events.emit('action_B_long');
+            });
+        });
         this.btnB.on('pointerup', () => { 
             this.btnB.setFillStyle(0x0077cc);
-            let duration = Date.now() - this.bPressTime;
-            const mainScene = this.scene.manager.getScene('MainScene');
-            if (mainScene) {
-                if (duration > 400) mainScene.events.emit('action_B_long');
-                else mainScene.events.emit('action_B');
+            if (this.bLongPressTimer) this.bLongPressTimer.remove();
+            if (!this.bLongPressTriggered) {
+                const mainScene = this.scene.manager.getScene('MainScene');
+                if (mainScene) mainScene.events.emit('action_B');
             }
+        });
+        this.btnB.on('pointerout', () => { 
+            this.btnB.setFillStyle(0x0077cc);
+            if (this.bLongPressTimer) this.bLongPressTimer.remove();
         });
         
         this.scale.on('resize', this.resizeUI, this); this.resizeUI(this.scale.gameSize); window.updateUnreadGlow();
@@ -1169,6 +1189,7 @@ class UIScene extends Phaser.Scene {
         this.statusText.setPosition(bgW * 0.32, -bgH * 0.30).setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); this.equipText.setPosition(bgW * 0.75, -bgH * 0.30).setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); this.statusToggleBtn.setPosition(bgW, -bgH * 0.30);
         let clusterX = gameSize.width - 90; let clusterY = gameSize.height - bottomOffset - 70; let d = 45; 
         this.itemBtn.setPosition(clusterX, clusterY - d); this.itemText.setPosition(this.itemBtn.x, this.itemBtn.y); this.btnA.setPosition(clusterX + d, clusterY); this.txtA.setPosition(this.btnA.x, this.btnA.y); this.btnB.setPosition(clusterX, clusterY + d); this.txtB.setPosition(this.btnB.x, this.btnB.y); this.furnBtn.setPosition(clusterX - d, clusterY); this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
+        if (this.magicMenuEmitter) this.magicMenuEmitter.setPosition(gameSize.width / 2, gameSize.height - 150);
     }
 
     playExpGainEffect() {
@@ -1418,7 +1439,21 @@ class MainScene extends Phaser.Scene {
         this.cursors = this.input.keyboard.createCursorKeys(); this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE); this.shiftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
         this.spaceKey.on('down', (e) => { if (!e.repeat && document.activeElement.tagName !== 'INPUT') this.spacePressTime = Date.now(); });
         this.spaceKey.on('up', () => { if (document.activeElement.tagName === 'INPUT') return; let duration = Date.now() - this.spacePressTime; if (window.GameLogic.placingFurnitureKey) this.events.emit('action_A_place'); else if (duration > 500) this.events.emit('action_A_long'); else this.events.emit('action_A_short'); });
-        this.shiftKey.on('down', (e) => { if (!e.repeat && document.activeElement.tagName !== 'INPUT') this.events.emit('action_B'); });
+        
+        this.shiftKey.on('down', (e) => { 
+            if (!e.repeat && document.activeElement.tagName !== 'INPUT') {
+                this.shiftLongPressTriggered = false;
+                this.shiftLongPressTimer = this.time.delayedCall(300, () => {
+                    this.shiftLongPressTriggered = true;
+                    this.events.emit('action_B_long');
+                });
+            }
+        });
+        this.shiftKey.on('up', (e) => {
+            if (document.activeElement.tagName === 'INPUT') return;
+            if (this.shiftLongPressTimer) this.shiftLongPressTimer.remove();
+            if (!this.shiftLongPressTriggered) this.events.emit('action_B');
+        });
 
         this.qteContainer = this.add.container(0, 0).setVisible(false).setDepth(300); const qteBg = this.add.graphics().fillStyle(0x3e2723, 0.8).fillRoundedRect(-52, -10, 104, 20, 10).lineStyle(2, 0xc5a059).strokeRoundedRect(-52, -10, 104, 20, 10); this.qteBar = this.add.graphics(); const qteLabel = this.add.text(0, -25, '打掃進度', { fontSize: '14px', color: '#c5a059', fontStyle: 'bold' }).setOrigin(0.5); this.qteContainer.add([qteBg, this.qteBar, qteLabel]); if (this.minimap) this.minimap.ignore([qteBg, this.qteBar, qteLabel, this.qteContainer]);
 
@@ -1618,9 +1653,40 @@ class MainScene extends Phaser.Scene {
             if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!"); let interacted = false; for (const key in this.furnitureSprites) { let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y); if (dist < 90) { if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block'; if (key.startsWith('memory')) document.getElementById('memory-modal').style.display = 'block'; if (key.includes('scoreboard')) { window.openLeaderboardModal(); interacted = true; break; } if (key === 'shrine') { window.attemptJoinShrine(); interacted = true; break; } } } if(!interacted) sendBubble("使用了 A 技能!");
         });
 
+        window.closeQuickMenu = () => {
+            document.getElementById('quick-select-menu').style.display = 'none';
+            let blocker = document.getElementById('magic-menu-blocker');
+            if (blocker) blocker.style.display = 'none';
+            let uiScene = window.GameLogic.phaserGame.scene.getScene('UIScene');
+            if (uiScene && uiScene.magicMenuEmitter) uiScene.magicMenuEmitter.stop();
+        };
+
+        window.selectQuickMagic = (name) => {
+            window.closeQuickMenu();
+            window.GameLogic.stagedMagicItem = name;
+            if (!name || name === 'none') {
+                window.GameLogic.armedItemState = null;
+                window.GameLogic.armedItemName = null;
+                sendBubble('已收起法寶');
+            } else {
+                let inv = window.GameLogic.myProfile.inventory || {};
+                if (inv[name] > 0) {
+                    window.GameLogic.armedItemState = 'ready'; // 直接裝填為發射狀態
+                    window.GameLogic.armedItemName = name;
+                    sendBubble(`已裝填法寶：${name}`);
+                } else {
+                    sendBubble("法寶庫存不足！");
+                    window.GameLogic.armedItemState = null;
+                    window.GameLogic.armedItemName = null;
+                }
+            }
+        };
+
         this.events.off('action_B_long');
         this.events.on('action_B_long', () => {
             let menu = document.getElementById('quick-select-menu');
+            let blocker = document.getElementById('magic-menu-blocker');
+            let uiScene = this.scene.manager.getScene('UIScene');
             let inv = window.GameLogic.myProfile.inventory || {};
             let container = document.getElementById('quick-items-container');
             
@@ -1633,7 +1699,7 @@ class MainScene extends Phaser.Scene {
             let html = `<div style="flex: 0 0 calc(50% - 30px);"></div>`;
             magics.forEach((m) => {
                 let qtyHtml = m.name !== 'none' ? `<div style="position:absolute; bottom:-5px; right:0px; font-size:13px; font-weight:bold; color:#005599; text-shadow:0 0 4px #fff, 0 0 4px #fff;">x${m.qty}</div>` : '';
-                html += `<div class="quick-item" data-magic="${m.name}" onclick="this.parentNode.scrollTo({left: this.offsetLeft - this.parentNode.offsetWidth/2 + this.offsetWidth/2, behavior: 'smooth'});">
+                html += `<div class="quick-item" data-magic="${m.name}" onclick="window.selectQuickMagic('${m.name}')">
                             ${m.icon}${qtyHtml}
                          </div>`;
             });
@@ -1659,29 +1725,38 @@ class MainScene extends Phaser.Scene {
             };
             
             menu.style.display = 'flex';
+            if (blocker) blocker.style.display = 'block';
+            if (uiScene && uiScene.magicMenuEmitter) uiScene.magicMenuEmitter.start();
+            
             setTimeout(() => { container.scrollLeft = 0; container.dispatchEvent(new Event('scroll')); }, 50);
         });
 
         this.events.on('action_B', () => {
             let menu = document.getElementById('quick-select-menu');
             if (menu && menu.style.display === 'flex') {
-                menu.style.display = 'none';
-                let sel = window.GameLogic.stagedMagicItem;
-                if (!sel || sel === 'none') {
-                    window.GameLogic.armedItemState = null;
-                    window.GameLogic.armedItemName = null;
-                    sendBubble('已卸下裝備');
-                } else {
-                    let inv = window.GameLogic.myProfile.inventory || {};
-                    if (inv[sel] > 0) {
-                        window.GameLogic.armedItemState = 'ready';
-                        window.GameLogic.armedItemName = sel;
-                    } else {
-                        sendBubble("法寶庫存不足！");
-                    }
-                }
+                window.selectQuickMagic(window.GameLogic.stagedMagicItem);
                 return; 
             }
+            
+            // 開關切換邏輯：如果有配戴法寶，單按B變成裝備與卸下的切換鍵
+            if (window.GameLogic.armedItemName) {
+                if (window.GameLogic.armedItemState === 'ready') {
+                    window.GameLogic.armedItemState = null;
+                    sendBubble(`已卸下${window.GameLogic.armedItemName}，進入待機`);
+                } else {
+                    let inv = window.GameLogic.myProfile.inventory || {};
+                    if (inv[window.GameLogic.armedItemName] > 0) {
+                        window.GameLogic.armedItemState = 'ready';
+                        sendBubble(`已裝填法寶：${window.GameLogic.armedItemName}`);
+                    } else {
+                        sendBubble("法寶庫存不足！");
+                        window.GameLogic.armedItemState = null;
+                        window.GameLogic.armedItemName = null;
+                    }
+                }
+                return;
+            }
+
             if (this.localPlayer.isSleeping) return;
             
             if (this.sceneName === 'shrine') { 
