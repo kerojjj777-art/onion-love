@@ -1603,6 +1603,11 @@ class MainScene extends Phaser.Scene {
             if (this.trashListener) this.trashListener(); 
             if (this.coinsListener) this.coinsListener(); 
             if (this.dummiesListener) this.dummiesListener(); 
+            
+            // 【修正1 & 2】：離開場景時，徹底註銷米米監聽器並強制切斷走路音效
+            if (this.mimiListener) this.mimiListener(); 
+            if (this.sound && this.sound.get('mimi-walk')) this.sound.stopByKey('mimi-walk');
+            
             if (this.hitListener) this.hitListener(); 
             if (this.fwHitListener) this.fwHitListener(); 
             if (this.fwPlayersHitListener) this.fwPlayersHitListener(); 
@@ -2077,7 +2082,6 @@ class MainScene extends Phaser.Scene {
                         let targetUid = null; let minDist = 9999; let stolenUids = mData.stolenUids || {};
                         let stolenCount = Object.keys(stolenUids).length;
                         
-                        // 變速機制：找第一個目標速度為 320(比玩家略快)，偷到後發狂變 550
                         let walkSpeed = (stolenCount === 0) ? 320 : 550; 
                         
                         pUids.forEach(uid => { if (!stolenUids[uid]) { let op = this.otherPlayers[uid] ? this.otherPlayers[uid].sprite : (uid === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null); if (op) { let d = Phaser.Math.Distance.Between(mData.x, mData.y, op.x, op.y); if (d < minDist) { minDist = d; targetUid = uid; targetX = op.x; targetY = op.y; } } } });
@@ -2086,24 +2090,23 @@ class MainScene extends Phaser.Scene {
                                 let angle = Phaser.Math.Angle.Between(mData.x, mData.y, targetX, targetY); 
                                 targetX = mData.x + Math.cos(angle) * (delta / 1000) * walkSpeed; 
                                 targetY = mData.y + Math.sin(angle) * (delta / 1000) * walkSpeed; 
-                                // 精準判斷左翻：如果目標座標 X 小於當前座標 X，就鏡像翻轉
-                                update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX < mData.x) }); 
+                                // 【修正3】：米米原圖面朝左，所以向右跑 (targetX > mData.x) 時才需要鏡像翻轉
+                                update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX > mData.x) }); 
                             } else {
                                 update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'stealing', stealingFrom: targetUid }); 
                             }
                         } else {
-                            // 偷完所有人後，計算安全距離撤退
                             let sumX = 0, sumY = 0; pUids.forEach(u => { let op = this.otherPlayers[u] ? this.otherPlayers[u].sprite : (u === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null); if (op) { sumX += op.x; sumY += op.y; } });
                             let cX = sumX / pUids.length; let cY = sumY / pUids.length;
                             let angleAway = Phaser.Math.Angle.Between(cX, cY, mData.x, mData.y);
                             let safeX = Phaser.Math.Clamp(cX + Math.cos(angleAway) * 200, 100, 1948); let safeY = Phaser.Math.Clamp(cY + Math.sin(angleAway) * 200, 100, 1948);
                             let distToSafe = Phaser.Math.Distance.Between(mData.x, mData.y, safeX, safeY);
-                            // 用正常速度 180 撤退
                             if (distToSafe > 20) { 
                                 let angle = Phaser.Math.Angle.Between(mData.x, mData.y, safeX, safeY); 
                                 targetX = mData.x + Math.cos(angle) * (delta / 1000) * 180; 
                                 targetY = mData.y + Math.sin(angle) * (delta / 1000) * 180; 
-                                update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX < mData.x) }); 
+                                // 【修正3】：向右跑才翻轉
+                                update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX > mData.x) }); 
                             } else { 
                                 update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'laughing', laughTime: Date.now() }); 
                             }
@@ -2115,7 +2118,6 @@ class MainScene extends Phaser.Scene {
                     } else if (mData.state === 'laughing' && mData.hp > 0) {
                         if (Date.now() - mData.laughTime > 3000) update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'chase', randomAngle: Math.random() * Math.PI * 2 });
                     } else if (mData.state === 'chase' && mData.hp > 0) {
-                        // 鬼抓人智能迴避機制：反推離自己最近的玩家
                         let minDistToPlayer = 9999; let nearestP = null;
                         pUids.forEach(uid => {
                             let op = this.otherPlayers[uid] ? this.otherPlayers[uid].sprite : (uid === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null);
@@ -2124,23 +2126,22 @@ class MainScene extends Phaser.Scene {
                         
                         let angle = mData.randomAngle || 0;
                         if (nearestP && minDistToPlayer < 400) {
-                            // 如果玩家在 400 距離內，鎖定遠離玩家的角度，並微調避免直線卡死
                             angle = Phaser.Math.Angle.Between(nearestP.x, nearestP.y, mData.x, mData.y);
                             angle += Phaser.Math.FloatBetween(-0.3, 0.3); 
                         } else if (Math.random() < 0.05) {
-                            angle += Phaser.Math.FloatBetween(-0.5, 0.5); // 沒人追時的隨機漫步
+                            angle += Phaser.Math.FloatBetween(-0.5, 0.5); 
                         }
                         
                         targetX = mData.x + Math.cos(angle) * (delta / 1000) * 180; 
                         targetY = mData.y + Math.sin(angle) * (delta / 1000) * 180;
                         
-                        // 撞牆反彈：如果即將跑出邊界，將其座標強行限制在牆壁內側，並讓他彈射往地圖中央跑
                         if (targetX < 50 || targetX > 1998 || targetY < 50 || targetY > 1998) { 
                             targetX = Phaser.Math.Clamp(targetX, 50, 1998); 
                             targetY = Phaser.Math.Clamp(targetY, 50, 1998); 
                             angle = Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024) + Phaser.Math.FloatBetween(-1, 1);
                         }
-                        update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX < mData.x), randomAngle: angle });
+                        // 【修正3】：向右跑才翻轉
+                        update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX > mData.x), randomAngle: angle });
                     } else if (mData.state === 'down') {
                         if (!mData.downTime) update(ref(window.GameLogic.db, 'cafeMimi'), { downTime: Date.now() });
                         else if (Date.now() - mData.downTime > 3000) update(ref(window.GameLogic.db, 'cafeMimi'), { active: false, state: 'none' });
