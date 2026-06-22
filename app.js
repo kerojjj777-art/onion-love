@@ -1448,10 +1448,82 @@ class MainScene extends Phaser.Scene {
                 return; 
             } } } }
 
-            if (window.GameLogic.armedItemState === 'ready') {
-                let itemName = window.GameLogic.armedItemName || '水球'; let inv = window.GameLogic.myProfile.inventory || {}; inv[itemName] = Math.max(0, (inv[itemName] || 0) - 1); update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv }); if (inv[itemName] > 0) { window.GameLogic.armedItemState = 'armed'; } else { window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; }
-                let targetUid = window.GameLogic.currentTargetUid; let targetSprite = window.GameLogic.currentTargetSprite; let targetType = window.GameLogic.currentTargetType; if (targetSprite) { this.localPlayer.sprite.setFlipX(targetSprite.x < this.localPlayer.sprite.x); }
-                if (itemName === '煙火') { window.playSFX(this, 'launcher1'); this.localPlayer.sprite.play('fw-throw', true); this.localPlayer.isThrowing = true; this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; }); update(ref(window.GameLogic.db, `serverEvents/fireworkThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), scene: this.sceneName }); if (targetUid && targetSprite) { let fw = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'fireworks-shoot').setDepth(15); fw.play('fw-shoot', true); this.tweens.add({ targets: fw, x: targetSprite.x, y: targetSprite.y, duration: 300, onComplete: () => { fw.destroy(); this.createMiniExplosion(targetSprite.x, targetSprite.y); if (targetType === 'player') { update(ref(window.GameLogic.db, `serverEvents/fireworksHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid }); } else if (targetType === 'dummy') { update(ref(window.GameLogic.db, `serverEvents/fireworksDummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid }); for (let i = 0; i < 3; i++) { let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: 15 }); }); } } } }); } } else if (targetType === 'mimi') { this.handleMimiHit(targetSprite.x, targetSprite.y); } } }); } else { update(ref(window.GameLogic.db, 'serverEvents/globalFireworks'), { time: Date.now(), scene: this.sceneName, initiator: window.GameLogic.currentUser.uid }); sendBubble("施放了全頻煙火！"); } } else { window.playSFX(this, 'minimum_laser'); this.localPlayer.sprite.play('throw', true); this.localPlayer.isThrowing = true; this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; }); if (targetUid && targetSprite) { let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15); wb.setFrame(0); this.tweens.add({ targets: wb, x: targetSprite.x, y: targetSprite.y, duration: 200, onComplete: () => { window.playSFX(this, 'powerdown07'); wb.play('wb-blast', true); this.time.delayedCall(300, () => { wb.destroy(); }); if (targetType === 'player') { update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid }); } else if (targetType === 'dummy') { update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid }); for (let i = 0; i < 3; i++) { let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: 5 }); }); } } } }); } else { sendBubble("把水球砸向了空地..."); } }
+           if (window.GameLogic.armedItemState === 'ready') {
+                let itemName = window.GameLogic.armedItemName || '水球';
+                let inv = window.GameLogic.myProfile.inventory || {};
+                inv[itemName] = Math.max(0, (inv[itemName] || 0) - 1);
+                update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
+                if (inv[itemName] > 0) { window.GameLogic.armedItemState = 'armed'; } else { window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; }
+                
+                let targetUid = window.GameLogic.currentTargetUid;
+                let targetSprite = window.GameLogic.currentTargetSprite;
+                let targetType = window.GameLogic.currentTargetType;
+                
+                if (targetSprite) { this.localPlayer.sprite.setFlipX(targetSprite.x < this.localPlayer.sprite.x); }
+                
+                if (itemName === '煙火') {
+                    window.playSFX(this, 'launcher1');
+                    this.localPlayer.sprite.play('fw-throw', true);
+                    this.localPlayer.isThrowing = true;
+                    this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
+                    update(ref(window.GameLogic.db, `serverEvents/fireworkThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), scene: this.sceneName });
+                    
+                    if (targetUid && targetSprite) {
+                        let fw = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'fireworks-shoot').setDepth(15);
+                        fw.play('fw-shoot', true);
+                        this.tweens.add({
+                            targets: fw, x: targetSprite.x, y: targetSprite.y, duration: 300, onComplete: () => {
+                                fw.destroy();
+                                this.createMiniExplosion(targetSprite.x, targetSprite.y);
+                                if (targetType === 'player') {
+                                    update(ref(window.GameLogic.db, `serverEvents/fireworksHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                } else if (targetType === 'dummy') {
+                                    update(ref(window.GameLogic.db, `serverEvents/fireworksDummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                    for (let i = 0; i < 3; i++) {
+                                        let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
+                                        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: 15 }); });
+                                    }
+                                } else if (targetType === 'mimi') {
+                                    this.handleMimiHit(targetSprite.x, targetSprite.y);
+                                }
+                            }
+                        });
+                    } else {
+                        update(ref(window.GameLogic.db, 'serverEvents/globalFireworks'), { time: Date.now(), scene: this.sceneName, initiator: window.GameLogic.currentUser.uid });
+                        sendBubble("施放了全頻煙火！");
+                    }
+                } else {
+                    // 水球邏輯
+                    window.playSFX(this, 'minimum_laser');
+                    this.localPlayer.sprite.play('throw', true);
+                    this.localPlayer.isThrowing = true;
+                    this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
+                    
+                    if (targetUid && targetSprite) {
+                        let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15);
+                        wb.setFrame(0);
+                        this.tweens.add({
+                            targets: wb, x: targetSprite.x, y: targetSprite.y, duration: 200, onComplete: () => {
+                                window.playSFX(this, 'powerdown07');
+                                wb.play('wb-blast', true);
+                                this.time.delayedCall(300, () => { wb.destroy(); });
+                                if (targetType === 'player') {
+                                    update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                } else if (targetType === 'dummy') {
+                                    update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                    for (let i = 0; i < 3; i++) {
+                                        let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
+                                        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: 5 }); });
+                                    }
+                                } else if (targetType === 'mimi') {
+                                    this.handleMimiHit(targetSprite.x, targetSprite.y);
+                                }
+                            }
+                        });
+                    } else {
+                        sendBubble("把水球砸向了空地...");
+                    }
+                }
                 return; 
             }
 
@@ -2281,4 +2353,4 @@ function listenToChat() { onValue(ref(db, 'chats'), (snapshot) => { const chatBo
 document.getElementById("upload-memory-btn").onclick = () => { const fileInput = document.getElementById("memory-file"); const textInput = document.getElementById("memory-text"); const file = fileInput.files[0]; const text = textInput.value.trim(); if (!file && !text) return alert("請上傳圖片或填寫文字！"); if (file) { const reader = new FileReader(); reader.onload = e => { const img = new Image(); img.onload = () => { const cvs = document.createElement('canvas'); let w = img.width, h = img.height; if (w > 300) { h *= 300 / w; w = 300; } cvs.width = w; cvs.height = h; cvs.getContext('2d').drawImage(img, 0, 0, w, h); saveMemoryToDB(cvs.toDataURL('image/jpeg', 0.7), text); }; img.src = e.target.result; }; reader.readAsDataURL(file); } else saveMemoryToDB("", text); fileInput.value = ""; textInput.value = ""; };
 function saveMemoryToDB(imgBase64, text) { push(ref(db, 'memories'), { uid: window.GameLogic.currentUser.uid, author: window.GameLogic.myProfile.name, img: imgBase64, text: text, time: new Date().toLocaleDateString('zh-TW') }); }
 window.deleteMemory = async function(key) { const snap = await get(ref(db, `memories/${key}`)); if (snap.exists()) { let m = snap.val(); let isMine = (m.uid === window.GameLogic.currentUser.uid) || (m.author === window.GameLogic.myProfile.name); if (isMine) { if (confirm("確定要刪除這條回憶嗎？")) remove(ref(db, `memories/${key}`)); } else { alert("您沒有權限刪除這篇回憶喔！"); } } };
-function listenToMemories() { onValue(ref(db, 'memories'), snap => { const feed = document.getElementById("memory-feed"); feed.innerHTML = ""; const data = snap.val(); if (data) { Object.keys(data).reverse().forEach(key => { let m = data[key]; let isMine = (m.uid === window.GameLogic.currentUser.uid) || (m.author === window.GameLogic.myProfile.name); let delBtnHtml = isMine ? `<button class="del-btn" onclick="window.deleteMemory('${key}')">刪除</button>` : ''; feed.innerHTML += `<div class="memory-card">${delBtnHtml}<div class="author">${m.author} - ${m.time}</div>${m.img ? `<img src="${m.img}" alt="回憶照片">` : ''}${m.text ? `<div class="text">${m.text}</div>` : ''}</div>`; }); } }); }
+function listenToMemories() { onValue(ref(db, 'memories'), snap => { const feed = document.getElementById("memory-feed"); feed.innerHTML = ""; const data = snap.val(); if (data) { Object.keys(data).reverse().forEach(key => { let m = data[key]; let isMine = (m.uid === window.GameLogic.currentUser.uid) || (m.author === window.GameLogic.myProfile.name); let delBtnHtml = isMine ? `<button class="del-btn" onclick="window.deleteMemory('${key}')">刪除</button>` : ''; feed.innerHTML += `<div class="memory-card">${delBtnHtml}<div class="author">${m.author} - ${m.time}</div>${m.img ? `<img src="${m.img}" alt="回憶照片">` : ''}${m.text ? `<div class="text">${m.text}</div>` : ''}</div>`; }); } }); 
