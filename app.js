@@ -163,9 +163,11 @@ function createSystemUI() {
             .magic-slot { border: 2px solid var(--mucha-gold); border-radius: 8px; background: rgba(255,255,255,0.5); display: flex; justify-content: center; align-items: center; cursor: pointer; position: relative; }
             .magic-slot:hover { background: rgba(197, 160, 89, 0.3); }
             .magic-qty { position: absolute; bottom: 2px; right: 5px; font-size: 12px; font-weight: bold; color: var(--mucha-brown); }
-            #quick-select-menu { display: none; position: absolute; bottom: 130px; right: 20px; width: 180px; background: linear-gradient(to top, rgba(197, 160, 89, 0.95), rgba(255, 255, 255, 0.95)); border: 2px solid var(--mucha-gold); border-radius: 12px; padding: 15px; z-index: 300; flex-direction: column; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5); pointer-events: auto; }
-            .quick-item { width: 50px; height: 50px; border: 2px solid var(--mucha-brown); border-radius: 8px; cursor: pointer; display: flex; justify-content: center; align-items: center; background: #fff; position: relative; margin: 5px; transition: 0.2s; }
-            .quick-item:active { transform: scale(0.9); }
+            #quick-select-menu { display: none; position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); width: 300px; background: radial-gradient(circle, rgba(173,216,230,0.8) 0%, rgba(135,206,235,0.3) 70%, transparent 100%); border: none; border-radius: 20px; padding: 15px 5px; z-index: 300; flex-direction: column; align-items: center; box-shadow: 0 0 25px rgba(135,206,235,0.8), inset 0 0 15px rgba(255,255,255,0.6); pointer-events: auto; touch-action: pan-x; }
+            #quick-items-container { display: flex; flex-direction: row; overflow-x: auto; scroll-snap-type: x mandatory; gap: 15px; width: 100%; padding: 15px 10px; box-sizing: border-box; scrollbar-width: none; align-items: center; }
+            #quick-items-container::-webkit-scrollbar { display: none; }
+            .quick-item { flex: 0 0 60px; height: 60px; border: none; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; background: rgba(255,255,255,0.7); position: relative; transition: 0.3s; scroll-snap-align: center; box-shadow: 0 0 10px rgba(135,206,235,0.5); }
+            .quick-item.staged { transform: scale(1.35); box-shadow: 0 0 20px rgba(255,255,255,1), 0 0 15px rgba(0,191,255,0.8); background: #fff; z-index: 10; }
         </style>
 
         <div id="energy-modal" class="modal" style="z-index: 260;">
@@ -280,10 +282,9 @@ function createSystemUI() {
             <div id="magic-desc" style="margin-top: 15px; font-size: 13px; color: #fff; text-align: left; min-height: 60px; background: rgba(62, 39, 35, 0.85); padding: 10px; border-radius: 6px; border: 1px solid var(--mucha-gold); line-height: 1.4;">點擊法寶查看說明...</div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('magic-modal').style.display='none'">關上法寶庫</button>
         </div>
-        <div id="quick-select-menu" onpointerdown="event.stopPropagation()">
-            <div style="font-weight: bold; color: var(--mucha-brown); margin-bottom: 10px; font-size: 14px; border-bottom: 1px solid var(--mucha-brown); padding-bottom: 5px;">快速選擇法寶</div>
-            <div id="quick-items-container" style="display: flex; flex-wrap: wrap; justify-content: center;"></div>
-            <button class="btn-secondary" style="width: 100%; margin-top: 10px; padding: 8px; font-size: 13px;" onclick="document.getElementById('quick-select-menu').style.display='none'">關閉選單</button>
+        <div id="quick-select-menu" onpointerdown="event.stopPropagation()" ontouchmove="event.stopPropagation()" onwheel="event.stopPropagation()">
+            <div style="font-weight: bold; color: #005599; margin-bottom: 0px; font-size: 13px; text-shadow: 0 0 5px #fff, 0 0 10px #fff; letter-spacing: 1px;">左右滑動，單按B選定</div>
+            <div id="quick-items-container"></div>
         </div>
 
         <div id="inventory-modal" class="modal"><div id="inventory-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--mucha-gold); padding-bottom: 5px; margin-bottom: 15px;"><h3 style="margin:0; border:none; color: var(--mucha-brown);">🎒 我的給西</h3><button id="inventory-edit-btn" class="btn-edit" onclick="window.toggleInventoryEdit()" style="padding:4px 8px; font-size:12px;">編輯排序</button></div><div id="inventory-list" class="catalog-grid" style="max-height: 50vh; overflow-y: auto; padding-right: 5px;"></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('inventory-modal').style.display='none'">關閉</button></div>
@@ -1524,6 +1525,18 @@ class MainScene extends Phaser.Scene {
            if (window.GameLogic.armedItemState === 'ready') {
                 let itemName = window.GameLogic.armedItemName || '水球';
                 let inv = window.GameLogic.myProfile.inventory || {};
+                
+                if (window.GameLogic.energyActive) {
+                    let currentEnergy = window.GameLogic.myProfile.energy || 0;
+                    if (currentEnergy >= 5) {
+                        window.GameLogic.myProfile.energy = currentEnergy - 5;
+                        update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { energy: window.GameLogic.myProfile.energy });
+                    } else {
+                        sendBubble("體力不足以遠距施放，鎖定解除！");
+                        window.GameLogic.energyActive = false;
+                    }
+                }
+
                 inv[itemName] = Math.max(0, (inv[itemName] || 0) - 1);
                 update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
                 if (inv[itemName] > 0) { window.GameLogic.armedItemState = 'ready'; } else { window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; sendBubble("法寶已耗盡！"); }
@@ -1608,40 +1621,66 @@ class MainScene extends Phaser.Scene {
         this.events.off('action_B_long');
         this.events.on('action_B_long', () => {
             let menu = document.getElementById('quick-select-menu');
-            if (menu.style.display === 'flex') {
-                menu.style.display = 'none';
-            } else {
-                let inv = window.GameLogic.myProfile.inventory || {};
-                let container = document.getElementById('quick-items-container');
-                let magics = [
-                    { name: '水球', icon: '<div class="sprite-waterball" style="transform: scale(0.7); transform-origin: center;"></div>' },
-                    { name: '煙火', icon: '<img src="shop-fireworks.png" style="width:35px; height:35px; object-fit:contain;">' }
-                ];
-                let html = '';
-                magics.forEach(m => {
-                    let qty = inv[m.name] || 0;
-                    html += `<div class="quick-item" onclick="window.GameLogic.selectedMagicItem = '${m.name}'; document.getElementById('quick-select-menu').style.display='none'; sendBubble('已選定：${m.name}，按B填充');">
-                                ${m.icon}<div style="position:absolute; bottom:2px; right:4px; font-size:12px; font-weight:bold; color:#3e2723;">x${qty}</div>
-                             </div>`;
+            let inv = window.GameLogic.myProfile.inventory || {};
+            let container = document.getElementById('quick-items-container');
+            
+            let magics = [
+                { name: 'none', icon: '<span style="font-size:24px; pointer-events:none;">❌</span>', qty: '' },
+                { name: '水球', icon: '<div class="sprite-waterball" style="transform: scale(0.8); transform-origin: center; pointer-events:none;"></div>', qty: inv['水球'] || 0 },
+                { name: '煙火', icon: '<img src="shop-fireworks.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['煙火'] || 0 }
+            ];
+            
+            let html = `<div style="flex: 0 0 calc(50% - 30px);"></div>`;
+            magics.forEach((m) => {
+                let qtyHtml = m.name !== 'none' ? `<div style="position:absolute; bottom:-5px; right:0px; font-size:13px; font-weight:bold; color:#005599; text-shadow:0 0 4px #fff, 0 0 4px #fff;">x${m.qty}</div>` : '';
+                html += `<div class="quick-item" data-magic="${m.name}" onclick="this.parentNode.scrollTo({left: this.offsetLeft - this.parentNode.offsetWidth/2 + this.offsetWidth/2, behavior: 'smooth'});">
+                            ${m.icon}${qtyHtml}
+                         </div>`;
+            });
+            html += `<div style="flex: 0 0 calc(50% - 30px);"></div>`;
+            container.innerHTML = html; 
+            
+            window.GameLogic.stagedMagicItem = 'none';
+            
+            container.onscroll = () => {
+                let centerPoint = container.scrollLeft + container.offsetWidth / 2;
+                let items = container.querySelectorAll('.quick-item');
+                let closest = null; let minDiff = Infinity;
+                items.forEach(el => {
+                    let elCenter = el.offsetLeft + el.offsetWidth / 2;
+                    let diff = Math.abs(elCenter - centerPoint);
+                    if (diff < minDiff) { minDiff = diff; closest = el; }
+                    el.classList.remove('staged');
                 });
-                html += `<div class="quick-item" onclick="window.GameLogic.selectedMagicItem = null; window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; document.getElementById('quick-select-menu').style.display='none'; sendBubble('已卸下法寶');"><span style="font-size:24px;">❌</span></div>`;
-                container.innerHTML = html; menu.style.display = 'flex';
-            }
+                if (closest) {
+                    closest.classList.add('staged');
+                    window.GameLogic.stagedMagicItem = closest.getAttribute('data-magic');
+                }
+            };
+            
+            menu.style.display = 'flex';
+            setTimeout(() => { container.scrollLeft = 0; container.dispatchEvent(new Event('scroll')); }, 50);
         });
 
         this.events.on('action_B', () => {
-            if (window.GameLogic.selectedMagicItem) {
-                if (window.GameLogic.armedItemState === 'ready') {
+            let menu = document.getElementById('quick-select-menu');
+            if (menu && menu.style.display === 'flex') {
+                menu.style.display = 'none';
+                let sel = window.GameLogic.stagedMagicItem;
+                if (!sel || sel === 'none') {
                     window.GameLogic.armedItemState = null;
                     window.GameLogic.armedItemName = null;
+                    sendBubble('已卸下裝備');
                 } else {
                     let inv = window.GameLogic.myProfile.inventory || {};
-                    if (inv[window.GameLogic.selectedMagicItem] > 0) {
+                    if (inv[sel] > 0) {
                         window.GameLogic.armedItemState = 'ready';
-                        window.GameLogic.armedItemName = window.GameLogic.selectedMagicItem;
-                    } else { sendBubble("法寶庫存不足！"); }
+                        window.GameLogic.armedItemName = sel;
+                    } else {
+                        sendBubble("法寶庫存不足！");
+                    }
                 }
-                return;
+                return; 
             }
             if (this.localPlayer.isSleeping) return;
             
