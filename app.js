@@ -197,6 +197,13 @@ function createSystemUI() {
             .quick-item { flex: 0 0 60px; height: 60px; border: none; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; background: rgba(255,255,255,0.8); position: relative; transition: 0.3s; scroll-snap-align: center; box-shadow: 0 0 10px rgba(135,206,235,0.5); }
             .quick-item.staged { transform: scale(1.35); box-shadow: 0 0 20px rgba(255,255,255,1), 0 0 15px rgba(0,191,255,0.8); background: #fff; z-index: 10; }
             
+            .quick-item.staged { transform: scale(1.35); box-shadow: 0 0 20px rgba(255,255,255,1), 0 0 15px rgba(0,191,255,0.8); background: #fff; z-index: 10; }
+            
+            /* 新增：洋蔥手機 Modal 特效 */
+            #phone-modal { background: #b8860b !important; border: 4px solid #885500 !important; box-shadow: inset 0 0 30px #553300 !important; }
+            .phone-contact { background: #222 !important; color: #fff !important; border: 2px solid #555 !important; border-radius: 8px; animation: screen-breathe 2.5s infinite alternate; }
+            @keyframes screen-breathe { 0% { box-shadow: inset 0 0 5px #fff, 0 0 5px #fff; } 100% { box-shadow: inset 0 0 15px #aaa, 0 0 20px #fff; } }
+
             /* 新增：空間傳送門 Modal 特效 */
             #portal-modal { background: #1a0033 !important; border-radius: 140px / 200px !important; border: 4px solid #4b0082 !important; box-shadow: inset 0 0 50px #000, 0 0 20px #8a2be2 !important; overflow: hidden; }
             .portal-particle { position: absolute; border-radius: 50%; }
@@ -205,13 +212,10 @@ function createSystemUI() {
             .portal-btn-style { background: #fff !important; color: #000 !important; font-weight: bold; text-shadow: 0 0 5px #aaa, 0 0 8px #000; animation: portal-btn-glow 2.5s infinite ease-in-out; border: none !important; border-radius: 20px; transition: transform 0.2s; cursor: pointer; }
             .portal-btn-style:active { transform: scale(0.95); }
             
-            /* 新增：蔥Music Modal 特效 */
-            #settings-modal { background: #0d0d0d !important; border-radius: 50% !important; border: 4px solid #333 !important; box-shadow: inset 0 0 40px #000, 0 0 15px rgba(255,255,255,0.1) !important; overflow: hidden; }
-            .record-ring { position:absolute; border: 1px dashed rgba(255,255,255,0.3); border-radius: 50%; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none; animation: record-spin linear infinite; z-index: 0;}
-            @keyframes record-spin { 100% { transform: translate(-50%,-50%) rotate(360deg); } }
-            @keyframes simple-spin { 100% { transform: rotate(360deg); } }
-            .music-note { position: absolute; color: #fff; font-size: 18px; animation: floatNote 4s ease-in infinite; opacity: 0; pointer-events:none; z-index:0; }
-            @keyframes floatNote { 0% { transform: translateY(0) scale(0.8) rotate(-10deg); opacity: 0; } 20% { opacity: 0.8; } 100% { transform: translateY(-120px) scale(1.5) rotate(20deg); opacity: 0; } }
+            /* 新增：蔥Music Modal 復古特效 */
+            #settings-modal { background: #8b0000 !important; border-radius: 12px !important; border: 4px solid #ffd700 !important; box-shadow: inset 0 0 30px #4a0000, 0 0 20px rgba(255,215,0,0.6) !important; overflow: hidden; }
+            .visualizer-bar { position: absolute; bottom: 0; width: 10%; background: rgba(255,215,0,0.4); border-top: 3px solid #ffd700; animation: bounce-bar 0.5s infinite alternate ease-in; z-index: 0; pointer-events: none; }
+            @keyframes bounce-bar { 0% { height: 10%; } 100% { height: 75%; } }
             
             /* 新增：蔥電飽 Modal 特效 */
             #energy-modal { background: #051a05 !important; border: 2px solid #00ff00 !important; box-shadow: 0 0 20px #00ff00, inset 0 0 30px #003300 !important; color: #ccffcc; overflow: hidden; }
@@ -308,22 +312,31 @@ function createSystemUI() {
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('memory-modal').style.display='none'">闔上回憶錄</button>
         </div>
 
-        <div id="settings-modal" class="modal" style="width: 380px; height: 380px; box-sizing: border-box; z-index: 260; padding: 0;">
-            <div class="record-ring" style="width: 310px; height: 310px; animation-duration: 8s;"></div>
-            <div class="record-ring" style="width: 350px; height: 350px; animation-duration: 12s; border-style: dotted;"></div>
-            <div class="music-note" style="bottom: 20%; left: 30%; animation-delay: 0s;">🎵</div>
-            <div class="music-note" style="bottom: 15%; left: 60%; animation-delay: 1.5s;">🎶</div>
-            <div class="music-note" style="bottom: 35%; left: 80%; animation-delay: 3s;">🎵</div>
+        <div id="settings-modal" class="modal" style="width: 350px; box-sizing: border-box; z-index: 260; padding: 0; position:relative;">
+            <div class="visualizer-bar" style="left: 6%; animation-duration: 0.6s; animation-delay: 0.1s;"></div>
+            <div class="visualizer-bar" style="left: 21%; animation-duration: 0.4s; animation-delay: 0.3s;"></div>
+            <div class="visualizer-bar" style="left: 36%; animation-duration: 0.7s; animation-delay: 0.0s;"></div>
+            <div class="visualizer-bar" style="left: 51%; animation-duration: 0.5s; animation-delay: 0.2s;"></div>
+            <div class="visualizer-bar" style="left: 66%; animation-duration: 0.8s; animation-delay: 0.4s;"></div>
+            <div class="visualizer-bar" style="left: 81%; animation-duration: 0.55s; animation-delay: 0.1s;"></div>
             
-            <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; padding: 15px; box-sizing: border-box; position: relative; z-index: 1;">
-                <h3 style="color: #fff; border-bottom: 1px dashed rgba(255,255,255,0.3); padding-bottom: 5px; margin-top: 0; margin-bottom: 10px; width:80%;">🎵 蔥Music</h3>
-                <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; width:90%;">
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 15px;"><button class="btn-secondary" onclick="window.prevTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0; position:relative; z-index:10;">&lt;</button><img id="music-cover" onclick="window.openFullscreen(this.src)" src="Sweet-Onion.png" alt="Music Cover" style="width: 140px; height: 140px; border-radius: 50%; border: 4px solid #444; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.8); cursor: pointer; animation: simple-spin 5s linear infinite; position:relative; z-index:10;"><button class="btn-secondary" onclick="window.nextTrack()" style="border-radius:50%; width: 35px; height: 35px; padding: 0; position:relative; z-index:10;">&gt;</button></div>
-                    <div id="music-title" style="font-weight: bold; color: #fff; font-size: 16px; text-shadow: 0 2px 4px rgba(0,0,0,0.8); margin-top: 5px;">Sweet-Onion</div>
-                    <div style="width: 100%; margin-top: 5px;"><label style="font-size: 13px; color: #ccc; display: flex; justify-content: space-between;"><span>音樂音量</span> <span id="bgm-vol-text">100%</span></label><input type="range" id="bgm-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 3px; position:relative; z-index:10;" oninput="window.updateBGMVolume(this.value)"></div>
-                    <div style="width: 100%; margin-top: 5px;"><label style="font-size: 13px; color: #ccc; display: flex; justify-content: space-between;"><span>特殊音效</span> <span id="sfx-vol-text">100%</span></label><input type="range" id="sfx-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 3px; position:relative; z-index:10;" oninput="window.updateSFXVolume(this.value)"></div>
+            <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; padding: 25px 15px; box-sizing: border-box; position: relative; z-index: 1;">
+                <h3 style="color: #ffd700; border-bottom: 2px dashed #ffd700; padding-bottom: 5px; margin-top: 0; margin-bottom: 15px; width:80%; text-shadow: 2px 2px 0px #000;">🎵 蔥Music</h3>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; width:90%;">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
+                        <button class="btn-primary" onclick="window.prevTrack()" style="border-radius:8px; width: 40px; height: 40px; padding: 0; font-weight:bold; background:#222; border:2px solid #ffd700; color:#ffd700; box-shadow: 0 4px 8px rgba(0,0,0,0.8);">&lt;</button>
+                        <img id="music-cover" onclick="window.openFullscreen(this.src)" src="Sweet-Onion.png" alt="Music Cover" style="width: 140px; height: 140px; border-radius: 8px; border: 4px solid #222; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.8); cursor: pointer;">
+                        <button class="btn-primary" onclick="window.nextTrack()" style="border-radius:8px; width: 40px; height: 40px; padding: 0; font-weight:bold; background:#222; border:2px solid #ffd700; color:#ffd700; box-shadow: 0 4px 8px rgba(0,0,0,0.8);">&gt;</button>
+                    </div>
+                    <div id="music-title" style="font-weight: bold; color: #fff; font-size: 16px; text-shadow: 2px 2px 0px #000; margin-top: 5px; background:rgba(0,0,0,0.5); padding:4px 12px; border-radius:4px; border:1px solid #ffd700;">Sweet-Onion</div>
+                    <div style="width: 100%; margin-top: 10px; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 8px; border: 1px solid #ffd700;">
+                        <label style="font-size: 13px; color: #ffd700; display: flex; justify-content: space-between;"><span>音樂音量</span> <span id="bgm-vol-text">100%</span></label>
+                        <input type="range" id="bgm-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 5px;" oninput="window.updateBGMVolume(this.value)">
+                        <label style="font-size: 13px; color: #ffd700; display: flex; justify-content: space-between; margin-top: 8px;"><span>特殊音效</span> <span id="sfx-vol-text">100%</span></label>
+                        <input type="range" id="sfx-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 5px;" oninput="window.updateSFXVolume(this.value)">
+                    </div>
                 </div>
-                <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 60%; border-radius: 20px; padding: 8px; position: relative; z-index: 20;" onclick="document.getElementById('settings-modal').style.display='none'">關閉播放器</button>
+                <button class="close-modal-btn" style="margin-top: 20px; width: 60%; border-radius: 4px; padding: 10px; background: #222; border: 2px solid #ffd700; color: #ffd700; font-weight: bold; text-shadow: 1px 1px 0px #000;" onclick="document.getElementById('settings-modal').style.display='none'">關閉播放器</button>
             </div>
         </div>
 
@@ -345,10 +358,10 @@ function createSystemUI() {
             <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; width:100%; height:100%; padding: 40px 20px; box-sizing: border-box; position: relative; z-index: 1;">
                 <h3 style="margin-top:0; color:#fff; border:none; text-shadow: 0 0 10px #8a2be2, 0 0 20px #8a2be2; font-size: 22px;">🌀 空間傳送門</h3>
                 <div style="display:flex; flex-direction:column; gap:12px; width: 100%; padding: 0 15px; box-sizing:border-box; margin-top: 10px;">
-                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); setTimeout(() => { window.switchScene('doghouse'); document.getElementById('portal-modal').style.display='none'; }, 250);">🏠 我的狗窩</button>
-                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); setTimeout(() => { window.switchScene('cafe'); document.getElementById('portal-modal').style.display='none'; }, 250);">☕ 洋蔥大廳</button>
-                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); setTimeout(() => { window.switchScene('farm'); document.getElementById('portal-modal').style.display='none'; }, 250);">🌱 我的蔥田</button>
-                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); setTimeout(() => { window.switchScene('7eonion'); document.getElementById('portal-modal').style.display='none'; }, 250);">🏪 7-EONION</button>
+                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); window.switchScene('doghouse'); document.getElementById('portal-modal').style.display='none';">🏠 我的狗窩</button>
+                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); window.switchScene('cafe'); document.getElementById('portal-modal').style.display='none';">☕ 洋蔥大廳</button>
+                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); window.switchScene('farm'); document.getElementById('portal-modal').style.display='none';">🌱 我的蔥田</button>
+                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); window.switchScene('7eonion'); document.getElementById('portal-modal').style.display='none';">🏪 7-EONION</button>
                 </div>
                 <button class="close-modal-btn btn-secondary" style="margin-top: 25px; width: 70%; border-radius: 20px; position:relative; z-index:10;" onclick="document.getElementById('portal-modal').style.display='none'">關閉傳送門</button>
             </div>
@@ -414,7 +427,7 @@ function createSystemUI() {
         </div>
     `;
     setTimeout(() => { 
-        document.querySelectorAll('.modal, .action-menu, #chat-section, #spam-ui').forEach(el => { ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'wheel', 'mousedown', 'mouseup', 'click'].forEach(evt => { el.addEventListener(evt, (e) => e.stopPropagation(), { passive: false }); }); }); 
+        document.querySelectorAll('.modal, .action-menu, #chat-section, #spam-ui, #quick-select-menu').forEach(el => { ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'wheel', 'mousedown', 'mouseup', 'click'].forEach(evt => { el.addEventListener(evt, (e) => e.stopPropagation(), { passive: false }); }); }); 
         
         let onlineToggleBtn = document.getElementById('online-toggle-btn');
         let onlineContainer = document.getElementById('online-players-container');
@@ -764,7 +777,7 @@ window.openInventoryModal = function() {
 };
 
 window.viewOtherProfile = function(uid) { import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.get(module.ref(window.GameLogic.db, `users/${uid}`)).then(snap => { if (snap.exists()) { document.getElementById('phone-modal').style.display = 'none'; showProfileModal(snap.val(), uid); } }); }); };
-window.openPhoneModal = function() { document.getElementById('inventory-modal').style.display = 'none'; document.getElementById('phone-modal').style.display = 'block'; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.get(module.ref(window.GameLogic.db, 'users')).then(snap => { let users = snap.val() || {}; let html = ''; for (let uid in users) { if (uid === window.GameLogic.currentUser.uid) continue; let u = users[uid]; let unreadDot = (window.GameLogic.unreadPMs && window.GameLogic.unreadPMs[uid]) ? ' <span style="color:red; font-size:10px;">🔴</span>' : ''; html += `<div class="catalog-item" style="flex-direction:row; justify-content:space-between; padding: 10px;"><span style="font-weight:bold; color: ${u.color || '#000'}">${u.name || '匿名'} (Lv.${u.level || 1})${unreadDot}</span><div><button class="btn-secondary" style="padding: 4px 12px; font-size:12px; margin-right: 5px;" onclick="window.viewOtherProfile('${uid}')">查看</button><button class="btn-primary" style="padding: 4px 12px; font-size:12px;" onclick="window.openPM('${uid}', '${u.name || '匿名'}')">私訊</button></div></div>`; } if (html === '') html = '<div style="text-align:center; color:#888;">目前沒有其他聯絡人</div>'; document.getElementById('phone-contacts').innerHTML = html; }); }); };
+window.openPhoneModal = function() { document.getElementById('inventory-modal').style.display = 'none'; document.getElementById('phone-modal').style.display = 'block'; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.get(module.ref(window.GameLogic.db, 'users')).then(snap => { let users = snap.val() || {}; let html = ''; for (let uid in users) { if (uid === window.GameLogic.currentUser.uid) continue; let u = users[uid]; let unreadDot = (window.GameLogic.unreadPMs && window.GameLogic.unreadPMs[uid]) ? ' <span style="color:red; font-size:10px;">🔴</span>' : ''; html += `<div class="catalog-item phone-contact" style="flex-direction:row; justify-content:space-between; padding: 10px;"><span style="font-weight:bold; color: ${u.color || '#fff'}; text-shadow: 1px 1px 2px #000;">${u.name || '匿名'} (Lv.${u.level || 1})${unreadDot}</span><div><button class="btn-secondary" style="padding: 4px 12px; font-size:12px; margin-right: 5px; color:#333;" onclick="window.viewOtherProfile('${uid}')">查看</button><button class="btn-primary" style="padding: 4px 12px; font-size:12px;" onclick="window.openPM('${uid}', '${u.name || '匿名'}')">私訊</button></div></div>`; } if (html === '') html = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">目前沒有其他聯絡人</div>'; document.getElementById('phone-contacts').innerHTML = html; }); }); };
 window.openPM = function(targetUid, targetName) { document.getElementById('phone-modal').style.display = 'none'; document.getElementById('pm-modal').style.display = 'block'; document.getElementById('pm-title').innerText = `💬 與 ${targetName} 密語`; window.currentPMUid = targetUid; let myUid = window.GameLogic.currentUser.uid; let chatId = [myUid, targetUid].sort().join('_'); import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.remove(module.ref(window.GameLogic.db, `users/${myUid}/unreadPMs/${targetUid}`)); }); import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { if (window.pmUnsubscribe) window.pmUnsubscribe(); window.pmUnsubscribe = module.onValue(module.ref(window.GameLogic.db, `privateChats/${chatId}`), snap => { let msgs = snap.val() || {}; let box = document.getElementById('pm-chat-box'); box.innerHTML = ''; Object.values(msgs).forEach(m => { if (m.uid === myUid) { box.innerHTML += `<div style="text-align:right; margin-bottom: 8px;"><div class="pm-bubble-me">${m.msg}</div></div>`; } else { box.innerHTML += `<div style="text-align:left; margin-bottom: 8px;"><div class="pm-bubble-other"><div style="font-size:11px; color:#558b2f; font-weight:bold; margin-bottom:2px;">${m.name}</div>${m.msg}</div></div>`; } }); box.scrollTop = box.scrollHeight; }); }); };
 window.closePM = function() { if (window.pmUnsubscribe) { window.pmUnsubscribe(); window.pmUnsubscribe = null; } document.getElementById('pm-modal').style.display = 'none'; document.getElementById('phone-modal').style.display = 'block'; };
 window.sendPM = function() { let input = document.getElementById('pm-input'); let msg = input.value.trim(); if (!msg || !window.currentPMUid) return; let myUid = window.GameLogic.currentUser.uid; let chatId = [myUid, window.currentPMUid].sort().join('_'); import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, `privateChats/${chatId}`), { uid: myUid, name: window.GameLogic.myProfile.name, msg: msg, time: Date.now() }); module.update(module.ref(window.GameLogic.db, `users/${window.currentPMUid}/unreadPMs`), { [myUid]: true }); }); input.value = ''; };
@@ -1287,7 +1300,7 @@ class UIScene extends Phaser.Scene {
         this.statusText.setPosition(bgW * 0.32, -bgH * 0.30).setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); this.equipText.setPosition(bgW * 0.75, -bgH * 0.30).setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); this.statusToggleBtn.setPosition(bgW, -bgH * 0.30);
         let clusterX = gameSize.width - 90; let clusterY = gameSize.height - bottomOffset - 70; let d = 45; 
         this.itemBtn.setPosition(clusterX, clusterY - d); this.itemText.setPosition(this.itemBtn.x, this.itemBtn.y); this.btnA.setPosition(clusterX + d, clusterY); this.txtA.setPosition(this.btnA.x, this.btnA.y); this.btnB.setPosition(clusterX, clusterY + d); this.txtB.setPosition(this.btnB.x, this.btnB.y); this.furnBtn.setPosition(clusterX - d, clusterY); this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
-        if (this.magicMenuEmitter) this.magicMenuEmitter.setPosition(gameSize.width / 2, gameSize.height - 165);
+        if (this.magicMenuEmitter) this.magicMenuEmitter.setPosition(gameSize.width / 2, gameSize.height - 185);
     }
 
     playExpGainEffect() {
