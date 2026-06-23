@@ -424,8 +424,20 @@ function createSystemUI() {
             </div>
         </div>
 
-        <div id="rps-modal" onpointerdown="event.stopPropagation()" onwheel="event.stopPropagation()" ontouchmove="event.stopPropagation()" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:9999; flex-direction:column; align-items:center; justify-content:center; color:#fff;">
-            <div id="rps-phase-bet" style="display:none; flex-direction:column; align-items:center; width:80%;">
+        <div id="rps-modal" onpointerdown="event.stopPropagation()" onwheel="event.stopPropagation()" ontouchmove="event.stopPropagation()" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:9999; flex-direction:column; align-items:center; justify-content:center; color:#fff; overflow:hidden;">
+            <style>
+                @keyframes orbit-spin { 100% { transform: rotate(360deg); } }
+                .rps-orbit { position: absolute; top: 50%; left: 50%; width: 150vw; height: 150vw; transform-origin: center; animation: orbit-spin 6s linear infinite; pointer-events: none; z-index: 0; margin-left: -75vw; margin-top: -75vw; opacity: 0.6; }
+                .rps-orbit-dot { position: absolute; background: #39ff14; border-radius: 50%; box-shadow: 0 0 10px #39ff14, 0 0 20px #39ff14, 0 0 30px #ffffff; }
+            </style>
+            <div class="rps-orbit">
+                <div class="rps-orbit-dot" style="top:10%; left:30%; width:8px; height:8px;"></div>
+                <div class="rps-orbit-dot" style="top:70%; left:80%; width:12px; height:12px;"></div>
+                <div class="rps-orbit-dot" style="top:30%; left:90%; width:6px; height:6px;"></div>
+                <div class="rps-orbit-dot" style="top:85%; left:20%; width:10px; height:10px;"></div>
+                <div class="rps-orbit-dot" style="top:45%; left:10%; width:5px; height:5px;"></div>
+            </div>
+            <div id="rps-phase-bet" style="display:none; flex-direction:column; align-items:center; width:80%; z-index:10;">
                 <h2 style="color:#ffcc00;">選擇籌碼</h2>
                 <p>最多只能押雙方存款較低者的全部身家</p>
                 <input type="range" id="rps-bet-slider" min="0" max="100" value="0" style="width:100%; margin:20px 0;">
@@ -435,22 +447,25 @@ function createSystemUI() {
                 <button class="btn-primary" id="rps-bet-confirm-btn" style="margin-top:20px; font-size:20px; padding:10px 30px;" onclick="window.confirmRpsBet()">確認籌碼</button>
             </div>
             
-            <div id="rps-phase-game" style="display:none; width:100%; height:100%; position:relative;">
+            <div id="rps-phase-game" style="display:none; width:100%; height:100%; position:relative; z-index:10;">
+                <div id="rps-spam-particles" style="position:absolute; top:50%; left:50%; width:0; height:0; z-index:5;"></div>
                 <style>
                     .rps-choice-img { transition: 0.2s; border-radius: 50%; }
                     .rps-choice-selected { box-shadow: 0 0 20px #fff, 0 0 40px #00ffff; transform: scale(1.1); background: rgba(255,255,255,0.3); }
                     .rps-spam-burst { animation: rps-burst 0.3s ease-out; }
                     @keyframes rps-burst { 0% { box-shadow: 0 0 10px #fff; transform: scale(1.1); } 100% { box-shadow: 0 0 50px #ffcc00, 0 0 80px #d9534f; transform: scale(1); opacity: 0; } }
-                    /* 新增精靈圖專用 CSS */
                     .rps-sprite-moving { animation: play-rps 0.2s steps(2) infinite !important; }
                     @keyframes play-rps { 100% { background-position: -600px center; } }
+                    /* 手機版面位置拉高調整 */
                     @media (max-width: 768px) {
-                        #rps-choices { bottom: 80px !important; left: 50% !important; transform: translateX(-50%) !important; gap: 10px !important; }
+                        #rps-choices { bottom: 120px !important; left: 50% !important; transform: translateX(-50%) !important; gap: 10px !important; }
                         #rps-choices img { width: 80px !important; }
+                        #rps-me-container { bottom: 120px !important; left: 10px !important; }
+                        #rps-me-img { width: 180px !important; height: 180px !important; }
                     }
                 </style>
 
-                <div id="rps-opponent-container" style="position:absolute; top:20px; right:20px; text-align:center; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);">
+                <div id="rps-opponent-container" style="position:absolute; top:20px; right:20px; text-align:center; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:10;">
                     <div id="rps-opponent-img" style="width:300px; height:300px; background: url('playroom-rps-onion-other-ready.png') no-repeat center center; background-size: contain; margin: 0 auto;"></div>
                     <div id="rps-opponent-status" style="font-size:24px; font-weight:bold; color:#ff4444; text-shadow:2px 2px 0 #000;">等待中</div>
                 </div>
@@ -2148,6 +2163,7 @@ class MainScene extends Phaser.Scene {
 
                 if (data.reply === 'yes') {
                     sendBubble("對方接受了你的友情昇華！");
+                    window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null;
                     let roomId = `playroom_${window.GameLogic.currentUser.uid}_${data.replierUid}`;
                     window.switchScene('playroom', { roomId: roomId });
                 } else {
@@ -3099,6 +3115,7 @@ window.replyInvite = function(replyType) {
             module.update(module.ref(window.GameLogic.db, `serverEvents/inviteReplies/${attacker}`), { reply: replyType, replierUid: window.GameLogic.currentUser.uid, time: Date.now() });
         });
         if (replyType === 'yes') {
+            window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null;
             let roomId = `playroom_${attacker}_${window.GameLogic.currentUser.uid}`;
             window.switchScene('playroom', { roomId: roomId });
         }
@@ -3115,30 +3132,10 @@ window.openRpsBetting = function(roomId) {
     let players = Object.keys(window.GameLogic.playroomPlayers || {});
     if (players.length < 2) return alert("等對方進來再開始喔！");
     
-    document.getElementById('rps-modal').style.display = 'flex';
-    document.getElementById('rps-phase-bet').style.display = 'flex';
-    document.getElementById('rps-phase-game').style.display = 'none';
-    document.getElementById('rps-phase-result').style.display = 'none';
-    document.getElementById('rps-bet-confirm-btn').style.display = 'block';
-    
-    // 初始化投注狀態
+    // 僅透過寫入 Firebase 觸發雙方同步介面開啟，由 syncRpsState 接管防呆同步
     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        module.get(module.ref(window.GameLogic.db, `users`)).then(snap => {
-            let uData = snap.val();
-            let p1Coins = uData[players[0]]?.coins || 0;
-            let p2Coins = uData[players[1]]?.coins || 0;
-            let maxBet = Math.min(Math.min(p1Coins, p2Coins), 10000);
-            
-            let slider = document.getElementById('rps-bet-slider');
-            slider.max = maxBet; slider.value = 0;
-            document.getElementById('rps-bet-display').innerText = 0;
-            document.getElementById('rps-bet-status').innerText = "等待雙方確認...";
-            
-            slider.oninput = function() { document.getElementById('rps-bet-display').innerText = this.value; };
-            
-            module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'betting' });
-            module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}/p_${window.GameLogic.currentUser.uid}`), { betReady: false, betValue: 0 });
-        });
+        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'betting' });
+        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}/p_${window.GameLogic.currentUser.uid}`), { betReady: false, betValue: 0 });
     });
 };
 
@@ -3179,12 +3176,32 @@ window.clickRpsSpam = function() {
     btn.style.transform = 'scale(0.9)';
     setTimeout(() => { btn.style.transform = 'scale(1)'; }, 50);
     
-    // Tweens 噴發粒子特效
+    // Tweens 按鈕微光特效
     let burst = document.createElement('div');
     burst.className = 'rps-spam-burst';
     burst.style.cssText = 'position:absolute; top:0; left:0; right:0; bottom:0; border-radius:20px; z-index:1; pointer-events:none;';
     btn.parentElement.appendChild(burst);
     setTimeout(() => burst.remove(), 300);
+
+    // 畫面中央底圖迸發類似煙火的噴發特效 (紅橘黃紫白)
+    let pContainer = document.getElementById('rps-spam-particles');
+    if (pContainer) {
+        let colors = ['#ff0000', '#ff8c00', '#ffff00', '#8a2be2', '#ffffff'];
+        for(let i = 0; i < 12; i++) {
+            let dot = document.createElement('div');
+            let color = colors[Math.floor(Math.random() * colors.length)];
+            dot.style.cssText = `position:absolute; top:0; left:0; width:12px; height:12px; background:${color}; border-radius:50%; box-shadow:0 0 15px ${color}, 0 0 25px #fff; pointer-events:none; mix-blend-mode: screen;`;
+            pContainer.appendChild(dot);
+            let angle = Math.random() * Math.PI * 2;
+            let dist = Math.random() * 200 + 100;
+            let tx = Math.cos(angle) * dist;
+            let ty = Math.sin(angle) * dist;
+            dot.animate([
+                { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
+                { transform: `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(0)`, opacity: 0 }
+            ], { duration: 400 + Math.random() * 300, easing: 'ease-out' }).onfinish = () => dot.remove();
+        }
+    }
 
     // 定義全域播放精靈圖動畫的幫助函式 (僅需定義一次，放這也行)
     if (!window.triggerRpsAnim) {
@@ -3229,6 +3246,30 @@ window.syncRpsState = function(roomId) {
             let otherData = data[`p_${otherUid}`] || {};
 
             if (state === 'betting') {
+                // 同步確保雙方都會觸發並打開 UI，防止有一方沒點到卡死
+                let modal = document.getElementById('rps-modal');
+                if (modal.style.display !== 'flex') {
+                    modal.style.display = 'flex';
+                    document.getElementById('rps-phase-bet').style.display = 'flex';
+                    document.getElementById('rps-phase-game').style.display = 'none';
+                    document.getElementById('rps-phase-result').style.display = 'none';
+                    document.getElementById('rps-bet-confirm-btn').style.display = 'block';
+
+                    module.get(module.ref(window.GameLogic.db, `users`)).then(uSnap => {
+                        let uDB = uSnap.val();
+                        let p1Coins = uDB[uids[0]]?.coins || 0;
+                        let p2Coins = uDB[uids[1]]?.coins || 0;
+                        let maxBet = Math.min(Math.min(p1Coins, p2Coins), 10000);
+                        
+                        let slider = document.getElementById('rps-bet-slider');
+                        slider.max = maxBet; slider.value = 0;
+                        document.getElementById('rps-bet-display').innerText = 0;
+                        document.getElementById('rps-bet-status').innerText = "等待雙方確認...";
+                        
+                        slider.oninput = function() { document.getElementById('rps-bet-display').innerText = this.value; };
+                    });
+                }
+                
                 if (myData.betReady && otherData.betReady && uids.sort()[0] === myUid) {
                     let avgBet = Math.round((myData.betValue + otherData.betValue) / 2);
                     module.get(module.ref(window.GameLogic.db, `users`)).then(uSnap => {
@@ -3237,7 +3278,18 @@ window.syncRpsState = function(roomId) {
                         let p2C = (uDB[otherUid]?.coins || 0) - avgBet;
                         module.update(module.ref(window.GameLogic.db, `users/${myUid}`), { coins: Math.max(0, p1C) });
                         module.update(module.ref(window.GameLogic.db, `users/${otherUid}`), { coins: Math.max(0, p2C) });
-                        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'rps_countdown', agreedBet: avgBet, rpsStartTime: Date.now() });
+                        
+                        // 初始化三戰兩勝計數與輪次
+                        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { 
+                            state: 'rps_countdown', 
+                            agreedBet: avgBet, 
+                            rpsStartTime: Date.now(),
+                            roundCount: 1,
+                            [`p_${myUid}/roundWins`]: 0,
+                            [`p_${otherUid}/roundWins`]: 0,
+                            [`p_${myUid}/rpsChoice`]: null,
+                            [`p_${otherUid}/rpsChoice`]: null
+                        });
                     });
                 }
             }
@@ -3247,17 +3299,20 @@ window.syncRpsState = function(roomId) {
                 document.getElementById('rps-choices').style.display = 'flex';
                 document.getElementById('rps-spam-area').style.display = 'none';
                 
-                // 改為設定 background-image
                 document.getElementById('rps-me-img').style.backgroundImage = "url('playroom-rps-onion-me-ready.png')";
                 document.getElementById('rps-opponent-img').style.backgroundImage = "url('playroom-rps-onion-other-ready.png')";
                 
-                // 初始化猜拳排版與清空發光特效
                 document.querySelectorAll('.rps-choice-img').forEach(el => el.classList.remove('rps-choice-selected'));
                 let meC = document.getElementById('rps-me-container');
                 let opC = document.getElementById('rps-opponent-container');
-                meC.style.bottom = '20px'; meC.style.left = '20px'; meC.style.top = 'auto'; meC.style.right = 'auto'; meC.style.transform = 'none';
-                opC.style.top = '20px'; opC.style.right = '20px'; opC.style.bottom = 'auto'; opC.style.left = 'auto'; opC.style.transform = 'none';
-                document.getElementById('rps-center-msg').style.top = '20%'; // 文字移至上方
+                meC.style.top = 'auto'; meC.style.right = 'auto'; meC.style.transform = 'none';
+                // 使用 cssText 以確保 CSS 媒體查詢不會被絕對寫死的值綁架
+                meC.style.cssText = "position:absolute; bottom:20px; left:20px; text-align:center; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:20;";
+                opC.style.cssText = "position:absolute; top:20px; right:20px; text-align:center; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:10;";
+                
+                let rpsMsg = document.getElementById('rps-center-msg');
+                rpsMsg.style.top = '20%';
+                rpsMsg.style.opacity = '1';
                 
                 if (window.rpsInterval) clearInterval(window.rpsInterval);
                 window.rpsInterval = setInterval(() => {
@@ -3265,9 +3320,23 @@ window.syncRpsState = function(roomId) {
                     let remain = 5 - Math.floor(elapsed / 1000);
                     if (remain > 0) {
                         let textArr = [1, 2, 3, 4, 5];
-                        document.getElementById('rps-center-msg').innerText = textArr[remain-1] || remain;
+                        let newText = textArr[remain-1] || remain;
+                        if (rpsMsg.innerText != newText) {
+                            rpsMsg.innerText = newText;
+                            // 漸變大且淡出特效
+                            rpsMsg.animate([
+                                { transform: 'translate(-50%, -50%) scale(0.5)', opacity: 1 },
+                                { transform: 'translate(-50%, -50%) scale(1.5)', opacity: 0 }
+                            ], { duration: 900, easing: 'ease-out' });
+                        }
                     } else {
-                        document.getElementById('rps-center-msg').innerText = "出拳！";
+                        if (rpsMsg.innerText !== "出拳！") {
+                            rpsMsg.innerText = "出拳！";
+                            rpsMsg.animate([
+                                { transform: 'translate(-50%, -50%) scale(0.5)', opacity: 1 },
+                                { transform: 'translate(-50%, -50%) scale(1.5)', opacity: 0 }
+                            ], { duration: 900, easing: 'ease-out' });
+                        }
                         clearInterval(window.rpsInterval);
                         if (uids.sort()[0] === myUid) {
                             module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'rps_result' });
@@ -3280,7 +3349,6 @@ window.syncRpsState = function(roomId) {
                 let mC = myData.rpsChoice || 'stone';
                 let oC = otherData.rpsChoice || 'stone';
                 
-                // 更新為 background-image
                 document.getElementById('rps-me-img').style.backgroundImage = `url('playroom-rps-onion-me-${mC}.png')`;
                 document.getElementById('rps-opponent-img').style.backgroundImage = `url('playroom-rps-onion-other-${oC}.png')`;
                 
@@ -3294,8 +3362,11 @@ window.syncRpsState = function(roomId) {
                 if (uids.sort()[0] === myUid) {
                     if (!window.rpsStateTimeout) {
                         window.rpsStateTimeout = setTimeout(() => {
-                            if (result === 'tie') module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'rps_countdown', rpsStartTime: Date.now(), [`p_${myUid}/rpsChoice`]: null, [`p_${otherUid}/rpsChoice`]: null });
-                            else module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'spam_countdown', winnerUid: result === 'win' ? myUid : otherUid, spamStartTime: Date.now(), [`p_${myUid}/spamCount`]: 0, [`p_${otherUid}/spamCount`]: 0 });
+                            if (result === 'tie') {
+                                module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'rps_countdown', rpsStartTime: Date.now(), [`p_${myUid}/rpsChoice`]: null, [`p_${otherUid}/rpsChoice`]: null });
+                            } else {
+                                module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'spam_countdown', winnerUid: result === 'win' ? myUid : otherUid, spamStartTime: Date.now(), [`p_${myUid}/spamCount`]: 0, [`p_${otherUid}/spamCount`]: 0 });
+                            }
                             window.rpsStateTimeout = null;
                         }, 2000);
                     }
@@ -3303,7 +3374,7 @@ window.syncRpsState = function(roomId) {
             }
             else if (state === 'spam_countdown') {
                 window.rpsMySpamCount = 0;
-                window.rpsOtherSpamCount = 0; // 重置對方的連擊記錄
+                window.rpsOtherSpamCount = 0;
                 
                 document.getElementById('rps-me-status').innerText = "";
                 document.getElementById('rps-opponent-status').innerText = "";
@@ -3311,25 +3382,24 @@ window.syncRpsState = function(roomId) {
                 let isWinner = data.winnerUid === myUid;
                 window.rpsMyRole = isWinner ? 'attacker' : 'defender';
                 
-                // 更新為 background-image
                 document.getElementById('rps-me-img').style.backgroundImage = isWinner ? "url('playroom-rps-onion-win-hit.png')" : "url('playroom-rps-onion-lose-defense.png')";
                 document.getElementById('rps-opponent-img').style.backgroundImage = !isWinner ? "url('playroom-rps-onion-win-hit.png')" : "url('playroom-rps-onion-lose-defense.png')";
                 
-                // 精確使用絕對中心對齊法，杜絕飄移問題
                 let meC = document.getElementById('rps-me-container');
                 let opC = document.getElementById('rps-opponent-container');
-                meC.style.top = '50%'; meC.style.bottom = 'auto';
-                opC.style.top = '50%'; opC.style.bottom = 'auto';
+                meC.style.cssText = "position:absolute; top:50%; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:20;";
+                opC.style.cssText = "position:absolute; top:50%; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:10;";
                 
-                if (isWinner) { // 我是攻擊方 (左側)
-                    meC.style.left = '35%'; meC.style.right = 'auto'; meC.style.transform = 'translate(-50%, -50%)';
-                    opC.style.left = '65%'; opC.style.right = 'auto'; opC.style.transform = 'translate(-50%, -50%)';
-                } else { // 我是防守方 (右側)
-                    meC.style.left = '65%'; meC.style.right = 'auto'; meC.style.transform = 'translate(-50%, -50%)';
-                    opC.style.left = '35%'; opC.style.right = 'auto'; opC.style.transform = 'translate(-50%, -50%)';
+                if (isWinner) {
+                    meC.style.left = '35%'; meC.style.transform = 'translate(-50%, -50%)';
+                    opC.style.left = '65%'; opC.style.transform = 'translate(-50%, -50%)';
+                } else {
+                    meC.style.left = '65%'; meC.style.transform = 'translate(-50%, -50%)';
+                    opC.style.left = '35%'; opC.style.transform = 'translate(-50%, -50%)';
                 }
                 
-                document.getElementById('rps-center-msg').style.top = '20%'; 
+                let rpsMsg = document.getElementById('rps-center-msg');
+                rpsMsg.style.top = '20%';
                 document.getElementById('rps-spam-area').style.display = 'block';
                 document.getElementById('rps-spam-btn').innerText = isWinner ? "打！" : "擋！";
                 
@@ -3338,10 +3408,18 @@ window.syncRpsState = function(roomId) {
                     let elapsed = Date.now() - data.spamStartTime;
                     let remain = 5 - Math.floor(elapsed / 1000);
                     if (remain > 0) {
-                        document.getElementById('rps-center-msg').innerText = "連擊準備";
-                        document.getElementById('rps-spam-timer').innerText = remain;
+                        if (rpsMsg.innerText !== "連擊準備") { rpsMsg.innerText = "連擊準備"; rpsMsg.style.opacity = '1'; }
+                        let tEl = document.getElementById('rps-spam-timer');
+                        if (tEl.innerText != remain) {
+                            tEl.innerText = remain;
+                            // 秒數漸變放大並淡出
+                            tEl.animate([ { transform: 'scale(1)', opacity: 1 }, { transform: 'scale(1.8)', opacity: 0 } ], { duration: 900, easing: 'ease-out' });
+                        }
                     } else {
-                        document.getElementById('rps-center-msg').innerText = "GO!";
+                        if (rpsMsg.innerText !== "GO!") {
+                            rpsMsg.innerText = "GO!";
+                            rpsMsg.animate([ { transform: 'translate(-50%, -50%) scale(0.5)', opacity: 1 }, { transform: 'translate(-50%, -50%) scale(2)', opacity: 0 } ], { duration: 900, easing: 'ease-out' });
+                        }
                         clearInterval(window.rpsInterval);
                         if (uids.sort()[0] === myUid) module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'spamming', spamPlayTime: Date.now() });
                     }
@@ -3353,11 +3431,10 @@ window.syncRpsState = function(roomId) {
                     let elapsed = Date.now() - data.spamPlayTime;
                     let remain = 5 - Math.floor(elapsed / 1000);
                     
-                    // 偵測對方是否發動連擊並播放動畫，以達雙方視覺同步
                     let currentOtherSpam = otherData.spamCount || 0;
                     if (currentOtherSpam > (window.rpsOtherSpamCount || 0)) {
                         window.rpsOtherSpamCount = currentOtherSpam;
-                        let isWinner = data.winnerUid === myUid; // 判斷對手是否為攻擊方
+                        let isWinner = data.winnerUid === myUid;
                         if (window.triggerRpsAnim) window.triggerRpsAnim('rps-opponent-img', !isWinner);
                     }
 
@@ -3366,14 +3443,13 @@ window.syncRpsState = function(roomId) {
                     } else {
                         document.getElementById('rps-spam-area').style.display = 'none';
                         clearInterval(window.rpsInterval);
-                        if (uids.sort()[0] === myUid) module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'calc_result' });
+                        if (uids.sort()[0] === myUid) module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'round_result' });
                     }
-                }, 100); // 維持高頻 100ms 更新以順暢抓取對方點擊
+                }, 100);
             }
-            else if (state === 'calc_result') {
+            else if (state === 'round_result') {
                 if (window.rpsInterval) clearInterval(window.rpsInterval);
-                document.getElementById('rps-phase-game').style.display = 'none';
-                document.getElementById('rps-phase-result').style.display = 'flex';
+                document.getElementById('rps-spam-area').style.display = 'none';
                 
                 let isWinner = data.winnerUid === myUid;
                 let mySpams = myData.spamCount || 0;
@@ -3383,6 +3459,63 @@ window.syncRpsState = function(roomId) {
                 let loseSpam = isWinner ? Math.round(otherSpams * 0.9) : Math.round(mySpams * 0.9);
                 
                 let attackSuccess = winSpam > loseSpam;
+                let tieSpam = winSpam === loseSpam;
+                
+                let roundWinnerUid = null;
+                if (!tieSpam) roundWinnerUid = attackSuccess ? data.winnerUid : (data.winnerUid === myUid ? otherUid : myUid);
+                
+                let rMsg = document.getElementById('rps-center-msg');
+                rMsg.style.opacity = '1';
+                if (tieSpam) {
+                    rMsg.innerText = "平局！";
+                } else if (roundWinnerUid === myUid) {
+                    rMsg.innerText = "本回合勝！";
+                } else {
+                    rMsg.innerText = "本回合敗！";
+                }
+                rMsg.animate([
+                    { transform: 'translate(-50%, -50%) scale(0.2)', opacity: 0 },
+                    { transform: 'translate(-50%, -50%) scale(1.2)', opacity: 1 },
+                    { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 }
+                ], { duration: 500, fill: 'forwards' });
+
+                // 由 Host 判定三回合的結算，確認是否分出勝負
+                if (uids.sort()[0] === myUid && !data.roundProcessed) {
+                    let myCurrentWins = myData.roundWins || 0;
+                    let otherCurrentWins = otherData.roundWins || 0;
+                    if (roundWinnerUid === myUid) myCurrentWins++;
+                    else if (roundWinnerUid === otherUid) otherCurrentWins++;
+
+                    let currentRoundCount = data.roundCount || 1;
+                    
+                    let updates = { roundProcessed: true };
+                    updates[`p_${myUid}/roundWins`] = myCurrentWins;
+                    updates[`p_${otherUid}/roundWins`] = otherCurrentWins;
+                    
+                    setTimeout(() => {
+                        if (myCurrentWins >= 2 || otherCurrentWins >= 2 || currentRoundCount >= 3) {
+                            updates.state = 'calc_result';
+                        } else {
+                            updates.state = 'rps_countdown';
+                            updates.rpsStartTime = Date.now();
+                            updates.roundCount = currentRoundCount + 1;
+                            updates.roundProcessed = null;
+                            updates[`p_${myUid}/rpsChoice`] = null;
+                            updates[`p_${otherUid}/rpsChoice`] = null;
+                        }
+                        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), updates);
+                    }, 3000);
+                    
+                    module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { roundProcessed: true });
+                }
+            }
+            else if (state === 'calc_result') {
+                if (window.rpsInterval) clearInterval(window.rpsInterval);
+                document.getElementById('rps-phase-game').style.display = 'none';
+                document.getElementById('rps-phase-result').style.display = 'flex';
+                
+                let myWins = myData.roundWins || 0;
+                let otherWins = otherData.roundWins || 0;
                 let totalPool = (data.agreedBet || 0) * 2;
                 
                 let taxRate = 0;
@@ -3393,17 +3526,16 @@ window.syncRpsState = function(roomId) {
                 let finalPool = Math.round(totalPool * (1 - taxRate));
                 
                 let iWinMoney = false; let tieMoney = false;
-                if (winSpam === loseSpam) tieMoney = true;
-                else if (attackSuccess && isWinner) iWinMoney = true;
-                else if (!attackSuccess && !isWinner) iWinMoney = true;
+                if (myWins === otherWins) tieMoney = true;
+                else if (myWins > otherWins) iWinMoney = true;
                 
                 let getAmt = tieMoney ? Math.round(finalPool/2) : (iWinMoney ? finalPool : 0);
                 
                 let tDesc = "";
-                tDesc += `原始獎金池: ${totalPool} (扣稅 ${taxRate*100}% 後剩 ${finalPool})<br><br>`;
-                tDesc += `攻擊方連擊: ${winSpam} | 防守方連擊: ${loseSpam}<br>`;
-                if (tieMoney) tDesc += `平手！雙方拿回 ${getAmt} 馬德幣`;
-                else tDesc += iWinMoney ? `🎉 你贏得了 ${getAmt} 馬德幣！` : `😭 你被擊敗了... 失去所有押注。`;
+                tDesc += `原始獎金池: ${totalPool} (扣稅 ${Math.round(taxRate*100)}% 後剩 ${finalPool})<br><br>`;
+                tDesc += `三戰兩勝最終比分 - 你 [ ${myWins} : ${otherWins} ] 對手<br><br>`;
+                if (tieMoney) tDesc += `平局收場！雙方拿回 ${getAmt} 馬德幣`;
+                else tDesc += iWinMoney ? `🎉 最終勝利！贏得了 ${getAmt} 馬德幣！` : `😭 最終敗北... 失去所有押注。`;
                 
                 document.getElementById('rps-result-desc').innerHTML = tDesc;
                 
@@ -3422,33 +3554,6 @@ window.syncRpsState = function(roomId) {
                         module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { moneyDistributed: true });
                     });
                 }
-            }
-        });
-    });
-};
-
-window.cancelRpsGame = function(roomId) {
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'finished' });
-    });
-};
-
-window.handleRpsDisconnect = function(roomId) {
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        module.get(module.ref(window.GameLogic.db, `playroomGames/${roomId}`)).then(snap => {
-            let data = snap.val();
-            // 如果遊戲尚未結束結算，就執行沒收判定
-            if (data && data.state !== 'finished' && data.state !== 'calc_result') {
-                alert("對方逃跑或斷線了！強制結束並沒收對方籌碼給您！");
-                let totalPool = (data.agreedBet || 0) * 2;
-                if (totalPool > 0) {
-                    module.get(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`)).then(uSnap => {
-                        let pCoins = (uSnap.val().coins || 0) + totalPool;
-                        module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: pCoins });
-                    });
-                }
-                module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'finished' });
-                window.exitPlayroom();
             }
         });
     });
