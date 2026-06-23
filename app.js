@@ -3330,8 +3330,6 @@ window.syncRpsState = function(roomId) {
                 });
                 
                 if (myData.betReady && otherData.betReady && uids.sort()[0] === myUid) {
-                
-                if (myData.betReady && otherData.betReady && uids.sort()[0] === myUid) {
                     let avgBet = Math.round((myData.betValue + otherData.betValue) / 2);
                     module.get(module.ref(window.GameLogic.db, `users`)).then(uSnap => {
                         let uDB = uSnap.val();
