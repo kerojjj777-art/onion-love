@@ -427,15 +427,13 @@ function createSystemUI() {
         <div id="rps-modal" onpointerdown="event.stopPropagation()" onwheel="event.stopPropagation()" ontouchmove="event.stopPropagation()" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:9999; flex-direction:column; align-items:center; justify-content:center; color:#fff; overflow:hidden;">
             <style>
                 @keyframes orbit-spin { 100% { transform: rotate(360deg); } }
+                @keyframes rps-bg-breathe { 0% { background: #000; } 50% { background: #1a331a; } 100% { background: #000; } }
+                .rps-gaming-bg { animation: rps-bg-breathe 4s infinite !important; }
                 .rps-orbit { position: absolute; top: 50%; left: 50%; width: 150vw; height: 150vw; transform-origin: center; animation: orbit-spin 6s linear infinite; pointer-events: none; z-index: 0; margin-left: -75vw; margin-top: -75vw; opacity: 0.6; }
                 .rps-orbit-dot { position: absolute; background: #39ff14; border-radius: 50%; box-shadow: 0 0 10px #39ff14, 0 0 20px #39ff14, 0 0 30px #ffffff; }
             </style>
-            <div class="rps-orbit">
-                <div class="rps-orbit-dot" style="top:10%; left:30%; width:8px; height:8px;"></div>
-                <div class="rps-orbit-dot" style="top:70%; left:80%; width:12px; height:12px;"></div>
-                <div class="rps-orbit-dot" style="top:30%; left:90%; width:6px; height:6px;"></div>
-                <div class="rps-orbit-dot" style="top:85%; left:20%; width:10px; height:10px;"></div>
-                <div class="rps-orbit-dot" style="top:45%; left:10%; width:5px; height:5px;"></div>
+            <div class="rps-orbit" id="rps-orbit-container">
+                ${Array.from({length: 40}).map(() => `<div class="rps-orbit-dot" style="top:${Math.random()*100}%; left:${Math.random()*100}%; width:${Math.random()*8+4}px; height:${Math.random()*8+4}px;"></div>`).join('')}
             </div>
             <div id="rps-phase-bet" style="display:none; flex-direction:column; align-items:center; width:80%; z-index:10;">
                 <h2 style="color:#ffcc00;">選擇籌碼</h2>
@@ -456,12 +454,16 @@ function createSystemUI() {
                     @keyframes rps-burst { 0% { box-shadow: 0 0 10px #fff; transform: scale(1.1); } 100% { box-shadow: 0 0 50px #ffcc00, 0 0 80px #d9534f; transform: scale(1); opacity: 0; } }
                     .rps-sprite-moving { animation: play-rps 0.2s steps(2) infinite !important; }
                     @keyframes play-rps { 100% { background-position: -600px center; } }
-                    /* 手機版面位置拉高調整 */
+                    /* 手機版面位置拉高調整與大小修正 */
                     @media (max-width: 768px) {
-                        #rps-choices { bottom: 120px !important; left: 50% !important; transform: translateX(-50%) !important; gap: 10px !important; }
-                        #rps-choices img { width: 80px !important; }
-                        #rps-me-container { bottom: 120px !important; left: 10px !important; }
-                        #rps-me-img { width: 180px !important; height: 180px !important; }
+                        #rps-choices { bottom: 35% !important; left: 50% !important; transform: translateX(-50%) !important; gap: 15px !important; }
+                        #rps-choices img { width: 70px !important; }
+                        #rps-opponent-img { width: 220px !important; height: 220px !important; }
+                        #rps-me-img { width: 250px !important; height: 250px !important; }
+                        #rps-me-container { bottom: 15px !important; left: 10px !important; }
+                        .spam-phase-pos-me { left: 20% !important; transform: translateY(-50%) scale(0.65) !important; bottom: auto !important; top: 50% !important; }
+                        .spam-phase-pos-op { left: 80% !important; right: auto !important; transform: translateY(-50%) scale(0.65) !important; top: 50% !important; }
+                        #rps-center-msg { font-size: 40px !important; white-space: nowrap; }
                     }
                 </style>
 
@@ -477,9 +479,9 @@ function createSystemUI() {
                 <div id="rps-center-msg" style="position:absolute; top:20%; left:50%; transform:translate(-50%, -50%); font-size:80px; font-weight:bold; color:#ffcc00; text-shadow: 4px 4px 0 #d9534f; z-index:10; transition: top 0.5s ease;">START!</div>
                 
                 <div id="rps-choices" style="position:absolute; bottom:80px; left:50%; transform:translateX(-50%); display:flex; gap:20px; z-index:30;">
-                    <img id="rps-choice-scissors" class="rps-choice-img" src="playroom-rps-machine-scissors.png" style="width:120px; cursor:pointer;" onclick="window.selectRps('scissors')">
-                    <img id="rps-choice-stone" class="rps-choice-img" src="playroom-rps-machine-stone.png" style="width:120px; cursor:pointer;" onclick="window.selectRps('stone')">
-                    <img id="rps-choice-paper" class="rps-choice-img" src="playroom-rps-machine-paper.png" style="width:120px; cursor:pointer;" onclick="window.selectRps('paper')">
+                    <img id="rps-choice-scissors" class="rps-choice-img" src="playroom-rps-machine-scissors.png" style="width:120px; cursor:pointer;" onpointerdown="window.selectRps('scissors'); event.stopPropagation();">
+                    <img id="rps-choice-stone" class="rps-choice-img" src="playroom-rps-machine-stone.png" style="width:120px; cursor:pointer;" onpointerdown="window.selectRps('stone'); event.stopPropagation();">
+                    <img id="rps-choice-paper" class="rps-choice-img" src="playroom-rps-machine-paper.png" style="width:120px; cursor:pointer;" onpointerdown="window.selectRps('paper'); event.stopPropagation();">
                 </div>
 
                 <div id="rps-spam-area" style="display:none; position:absolute; bottom:80px; left:50%; transform:translateX(-50%); text-align:center; z-index: 50;">
@@ -1260,6 +1262,9 @@ class BootScene extends Phaser.Scene {
         this.load.audio('shrine-purify-success-win', 'shrine-purify-success-win.mp3');
         this.load.audio('shrine-purify-success', 'shrine-purify-success.mp3');
 
+        // 新增：猜拳連擊按鈕音效
+        this.load.audio('playroom-figjt-buttom', 'playroom-figjt-buttom-sound.mp3');
+      
         this.load.audio('onion-sleep', 'onion-sleep.mp3');
         this.load.audio('sleep-wakeup', 'sleep-wakeup-rooster-call.mp3');
         this.load.spritesheet('onion-clean', 'onion-clean.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-sleep', 'onion-sleeping.png', { frameWidth: 75, frameHeight: 75 });
@@ -1859,6 +1864,9 @@ class MainScene extends Phaser.Scene {
                     this.localPlayer.isThrowing = true;
                     this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
                     
+                    // 新增11：向全服發送投擲動畫訊號
+                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `serverEvents/planeThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), targetUid: targetUid, scene: this.sceneName }); });
+                    
                     if (targetUid && targetSprite) {
                         let plane = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'plane').setDepth(15);
                         this.tweens.add({
@@ -2129,8 +2137,36 @@ class MainScene extends Phaser.Scene {
         this.fwThrowsListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworkThrows'), (snap) => { let throws = snap.val() || {}; for (let uid in throws) { if (uid === window.GameLogic.currentUser.uid) continue; let data = throws[uid]; if (data && data.time && (Date.now() - data.time < 1000) && data.scene === this.sceneName) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; opSprite.play('fw-throw', true); opSprite.isThrowing = true; this.time.delayedCall(300, () => { if (opSprite && opSprite.active) opSprite.isThrowing = false; }); } } } });
         this.playersHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/waterHits'), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { opSprite.isStunned = true; opSprite.play('wet', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
         this.dummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/dummyHits'), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
+        
+        // 新增11：全服接收他人發射蔥友機的動畫
+        this.planeThrowsListener = onValue(ref(window.GameLogic.db, 'serverEvents/planeThrows'), (snap) => { 
+            let throws = snap.val() || {}; 
+            for (let uid in throws) { 
+                if (uid === window.GameLogic.currentUser.uid) continue; 
+                let data = throws[uid]; 
+                if (data && data.time && (Date.now() - data.time < 1000) && data.scene === this.sceneName) { 
+                    if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { 
+                        let opSprite = this.otherPlayers[uid].sprite; 
+                        opSprite.play('throw', true); 
+                        window.playSFX(this, 'launcher1'); 
+                        let targetX = opSprite.x + (opSprite.flipX ? -200 : 200);
+                        let targetY = opSprite.y;
+                        if (data.targetUid && this.otherPlayers[data.targetUid]) {
+                            targetX = this.otherPlayers[data.targetUid].sprite.x;
+                            targetY = this.otherPlayers[data.targetUid].sprite.y;
+                        } else if (data.targetUid === window.GameLogic.currentUser.uid) {
+                            targetX = this.localPlayer.sprite.x;
+                            targetY = this.localPlayer.sprite.y;
+                        }
+                        let plane = this.physics.add.sprite(opSprite.x, opSprite.y, 'plane').setDepth(15);
+                        this.tweens.add({ targets: plane, x: targetX, y: targetY, duration: 400, onComplete: () => plane.destroy() });
+                    } 
+                } 
+            } 
+        });
+
         // 接收邀請
-        this.planeHitsListener = onValue(ref(window.GameLogic.db, `serverEvents/planeHits/${window.GameLogic.currentUser.uid}`), (snap) => { 
+        this.planeHitsListener = onValue(ref(window.GameLogic.db, `serverEvents/planeHits/${window.GameLogic.currentUser.uid}`), (snap) => {
             let data = snap.val(); 
             if (data && data.time && (Date.now() - data.time < 5000)) { 
                 let modal = document.getElementById('invite-modal');
@@ -2192,6 +2228,7 @@ class MainScene extends Phaser.Scene {
             if (this.dummiesListener) this.dummiesListener(); 
             if (this.planeHitsListener) this.planeHitsListener();
             if (this.inviteRepliesListener) this.inviteRepliesListener();
+            if (this.planeThrowsListener) this.planeThrowsListener(); // 新增：離開場景時註銷
             
             // 【修正1 & 2】：離開場景時，徹底註銷米米監聽器並強制切斷走路音效
             if (this.mimiListener) this.mimiListener(); 
@@ -2614,6 +2651,12 @@ class MainScene extends Phaser.Scene {
                         module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { state: 'down' });
                         
                         window.playSFX(this, 'mimi-thief-get-down');
+                        
+                        // 修正10：強制立刻播放倒下動畫，避免等待網路同步的延遲或錯失
+                        if (this.mimiSprite) {
+                            this.mimiSprite.play('mimi-down', true);
+                            this.mimiSprite.setAlpha(0.6);
+                        }
 
                         let mData = window.GameLogic.cafeMimiData || {}; 
                         let baseCoins = 300 * (mData.playersInvolved || 1); 
@@ -3168,6 +3211,12 @@ window.clickRpsSpam = function() {
     window.rpsLastClickTimes = window.rpsLastClickTimes.filter(t => now - t < 1000);
     if (window.rpsLastClickTimes.length >= 15) return; 
     
+    // 修正7：新增按鈕打擊音效
+    if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) {
+        let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
+        if (ms) window.playSFX(ms, 'playroom-figjt-buttom');
+    }
+    
     window.rpsLastClickTimes.push(now);
     window.rpsMySpamCount++;
     
@@ -3183,23 +3232,24 @@ window.clickRpsSpam = function() {
     btn.parentElement.appendChild(burst);
     setTimeout(() => burst.remove(), 300);
 
-    // 畫面中央底圖迸發類似煙火的噴發特效 (紅橘黃紫白)
+    // 畫面中央底圖迸發類似煙火的噴發特效 (修正9：擴大為滿版 3 顆大煙火)
     let pContainer = document.getElementById('rps-spam-particles');
     if (pContainer) {
         let colors = ['#ff0000', '#ff8c00', '#ffff00', '#8a2be2', '#ffffff'];
-        for(let i = 0; i < 12; i++) {
+        for(let i = 0; i < 3; i++) {
             let dot = document.createElement('div');
             let color = colors[Math.floor(Math.random() * colors.length)];
-            dot.style.cssText = `position:absolute; top:0; left:0; width:12px; height:12px; background:${color}; border-radius:50%; box-shadow:0 0 15px ${color}, 0 0 25px #fff; pointer-events:none; mix-blend-mode: screen;`;
+            let size = Math.random() * 20 + 30; // 巨大粒子
+            dot.style.cssText = `position:absolute; top:50%; left:50%; width:${size}px; height:${size}px; background:${color}; border-radius:50%; box-shadow:0 0 30px ${color}, 0 0 50px #fff; pointer-events:none; mix-blend-mode: screen;`;
             pContainer.appendChild(dot);
             let angle = Math.random() * Math.PI * 2;
-            let dist = Math.random() * 200 + 100;
+            let dist = Math.random() * 400 + 200; // 擴散近乎全螢幕
             let tx = Math.cos(angle) * dist;
             let ty = Math.sin(angle) * dist;
             dot.animate([
                 { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
-                { transform: `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(0)`, opacity: 0 }
-            ], { duration: 400 + Math.random() * 300, easing: 'ease-out' }).onfinish = () => dot.remove();
+                { transform: `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(3)`, opacity: 0 }
+            ], { duration: 600 + Math.random() * 400, easing: 'ease-out' }).onfinish = () => dot.remove();
         }
     }
 
@@ -3246,6 +3296,9 @@ window.syncRpsState = function(roomId) {
             let otherData = data[`p_${otherUid}`] || {};
 
             if (state === 'betting') {
+                // 清除戰鬥漸變背景
+                document.getElementById('rps-modal').classList.remove('rps-gaming-bg');
+                
                 // 同步確保雙方都會觸發並打開 UI，防止有一方沒點到卡死
                 let modal = document.getElementById('rps-modal');
                 if (modal.style.display !== 'flex') {
@@ -3253,22 +3306,30 @@ window.syncRpsState = function(roomId) {
                     document.getElementById('rps-phase-bet').style.display = 'flex';
                     document.getElementById('rps-phase-game').style.display = 'none';
                     document.getElementById('rps-phase-result').style.display = 'none';
-                    document.getElementById('rps-bet-confirm-btn').style.display = 'block';
-
-                    module.get(module.ref(window.GameLogic.db, `users`)).then(uSnap => {
-                        let uDB = uSnap.val();
-                        let p1Coins = uDB[uids[0]]?.coins || 0;
-                        let p2Coins = uDB[uids[1]]?.coins || 0;
-                        let maxBet = Math.min(Math.min(p1Coins, p2Coins), 10000);
-                        
-                        let slider = document.getElementById('rps-bet-slider');
-                        slider.max = maxBet; slider.value = 0;
-                        document.getElementById('rps-bet-display').innerText = 0;
-                        document.getElementById('rps-bet-status').innerText = "等待雙方確認...";
-                        
-                        slider.oninput = function() { document.getElementById('rps-bet-display').innerText = this.value; };
-                    });
                 }
+                // 每次回到下注畫面都要重置確認按鈕
+                document.getElementById('rps-bet-confirm-btn').style.display = 'block';
+
+                module.get(module.ref(window.GameLogic.db, `users`)).then(uSnap => {
+                    let uDB = uSnap.val() || {};
+                    let p1Coins = (uDB[uids[0]] && uDB[uids[0]].coins) ? uDB[uids[0]].coins : 0;
+                    let p2Coins = (uDB[uids[1]] && uDB[uids[1]].coins) ? uDB[uids[1]].coins : 0;
+                    
+                    // 修正1：確保 maxBet 絕對不會回傳 NaN 或被卡死在 0 (除非雙方真的沒錢)
+                    let maxBet = Math.max(0, Math.min(p1Coins, p2Coins, 10000));
+                    if (isNaN(maxBet)) maxBet = 0;
+                    
+                    let slider = document.getElementById('rps-bet-slider');
+                    slider.max = maxBet; 
+                    slider.value = 0;
+                    document.getElementById('rps-bet-display').innerText = 0;
+                    document.getElementById('rps-bet-status').innerText = "等待雙方確認...";
+                    
+                    slider.oninput = function() { document.getElementById('rps-bet-display').innerText = this.value; };
+                    slider.onchange = function() { document.getElementById('rps-bet-display').innerText = this.value; };
+                });
+                
+                if (myData.betReady && otherData.betReady && uids.sort()[0] === myUid) {
                 
                 if (myData.betReady && otherData.betReady && uids.sort()[0] === myUid) {
                     let avgBet = Math.round((myData.betValue + otherData.betValue) / 2);
@@ -3294,6 +3355,9 @@ window.syncRpsState = function(roomId) {
                 }
             }
             else if (state === 'rps_countdown') {
+                // 進入猜拳倒數，套用呼吸漸變底色
+                document.getElementById('rps-modal').classList.add('rps-gaming-bg');
+                
                 document.getElementById('rps-phase-bet').style.display = 'none';
                 document.getElementById('rps-phase-game').style.display = 'block';
                 document.getElementById('rps-choices').style.display = 'flex';
@@ -3305,6 +3369,7 @@ window.syncRpsState = function(roomId) {
                 document.querySelectorAll('.rps-choice-img').forEach(el => el.classList.remove('rps-choice-selected'));
                 let meC = document.getElementById('rps-me-container');
                 let opC = document.getElementById('rps-opponent-container');
+                meC.className = ""; opC.className = ""; // 拔除連擊階段的鎖定 class
                 meC.style.top = 'auto'; meC.style.right = 'auto'; meC.style.transform = 'none';
                 // 使用 cssText 以確保 CSS 媒體查詢不會被絕對寫死的值綁架
                 meC.style.cssText = "position:absolute; bottom:20px; left:20px; text-align:center; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:20;";
@@ -3387,15 +3452,20 @@ window.syncRpsState = function(roomId) {
                 
                 let meC = document.getElementById('rps-me-container');
                 let opC = document.getElementById('rps-opponent-container');
-                meC.style.cssText = "position:absolute; top:50%; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:20;";
-                opC.style.cssText = "position:absolute; top:50%; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:10;";
+                meC.style.cssText = "position:absolute; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:20;";
+                opC.style.cssText = "position:absolute; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:10;";
                 
+                // 修正5：套用自定義 class 以支援手機版自適應大小與位置
                 if (isWinner) {
-                    meC.style.left = '35%'; meC.style.transform = 'translate(-50%, -50%)';
-                    opC.style.left = '65%'; opC.style.transform = 'translate(-50%, -50%)';
+                    meC.className = "spam-phase-pos-me";
+                    opC.className = "spam-phase-pos-op";
+                    meC.style.left = '35%'; meC.style.top = '50%'; meC.style.transform = 'translate(-50%, -50%)';
+                    opC.style.left = '65%'; opC.style.top = '50%'; opC.style.transform = 'translate(-50%, -50%)';
                 } else {
-                    meC.style.left = '65%'; meC.style.transform = 'translate(-50%, -50%)';
-                    opC.style.left = '35%'; opC.style.transform = 'translate(-50%, -50%)';
+                    meC.className = "spam-phase-pos-op";
+                    meC.style.left = '65%'; meC.style.top = '50%'; meC.style.transform = 'translate(-50%, -50%)';
+                    opC.className = "spam-phase-pos-me";
+                    opC.style.left = '35%'; opC.style.top = '50%'; opC.style.transform = 'translate(-50%, -50%)';
                 }
                 
                 let rpsMsg = document.getElementById('rps-center-msg');
