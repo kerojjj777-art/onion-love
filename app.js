@@ -398,6 +398,7 @@ function createSystemUI() {
                 <div id="store-list" class="catalog-grid">
                     <div class="catalog-item" onclick="window.openPurchaseModal('水球', 20)"><div class="sprite-waterball"></div><span style="margin-top:5px;">水球</span><span style="color:#d4af37; font-size:12px; font-weight:bold;">20 馬德幣</span></div>
                     <div class="catalog-item" onclick="window.openPurchaseModal('煙火', 100)"><img src="shop-fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin-top:5px;">煙火</span><span style="color:#d4af37; font-size:12px; font-weight:bold;">100 馬德幣</span></div>
+                    <div class="catalog-item" onclick="window.openPurchaseModal('蔥友機', 20)"><img src="playroom-onion-friend-plane.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin-top:5px;">蔥友機</span><span style="color:#d4af37; font-size:12px; font-weight:bold;">20 馬德幣</span></div>
                 </div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('store-modal').style.display='none'; window.GameLogic.isShopping = false;">離開商店</button>
             </div>
         </div>
@@ -411,6 +412,59 @@ function createSystemUI() {
             </div>
             <div id="leaderboard-list" style="max-height: 40vh; overflow-y: auto; text-align: left; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 8px;"></div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('leaderboard-modal').style.display='none'">關閉</button>
+        </div>
+
+        <div id="invite-modal" class="modal" style="z-index: 500;">
+            <h3 style="color:var(--mucha-green);">收到邀請函！</h3>
+            <p><strong id="invite-sender-name" style="color:var(--mucha-gold);"></strong> 向你射出了蔥友機，想來一場友情的昇華！</p>
+            <p style="color:#d9534f; font-size:14px; font-weight:bold; margin-bottom:5px;">⏳ 倒數計時: <span id="invite-timer">15</span> 秒</p>
+            <div class="modal-btns">
+                <button class="btn-primary" onclick="window.replyInvite('yes')">好喔</button>
+                <button class="btn-secondary" onclick="window.replyInvite('no')">等等</button>
+            </div>
+        </div>
+
+        <div id="rps-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; flex-direction:column; align-items:center; justify-content:center; color:#fff;">
+            <div id="rps-phase-bet" style="display:none; flex-direction:column; align-items:center; width:80%;">
+                <h2 style="color:#ffcc00;">選擇籌碼</h2>
+                <p>最多只能押雙方存款較低者的全部身家</p>
+                <input type="range" id="rps-bet-slider" min="0" max="100" value="0" style="width:100%; margin:20px 0;">
+                <h1 style="color:#00ff00;">💰 <span id="rps-bet-display">0</span></h1>
+                <p style="font-size:12px; color:#aaa;">(雙方確認後將自動扣款，平手或結束後結算)</p>
+                <div id="rps-bet-status" style="margin-top:10px; color:#ffaa00; font-weight:bold;">等待雙方確認...</div>
+                <button class="btn-primary" id="rps-bet-confirm-btn" style="margin-top:20px; font-size:20px; padding:10px 30px;" onclick="window.confirmRpsBet()">確認籌碼</button>
+            </div>
+            
+            <div id="rps-phase-game" style="display:none; width:100%; height:100%; position:relative;">
+                <div style="position:absolute; top:20px; right:20px; text-align:center;">
+                    <img id="rps-opponent-img" src="playroom-rps-onion-other-ready.png" style="width:220px; height:220px; object-fit:contain;">
+                    <div id="rps-opponent-status" style="font-size:24px; font-weight:bold; color:#ff4444; text-shadow:2px 2px 0 #000;">等待中</div>
+                </div>
+                <div style="position:absolute; bottom:20px; left:20px; text-align:center;">
+                    <img id="rps-me-img" src="playroom-rps-onion-me-ready.png" style="width:250px; height:250px; object-fit:contain;">
+                    <div id="rps-me-status" style="font-size:24px; font-weight:bold; color:#44ff44; text-shadow:2px 2px 0 #000;">等待中</div>
+                </div>
+                
+                <div id="rps-center-msg" style="position:absolute; top:40%; left:50%; transform:translate(-50%, -50%); font-size:80px; font-weight:bold; color:#ffcc00; text-shadow: 4px 4px 0 #d9534f; z-index:10;">START!</div>
+                
+                <div id="rps-choices" style="position:absolute; bottom:50px; left:50%; transform:translateX(-50%); display:flex; gap:20px;">
+                    <img src="playroom-rps-machine-scissors.png" style="width:120px; cursor:pointer;" onclick="window.selectRps('scissors')">
+                    <img src="playroom-rps-machine-stone.png" style="width:120px; cursor:pointer;" onclick="window.selectRps('stone')">
+                    <img src="playroom-rps-machine-paper.png" style="width:120px; cursor:pointer;" onclick="window.selectRps('paper')">
+                </div>
+
+                <div id="rps-spam-area" style="display:none; position:absolute; bottom:80px; left:50%; transform:translateX(-50%); text-align:center;">
+                    <button id="rps-spam-btn" style="font-size:48px; font-weight:bold; padding:20px 60px; border-radius:20px; background:#d9534f; color:#fff; border:4px solid #ffcc00; cursor:pointer; box-shadow:0 10px 0 #aa0000;" onclick="window.clickRpsSpam()">打！</button>
+                    <div style="margin-top:10px; font-size:20px;">剩餘時間: <span id="rps-spam-timer">5</span></div>
+                </div>
+            </div>
+
+            <div id="rps-phase-result" style="display:none; flex-direction:column; align-items:center; z-index:20;">
+                <h1 id="rps-result-title" style="font-size:60px; color:#ffcc00; margin-bottom:10px;">結算</h1>
+                <div id="rps-result-desc" style="font-size:24px; margin-bottom:20px;"></div>
+                <p style="color:#aaa; font-size:14px; margin-bottom:30px;">結算總金額已扣除機台維護與場地清潔費 (1000以下免稅 / 1000~5000抽8% / 5000以上抽15%豪華娛樂稅)</p>
+                <button class="btn-primary" style="font-size:24px; padding:10px 40px;" onclick="window.exitPlayroom()">離開機台</button>
+            </div>
         </div>
 
         <div id="dev-modal" class="modal" style="z-index: 260;">
@@ -706,6 +760,7 @@ window.openMagicModal = function() {
     let magics = [
         { name: '水球', icon: '<div class="sprite-waterball" style="transform: scale(0.8); transform-origin: center;"></div>', desc: '聞說水是生命的起源，洋蔥喜歡感受生命，使勁地丟吧！\n按B填充後按A擲出' },
         { name: '煙火', icon: '<img src="shop-fireworks.png" style="width:40px; height:40px; object-fit:contain;">', desc: '喜歡煙火咻蹦的美麗光彩，但也喜歡拿來朝著其他洋蔥丟～\n按B填充後按A擲出，鎖定目標與不鎖定目標會有不同的效果。' }
+        { name: '蔥友機', icon: '<img src="playroom-onion-friend-plane.png" style="width:40px; height:40px; object-fit:contain;">', desc: '隨時發動好(ㄓㄢˋ)友(ㄉㄡˋ)邀請，按B捏緊再按A投射，被射中的好友會收到你的訊息。' }
     ];
     for(let i = 0; i < 16; i++) {
         if (i < magics.length) {
@@ -754,7 +809,7 @@ window.devFillMagic = function() {
 
 window.openInventoryModal = function() {
     const list = document.getElementById('inventory-list'); let hasUnread = Object.keys(window.GameLogic.unreadPMs || {}).length > 0; let dotHtml = hasUnread ? '<div style="position:absolute; top:5px; right:5px; width:12px; height:12px; background:red; border-radius:50%; box-shadow:0 0 5px red; z-index:10;"></div>' : '';
-    let rawItems = {}; let isEdit = window.GameLogic.inventoryEditMode; let inv = window.GameLogic.myProfile.inventory || {}; let sysKeys = ['phone', 'portal', 'profile', 'music', 'manual', 'logout', 'dev', 'magic_items']; let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥' && !sysKeys.includes(k) && k !== '水球' && k !== '煙火');
+    let rawItems = {}; let isEdit = window.GameLogic.inventoryEditMode; let inv = window.GameLogic.myProfile.inventory || {}; let sysKeys = ['phone', 'portal', 'profile', 'music', 'manual', 'logout', 'dev', 'magic_items']; let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥' && !sysKeys.includes(k) && k !== '水球' && k !== '煙火' && k !== '蔥友機');
     keys.forEach(k => {
         let iconHtml = (k === '水球') ? '<div class="sprite-waterball"></div>' : (k === '煙火' ? '<img src="shop-fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">' : '<span style="font-size:24px; margin-bottom:5px;">📦</span>');
         let isUsing = ((k === '水球' || k === '煙火') && window.GameLogic.armedItemState != null && window.GameLogic.armedItemName === k);
@@ -782,7 +837,7 @@ window.openPM = function(targetUid, targetName) { document.getElementById('phone
 window.closePM = function() { if (window.pmUnsubscribe) { window.pmUnsubscribe(); window.pmUnsubscribe = null; } document.getElementById('pm-modal').style.display = 'none'; document.getElementById('phone-modal').style.display = 'block'; };
 window.sendPM = function() { let input = document.getElementById('pm-input'); let msg = input.value.trim(); if (!msg || !window.currentPMUid) return; let myUid = window.GameLogic.currentUser.uid; let chatId = [myUid, window.currentPMUid].sort().join('_'); import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, `privateChats/${chatId}`), { uid: myUid, name: window.GameLogic.myProfile.name, msg: msg, time: Date.now() }); module.update(module.ref(window.GameLogic.db, `users/${window.currentPMUid}/unreadPMs`), { [myUid]: true }); }); input.value = ''; };
 
-window.openPurchaseModal = function(name, price) { let currentCoins = window.GameLogic.myProfile.coins || 0; let maxQty = Math.floor(currentCoins / price); if (maxQty <= 0) { alert("馬德幣不足！快去打掃賺錢吧！"); return; } window.currentPurchaseItem = name; window.currentPurchasePrice = price; window.currentPurchaseQty = 1; document.getElementById('purchase-title').innerText = `購買 ${name}`; let desc = ""; if (name === '水球') { desc = "聽說洋蔥都躲在大廳裡面玩水球大戰，為了讓我可以賺更多錢，我在水球裡加了魔法，被擊中的對象也會噴錢，然後他們就會.....一直噴錢，一直撿錢，來找我花錢!!! 嘿嘿嘿..."; } else if (name === '煙火') { desc = "曾經聽我朋友說他的同事們很奇怪，遇到好事就要說『咻蹦～』還要搭配放煙火手勢，我都懶得講話所以做了這個神奇的煙火拿來賣，畫面漂亮((還可以攻擊別人))多麼棒～"; } document.getElementById('purchase-desc').innerText = desc; document.getElementById('purchase-qty').innerText = window.currentPurchaseQty; document.getElementById('purchase-total').innerText = window.currentPurchasePrice; document.getElementById('purchase-modal').style.display = 'block'; };
+window.openPurchaseModal = function(name, price) { let currentCoins = window.GameLogic.myProfile.coins || 0; let maxQty = Math.floor(currentCoins / price); if (maxQty <= 0) { alert("馬德幣不足！快去打掃賺錢吧！"); return; } window.currentPurchaseItem = name; window.currentPurchasePrice = price; window.currentPurchaseQty = 1; document.getElementById('purchase-title').innerText = `購買 ${name}`; let desc = ""; if (name === '水球') { desc = "聽說洋蔥都躲在大廳裡面玩水球大戰，為了讓我可以賺更多錢，我在水球裡加了魔法，被擊中的對象也會噴錢，然後他們就會.....一直噴錢，一直撿錢，來找我花錢!!! 嘿嘿嘿..."; } else if (name === '煙火') { desc = "曾經聽我朋友說他的同事們很奇怪，遇到好事就要說『咻蹦～』還要搭配放煙火手勢，我都懶得講話所以做了這個神奇的煙火拿來賣，畫面漂亮((還可以攻擊別人))多麼棒～"; } else if (name === '蔥友機') { desc = "那些洋蔥好像平常太互相傷害了，是時候來點友情的昇華。"; } document.getElementById('purchase-desc').innerText = desc; document.getElementById('purchase-qty').innerText = window.currentPurchaseQty; document.getElementById('purchase-total').innerText = window.currentPurchasePrice; document.getElementById('purchase-modal').style.display = 'block'; };
 window.adjustPurchaseQty = function(delta) { let maxQty = Math.floor((window.GameLogic.myProfile.coins || 0) / window.currentPurchasePrice); let newQty = window.currentPurchaseQty + delta; if (newQty >= 1 && newQty <= maxQty) { window.currentPurchaseQty = newQty; document.getElementById('purchase-qty').innerText = window.currentPurchaseQty; document.getElementById('purchase-total').innerText = window.currentPurchaseQty * window.currentPurchasePrice; } };
 window.confirmPurchase = function() { let cost = window.currentPurchaseQty * window.currentPurchasePrice; if ((window.GameLogic.myProfile.coins || 0) >= cost) { window.GameLogic.myProfile.coins -= cost; window.GameLogic.myProfile.inventory = window.GameLogic.myProfile.inventory || {}; window.GameLogic.myProfile.inventory[window.currentPurchaseItem] = (window.GameLogic.myProfile.inventory[window.currentPurchaseItem] || 0) + window.currentPurchaseQty; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: window.GameLogic.myProfile.coins, inventory: window.GameLogic.myProfile.inventory }); }); document.getElementById('purchase-modal').style.display = 'none'; if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if (scene) { window.playSFX(scene, 'shop-boss-thank-you'); window.playSFX(scene, 'shop-check-buying'); } } let msgEl = document.getElementById('purchase-success-msg'); msgEl.style.display = 'block'; msgEl.classList.remove('flash-text'); void msgEl.offsetWidth; msgEl.classList.add('flash-text'); setTimeout(() => { msgEl.style.display = 'none'; }, 2000); let smBubble = document.getElementById('store-manager-bubble'); if (smBubble) { smBubble.innerText = "懂買的都是好蔥！"; setTimeout(() => { smBubble.innerText = "這顆臭洋蔥打什麼主意啊"; }, 3000); } let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins; let storeCoinsEl = document.getElementById("store-current-coins"); if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins}`; } };
 
@@ -1018,58 +1073,87 @@ function checkShrineVotingTrigger() {
     } 
 }
 
-function switchScene(sceneName) {
+function switchScene(sceneName, extraData = null) {
     if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if (scene) window.playSFX(scene, 'jump04'); }
     if (sceneName !== 'shrine') window.GameLogic.shrineRitualActive = false;
     
-    // 修正：只有在「切換到其他場景」時，才中斷睡眠。如果是剛登入直接進入狗窩，則保留睡眠狀態
     if (sceneName !== 'doghouse') {
         if (window.GameLogic.myProfile && window.GameLogic.myProfile.sleepStartTime > 0) {
-            window.GameLogic.myProfile.sleepStartTime = 0;
-            localStorage.removeItem('onion_sleepStartTime');
-            update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { sleepStartTime: 0 });
+            window.GameLogic.myProfile.sleepStartTime = 0; localStorage.removeItem('onion_sleepStartTime');
+            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { sleepStartTime: 0 }));
         }
-        if (window.GameLogic.phaserGame) {
-            let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
-            if (ms && ms.sound && ms.sound.get('onion-sleep')) ms.sound.stopByKey('onion-sleep');
-        }
+        if (window.GameLogic.phaserGame) { let ms = window.GameLogic.phaserGame.scene.getScene('MainScene'); if (ms && ms.sound && ms.sound.get('onion-sleep')) ms.sound.stopByKey('onion-sleep'); }
     }
 
     const doSwitch = () => {
         window.GameLogic.currentScene = sceneName; window.GameLogic.placingFurnitureKey = null; 
-        if (sceneName === "cafe") joinCafe(); else leaveCafe();
-        if (sceneName === "shrine") joinShrine(); else leaveShrine();
+        
+        // 離開原本的房間
+        leaveCafe(); leaveShrine(); leavePlayroom();
+
+        if (sceneName === "cafe") joinCafe(); 
+        else if (sceneName === "shrine") joinShrine(); 
+        else if (sceneName === "playroom") joinPlayroom(extraData.roomId);
+
         window.updateOnlinePlayersUI();
-        if (window.GameLogic.phaserGame && window.GameLogic.phaserLoaded) { const game = window.GameLogic.phaserGame; game.scene.stop('MainScene'); game.scene.start('MainScene'); game.scene.bringToTop('UIScene'); }
+        if (window.GameLogic.phaserGame && window.GameLogic.phaserLoaded) { 
+            const game = window.GameLogic.phaserGame; 
+            game.scene.stop('MainScene'); game.scene.start('MainScene'); game.scene.bringToTop('UIScene'); 
+        }
     };
+
     if (window.GameLogic.currentUser && window.GameLogic.phaserGame && window.GameLogic.phaserLoaded) {
         let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
         if (scene && scene.localPlayer) {
-                    // 修正：切換場景時，不要帶入舊地圖的座標，改為新地圖的預設出生點
-                    let newMapW = (sceneName === 'cafe') ? 2048 : 1280;
-                    let newMapH = (sceneName === 'cafe') ? 2048 : 720;
-                    let entranceX = newMapW / 2 + 100;
-                    let entranceY = newMapH / 2;
-                    
-                    update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { lastScene: sceneName, lastX: entranceX, lastY: entranceY });
-                    window.GameLogic.myProfile.lastScene = sceneName; 
-                    window.GameLogic.myProfile.lastX = entranceX; 
-                    window.GameLogic.myProfile.lastY = entranceY;
-                    
-                    let cam = scene.cameras.main; 
-                let topBlack = scene.add.rectangle(cam.width/2, 0, cam.width, cam.height/2, 0x000000).setOrigin(0.5, 0).setDepth(9999).setScrollFactor(0);
-                let botBlack = scene.add.rectangle(cam.width/2, cam.height, cam.width, cam.height/2, 0x000000).setOrigin(0.5, 1).setDepth(9999).setScrollFactor(0);
-                topBlack.scaleY = 0; botBlack.scaleY = 0;
-                let whiteLine = scene.add.rectangle(cam.width/2, cam.height/2, cam.width, 4, 0xffffff).setDepth(10000).setScrollFactor(0).setAlpha(0);
-                
-                scene.tweens.add({ targets: [topBlack, botBlack], scaleY: 1, duration: 200, ease: 'Cubic.easeIn', onComplete: () => {
-                    whiteLine.setAlpha(1);
-                    scene.tweens.add({ targets: whiteLine, scaleX: 0, duration: 150, ease: 'Power2', onComplete: () => { doSwitch(); } });
-                }});
-                return; 
+            let newMapW = (sceneName === 'cafe') ? 2048 : 1280;
+            let newMapH = (sceneName === 'cafe') ? 2048 : 720;
+            let entranceX = newMapW / 2 + 100; let entranceY = newMapH / 2;
+            
+            // 只有一般場景需要記錄位置，副本不覆蓋最後重生點
+            if (sceneName !== 'playroom') {
+                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => module.update(module.ref(db, `users/${window.GameLogic.currentUser.uid}`), { lastScene: sceneName, lastX: entranceX, lastY: entranceY }));
+                window.GameLogic.myProfile.lastScene = sceneName; window.GameLogic.myProfile.lastX = entranceX; window.GameLogic.myProfile.lastY = entranceY;
             }
+            
+            let cam = scene.cameras.main; 
+            let topBlack = scene.add.rectangle(cam.width/2, 0, cam.width, cam.height/2, 0x000000).setOrigin(0.5, 0).setDepth(9999).setScrollFactor(0);
+            let botBlack = scene.add.rectangle(cam.width/2, cam.height, cam.width, cam.height/2, 0x000000).setOrigin(0.5, 1).setDepth(9999).setScrollFactor(0);
+            topBlack.scaleY = 0; botBlack.scaleY = 0;
+            let whiteLine = scene.add.rectangle(cam.width/2, cam.height/2, cam.width, 4, 0xffffff).setDepth(10000).setScrollFactor(0).setAlpha(0);
+            
+            scene.tweens.add({ targets: [topBlack, botBlack], scaleY: 1, duration: 200, ease: 'Cubic.easeIn', onComplete: () => {
+                whiteLine.setAlpha(1);
+                scene.tweens.add({ targets: whiteLine, scaleX: 0, duration: 150, ease: 'Power2', onComplete: () => { doSwitch(); } });
+            }});
+            return; 
+        }
     }
     doSwitch();
+}
+
+let playroomUnsubscribe = null;
+function joinPlayroom(roomId) {
+    window.GameLogic.currentRoomId = roomId;
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        const playerRef = module.ref(db, `playroomPlayers/${roomId}/${window.GameLogic.currentUser.uid}`);
+        module.set(playerRef, { x: 640, y: 360, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1 });
+        module.onDisconnect(playerRef).remove();
+        playroomUnsubscribe = module.onValue(module.ref(db, `playroomPlayers/${roomId}`), (snapshot) => { window.GameLogic.playroomPlayers = snapshot.val() || {}; });
+        window.syncRpsState(roomId); // 啟動遊戲狀態機同步
+    });
+}
+function leavePlayroom() {
+    if (window.GameLogic.currentRoomId && window.GameLogic.currentUser) {
+        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+            module.set(module.ref(db, `playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`), null);
+            // 離開時防呆：強迫清理正在進行的 RPS
+            window.cancelRpsGame(window.GameLogic.currentRoomId);
+        });
+    }
+    if (playroomUnsubscribe) { playroomUnsubscribe(); playroomUnsubscribe = null; }
+    window.GameLogic.currentRoomId = null;
+    window.GameLogic.playroomPlayers = {};
+    if (window.rpsUnsubscribe) { window.rpsUnsubscribe(); window.rpsUnsubscribe = null; }
 }
 function joinCafe() { const playerRef = ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`); set(playerRef, { x: window.GameLogic.myProfile.lastX || 1024, y: window.GameLogic.myProfile.lastY || 1024, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1, bubbleMsg: window.GameLogic.myProfile.bubbleMsg, bubbleTime: window.GameLogic.myProfile.bubbleTime }); onDisconnect(playerRef).remove(); cafeUnsubscribe = onValue(ref(db, 'cafePlayers'), (snapshot) => { window.GameLogic.cafePlayers = snapshot.val() || {}; }); }
 function leaveCafe() { if (window.GameLogic.currentUser) set(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), null); if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; } }
@@ -1140,6 +1224,21 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('mimi-thief-stealing', 'mimi-thief-stealing.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('mimi-laugh', 'mimi-laugh.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('mimi-thief-get-down', 'mimi-thief-get-down.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.image('plane', 'playroom-onion-friend-plane.png');
+        this.load.image('bgPlayroom', 'playroom-bg.jpg');
+        this.load.image('rps-machine', 'playroom-rps-machine.png');
+        this.load.image('rps-me-ready', 'playroom-rps-onion-me-ready.png');
+        this.load.image('rps-other-ready', 'playroom-rps-onion-other-ready.png');
+        this.load.image('rps-me-scissors', 'playroom-rps-onion-me-scissors.png');
+        this.load.image('rps-me-stone', 'playroom-rps-onion-me-stone.png');
+        this.load.image('rps-me-paper', 'playroom-rps-onion-me-paper.png');
+        this.load.image('rps-other-scissors', 'playroom-rps-onion-other-scissors.png');
+        this.load.image('rps-other-stone', 'playroom-rps-onion-other-stone.png');
+        this.load.image('rps-other-paper', 'playroom-rps-onion-other-paper.png');
+        this.load.image('rps-win-hit', 'playroom-rps-onion-win-hit.png');
+        this.load.image('rps-lose-defense', 'playroom-rps-onion-lose-defense.png');
+        this.load.image('rps-win-hit-moving', 'playroom-rps-onion-win-hit-moving.png');
+        this.load.image('rps-lose-defense-moving', 'playroom-rps-onion-lose-defense-moving.png');
         this.load.image('status-bg', 'character-status-bg.png');
         
         // 神龕符咒與法器資源
@@ -1433,16 +1532,29 @@ class MainScene extends Phaser.Scene {
             this.add.image(mapW/2, mapH/2, 'bgFarm').setDisplaySize(mapW, mapH);
         } else if (this.sceneName === "shrine") {
             this.add.image(mapW/2, mapH/2, 'bgShrine').setDisplaySize(mapW, mapH); this.shrineFurnListener = onValue(ref(window.GameLogic.db, 'shrineFurniture'), (snap) => { window.GameLogic.shrineFurniture = snap.val() || {}; });
-            this.purifyBarBg = this.add.graphics().setDepth(200).setVisible(false); this.purifyBar = this.add.graphics().setDepth(201).setVisible(false);
+          } else if (this.sceneName === "playroom") {
+            this.add.image(mapW/2, mapH/2, 'bgPlayroom').setDisplaySize(mapW, mapH);
+            this.rpsMachine = this.physics.add.staticSprite(mapW/2, mapH/2, 'rps-machine').setDepth(5);
+        }  
+          this.purifyBarBg = this.add.graphics().setDepth(200).setVisible(false); this.purifyBar = this.add.graphics().setDepth(201).setVisible(false);
             this.countdownText = this.add.text(mapW/2, mapH/2, '', { fontSize: '72px', fontStyle: 'bold', color: '#fff', stroke: '#8a2be2', strokeThickness: 8 }).setOrigin(0.5).setDepth(300).setVisible(false);
         } else if (this.sceneName === "7eonion") {
             this.add.image(mapW/2, mapH/2, 'bg7Eonion').setDisplaySize(mapW, mapH); this.storeManager = this.physics.add.staticSprite(mapW/2, mapH/2, 'storeManager').setDepth(5); let imgW = this.storeManager.width; let imgH = this.storeManager.height; this.storeManager.body.setSize(120, 120); this.storeManager.body.setOffset((imgW - 120) / 2, (imgH - 120) / 2); 
             this.smBubbleBg = this.add.graphics().setDepth(6); this.smBubbleText = this.add.text(mapW/2, mapH/2 - 90, '好想離職......', { fontSize: '14px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(7);
             const smPhrases = ["好想離職......", "這裡怎麼還沒倒......", "洋蔥好臭啊......"]; let phraseIdx = 0; const updateSMBubble = () => { this.smBubbleText.setText(smPhrases[phraseIdx]); const bounds = this.smBubbleText.getBounds(); const boxWidth = bounds.width + 16, boxHeight = bounds.height + 12; const boxX = this.smBubbleText.x - boxWidth / 2, boxY = this.smBubbleText.y - boxHeight / 2; this.smBubbleBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(boxX, boxY, boxWidth, boxHeight, 8).strokeRoundedRect(boxX, boxY, boxWidth, boxHeight, 8); phraseIdx = (phraseIdx + 1) % smPhrases.length; }; updateSMBubble(); this.time.addEvent({ delay: 4000, callback: updateSMBubble, callbackScope: this, loop: true });
+        } else if (this.sceneName === "playroom") {
+            this.add.image(mapW/2, mapH/2, 'bgPlayroom').setDisplaySize(mapW, mapH);
+            this.rpsMachine = this.physics.add.staticSprite(mapW/2, mapH/2, 'rps-machine').setDepth(5);
         }
 
         const uiScene = this.scene.manager.getScene('UIScene');
-        if (uiScene && uiScene.furnText) uiScene.furnText.setText(this.sceneName === 'farm' ? '農具' : (this.sceneName === 'shrine' ? '法器' : '家俱'));
+        if (uiScene && uiScene.furnText) {
+            let t = '家俱';
+            if (this.sceneName === 'farm') t = '農具';
+            else if (this.sceneName === 'shrine') t = '法器';
+            else if (this.sceneName === 'playroom') t = '玩具';
+            uiScene.furnText.setText(t);
+        }
 
         this.otherPlayers = {}; this.furnitureSprites = {}; this.dummySprites = {}; this.coinSprites = {};
         
@@ -1691,7 +1803,48 @@ class MainScene extends Phaser.Scene {
                 let targetUid = window.GameLogic.currentTargetUid;
                 let targetSprite = window.GameLogic.currentTargetSprite;
                 let targetType = window.GameLogic.currentTargetType;
-                
+                if (itemName === '蔥友機') {
+                    if (targetType === 'player' && targetUid) {
+                        if (window.GameLogic.activeInvite) { sendBubble("你已經有一個邀請在進行中了！"); return; }
+                        if (window.GameLogic.planeCooldowns && window.GameLogic.planeCooldowns[targetUid] && Date.now() - window.GameLogic.planeCooldowns[targetUid] < 60000) {
+                            sendBubble("對方剛拒絕或超時，請稍等一分鐘再邀請！"); return;
+                        }
+                    }
+                    
+                    window.playSFX(this, 'launcher1');
+                    this.localPlayer.sprite.play('throw', true);
+                    this.localPlayer.isThrowing = true;
+                    this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
+                    
+                    if (targetUid && targetSprite) {
+                        let plane = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'plane').setDepth(15);
+                        this.tweens.add({
+                            targets: plane, x: targetSprite.x, y: targetSprite.y, duration: 400, onComplete: () => {
+                                plane.destroy();
+                                if (targetType === 'player') {
+                                    window.GameLogic.activeInvite = true;
+                                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => module.update(module.ref(window.GameLogic.db, `serverEvents/planeHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid, attackerName: window.GameLogic.myProfile.name }));
+                                    sendBubble("蔥友機發射！等待對方回應...");
+                                    
+                                    // 15 秒超時判斷
+                                    window.GameLogic.inviteTimeout = setTimeout(() => { 
+                                        if (window.GameLogic.activeInvite) { 
+                                            window.GameLogic.activeInvite = false; 
+                                            window.GameLogic.planeCooldowns = window.GameLogic.planeCooldowns || {}; 
+                                            window.GameLogic.planeCooldowns[targetUid] = Date.now(); 
+                                            sendBubble("對方無回應..."); 
+                                        } 
+                                    }, 16000);
+                                } else if (targetType === 'mimi') {
+                                    this.handleMimiHit(targetSprite.x, targetSprite.y);
+                                }
+                            }
+                        });
+                    } else {
+                        sendBubble("紙飛機往空無一人的地方飛去了...");
+                    }
+                    return; // 結束蔥友機邏輯
+                }
                 if (targetSprite) { this.localPlayer.sprite.setFlipX(targetSprite.x < this.localPlayer.sprite.x); }
                 
                 if (itemName === '煙火') {
@@ -1761,7 +1914,13 @@ class MainScene extends Phaser.Scene {
             }
 
             if (this.localPlayer.isSweeping) { let vol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100; if (!window.GameLogic.muteSFX && !this.sound.get('brooming1')?.isPlaying && vol > 0) { if (this.sound.get('brooming1')) this.sound.play('brooming1', {volume: vol}); else this.sound.add('brooming1', {volume: vol}).play(); } this.qteProgress += (100 / this.qteTotalClicks); if (this.qteProgress >= 100) { this.qteProgress = 100; this.finishSweeping(true); } return; }
-            if (this.sceneName === '7eonion' && this.storeManager) { let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.storeManager.x, this.storeManager.y); if (dist < 150) { window.GameLogic.isShopping = true; let storeCoinsEl = document.getElementById('store-current-coins'); if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins || 0}`; document.getElementById('store-modal').style.display = 'block'; return; } }
+            if (this.sceneName === '7eonion' && this.storeManager) { let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.storeManager.x, this.storeManager.y); if (dist < 150) if (this.sceneName === 'playroom' && this.rpsMachine) { 
+                let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.rpsMachine.x, this.rpsMachine.y); 
+                if (dist < 150) { 
+                    window.openRpsBetting(window.GameLogic.currentRoomId);
+                    return; 
+                } 
+            } { window.GameLogic.isShopping = true; let storeCoinsEl = document.getElementById('store-current-coins'); if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins || 0}`; document.getElementById('store-modal').style.display = 'block'; return; } }
             if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!"); let interacted = false; for (const key in this.furnitureSprites) { let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y); if (dist < 90) { if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block'; if (key.startsWith('memory')) document.getElementById('memory-modal').style.display = 'block'; if (key.includes('scoreboard')) { window.openLeaderboardModal(); interacted = true; break; } if (key === 'shrine') { window.attemptJoinShrine(); interacted = true; break; } } } if(!interacted) sendBubble("使用了 A 技能!");
         });
 
@@ -1806,6 +1965,7 @@ class MainScene extends Phaser.Scene {
                 { name: 'none', icon: '<span style="font-size:24px; pointer-events:none;">❌</span>', qty: '' },
                 { name: '水球', icon: '<div class="sprite-waterball" style="transform: scale(0.8); transform-origin: center; pointer-events:none;"></div>', qty: inv['水球'] || 0 },
                 { name: '煙火', icon: '<img src="shop-fireworks.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['煙火'] || 0 }
+                { name: '蔥友機', icon: '<img src="playroom-onion-friend-plane.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['蔥友機'] || 0 }
             ];
             
             let html = `<div style="flex: 0 0 calc(50% - 30px);"></div>`;
@@ -1920,6 +2080,50 @@ class MainScene extends Phaser.Scene {
         this.fwThrowsListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworkThrows'), (snap) => { let throws = snap.val() || {}; for (let uid in throws) { if (uid === window.GameLogic.currentUser.uid) continue; let data = throws[uid]; if (data && data.time && (Date.now() - data.time < 1000) && data.scene === this.sceneName) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; opSprite.play('fw-throw', true); opSprite.isThrowing = true; this.time.delayedCall(300, () => { if (opSprite && opSprite.active) opSprite.isThrowing = false; }); } } } });
         this.playersHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/waterHits'), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { opSprite.isStunned = true; opSprite.play('wet', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
         this.dummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/dummyHits'), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
+        // 接收邀請
+        this.planeHitsListener = onValue(ref(window.GameLogic.db, `serverEvents/planeHits/${window.GameLogic.currentUser.uid}`), (snap) => { 
+            let data = snap.val(); 
+            if (data && data.time && (Date.now() - data.time < 5000)) { 
+                let modal = document.getElementById('invite-modal');
+                if (modal.style.display !== 'block') {
+                    document.getElementById('invite-sender-name').innerText = data.attackerName || '某人';
+                    window.currentInviteAttacker = data.attacker;
+                    modal.style.display = 'block';
+                    
+                    let remain = 15;
+                    document.getElementById('invite-timer').innerText = remain;
+                    window.inviteTimerInterval = setInterval(() => {
+                        remain--;
+                        document.getElementById('invite-timer').innerText = remain;
+                        if (remain <= 0) {
+                            clearInterval(window.inviteTimerInterval);
+                            window.replyInvite('no');
+                        }
+                    }, 1000);
+                }
+                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => module.remove(module.ref(window.GameLogic.db, `serverEvents/planeHits/${window.GameLogic.currentUser.uid}`))); 
+            } 
+        });
+
+        // 接收對方的回覆
+        this.inviteRepliesListener = onValue(ref(window.GameLogic.db, `serverEvents/inviteReplies/${window.GameLogic.currentUser.uid}`), (snap) => {
+            let data = snap.val();
+            if (data && data.time && (Date.now() - data.time < 5000) && window.GameLogic.activeInvite) {
+                window.GameLogic.activeInvite = false;
+                if (window.GameLogic.inviteTimeout) clearTimeout(window.GameLogic.inviteTimeout);
+
+                if (data.reply === 'yes') {
+                    sendBubble("對方接受了你的友情昇華！");
+                    let roomId = `playroom_${window.GameLogic.currentUser.uid}_${data.replierUid}`;
+                    window.switchScene('playroom', { roomId: roomId });
+                } else {
+                    sendBubble("對方殘酷地拒絕了你。");
+                    window.GameLogic.planeCooldowns = window.GameLogic.planeCooldowns || {};
+                    window.GameLogic.planeCooldowns[data.replierUid] = Date.now();
+                }
+                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => module.remove(module.ref(window.GameLogic.db, `serverEvents/inviteReplies/${window.GameLogic.currentUser.uid}`))); 
+            }
+        });
 
         // 建立蔥電飽專屬綠色往上飄特效 (優化效能並確保隨身顯示)
         this.playerEnergyEmitter = this.add.particles(0, 0, 'fw-particle', {
@@ -1936,6 +2140,8 @@ class MainScene extends Phaser.Scene {
             if (this.trashListener) this.trashListener();
             if (this.coinsListener) this.coinsListener(); 
             if (this.dummiesListener) this.dummiesListener(); 
+            if (this.planeHitsListener) this.planeHitsListener();
+            if (this.inviteRepliesListener) this.inviteRepliesListener();
             
             // 【修正1 & 2】：離開場景時，徹底註銷米米監聽器並強制切斷走路音效
             if (this.mimiListener) this.mimiListener(); 
@@ -2611,7 +2817,10 @@ class MainScene extends Phaser.Scene {
             }
             for (let t of this.trashes) { if (!t.active) continue; let d = Phaser.Math.Distance.Between(px, py, t.x, t.y); if (d < minDist) { minDist = d; promptTarget = t; promptMsg = "按B使出掃地"; this.closestTrash = t; } }
             if (this.sceneName === '7eonion' && this.storeManager && !window.GameLogic.isShopping) { let d = Phaser.Math.Distance.Between(px, py, this.storeManager.x, this.storeManager.y); if (d < 150) { minDist = d; promptTarget = this.storeManager; promptMsg = "按A對話購物"; } }
-
+            if (this.sceneName === 'playroom' && this.rpsMachine) { 
+                let d = Phaser.Math.Distance.Between(px, py, this.rpsMachine.x, this.rpsMachine.y); 
+                if (d < 150) { minDist = d; promptTarget = this.rpsMachine; promptMsg = "按A進行拳頭PK"; } 
+            }
             if (promptTarget && !isPlacing) {
                 this.smartPromptText.setText(promptMsg).setVisible(true); const pBounds = this.smartPromptText.getBounds(); const pWidth = pBounds.width + 16, pHeight = pBounds.height + 8, ptX = promptTarget.x, ptY = promptTarget.y - 60; 
                 this.smartPromptBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(ptX - pWidth/2, ptY - pHeight/2, pWidth, pHeight, 6).strokeRoundedRect(ptX - pWidth/2, ptY - pHeight/2, pWidth, pHeight, 6).setVisible(true); this.smartPromptText.setPosition(ptX, ptY);
@@ -2701,7 +2910,8 @@ class MainScene extends Phaser.Scene {
             }
         }
 
-        if (this.isCafe || this.sceneName === 'shrine') {
+        if (this.isCafe || this.sceneName === 'shrine' || this.sceneName === 'playroom') {
+            const playersData = this.isCafe ? window.GameLogic.cafePlayers : (this.sceneName === 'shrine' ? window.GameLogic.shrinePlayers : window.GameLogic.playroomPlayers);
             const playersData = this.isCafe ? window.GameLogic.cafePlayers : window.GameLogic.shrinePlayers; const globalOnline = window.GameLogic.onlinePlayers || {}; 
             for (let uid in playersData) {
                 if (uid === window.GameLogic.currentUser.uid) continue; if (!globalOnline[uid]) continue; 
@@ -2842,4 +3052,271 @@ function listenToMemories() {
         } 
     }); 
 }
+// ==================== 蔥友機與拳頭PK機 全域遊戲邏輯 ====================
+
+window.replyInvite = function(replyType) {
+    let modal = document.getElementById('invite-modal');
+    modal.style.display = 'none';
+    if (window.inviteTimerInterval) clearInterval(window.inviteTimerInterval);
+    
+    let attacker = window.currentInviteAttacker;
+    if (attacker) {
+        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+            module.update(module.ref(window.GameLogic.db, `serverEvents/inviteReplies/${attacker}`), { reply: replyType, replierUid: window.GameLogic.currentUser.uid, time: Date.now() });
+        });
+        if (replyType === 'yes') {
+            let roomId = `playroom_${attacker}_${window.GameLogic.currentUser.uid}`;
+            window.switchScene('playroom', { roomId: roomId });
+        }
+    }
+};
+
+window.exitPlayroom = function() {
+    document.getElementById('rps-modal').style.display = 'none';
+    window.switchScene('doghouse');
+};
+
+window.openRpsBetting = function(roomId) {
+    if (!roomId) return;
+    let players = Object.keys(window.GameLogic.playroomPlayers || {});
+    if (players.length < 2) return alert("等對方進來再開始喔！");
+    
+    document.getElementById('rps-modal').style.display = 'flex';
+    document.getElementById('rps-phase-bet').style.display = 'flex';
+    document.getElementById('rps-phase-game').style.display = 'none';
+    document.getElementById('rps-phase-result').style.display = 'none';
+    document.getElementById('rps-bet-confirm-btn').style.display = 'block';
+    
+    // 初始化投注狀態
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.get(module.ref(window.GameLogic.db, `users`)).then(snap => {
+            let uData = snap.val();
+            let p1Coins = uData[players[0]]?.coins || 0;
+            let p2Coins = uData[players[1]]?.coins || 0;
+            let maxBet = Math.min(Math.min(p1Coins, p2Coins), 10000);
+            
+            let slider = document.getElementById('rps-bet-slider');
+            slider.max = maxBet; slider.value = 0;
+            document.getElementById('rps-bet-display').innerText = 0;
+            document.getElementById('rps-bet-status').innerText = "等待雙方確認...";
+            
+            slider.oninput = function() { document.getElementById('rps-bet-display').innerText = this.value; };
+            
+            module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'betting' });
+            module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}/p_${window.GameLogic.currentUser.uid}`), { betReady: false, betValue: 0 });
+        });
+    });
+};
+
+window.confirmRpsBet = function() {
+    let betVal = parseInt(document.getElementById('rps-bet-slider').value) || 0;
+    document.getElementById('rps-bet-confirm-btn').style.display = 'none';
+    document.getElementById('rps-bet-status').innerText = "已確認！等待對方...";
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.update(module.ref(window.GameLogic.db, `playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { betReady: true, betValue: betVal });
+    });
+};
+
+window.selectRps = function(choice) {
+    if (window.rpsPhase !== 'rps') return;
+    document.getElementById('rps-me-img').src = `playroom-rps-onion-me-${choice}.png`;
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.update(module.ref(window.GameLogic.db, `playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { rpsChoice: choice });
+    });
+};
+
+window.clickRpsSpam = function() {
+    if (window.rpsPhase !== 'spamming') return;
+    let now = Date.now();
+    if (!window.rpsLastClickTimes) window.rpsLastClickTimes = [];
+    window.rpsLastClickTimes = window.rpsLastClickTimes.filter(t => now - t < 1000);
+    if (window.rpsLastClickTimes.length >= 15) return; // 最高每秒 15 下防連點器
+    
+    window.rpsLastClickTimes.push(now);
+    window.rpsMySpamCount++;
+    
+    // 動畫回饋
+    let myRole = window.rpsMyRole; // 'attacker' or 'defender'
+    let imgEl = document.getElementById('rps-me-img');
+    imgEl.src = myRole === 'attacker' ? 'playroom-rps-onion-win-hit-moving.png' : 'playroom-rps-onion-lose-defense-moving.png';
+    clearTimeout(window.rpsAnimTimeout);
+    window.rpsAnimTimeout = setTimeout(() => { imgEl.src = myRole === 'attacker' ? 'playroom-rps-onion-win-hit.png' : 'playroom-rps-onion-lose-defense.png'; }, 100);
+    
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.update(module.ref(window.GameLogic.db, `playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { spamCount: window.rpsMySpamCount });
+    });
+};
+
+window.syncRpsState = function(roomId) {
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        if (window.rpsUnsubscribe) window.rpsUnsubscribe();
+        window.rpsUnsubscribe = module.onValue(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), snap => {
+            let data = snap.val(); if (!data) return;
+            let state = data.state;
+            window.rpsPhase = state;
+            let myUid = window.GameLogic.currentUser.uid;
+            let uids = Object.keys(data).filter(k => k.startsWith('p_')).map(k => k.replace('p_', ''));
+            let otherUid = uids.find(u => u !== myUid);
+            
+            let myData = data[`p_${myUid}`] || {};
+            let otherData = data[`p_${otherUid}`] || {};
+
+            if (state === 'betting') {
+                if (myData.betReady && otherData.betReady && uids.sort()[0] === myUid) {
+                    // 主機結算籌碼
+                    let avgBet = Math.round((myData.betValue + otherData.betValue) / 2);
+                    
+                    // 扣款
+                    module.get(module.ref(window.GameLogic.db, `users`)).then(uSnap => {
+                        let uDB = uSnap.val();
+                        let p1C = (uDB[myUid]?.coins || 0) - avgBet;
+                        let p2C = (uDB[otherUid]?.coins || 0) - avgBet;
+                        module.update(module.ref(window.GameLogic.db, `users/${myUid}`), { coins: Math.max(0, p1C) });
+                        module.update(module.ref(window.GameLogic.db, `users/${otherUid}`), { coins: Math.max(0, p2C) });
+                        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'rps_countdown', agreedBet: avgBet, rpsStartTime: Date.now() });
+                    });
+                }
+            }
+            else if (state === 'rps_countdown') {
+                document.getElementById('rps-phase-bet').style.display = 'none';
+                document.getElementById('rps-phase-game').style.display = 'block';
+                document.getElementById('rps-choices').style.display = 'flex';
+                document.getElementById('rps-spam-area').style.display = 'none';
+                document.getElementById('rps-me-img').src = 'playroom-rps-onion-me-ready.png';
+                document.getElementById('rps-opponent-img').src = 'playroom-rps-onion-other-ready.png';
+                
+                let elapsed = Date.now() - data.rpsStartTime;
+                let remain = 5 - Math.floor(elapsed / 1000);
+                if (remain > 0) {
+                    let textArr = [1, 2, 3, 5, 5];
+                    document.getElementById('rps-center-msg').innerText = textArr[remain-1] || remain;
+                } else {
+                    document.getElementById('rps-center-msg').innerText = "出拳！";
+                    if (uids.sort()[0] === myUid) {
+                        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'rps_result' });
+                    }
+                }
+            }
+            else if (state === 'rps_result') {
+                document.getElementById('rps-choices').style.display = 'none';
+                let mC = myData.rpsChoice || 'stone';
+                let oC = otherData.rpsChoice || 'stone';
+                
+                document.getElementById('rps-me-img').src = `playroom-rps-onion-me-${mC}.png`;
+                document.getElementById('rps-opponent-img').src = `playroom-rps-onion-other-${oC}.png`;
+                
+                let result = 'tie';
+                if ((mC === 'scissors' && oC === 'paper') || (mC === 'stone' && oC === 'scissors') || (mC === 'paper' && oC === 'stone')) result = 'win';
+                else if (mC !== oC) result = 'lose';
+
+                document.getElementById('rps-me-status').innerText = result === 'win' ? '贏！' : (result === 'lose' ? '輸！' : '平手');
+                document.getElementById('rps-opponent-status').innerText = result === 'lose' ? '贏！' : (result === 'win' ? '輸！' : '平手');
+                
+                if (uids.sort()[0] === myUid) {
+                    if (!window.rpsStateTimeout) {
+                        window.rpsStateTimeout = setTimeout(() => {
+                            if (result === 'tie') module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'rps_countdown', rpsStartTime: Date.now(), [`p_${myUid}/rpsChoice`]: null, [`p_${otherUid}/rpsChoice`]: null });
+                            else module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'spam_countdown', winnerUid: result === 'win' ? myUid : otherUid, spamStartTime: Date.now(), [`p_${myUid}/spamCount`]: 0, [`p_${otherUid}/spamCount`]: 0 });
+                            window.rpsStateTimeout = null;
+                        }, 2000);
+                    }
+                }
+            }
+            else if (state === 'spam_countdown') {
+                window.rpsMySpamCount = 0;
+                document.getElementById('rps-me-status').innerText = "";
+                document.getElementById('rps-opponent-status').innerText = "";
+                
+                let isWinner = data.winnerUid === myUid;
+                window.rpsMyRole = isWinner ? 'attacker' : 'defender';
+                
+                document.getElementById('rps-me-img').src = isWinner ? 'playroom-rps-onion-win-hit.png' : 'playroom-rps-onion-lose-defense.png';
+                document.getElementById('rps-opponent-img').src = !isWinner ? 'playroom-rps-onion-win-hit.png' : 'playroom-rps-onion-lose-defense.png';
+                
+                document.getElementById('rps-spam-area').style.display = 'block';
+                document.getElementById('rps-spam-btn').innerText = isWinner ? "打！" : "擋！";
+                
+                let elapsed = Date.now() - data.spamStartTime;
+                let remain = 5 - Math.floor(elapsed / 1000);
+                if (remain > 0) {
+                    document.getElementById('rps-center-msg').innerText = "連擊準備";
+                    document.getElementById('rps-spam-timer').innerText = remain;
+                } else {
+                    document.getElementById('rps-center-msg').innerText = "GO!";
+                    if (uids.sort()[0] === myUid) module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'spamming', spamPlayTime: Date.now() });
+                }
+            }
+            else if (state === 'spamming') {
+                let elapsed = Date.now() - data.spamPlayTime;
+                let remain = 5 - Math.floor(elapsed / 1000);
+                if (remain > 0) {
+                    document.getElementById('rps-spam-timer').innerText = remain;
+                } else {
+                    document.getElementById('rps-spam-area').style.display = 'none';
+                    if (uids.sort()[0] === myUid) module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'calc_result' });
+                }
+            }
+            else if (state === 'calc_result') {
+                document.getElementById('rps-phase-game').style.display = 'none';
+                document.getElementById('rps-phase-result').style.display = 'flex';
+                
+                let isWinner = data.winnerUid === myUid;
+                let mySpams = myData.spamCount || 0;
+                let otherSpams = otherData.spamCount || 0;
+                
+                // 結算: 贏的點擊次數+10%, 輸的-10%
+                let winSpam = isWinner ? Math.round(mySpams * 1.1) : Math.round(otherSpams * 1.1);
+                let loseSpam = isWinner ? Math.round(otherSpams * 0.9) : Math.round(mySpams * 0.9);
+                
+                let attackSuccess = winSpam > loseSpam;
+                let totalPool = (data.agreedBet || 0) * 2;
+                
+                // 計算稅率
+                let taxRate = 0;
+                if (totalPool >= 5000) taxRate = 0.15;
+                else if (totalPool >= 1000) taxRate = 0.08;
+                else taxRate = 0.03; 
+                
+                let finalPool = Math.round(totalPool * (1 - taxRate));
+                
+                let iWinMoney = false; let tieMoney = false;
+                if (winSpam === loseSpam) tieMoney = true;
+                else if (attackSuccess && isWinner) iWinMoney = true;
+                else if (!attackSuccess && !isWinner) iWinMoney = true;
+                
+                let getAmt = tieMoney ? Math.round(finalPool/2) : (iWinMoney ? finalPool : 0);
+                
+                let tDesc = "";
+                tDesc += `原始獎金池: ${totalPool} (扣稅 ${taxRate*100}% 後剩 ${finalPool})<br><br>`;
+                tDesc += `攻擊方連擊: ${winSpam} | 防守方連擊: ${loseSpam}<br>`;
+                if (tieMoney) tDesc += `平手！雙方拿回 ${getAmt} 馬德幣`;
+                else tDesc += iWinMoney ? `🎉 你贏得了 ${getAmt} 馬德幣！` : `😭 你被擊敗了... 失去所有押注。`;
+                
+                document.getElementById('rps-result-desc').innerHTML = tDesc;
+                
+                if (uids.sort()[0] === myUid && !data.moneyDistributed) {
+                    module.get(module.ref(window.GameLogic.db, `users`)).then(uSnap => {
+                        let uDB = uSnap.val();
+                        let p1C = uDB[myUid]?.coins || 0;
+                        let p2C = uDB[otherUid]?.coins || 0;
+                        
+                        if (tieMoney) { p1C += getAmt; p2C += getAmt; }
+                        else if (iWinMoney) { p1C += getAmt; }
+                        else { p2C += getAmt; }
+                        
+                        module.update(module.ref(window.GameLogic.db, `users/${myUid}`), { coins: p1C });
+                        module.update(module.ref(window.GameLogic.db, `users/${otherUid}`), { coins: p2C });
+                        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { moneyDistributed: true });
+                    });
+                }
+            }
+        });
+    });
+};
+
+window.cancelRpsGame = function(roomId) {
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'finished' });
+    });
+};
 // (這必須是整份檔案的最後一行！)
