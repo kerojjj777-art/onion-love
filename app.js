@@ -3051,7 +3051,6 @@ function listenToMemories() {
             }); 
         } 
     }); 
-}
 // ==================== 蔥友機與拳頭PK機 全域遊戲邏輯 ====================
 
 window.replyInvite = function(replyType) {
@@ -3319,4 +3318,5 @@ window.cancelRpsGame = function(roomId) {
         module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'finished' });
     });
 };
+}
 // (這必須是整份檔案的最後一行！)
