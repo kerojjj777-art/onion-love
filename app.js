@@ -424,7 +424,7 @@ function createSystemUI() {
             </div>
         </div>
 
-        <div id="rps-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; flex-direction:column; align-items:center; justify-content:center; color:#fff;">
+        <div id="rps-modal" onpointerdown="event.stopPropagation()" onwheel="event.stopPropagation()" ontouchmove="event.stopPropagation()" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:9999; flex-direction:column; align-items:center; justify-content:center; color:#fff;">
             <div id="rps-phase-bet" style="display:none; flex-direction:column; align-items:center; width:80%;">
                 <h2 style="color:#ffcc00;">選擇籌碼</h2>
                 <p>最多只能押雙方存款較低者的全部身家</p>
@@ -441,24 +441,27 @@ function createSystemUI() {
                     .rps-choice-selected { box-shadow: 0 0 20px #fff, 0 0 40px #00ffff; transform: scale(1.1); background: rgba(255,255,255,0.3); }
                     .rps-spam-burst { animation: rps-burst 0.3s ease-out; }
                     @keyframes rps-burst { 0% { box-shadow: 0 0 10px #fff; transform: scale(1.1); } 100% { box-shadow: 0 0 50px #ffcc00, 0 0 80px #d9534f; transform: scale(1); opacity: 0; } }
+                    /* 新增精靈圖專用 CSS */
+                    .rps-sprite-moving { animation: play-rps 0.2s steps(2) infinite !important; }
+                    @keyframes play-rps { 100% { background-position: -600px center; } }
                     @media (max-width: 768px) {
-                        #rps-choices { bottom: 100px !important; left: 60% !important; transform: translateX(-40%) !important; gap: 10px !important; }
+                        #rps-choices { bottom: 80px !important; left: 50% !important; transform: translateX(-50%) !important; gap: 10px !important; }
                         #rps-choices img { width: 80px !important; }
                     }
                 </style>
 
                 <div id="rps-opponent-container" style="position:absolute; top:20px; right:20px; text-align:center; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);">
-                    <img id="rps-opponent-img" src="playroom-rps-onion-other-ready.png" style="width:220px; height:220px; object-fit:contain;">
+                    <div id="rps-opponent-img" style="width:300px; height:300px; background: url('playroom-rps-onion-other-ready.png') no-repeat center center; background-size: contain; margin: 0 auto;"></div>
                     <div id="rps-opponent-status" style="font-size:24px; font-weight:bold; color:#ff4444; text-shadow:2px 2px 0 #000;">等待中</div>
                 </div>
                 <div id="rps-me-container" style="position:absolute; bottom:20px; left:20px; text-align:center; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);">
-                    <img id="rps-me-img" src="playroom-rps-onion-me-ready.png" style="width:250px; height:250px; object-fit:contain;">
+                    <div id="rps-me-img" style="width:300px; height:300px; background: url('playroom-rps-onion-me-ready.png') no-repeat center center; background-size: contain; margin: 0 auto;"></div>
                     <div id="rps-me-status" style="font-size:24px; font-weight:bold; color:#44ff44; text-shadow:2px 2px 0 #000;">等待中</div>
                 </div>
                 
-                <div id="rps-center-msg" style="position:absolute; top:40%; left:50%; transform:translate(-50%, -50%); font-size:80px; font-weight:bold; color:#ffcc00; text-shadow: 4px 4px 0 #d9534f; z-index:10; transition: top 0.5s ease;">START!</div>
+                <div id="rps-center-msg" style="position:absolute; top:20%; left:50%; transform:translate(-50%, -50%); font-size:80px; font-weight:bold; color:#ffcc00; text-shadow: 4px 4px 0 #d9534f; z-index:10; transition: top 0.5s ease;">START!</div>
                 
-                <div id="rps-choices" style="position:absolute; bottom:50px; left:50%; transform:translateX(-50%); display:flex; gap:20px; z-index:30;">
+                <div id="rps-choices" style="position:absolute; bottom:80px; left:50%; transform:translateX(-50%); display:flex; gap:20px; z-index:30;">
                     <img id="rps-choice-scissors" class="rps-choice-img" src="playroom-rps-machine-scissors.png" style="width:120px; cursor:pointer;" onclick="window.selectRps('scissors')">
                     <img id="rps-choice-stone" class="rps-choice-img" src="playroom-rps-machine-stone.png" style="width:120px; cursor:pointer;" onclick="window.selectRps('stone')">
                     <img id="rps-choice-paper" class="rps-choice-img" src="playroom-rps-machine-paper.png" style="width:120px; cursor:pointer;" onclick="window.selectRps('paper')">
@@ -3155,7 +3158,7 @@ window.selectRps = function(choice) {
     document.querySelectorAll('.rps-choice-img').forEach(el => el.classList.remove('rps-choice-selected'));
     document.getElementById('rps-choice-' + choice).classList.add('rps-choice-selected');
 
-    document.getElementById('rps-me-img').src = `playroom-rps-onion-me-${choice}.png`;
+    document.getElementById('rps-me-img').style.backgroundImage = `url('playroom-rps-onion-me-${choice}.png')`;
     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
         module.update(module.ref(window.GameLogic.db, `playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { rpsChoice: choice });
     });
@@ -3183,12 +3186,28 @@ window.clickRpsSpam = function() {
     btn.parentElement.appendChild(burst);
     setTimeout(() => burst.remove(), 300);
 
-    // 人物連擊精靈圖切換
-    let myRole = window.rpsMyRole; 
-    let imgEl = document.getElementById('rps-me-img');
-    imgEl.src = myRole === 'attacker' ? 'playroom-rps-onion-win-hit-moving.png' : 'playroom-rps-onion-lose-defense-moving.png';
-    clearTimeout(window.rpsAnimTimeout);
-    window.rpsAnimTimeout = setTimeout(() => { imgEl.src = myRole === 'attacker' ? 'playroom-rps-onion-win-hit.png' : 'playroom-rps-onion-lose-defense.png'; }, 100);
+    // 定義全域播放精靈圖動畫的幫助函式 (僅需定義一次，放這也行)
+    if (!window.triggerRpsAnim) {
+        window.triggerRpsAnim = function(elementId, isAttacker) {
+            let div = document.getElementById(elementId);
+            if (!div) return;
+            div.style.backgroundImage = isAttacker ? "url('playroom-rps-onion-win-hit-moving.png')" : "url('playroom-rps-onion-lose-defense-moving.png')";
+            div.style.backgroundSize = '200% 100%';
+            div.style.backgroundPosition = 'left center';
+            div.classList.add('rps-sprite-moving');
+            
+            if (div.animTimeout) clearTimeout(div.animTimeout);
+            div.animTimeout = setTimeout(() => {
+                div.classList.remove('rps-sprite-moving');
+                div.style.backgroundSize = 'contain';
+                div.style.backgroundPosition = 'center center';
+                div.style.backgroundImage = isAttacker ? "url('playroom-rps-onion-win-hit.png')" : "url('playroom-rps-onion-lose-defense.png')";
+            }, 150);
+        };
+    }
+    
+    // 人物連擊精靈圖切換 (自己)
+    window.triggerRpsAnim('rps-me-img', window.rpsMyRole === 'attacker');
     
     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
         module.update(module.ref(window.GameLogic.db, `playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { spamCount: window.rpsMySpamCount });
@@ -3227,8 +3246,10 @@ window.syncRpsState = function(roomId) {
                 document.getElementById('rps-phase-game').style.display = 'block';
                 document.getElementById('rps-choices').style.display = 'flex';
                 document.getElementById('rps-spam-area').style.display = 'none';
-                document.getElementById('rps-me-img').src = 'playroom-rps-onion-me-ready.png';
-                document.getElementById('rps-opponent-img').src = 'playroom-rps-onion-other-ready.png';
+                
+                // 改為設定 background-image
+                document.getElementById('rps-me-img').style.backgroundImage = "url('playroom-rps-onion-me-ready.png')";
+                document.getElementById('rps-opponent-img').style.backgroundImage = "url('playroom-rps-onion-other-ready.png')";
                 
                 // 初始化猜拳排版與清空發光特效
                 document.querySelectorAll('.rps-choice-img').forEach(el => el.classList.remove('rps-choice-selected'));
@@ -3236,7 +3257,7 @@ window.syncRpsState = function(roomId) {
                 let opC = document.getElementById('rps-opponent-container');
                 meC.style.bottom = '20px'; meC.style.left = '20px'; meC.style.top = 'auto'; meC.style.right = 'auto'; meC.style.transform = 'none';
                 opC.style.top = '20px'; opC.style.right = '20px'; opC.style.bottom = 'auto'; opC.style.left = 'auto'; opC.style.transform = 'none';
-                document.getElementById('rps-center-msg').style.top = '40%';
+                document.getElementById('rps-center-msg').style.top = '20%'; // 文字移至上方
                 
                 if (window.rpsInterval) clearInterval(window.rpsInterval);
                 window.rpsInterval = setInterval(() => {
@@ -3252,15 +3273,16 @@ window.syncRpsState = function(roomId) {
                             module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'rps_result' });
                         }
                     }
-                }, 100); // 高頻率更新確保動畫流暢
+                }, 100);
             }
             else if (state === 'rps_result') {
                 document.getElementById('rps-choices').style.display = 'none';
                 let mC = myData.rpsChoice || 'stone';
                 let oC = otherData.rpsChoice || 'stone';
                 
-                document.getElementById('rps-me-img').src = `playroom-rps-onion-me-${mC}.png`;
-                document.getElementById('rps-opponent-img').src = `playroom-rps-onion-other-${oC}.png`;
+                // 更新為 background-image
+                document.getElementById('rps-me-img').style.backgroundImage = `url('playroom-rps-onion-me-${mC}.png')`;
+                document.getElementById('rps-opponent-img').style.backgroundImage = `url('playroom-rps-onion-other-${oC}.png')`;
                 
                 let result = 'tie';
                 if ((mC === 'scissors' && oC === 'paper') || (mC === 'stone' && oC === 'scissors') || (mC === 'paper' && oC === 'stone')) result = 'win';
@@ -3281,27 +3303,33 @@ window.syncRpsState = function(roomId) {
             }
             else if (state === 'spam_countdown') {
                 window.rpsMySpamCount = 0;
+                window.rpsOtherSpamCount = 0; // 重置對方的連擊記錄
+                
                 document.getElementById('rps-me-status').innerText = "";
                 document.getElementById('rps-opponent-status').innerText = "";
                 
                 let isWinner = data.winnerUid === myUid;
                 window.rpsMyRole = isWinner ? 'attacker' : 'defender';
                 
-                document.getElementById('rps-me-img').src = isWinner ? 'playroom-rps-onion-win-hit.png' : 'playroom-rps-onion-lose-defense.png';
-                document.getElementById('rps-opponent-img').src = !isWinner ? 'playroom-rps-onion-win-hit.png' : 'playroom-rps-onion-lose-defense.png';
+                // 更新為 background-image
+                document.getElementById('rps-me-img').style.backgroundImage = isWinner ? "url('playroom-rps-onion-win-hit.png')" : "url('playroom-rps-onion-lose-defense.png')";
+                document.getElementById('rps-opponent-img').style.backgroundImage = !isWinner ? "url('playroom-rps-onion-win-hit.png')" : "url('playroom-rps-onion-lose-defense.png')";
                 
-                // 動態切換為連擊階段的排版：人物往中央靠攏
+                // 精確使用絕對中心對齊法，杜絕飄移問題
                 let meC = document.getElementById('rps-me-container');
                 let opC = document.getElementById('rps-opponent-container');
-                if (isWinner) { // 我是攻擊方 (左側)
-                    meC.style.bottom = '45%'; meC.style.left = '35%'; meC.style.transform = 'translate(-50%, 50%)';
-                    opC.style.top = 'auto'; opC.style.bottom = '45%'; opC.style.left = '65%'; opC.style.right = 'auto'; opC.style.transform = 'translate(-50%, 50%)';
-                } else { // 我是防守方 (右側)
-                    meC.style.bottom = '45%'; meC.style.left = '65%'; meC.style.transform = 'translate(-50%, 50%)';
-                    opC.style.top = 'auto'; opC.style.bottom = '45%'; opC.style.left = '35%'; opC.style.right = 'auto'; opC.style.transform = 'translate(-50%, 50%)';
-                }
-                document.getElementById('rps-center-msg').style.top = '15%'; // 倒數文字往上移
+                meC.style.top = '50%'; meC.style.bottom = 'auto';
+                opC.style.top = '50%'; opC.style.bottom = 'auto';
                 
+                if (isWinner) { // 我是攻擊方 (左側)
+                    meC.style.left = '35%'; meC.style.right = 'auto'; meC.style.transform = 'translate(-50%, -50%)';
+                    opC.style.left = '65%'; opC.style.right = 'auto'; opC.style.transform = 'translate(-50%, -50%)';
+                } else { // 我是防守方 (右側)
+                    meC.style.left = '65%'; meC.style.right = 'auto'; meC.style.transform = 'translate(-50%, -50%)';
+                    opC.style.left = '35%'; opC.style.right = 'auto'; opC.style.transform = 'translate(-50%, -50%)';
+                }
+                
+                document.getElementById('rps-center-msg').style.top = '20%'; 
                 document.getElementById('rps-spam-area').style.display = 'block';
                 document.getElementById('rps-spam-btn').innerText = isWinner ? "打！" : "擋！";
                 
@@ -3324,6 +3352,15 @@ window.syncRpsState = function(roomId) {
                 window.rpsInterval = setInterval(() => {
                     let elapsed = Date.now() - data.spamPlayTime;
                     let remain = 5 - Math.floor(elapsed / 1000);
+                    
+                    // 偵測對方是否發動連擊並播放動畫，以達雙方視覺同步
+                    let currentOtherSpam = otherData.spamCount || 0;
+                    if (currentOtherSpam > (window.rpsOtherSpamCount || 0)) {
+                        window.rpsOtherSpamCount = currentOtherSpam;
+                        let isWinner = data.winnerUid === myUid; // 判斷對手是否為攻擊方
+                        if (window.triggerRpsAnim) window.triggerRpsAnim('rps-opponent-img', !isWinner);
+                    }
+
                     if (remain > 0) {
                         document.getElementById('rps-spam-timer').innerText = remain;
                     } else {
@@ -3331,7 +3368,7 @@ window.syncRpsState = function(roomId) {
                         clearInterval(window.rpsInterval);
                         if (uids.sort()[0] === myUid) module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'calc_result' });
                     }
-                }, 100);
+                }, 100); // 維持高頻 100ms 更新以順暢抓取對方點擊
             }
             else if (state === 'calc_result') {
                 if (window.rpsInterval) clearInterval(window.rpsInterval);
