@@ -759,7 +759,7 @@ window.openMagicModal = function() {
     let html = '';
     let magics = [
         { name: '水球', icon: '<div class="sprite-waterball" style="transform: scale(0.8); transform-origin: center;"></div>', desc: '聞說水是生命的起源，洋蔥喜歡感受生命，使勁地丟吧！\n按B填充後按A擲出' },
-        { name: '煙火', icon: '<img src="shop-fireworks.png" style="width:40px; height:40px; object-fit:contain;">', desc: '喜歡煙火咻蹦的美麗光彩，但也喜歡拿來朝著其他洋蔥丟～\n按B填充後按A擲出，鎖定目標與不鎖定目標會有不同的效果。' }
+        { name: '煙火', icon: '<img src="shop-fireworks.png" style="width:40px; height:40px; object-fit:contain;">', desc: '喜歡煙火咻蹦的美麗光彩，但也喜歡拿來朝著其他洋蔥丟～\n按B填充後按A擲出，鎖定目標與不鎖定目標會有不同的效果。' },
         { name: '蔥友機', icon: '<img src="playroom-onion-friend-plane.png" style="width:40px; height:40px; object-fit:contain;">', desc: '隨時發動好(ㄓㄢˋ)友(ㄉㄡˋ)邀請，按B捏緊再按A投射，被射中的好友會收到你的訊息。' }
     ];
     for(let i = 0; i < 16; i++) {
@@ -1914,13 +1914,19 @@ class MainScene extends Phaser.Scene {
             }
 
             if (this.localPlayer.isSweeping) { let vol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100; if (!window.GameLogic.muteSFX && !this.sound.get('brooming1')?.isPlaying && vol > 0) { if (this.sound.get('brooming1')) this.sound.play('brooming1', {volume: vol}); else this.sound.add('brooming1', {volume: vol}).play(); } this.qteProgress += (100 / this.qteTotalClicks); if (this.qteProgress >= 100) { this.qteProgress = 100; this.finishSweeping(true); } return; }
-            if (this.sceneName === '7eonion' && this.storeManager) { let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.storeManager.x, this.storeManager.y); if (dist < 150) if (this.sceneName === 'playroom' && this.rpsMachine) { 
+            if (this.sceneName === '7eonion' && this.storeManager) { 
+                let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.storeManager.x, this.storeManager.y); 
+                if (dist < 150) { 
+                    window.GameLogic.isShopping = true; let storeCoinsEl = document.getElementById('store-current-coins'); if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins || 0}`; document.getElementById('store-modal').style.display = 'block'; return; 
+                } 
+            }
+            if (this.sceneName === 'playroom' && this.rpsMachine) { 
                 let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.rpsMachine.x, this.rpsMachine.y); 
                 if (dist < 150) { 
                     window.openRpsBetting(window.GameLogic.currentRoomId);
                     return; 
                 } 
-            } { window.GameLogic.isShopping = true; let storeCoinsEl = document.getElementById('store-current-coins'); if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins || 0}`; document.getElementById('store-modal').style.display = 'block'; return; } }
+            }
             if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!"); let interacted = false; for (const key in this.furnitureSprites) { let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y); if (dist < 90) { if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block'; if (key.startsWith('memory')) document.getElementById('memory-modal').style.display = 'block'; if (key.includes('scoreboard')) { window.openLeaderboardModal(); interacted = true; break; } if (key === 'shrine') { window.attemptJoinShrine(); interacted = true; break; } } } if(!interacted) sendBubble("使用了 A 技能!");
         });
 
@@ -1964,7 +1970,7 @@ class MainScene extends Phaser.Scene {
             let magics = [
                 { name: 'none', icon: '<span style="font-size:24px; pointer-events:none;">❌</span>', qty: '' },
                 { name: '水球', icon: '<div class="sprite-waterball" style="transform: scale(0.8); transform-origin: center; pointer-events:none;"></div>', qty: inv['水球'] || 0 },
-                { name: '煙火', icon: '<img src="shop-fireworks.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['煙火'] || 0 }
+                { name: '煙火', icon: '<img src="shop-fireworks.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['煙火'] || 0 },
                 { name: '蔥友機', icon: '<img src="playroom-onion-friend-plane.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['蔥友機'] || 0 }
             ];
             
@@ -3051,6 +3057,7 @@ function listenToMemories() {
             }); 
         } 
     }); 
+}
 // ==================== 蔥友機與拳頭PK機 全域遊戲邏輯 ====================
 
 window.replyInvite = function(replyType) {
@@ -3318,5 +3325,3 @@ window.cancelRpsGame = function(roomId) {
         module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'finished' });
     });
 };
-}
-// (這必須是整份檔案的最後一行！)
