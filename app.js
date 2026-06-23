@@ -447,7 +447,13 @@ function createSystemUI() {
                 
                 <div id="rps-center-msg" style="position:absolute; top:40%; left:50%; transform:translate(-50%, -50%); font-size:80px; font-weight:bold; color:#ffcc00; text-shadow: 4px 4px 0 #d9534f; z-index:10;">START!</div>
                 
-                <div id="rps-choices" style="position:absolute; bottom:50px; left:50%; transform:translateX(-50%); display:flex; gap:20px;">
+                <style>
+                    @media (max-width: 768px) {
+                        #rps-choices { bottom: 100px !important; left: 60% !important; transform: translateX(-40%) !important; gap: 10px !important; }
+                        #rps-choices img { width: 80px !important; }
+                    }
+                </style>
+                <div id="rps-choices" style="position:absolute; bottom:50px; left:50%; transform:translateX(-50%); display:flex; gap:20px; z-index:30;">
                     <img src="playroom-rps-machine-scissors.png" style="width:120px; cursor:pointer;" onclick="window.selectRps('scissors')">
                     <img src="playroom-rps-machine-stone.png" style="width:120px; cursor:pointer;" onclick="window.selectRps('stone')">
                     <img src="playroom-rps-machine-paper.png" style="width:120px; cursor:pointer;" onclick="window.selectRps('paper')">
@@ -800,6 +806,7 @@ window.devFillMagic = function() {
     let inv = window.GameLogic.myProfile.inventory || {};
     inv['水球'] = 100;
     inv['煙火'] = 100;
+    inv['蔥友機'] = 100;
     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
         module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv }).then(() => {
             document.getElementById('dev-modal').style.display = 'none';
@@ -1136,10 +1143,25 @@ function joinPlayroom(roomId) {
     window.GameLogic.currentRoomId = roomId;
     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
         const playerRef = module.ref(db, `playroomPlayers/${roomId}/${window.GameLogic.currentUser.uid}`);
-        module.set(playerRef, { x: 640, y: 360, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1 });
+        let startX = 640 + (Math.random() * 100 - 50); // 稍微錯開出生點避免疊加卡死
+        module.set(playerRef, { x: startX, y: 450, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1 });
         module.onDisconnect(playerRef).remove();
-        playroomUnsubscribe = module.onValue(module.ref(db, `playroomPlayers/${roomId}`), (snapshot) => { window.GameLogic.playroomPlayers = snapshot.val() || {}; });
-        window.syncRpsState(roomId); // 啟動遊戲狀態機同步
+        module.onDisconnect(module.ref(db, `playroomGames/${roomId}/p_${window.GameLogic.currentUser.uid}`)).remove();
+
+        playroomUnsubscribe = module.onValue(module.ref(db, `playroomPlayers/${roomId}`), (snapshot) => { 
+            window.GameLogic.playroomPlayers = snapshot.val() || {}; 
+            
+            // 偵測對方離線邏輯
+            let players = window.GameLogic.playroomPlayers;
+            let uids = Object.keys(players);
+            let modal = document.getElementById('rps-modal');
+            if (window.GameLogic.currentRoomId && modal && modal.style.display === 'flex') {
+                if (uids.length < 2 && uids.includes(window.GameLogic.currentUser.uid)) {
+                    window.handleRpsDisconnect(roomId);
+                }
+            }
+        });
+        window.syncRpsState(roomId); 
     });
 }
 function leavePlayroom() {
@@ -2804,7 +2826,7 @@ class MainScene extends Phaser.Scene {
                 }
                 let absX = Math.abs(vx); let absY = Math.abs(vy); if (absX < 1) vx = 0; if (absY < 1) vy = 0;
                 if (vx === 0 && vy === 0) { this.localPlayer.sprite.play('idle', true); } else if (absX >= absY) { this.localPlayer.sprite.setFlipX(vx < 0); this.localPlayer.sprite.play('walk', true); } else { if (vy < 0) { this.localPlayer.sprite.play('walk-up', true); } else { this.localPlayer.sprite.play('walk-down', true); } }
-                if ((this.isCafe || this.sceneName === 'shrine') && (vx !== 0 || vy !== 0)) { if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) { let path = this.isCafe ? `cafePlayers/${window.GameLogic.currentUser.uid}` : `shrinePlayers/${window.GameLogic.currentUser.uid}`; update(ref(window.GameLogic.db, path), { x: this.localPlayer.sprite.x, y: this.localPlayer.sprite.y }); this.lastSyncTime = Date.now(); } }
+                if ((this.isCafe || this.sceneName === 'shrine' || this.sceneName === 'playroom') && (vx !== 0 || vy !== 0)) { if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) { let path = this.isCafe ? `cafePlayers/${window.GameLogic.currentUser.uid}` : (this.sceneName === 'shrine' ? `shrinePlayers/${window.GameLogic.currentUser.uid}` : `playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`); update(ref(window.GameLogic.db, path), { x: this.localPlayer.sprite.x, y: this.localPlayer.sprite.y }); this.lastSyncTime = Date.now(); } }
             }
 
             let minDist = 90; let promptTarget = null; let promptMsg = ""; this.closestTrash = null;
@@ -3120,7 +3142,7 @@ window.confirmRpsBet = function() {
 };
 
 window.selectRps = function(choice) {
-    if (window.rpsPhase !== 'rps') return;
+    if (window.rpsPhase !== 'rps_countdown') return;
     document.getElementById('rps-me-img').src = `playroom-rps-onion-me-${choice}.png`;
     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
         module.update(module.ref(window.GameLogic.db, `playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { rpsChoice: choice });
@@ -3319,5 +3341,26 @@ window.syncRpsState = function(roomId) {
 window.cancelRpsGame = function(roomId) {
     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
         module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'finished' });
+    });
+};
+
+window.handleRpsDisconnect = function(roomId) {
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.get(module.ref(window.GameLogic.db, `playroomGames/${roomId}`)).then(snap => {
+            let data = snap.val();
+            // 如果遊戲尚未結束結算，就執行沒收判定
+            if (data && data.state !== 'finished' && data.state !== 'calc_result') {
+                alert("對方逃跑或斷線了！強制結束並沒收對方籌碼給您！");
+                let totalPool = (data.agreedBet || 0) * 2;
+                if (totalPool > 0) {
+                    module.get(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`)).then(uSnap => {
+                        let pCoins = (uSnap.val().coins || 0) + totalPool;
+                        module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: pCoins });
+                    });
+                }
+                module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'finished' });
+                window.exitPlayroom();
+            }
+        });
     });
 };
