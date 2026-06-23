@@ -1532,11 +1532,7 @@ class MainScene extends Phaser.Scene {
             this.add.image(mapW/2, mapH/2, 'bgFarm').setDisplaySize(mapW, mapH);
         } else if (this.sceneName === "shrine") {
             this.add.image(mapW/2, mapH/2, 'bgShrine').setDisplaySize(mapW, mapH); this.shrineFurnListener = onValue(ref(window.GameLogic.db, 'shrineFurniture'), (snap) => { window.GameLogic.shrineFurniture = snap.val() || {}; });
-          } else if (this.sceneName === "playroom") {
-            this.add.image(mapW/2, mapH/2, 'bgPlayroom').setDisplaySize(mapW, mapH);
-            this.rpsMachine = this.physics.add.staticSprite(mapW/2, mapH/2, 'rps-machine').setDepth(5);
-        }  
-          this.purifyBarBg = this.add.graphics().setDepth(200).setVisible(false); this.purifyBar = this.add.graphics().setDepth(201).setVisible(false);
+            this.purifyBarBg = this.add.graphics().setDepth(200).setVisible(false); this.purifyBar = this.add.graphics().setDepth(201).setVisible(false);
             this.countdownText = this.add.text(mapW/2, mapH/2, '', { fontSize: '72px', fontStyle: 'bold', color: '#fff', stroke: '#8a2be2', strokeThickness: 8 }).setOrigin(0.5).setDepth(300).setVisible(false);
         } else if (this.sceneName === "7eonion") {
             this.add.image(mapW/2, mapH/2, 'bg7Eonion').setDisplaySize(mapW, mapH); this.storeManager = this.physics.add.staticSprite(mapW/2, mapH/2, 'storeManager').setDepth(5); let imgW = this.storeManager.width; let imgH = this.storeManager.height; this.storeManager.body.setSize(120, 120); this.storeManager.body.setOffset((imgW - 120) / 2, (imgH - 120) / 2); 
@@ -2918,7 +2914,7 @@ class MainScene extends Phaser.Scene {
 
         if (this.isCafe || this.sceneName === 'shrine' || this.sceneName === 'playroom') {
             const playersData = this.isCafe ? window.GameLogic.cafePlayers : (this.sceneName === 'shrine' ? window.GameLogic.shrinePlayers : window.GameLogic.playroomPlayers);
-            const playersData = this.isCafe ? window.GameLogic.cafePlayers : window.GameLogic.shrinePlayers; const globalOnline = window.GameLogic.onlinePlayers || {}; 
+            const globalOnline = window.GameLogic.onlinePlayers || {}; 
             for (let uid in playersData) {
                 if (uid === window.GameLogic.currentUser.uid) continue; if (!globalOnline[uid]) continue; 
                 let pd = playersData[uid]; pd.uid = uid; if (!this.otherPlayers[uid]) this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
