@@ -3229,7 +3229,6 @@ window.exitPlayroom = function() {
     window.cancelRpsGame(); // 離開時連帶重置
     window.switchScene('cafe');
 };
-};
 
 window.openRpsBetting = function(roomId) {
     if (!roomId) return;
