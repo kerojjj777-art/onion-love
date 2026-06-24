@@ -3247,6 +3247,33 @@ window.replyInvite = function(replyType) {
 
 // 修正2：補上遺失的重置與斷線處理函式，確保隨時可將機台清空
 window.cancelRpsGame = function(roomId) {
+    let id = roomId || window.GameLogic.currentRoomId;
+    if (!id) return;
+    
+    // ==========================================
+    // 新增：離開時重置本機端的扣款與發獎鎖定
+    window.rpsLocalBetDeducted = false; 
+    window.rpsLocalRewardAdded = false; 
+    // ==========================================
+    
+    document.getElementById('rps-modal').style.display = 'none';
+    let waitPhase = document.getElementById('rps-phase-waiting');
+    if (waitPhase) waitPhase.style.display = 'none';
+    let summaryEl = document.getElementById('rps-phase-summary');
+    if (summaryEl) summaryEl.style.display = 'none';
+    
+    // 清除結算音效鎖與落金粉粒子
+    window.calcResultSoundPlayed = false;
+    let dust = document.getElementById('rps-dust-container');
+    if (dust) dust.innerHTML = '';
+    
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.update(module.ref(window.GameLogic.db, `playroomGames/${id}`), { state: 'none' });
+        if (window.GameLogic.currentUser) {
+            module.update(module.ref(window.GameLogic.db, `playroomGames/${id}/p_${window.GameLogic.currentUser.uid}`), { machineReady: null, betReady: null });
+        }
+    });
+};
 
 window.handleRpsDisconnect = function(roomId) {
     if (window.rpsPhase === 'calc_result') {
@@ -4176,7 +4203,7 @@ window.syncRpsState = function(roomId) {
                         let p1C = uDB[myUid]?.coins || 0;
                         let p2C = uDB[otherUid]?.coins || 0;
                         
-                        // ==========================================
+                       // ==========================================
                         // 修正：主機端分配資料庫獎金時，必須用客觀視角判斷，不能直接套用上方只算給本機看的 getAmt
                         let hostTie = (myWins === otherWins);
                         let hostWin = (myWins > otherWins);
@@ -4193,22 +4220,6 @@ window.syncRpsState = function(roomId) {
                             p2C += finalPool; 
                         }
                         // ==========================================
-                        
-                        module.update(module.ref(window.GameLogic.db, `users/${myUid}`), { coins: p1C });
-                        module.update(module.ref(window.GameLogic.db, `users/${otherUid}`), { coins: p2C });
-                        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { moneyDistributed: true });
-                    });
-                }
-                
-                if (uids.sort()[0] === myUid && !data.moneyDistributed) {
-                    module.get(module.ref(window.GameLogic.db, `users`)).then(uSnap => {
-                        let uDB = uSnap.val();
-                        let p1C = uDB[myUid]?.coins || 0;
-                        let p2C = uDB[otherUid]?.coins || 0;
-                        
-                        if (tieMoney) { p1C += getAmt; p2C += getAmt; }
-                        else if (iWinMoney) { p1C += getAmt; }
-                        else { p2C += getAmt; }
                         
                         module.update(module.ref(window.GameLogic.db, `users/${myUid}`), { coins: p1C });
                         module.update(module.ref(window.GameLogic.db, `users/${otherUid}`), { coins: p2C });
