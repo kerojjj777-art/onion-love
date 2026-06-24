@@ -671,7 +671,7 @@ window.startShrineRitual = function() {
     if (window.GameLogic.phaserGame) {
         let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
         if (ms) {
-            ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way'].forEach(k => ms.sound.stopByKey(k));
+            ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire'].forEach(k => ms.sound.stopByKey(k));
             if (!ms.sound.get('shrine-wierd-people-sound')?.isPlaying) ms.sound.play('shrine-wierd-people-sound', {loop: true});
         }
     }
@@ -2486,7 +2486,7 @@ class MainScene extends Phaser.Scene {
         // 修正5：正確利用原生陣列清除音樂，根除音樂被帶出神龕的 Bug
         if (evState !== this.currentRitualState) {
             this.currentRitualState = evState;
-            let trackKeys = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'];
+            let trackKeys = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire', 'shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'];
             trackKeys.forEach(k => {
                 if (this.sound.getAll(k)) { this.sound.getAll(k).forEach(s => s.stop()); }
             });
