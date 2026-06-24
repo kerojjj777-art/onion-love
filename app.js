@@ -478,6 +478,12 @@ function createSystemUI() {
                     @keyframes rps-burst { 0% { box-shadow: 0 0 10px #fff; transform: scale(1.1); } 100% { box-shadow: 0 0 50px #ffcc00, 0 0 80px #d9534f; transform: scale(1); opacity: 0; } }
                     .rps-sprite-moving { animation: play-rps 0.2s steps(2) infinite !important; }
                     @keyframes play-rps { 100% { background-position: -600px center; } }
+                    
+                    /* 新增：猜拳跳躍與結果放大動畫 */
+                    @keyframes rps-hopping { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-20px) scale(1); } }
+                    .rps-anim-hopping { animation: rps-hopping 0.4s infinite ease-in-out; }
+                    .rps-anim-result-scale { transform: scale(1.25) !important; transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+
                     /* 手機版面位置拉高調整與大小修正 */
                     @media (max-width: 768px) {
                         /* 選項按鈕改為中央偏上 */
@@ -3543,61 +3549,72 @@ window.syncRpsState = function(roomId) {
                     });
                 }
             }
-            else if (state === 'rps_countdown') {
-                // 進入猜拳倒數，套用漸變底色 (5秒黑變深橘)
-                document.getElementById('rps-modal').className = 'rps-bg-phase-count';
+            else if (state === 'spam_countdown') {
+                window.rpsMySpamCount = 0;
+                window.rpsOtherSpamCount = 0;
                 
-                // 顯示上方名字，隱藏下方名字
-                document.getElementById('rps-me-name-top').style.display = 'block';
-                document.getElementById('rps-me-name-bot').style.display = 'none';
-                document.getElementById('rps-op-name-top').style.display = 'block';
-                document.getElementById('rps-op-name-bot').style.display = 'none';
+                document.getElementById('rps-me-status').innerText = "";
+                document.getElementById('rps-opponent-status').innerText = "";
+                
+                let isWinner = data.winnerUid === myUid;
+                window.rpsMyRole = isWinner ? 'attacker' : 'defender';
+                
+                // 移除結果放大特效，恢復原始狀態
+                document.getElementById('rps-me-img').className = "";
+                document.getElementById('rps-opponent-img').className = "";
+                
+                document.getElementById('rps-me-img').style.backgroundImage = isWinner ? "url('playroom-rps-onion-win-hit.png')" : "url('playroom-rps-onion-lose-defense.png')";
+                document.getElementById('rps-opponent-img').style.backgroundImage = !isWinner ? "url('playroom-rps-onion-win-hit.png')" : "url('playroom-rps-onion-lose-defense.png')";
+                
+                // 背景閃爍兩下白光，準備進入連擊
+                document.getElementById('rps-modal').className = 'rps-bg-phase-flash';
 
-                document.getElementById('rps-phase-bet').style.display = 'none';
-                document.getElementById('rps-phase-game').style.display = 'block';
-                document.getElementById('rps-choices').style.display = 'flex';
-                document.getElementById('rps-spam-area').style.display = 'none';
-                
-                document.getElementById('rps-me-img').style.backgroundImage = "url('playroom-rps-onion-me-ready.png')";
-                document.getElementById('rps-opponent-img').style.backgroundImage = "url('playroom-rps-onion-other-ready.png')";
-                
-                document.querySelectorAll('.rps-choice-img').forEach(el => el.classList.remove('rps-choice-selected'));
-                // 修正1：依據資料庫中已選擇的選項，重新補回發亮特效，防止被 onValue 重置
-                if (myData.rpsChoice) {
-                    let selBtn = document.getElementById(`rps-choice-${myData.rpsChoice}`);
-                    if (selBtn) selBtn.classList.add('rps-choice-selected');
-                }
-                
+                // 隱藏上方名字，顯示下方名字
+                document.getElementById('rps-me-name-top').style.display = 'none';
+                document.getElementById('rps-me-name-bot').style.display = 'block';
+                document.getElementById('rps-op-name-top').style.display = 'none';
+                document.getElementById('rps-op-name-bot').style.display = 'block';
+
                 let meC = document.getElementById('rps-me-container');
                 let opC = document.getElementById('rps-opponent-container');
-                meC.className = ""; opC.className = ""; // 拔除連擊階段的鎖定 class
-                meC.style.top = 'auto'; meC.style.right = 'auto'; meC.style.transform = 'none';
-                // 使用 cssText 以確保 CSS 媒體查詢不會被絕對寫死的值綁架
-                meC.style.cssText = "position:absolute; bottom:20px; left:20px; text-align:center; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:20;";
-                opC.style.cssText = "position:absolute; top:20px; right:20px; text-align:center; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:10;";
+                meC.className = ""; opC.className = ""; // 確保清理乾淨
+                meC.style.cssText = "position:absolute; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:20;";
+                opC.style.cssText = "position:absolute; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:10;";
                 
-                // 猜拳階段：暱稱顯示在圖片上方
-                if(document.getElementById('rps-me-name')) { document.getElementById('rps-me-name').style.top = '-30px'; document.getElementById('rps-me-name').style.bottom = 'auto'; }
-                if(document.getElementById('rps-opponent-name')) { document.getElementById('rps-opponent-name').style.top = '-30px'; document.getElementById('rps-opponent-name').style.bottom = 'auto'; }
+                // 連擊階段：暱稱顯示在圖片下方
+                if(document.getElementById('rps-me-name')) { document.getElementById('rps-me-name').style.bottom = '-30px'; document.getElementById('rps-me-name').style.top = 'auto'; }
+                if(document.getElementById('rps-opponent-name')) { document.getElementById('rps-opponent-name').style.bottom = '-30px'; document.getElementById('rps-opponent-name').style.top = 'auto'; }
+                
+                // 攻擊方必定在左(35%)，防守方必定在右(65%)，網頁版也向中間靠攏增加打架感
+                if (isWinner) {
+                    meC.classList.add("spam-phase-pos-atk");
+                    opC.classList.add("spam-phase-pos-def");
+                    meC.style.left = '35%'; meC.style.top = '45%'; meC.style.transform = 'translate(-50%, -50%) scale(0.85)';
+                    opC.style.left = '65%'; opC.style.top = '45%'; opC.style.transform = 'translate(-50%, -50%) scale(0.85)';
+                } else {
+                    meC.classList.add("spam-phase-pos-def");
+                    opC.classList.add("spam-phase-pos-atk");
+                    meC.style.left = '65%'; meC.style.top = '45%'; meC.style.transform = 'translate(-50%, -50%) scale(0.85)';
+                    opC.style.left = '35%'; opC.style.top = '45%'; opC.style.transform = 'translate(-50%, -50%) scale(0.85)';
+                }
                 
                 let rpsMsg = document.getElementById('rps-center-msg');
-                rpsMsg.style.top = '20%';
+                rpsMsg.style.top = '45%';
                 rpsMsg.style.opacity = '1';
+                rpsMsg.getAnimations().forEach(a => a.cancel()); // 確保移除之前的殘留動畫
                 
                 if (window.rpsInterval) clearInterval(window.rpsInterval);
                 window.rpsInterval = setInterval(() => {
-                    let elapsed = Date.now() - data.rpsStartTime;
-                    let remain = 5 - Math.floor(elapsed / 1000);
+                    let elapsed = Date.now() - data.spamStartTime;
+                    let remain = 3 - Math.floor(elapsed / 1000);
+                    let tEl = document.getElementById('rps-spam-timer');
+                    
                     if (remain > 0) {
-                        let textArr = [1, 2, 3, 4, 5];
-                        let newText = textArr[remain-1] || remain;
-                        if (rpsMsg.innerText != newText) {
-                            rpsMsg.innerText = newText;
-                            // 漸變大且淡出特效 (放大兩倍)
-                            rpsMsg.animate([
-                                { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
-                                { transform: 'translate(-50%, -50%) scale(3)', opacity: 0 }
-                            ], { duration: 900, easing: 'ease-out' });
+                        if (rpsMsg.innerText != remain) {
+                            rpsMsg.innerText = remain;
+                            if (tEl) tEl.innerText = remain; // 確保連擊計時器也被同步設定
+                            // 修正：對中央的大字體做漸變放大與淡出
+                            rpsMsg.animate([ { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 }, { transform: 'translate(-50%, -50%) scale(3)', opacity: 0 } ], { duration: 900, easing: 'ease-out' });
                             
                             // 播放倒數音效
                             if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) {
@@ -3607,17 +3624,13 @@ window.syncRpsState = function(roomId) {
                             }
                         }
                     } else {
-                        if (rpsMsg.innerText !== "出拳！") {
-                            rpsMsg.innerText = "出拳！";
-                            rpsMsg.animate([
-                                { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
-                                { transform: 'translate(-50%, -50%) scale(3)', opacity: 0 }
-                            ], { duration: 900, easing: 'ease-out' });
+                        if (rpsMsg.innerText !== "GO!") {
+                            rpsMsg.innerText = "GO!";
+                            let anim = rpsMsg.animate([ { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 }, { transform: 'translate(-50%, -50%) scale(4)', opacity: 0 } ], { duration: 900, easing: 'ease-out' });
+                            anim.onfinish = () => { rpsMsg.style.opacity = '0'; }; // 動畫結束後徹底隱藏 GO!
                         }
                         clearInterval(window.rpsInterval);
-                        if (uids.sort()[0] === myUid) {
-                            module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'rps_result' });
-                        }
+                        if (uids.sort()[0] === myUid) module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'spamming', spamPlayTime: Date.now() });
                     }
                 }, 100);
             }
@@ -3764,6 +3777,9 @@ window.syncRpsState = function(roomId) {
               // 連擊階段背景變換紅橘黃
                 document.getElementById('rps-modal').className = 'rps-bg-phase-spam';
                 
+                // 確保 GO 文字消失不阻擋視線
+                document.getElementById('rps-center-msg').style.opacity = '0';
+                
                 // 顯示連擊區域與按鈕，並根據攻守方切換文字與顏色
                 let spamArea = document.getElementById('rps-spam-area');
                 let spamBtn = document.getElementById('rps-spam-btn');
@@ -3821,6 +3837,7 @@ window.syncRpsState = function(roomId) {
                 if (!tieSpam) roundWinnerUid = attackSuccess ? data.winnerUid : (data.winnerUid === myUid ? otherUid : myUid);
                 
                 let rMsg = document.getElementById('rps-center-msg');
+                rMsg.getAnimations().forEach(a => a.cancel()); // 移除任何進行中的淡出動畫，確保字能顯示
                 rMsg.style.opacity = '1';
                 if (tieSpam) {
                     rMsg.innerText = "平局！";
