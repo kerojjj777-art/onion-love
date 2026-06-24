@@ -438,11 +438,20 @@ function createSystemUI() {
             <div id="rps-phase-bet" style="display:none; flex-direction:column; align-items:center; width:80%; z-index:10;">
                 <h2 style="color:#ffcc00;">選擇籌碼</h2>
                 <p>最多只能押雙方存款較低者的全部身家</p>
-                <input type="range" id="rps-bet-slider" min="0" max="100" value="0" style="width:100%; margin:20px 0;">
-                <h1 style="color:#00ff00;">💰 <span id="rps-bet-display">0</span></h1>
-                <p style="font-size:12px; color:#aaa;">(雙方確認後將自動扣款，平手或結束後結算)</p>
-                <div id="rps-bet-status" style="margin-top:10px; color:#ffaa00; font-weight:bold;">等待雙方確認...</div>
-                <button class="btn-primary" id="rps-bet-confirm-btn" style="margin-top:20px; font-size:20px; padding:10px 30px;" onclick="window.confirmRpsBet()">確認籌碼</button>
+                
+                <div style="display:flex; justify-content:space-between; width:100%; margin: 15px 0; background:rgba(0,0,0,0.5); padding:10px; border-radius:8px;">
+                    <div style="text-align:center; width:45%;"><span id="rps-bet-name-me" style="color:var(--mucha-green); font-weight:bold; font-size:16px;">我</span><br><span id="rps-bet-status-me" style="color:#ffaa00; font-size:14px; margin-top:5px; display:inline-block;">下注中...</span></div>
+                    <div style="text-align:center; width:10%; font-size:20px; font-weight:bold; color:#fff; display:flex; align-items:center; justify-content:center;">VS</div>
+                    <div style="text-align:center; width:45%;"><span id="rps-bet-name-op" style="color:#d9534f; font-weight:bold; font-size:16px;">對手</span><br><span id="rps-bet-status-op" style="color:#ffaa00; font-size:14px; margin-top:5px; display:inline-block;">下注中...</span></div>
+                </div>
+
+                <div id="rps-bet-input-area" style="width:100%; text-align:center; display:flex; flex-direction:column; align-items:center;">
+                    <input type="range" id="rps-bet-slider" min="0" max="100" value="0" style="width:100%; margin:10px 0;">
+                    <h1 style="color:#00ff00; margin:10px 0;">💰 <span id="rps-bet-display">0</span></h1>
+                    <button class="btn-primary" id="rps-bet-confirm-btn" style="margin-top:10px; font-size:20px; padding:10px 30px;" onclick="window.confirmRpsBet()">下注</button>
+                </div>
+                
+                <p style="font-size:12px; color:#aaa; margin-top:15px; text-align:center;">(雙方確認後將取平均值扣款，平手或結束後結算)</p>
             </div>
             
             <div id="rps-phase-game" style="display:none; width:100%; height:100%; position:relative; z-index:10;">
@@ -3212,8 +3221,9 @@ window.openRpsBetting = function(roomId) {
 
 window.confirmRpsBet = function() {
     let betVal = parseInt(document.getElementById('rps-bet-slider').value) || 0;
-    document.getElementById('rps-bet-confirm-btn').style.display = 'none';
-    document.getElementById('rps-bet-status').innerText = "已確認！等待對方...";
+    document.getElementById('rps-bet-input-area').style.display = 'none';
+    document.getElementById('rps-bet-status-me').innerText = "✅已下注";
+    document.getElementById('rps-bet-status-me').style.color = "#00ff00";
     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
         module.update(module.ref(window.GameLogic.db, `playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { betReady: true, betValue: betVal });
     });
@@ -3364,36 +3374,61 @@ window.syncRpsState = function(roomId) {
                 // 清除戰鬥漸變背景
                 document.getElementById('rps-modal').classList.remove('rps-gaming-bg');
                 
-                // 同步確保雙方都會觸發並打開 UI，防止有一方沒點到卡死
-                // 修正：拔除 if (modal.style.display !== 'flex') 判斷
-                // 確保從「等待對手畫面」過來的第一位玩家，也能成功打開下注 UI
+                // 判斷是否為剛進入下注畫面，用於決定是否將拉條歸零
+                let isFirstLoad = document.getElementById('rps-phase-bet').style.display !== 'flex';
+                
                 let modal = document.getElementById('rps-modal');
                 modal.style.display = 'flex';
                 document.getElementById('rps-phase-bet').style.display = 'flex';
                 document.getElementById('rps-phase-game').style.display = 'none';
                 document.getElementById('rps-phase-result').style.display = 'none';
                 
-                // 每次回到下注畫面都要重置確認按鈕
-                document.getElementById('rps-bet-confirm-btn').style.display = 'block';
+                // 動態更新雙方暱稱與狀態
+                let pList = window.GameLogic.playroomPlayers || {};
+                document.getElementById('rps-bet-name-me').innerText = pList[myUid] ? pList[myUid].name : '我';
+                document.getElementById('rps-bet-name-op').innerText = pList[otherUid] ? pList[otherUid].name : '對手';
+                
+                let meStatusEl = document.getElementById('rps-bet-status-me');
+                let opStatusEl = document.getElementById('rps-bet-status-op');
+                let inputArea = document.getElementById('rps-bet-input-area');
+                
+                if (myData.betReady) {
+                    meStatusEl.innerText = "✅已下注"; meStatusEl.style.color = "#00ff00";
+                    if (inputArea) inputArea.style.display = 'none'; // 自己下注後隱藏拉條
+                } else {
+                    meStatusEl.innerText = "下注中..."; meStatusEl.style.color = "#ffaa00";
+                    if (inputArea) inputArea.style.display = 'flex'; // 顯示拉條與按鈕
+                }
+                
+                if (otherData.betReady) {
+                    opStatusEl.innerText = "✅已下注"; opStatusEl.style.color = "#00ff00";
+                } else {
+                    opStatusEl.innerText = "下注中..."; opStatusEl.style.color = "#ffaa00";
+                }
 
-                module.get(module.ref(window.GameLogic.db, `users`)).then(uSnap => {
-                    let uDB = uSnap.val() || {};
-                    let p1Coins = (uDB[uids[0]] && uDB[uids[0]].coins) ? uDB[uids[0]].coins : 0;
-                    let p2Coins = (uDB[uids[1]] && uDB[uids[1]].coins) ? uDB[uids[1]].coins : 0;
-                    
-                    // 修正1：確保 maxBet 絕對不會回傳 NaN 或被卡死在 0 (除非雙方真的沒錢)
-                    let maxBet = Math.max(0, Math.min(p1Coins, p2Coins, 10000));
-                    if (isNaN(maxBet)) maxBet = 0;
-                    
-                    let slider = document.getElementById('rps-bet-slider');
-                    slider.max = maxBet; 
-                    slider.value = 0;
-                    document.getElementById('rps-bet-display').innerText = 0;
-                    document.getElementById('rps-bet-status').innerText = "等待雙方確認...";
-                    
-                    slider.oninput = function() { document.getElementById('rps-bet-display').innerText = this.value; };
-                    slider.onchange = function() { document.getElementById('rps-bet-display').innerText = this.value; };
-                });
+                // 只有自己還沒確認時，才需要重新讀取拉條並綁定事件
+                if (!myData.betReady) {
+                    module.get(module.ref(window.GameLogic.db, `users`)).then(uSnap => {
+                        let uDB = uSnap.val() || {};
+                        let p1Coins = (uDB[uids[0]] && uDB[uids[0]].coins) ? uDB[uids[0]].coins : 0;
+                        let p2Coins = (uDB[uids[1]] && uDB[uids[1]].coins) ? uDB[uids[1]].coins : 0;
+                        
+                        let maxBet = Math.max(0, Math.min(p1Coins, p2Coins, 10000));
+                        if (isNaN(maxBet)) maxBet = 0;
+                        
+                        let slider = document.getElementById('rps-bet-slider');
+                        slider.max = maxBet; 
+                        
+                        // 修正：只有首次開啟時才將數值歸零，避免對方下注觸發狀態同步時把自己的拉條歸零
+                        if (isFirstLoad) {
+                            slider.value = 0;
+                            document.getElementById('rps-bet-display').innerText = 0;
+                        }
+                        
+                        slider.oninput = function() { document.getElementById('rps-bet-display').innerText = this.value; };
+                        slider.onchange = function() { document.getElementById('rps-bet-display').innerText = this.value; };
+                    });
+                }
                 
                 if (myData.betReady && otherData.betReady && uids.sort()[0] === myUid) {
                     let avgBet = Math.round((myData.betValue + otherData.betValue) / 2);
