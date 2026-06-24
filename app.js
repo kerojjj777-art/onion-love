@@ -442,7 +442,6 @@ function createSystemUI() {
                 ${Array.from({length: 50}).map(() => `<div class="rps-blue-bubble" style="left:${Math.random()*100}%; width:${Math.random()*10+5}px; height:${Math.random()*10+5}px; animation-duration:${Math.random()*4+3}s; animation-delay:${Math.random()*5}s;"></div>`).join('')}
             </div>
             <div id="rps-phase-bet" style="display:none; flex-direction:column; align-items:center; width:80%; z-index:10;">
-            <div id="rps-phase-bet" style="display:none; flex-direction:column; align-items:center; width:80%; z-index:10;">
                 <h2 style="color:#ffcc00;">選擇籌碼</h2>
                 <p>最多只能押雙方存款較低者的全部身家</p>
                 
