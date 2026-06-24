@@ -3724,7 +3724,16 @@ window.syncRpsState = function(roomId) {
                 }
                 
                 let rpsMsg = document.getElementById('rps-center-msg');
-                // ... 中間不變 ...
+                rpsMsg.style.top = '45%';
+                rpsMsg.style.opacity = '1';
+                
+                if (window.rpsInterval) clearInterval(window.rpsInterval);
+                window.rpsInterval = setInterval(() => {
+                    let elapsed = Date.now() - data.spamStartTime;
+                    let remain = 3 - Math.floor(elapsed / 1000);
+                    let tEl = document.getElementById('rps-spam-timer');
+                    
+                    if (remain > 0) {
                         if (tEl.innerText != remain) {
                             tEl.innerText = remain;
                             // 秒數漸變放大並淡出 (放大兩倍)
