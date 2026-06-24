@@ -3759,6 +3759,23 @@ window.syncRpsState = function(roomId) {
             else if (state === 'spamming') {
               // 連擊階段背景變換紅橘黃
                 document.getElementById('rps-modal').className = 'rps-bg-phase-spam';
+                
+                // 顯示連擊區域與按鈕，並根據攻守方切換文字與顏色
+                let spamArea = document.getElementById('rps-spam-area');
+                let spamBtn = document.getElementById('rps-spam-btn');
+                spamArea.style.display = 'block';
+                
+                let isWinner = data.winnerUid === myUid;
+                if (isWinner) {
+                    spamBtn.innerText = "打！";
+                    spamBtn.style.background = "#d9534f";
+                    spamBtn.style.boxShadow = "0 10px 0 #aa0000";
+                } else {
+                    spamBtn.innerText = "擋！";
+                    spamBtn.style.background = "#0077cc";
+                    spamBtn.style.boxShadow = "0 10px 0 #0044aa";
+                }
+
                 if (window.rpsInterval) clearInterval(window.rpsInterval);
                 window.rpsInterval = setInterval(() => {
                     let elapsed = Date.now() - data.spamPlayTime;
@@ -3767,8 +3784,8 @@ window.syncRpsState = function(roomId) {
                     let currentOtherSpam = otherData.spamCount || 0;
                     if (currentOtherSpam > (window.rpsOtherSpamCount || 0)) {
                         window.rpsOtherSpamCount = currentOtherSpam;
-                        let isWinner = data.winnerUid === myUid;
-                        if (window.triggerRpsAnim) window.triggerRpsAnim('rps-opponent-img', !isWinner);
+                        let isWinnerAnim = data.winnerUid === myUid;
+                        if (window.triggerRpsAnim) window.triggerRpsAnim('rps-opponent-img', !isWinnerAnim);
                     }
 
                     if (remain > 0) {
