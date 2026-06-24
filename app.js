@@ -547,6 +547,9 @@ function createSystemUI() {
                 <div class="catalog-item" onclick="window.devFillMagic()" style="flex-direction:row; justify-content:center; padding: 15px; font-weight:bold; background:rgba(197, 160, 89, 0.1); width:100%; box-sizing:border-box;">
                     <span>✨ 法寶填充 (100個)</span>
                 </div>
+                <div class="catalog-item" onclick="window.devAddCoins()" style="flex-direction:row; justify-content:center; padding: 15px; font-weight:bold; background:rgba(197, 160, 89, 0.1); width:100%; box-sizing:border-box;">
+                    <span>💰 增加10萬馬德幣</span>
+                </div>
             </div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('dev-modal').style.display='none'; document.getElementById('inventory-modal').style.display='block';">返回背包</button>
         </div>
@@ -875,6 +878,18 @@ window.devFillMagic = function() {
     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
         module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv }).then(() => {
             document.getElementById('dev-modal').style.display = 'none';
+        });
+    });
+};
+
+window.devAddCoins = function() {
+    let p = window.GameLogic.myProfile;
+    p.coins = (p.coins || 0) + 100000;
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }).then(() => {
+            let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins;
+            document.getElementById('dev-modal').style.display = 'none';
+            alert("已成功匯入 100,000 馬德幣！");
         });
     });
 };
@@ -3200,7 +3215,7 @@ function listenToMemories() {
                 let m = data[key]; 
                 let isMine = (m.uid === window.GameLogic.currentUser.uid) || (m.author === window.GameLogic.myProfile.name); 
                 let delBtnHtml = isMine ? `<button class="del-btn" onclick="window.deleteMemory('${key}')">刪除</button>` : ''; 
-                feed.innerHTML += `<div class="memory-card">${delBtnHtml}<div class="author">${m.author} - ${m.time}</div>${m.img ? `<img src="${m.img}" alt="回憶照片">` : ''}${m.text ? `<div class="text">${m.text}</div>` : ''}</div>`; 
+                feed.innerHTML += `<div class="memory-card">${delBtnHtml}<div class="author">${m.author} - ${m.time}</div>${m.img ? `<img src="${m.img}" alt="回憶照片" style="cursor: pointer;" onclick="window.openFullscreen(this.src)">` : ''}${m.text ? `<div class="text">${m.text}</div>` : ''}</div>`; 
             }); 
         } 
     }); 
