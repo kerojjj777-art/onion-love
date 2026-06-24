@@ -480,15 +480,17 @@ function createSystemUI() {
                     @keyframes play-rps { 100% { background-position: -600px center; } }
                     /* 手機版面位置拉高調整與大小修正 */
                     @media (max-width: 768px) {
-                        /* 修正：將選項按鈕改為中央偏上 */
+                        /* 選項按鈕改為中央偏上 */
                         #rps-choices { top: 35% !important; bottom: auto !important; left: 50% !important; transform: translateX(-50%) !important; gap: 15px !important; z-index: 50 !important; }
                         #rps-choices img { width: 70px !important; }
-                        #rps-opponent-img { width: 220px !important; height: 220px !important; }
-                        #rps-me-img { width: 250px !important; height: 250px !important; }
-                        #rps-me-container { bottom: 15px !important; left: 10px !important; }
-                        /* 修正：將攻擊方與防守方往畫面中央靠近 (35% 與 65%) */
-                        .spam-phase-pos-atk { left: 35% !important; right: auto !important; transform: translate(-50%, -50%) scale(0.7) !important; bottom: auto !important; top: 45% !important; }
-                        .spam-phase-pos-def { left: 65% !important; right: auto !important; transform: translate(-50%, -50%) scale(0.7) !important; bottom: auto !important; top: 45% !important; }
+                        
+                        /* 修正1：統一雙方圖片大小，確保在手機上絕對對稱 */
+                        #rps-opponent-img, #rps-me-img { width: 220px !important; height: 220px !important; }
+                        
+                        /* 修正2：提升 CSS 權重，確保連擊階段不受其他設定干擾，強制雙方鎖死在同一水平線 (top: 45%) */
+                        #rps-me-container.spam-phase-pos-atk, #rps-opponent-container.spam-phase-pos-atk { left: 35% !important; right: auto !important; transform: translate(-50%, -50%) scale(0.7) !important; bottom: auto !important; top: 45% !important; }
+                        #rps-me-container.spam-phase-pos-def, #rps-opponent-container.spam-phase-pos-def { left: 65% !important; right: auto !important; transform: translate(-50%, -50%) scale(0.7) !important; bottom: auto !important; top: 45% !important; }
+                        
                         #rps-center-msg { font-size: 80px !important; white-space: nowrap; }
                     }
                 </style>
