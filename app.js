@@ -35,7 +35,7 @@ window.updateBGMVolume = function(val) {
     let volText = document.getElementById('bgm-vol-text');
     if(volText) volText.innerText = val + '%';
     if (window.GameLogic.phaserGame) {
-        let playlist = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'];
+        let playlist = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire', 'shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'];
         playlist.forEach(k => {
             let sndList = window.GameLogic.phaserGame.sound.getAll(k);
             sndList.forEach(snd => snd.setVolume(val / 100));
@@ -86,7 +86,7 @@ window.playSFX = function(scene, key) {
 };
 
 window.changeTrack = function(dir) {
-    let playlist = [{ key: 'bgm', title: 'Sweet-Onion', cover: 'Sweet-Onion.png' }, { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' }, { key: 'bgm-inside', title: 'Inside-of-Onion', cover: 'Inside-of-Onion.png' }, { key: 'bgm-kyo', title: '귀엽다!귀엽다!Onion!', cover: 'kyo-kyo-onion.png' }, { key: 'bgm-world', title: '世界他會自己轉動', cover: "OMusic-World'll-rol.png" }, { key: 'bgm-lazy', title: 'Onion Lazy Cat', cover: 'OMusic-Onion-Lazy-Cat.png' }, { key: 'bgm-way', title: '洋蔥滾動自己路', cover: 'OMusic-Onion-go-my-way.png' }];
+    let playlist = [{ key: 'bgm', title: 'Sweet-Onion', cover: 'Sweet-Onion.png' }, { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' }, { key: 'bgm-inside', title: 'Inside-of-Onion', cover: 'Inside-of-Onion.png' }, { key: 'bgm-kyo', title: '귀엽다!귀엽다!Onion!', cover: 'kyo-kyo-onion.png' }, { key: 'bgm-world', title: '世界他會自己轉動', cover: "OMusic-World'll-rol.png" }, { key: 'bgm-lazy', title: 'Onion Lazy Cat', cover: 'OMusic-Onion-Lazy-Cat.png' }, { key: 'bgm-way', title: '洋蔥滾動自己路', cover: 'OMusic-Onion-go-my-way.png' }, { key: 'bgm-corazon', title: 'Onion acre Corazón', cover: 'OMusic-Onion-acre-Corazón.png' }, { key: 'bgm-fire', title: '烈艷洋蔥', cover: 'OMusic-Onion-Got-Fire.png' }];
     window.GameLogic.currentTrackIdx = ((window.GameLogic.currentTrackIdx || 0) + dir + playlist.length) % playlist.length;
     let track = playlist[window.GameLogic.currentTrackIdx];
     document.getElementById('music-cover').src = track.cover; document.getElementById('music-title').innerText = track.title;
@@ -94,7 +94,7 @@ window.changeTrack = function(dir) {
     // 修正5：只要在神龕場景內，就強制阻斷切換音樂的功能
     if (window.GameLogic.phaserGame && window.GameLogic.currentScene !== 'shrine') {
         let vol = document.getElementById('bgm-volume') ? document.getElementById('bgm-volume').value / 100 : 0.5;
-        ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way'].forEach(k => window.GameLogic.phaserGame.sound.removeByKey(k));
+        ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire'].forEach(k => window.GameLogic.phaserGame.sound.removeByKey(k));
         window.GameLogic.phaserGame.sound.add(track.key, { loop: true, volume: vol }).play();
     }
 };
@@ -940,7 +940,7 @@ onAuthStateChanged(auth, async (user) => {
             }
 
             window.GameLogic.currentTrackIdx = window.GameLogic.myProfile.currentTrackIdx || 0;
-            let playlist = [ { key: 'bgm', title: 'Sweet-Onion', cover: 'Sweet-Onion.png' }, { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' }, { key: 'bgm-inside', title: 'Inside-of-Onion', cover: 'Inside-of-Onion.png' }, { key: 'bgm-kyo', title: '귀엽다!귀엽다!Onion!', cover: 'kyo-kyo-onion.png' }, { key: 'bgm-world', title: '世界他會自己轉動', cover: "OMusic-World'll-rol.png" }, { key: 'bgm-lazy', title: 'Onion Lazy Cat', cover: 'OMusic-Onion-Lazy-Cat.png' }, { key: 'bgm-way', title: '洋蔥滾動自己路', cover: 'OMusic-Onion-go-my-way.png' } ];
+            let playlist = [ { key: 'bgm', title: 'Sweet-Onion', cover: 'Sweet-Onion.png' }, { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' }, { key: 'bgm-inside', title: 'Inside-of-Onion', cover: 'Inside-of-Onion.png' }, { key: 'bgm-kyo', title: '귀엽다!귀엽다!Onion!', cover: 'kyo-kyo-onion.png' }, { key: 'bgm-world', title: '世界他會自己轉動', cover: "OMusic-World'll-rol.png" }, { key: 'bgm-lazy', title: 'Onion Lazy Cat', cover: 'OMusic-Onion-Lazy-Cat.png' }, { key: 'bgm-way', title: '洋蔥滾動自己路', cover: 'OMusic-Onion-go-my-way.png' }, { key: 'bgm-corazon', title: 'Onion acre Corazón', cover: 'OMusic-Onion-acre-Corazón.png' }, { key: 'bgm-fire', title: '烈艷洋蔥', cover: 'OMusic-Onion-Got-Fire.png' } ];
             let track = playlist[window.GameLogic.currentTrackIdx];
             let coverEl = document.getElementById('music-cover'), titleEl = document.getElementById('music-title');
             if (coverEl) coverEl.src = track.cover; if (titleEl) titleEl.innerText = track.title;
@@ -1283,7 +1283,7 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('onion-skin', 'onion-skin-sprite.png', { frameWidth: 50, frameHeight: 50 }); this.load.spritesheet('onion-skin-old', 'onion-skin-old-sprite.png', { frameWidth: 65, frameHeight: 65 });
         this.load.image('onion', 'onion-sprite.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-down', 'onion-down.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-up', 'onion-up.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-walk', 'onion-right.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-idle', 'onion-idle.png', { frameWidth: 75, frameHeight: 75 });
         
-        this.load.audio('bgm', 'Sweet-Onion.mp3'); this.load.audio('bgm-heart', 'Onion-Heart.mp3'); this.load.audio('bgm-inside', 'Inside-of-Onion.mp3'); this.load.audio('bgm-kyo', 'kyo-kyo-onion.mp3'); this.load.audio('bgm-world', "OMusic-World'll-roll.mp3"); this.load.audio('bgm-lazy', 'OMusic-Onion-Lazy-Cat.mp3'); this.load.audio('bgm-way', 'OMusic-Onion-go-my-way.mp3');
+        this.load.audio('bgm', 'Sweet-Onion.mp3'); this.load.audio('bgm-heart', 'Onion-Heart.mp3'); this.load.audio('bgm-inside', 'Inside-of-Onion.mp3'); this.load.audio('bgm-kyo', 'kyo-kyo-onion.mp3'); this.load.audio('bgm-world', "OMusic-World'll-roll.mp3"); this.load.audio('bgm-lazy', 'OMusic-Onion-Lazy-Cat.mp3'); this.load.audio('bgm-way', 'OMusic-Onion-go-my-way.mp3'); this.load.audio('bgm-corazon', 'OMusic-Onion-acre-Corazón.mp3'); this.load.audio('bgm-fire', 'OMusic-Onion-Got-Fire.mp3');
         this.load.audio('jump04', 'jump04.mp3'); this.load.audio('launcher1', 'launcher1.mp3'); this.load.audio('bomb', 'bomb.mp3'); this.load.audio('fireworks-in-the-sky', 'fireworks-in-the-sky.mp3'); this.load.audio('shop-boss-thank-you', 'shop-boss-thank-you.mp3'); this.load.audio('shop-check-buying', 'shop-check-buying.mp3');
 
         // 載入米米專屬音效
@@ -1553,7 +1553,7 @@ class MainScene extends Phaser.Scene {
         this.isCafe = this.sceneName === "cafe";
         
         // 修正：徹底重構音樂切換邏輯，神龕擁有絕對獨立的背景音樂，不再與儀式狀態綁定
-        let allBgms = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way'];
+        let allBgms = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire'];
         let shrineBgms = ['shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'];
         
         let volControl = document.getElementById('bgm-volume');
