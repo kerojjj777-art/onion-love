@@ -3364,13 +3364,14 @@ window.syncRpsState = function(roomId) {
                 document.getElementById('rps-modal').classList.remove('rps-gaming-bg');
                 
                 // 同步確保雙方都會觸發並打開 UI，防止有一方沒點到卡死
+                // 修正：拔除 if (modal.style.display !== 'flex') 判斷
+                // 確保從「等待對手畫面」過來的第一位玩家，也能成功打開下注 UI
                 let modal = document.getElementById('rps-modal');
-                if (modal.style.display !== 'flex') {
-                    modal.style.display = 'flex';
-                    document.getElementById('rps-phase-bet').style.display = 'flex';
-                    document.getElementById('rps-phase-game').style.display = 'none';
-                    document.getElementById('rps-phase-result').style.display = 'none';
-                }
+                modal.style.display = 'flex';
+                document.getElementById('rps-phase-bet').style.display = 'flex';
+                document.getElementById('rps-phase-game').style.display = 'none';
+                document.getElementById('rps-phase-result').style.display = 'none';
+                
                 // 每次回到下注畫面都要重置確認按鈕
                 document.getElementById('rps-bet-confirm-btn').style.display = 'block';
 
