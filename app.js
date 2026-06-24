@@ -461,8 +461,9 @@ function createSystemUI() {
                         #rps-opponent-img { width: 220px !important; height: 220px !important; }
                         #rps-me-img { width: 250px !important; height: 250px !important; }
                         #rps-me-container { bottom: 15px !important; left: 10px !important; }
-                        .spam-phase-pos-me { left: 20% !important; transform: translateY(-50%) scale(0.65) !important; bottom: auto !important; top: 50% !important; }
-                        .spam-phase-pos-op { left: 80% !important; right: auto !important; transform: translateY(-50%) scale(0.65) !important; top: 50% !important; }
+                        /* 修正2：將連擊區分為明確的攻擊方(atk)與防守方(def)，徹底避免位置飄移 */
+                        .spam-phase-pos-atk { left: -5% !important; right: auto !important; transform: translateY(-50%) scale(0.65) !important; bottom: auto !important; top: 50% !important; }
+                        .spam-phase-pos-def { left: auto !important; right: -5% !important; transform: translateY(-50%) scale(0.65) !important; bottom: auto !important; top: 50% !important; }
                         #rps-center-msg { font-size: 40px !important; white-space: nowrap; }
                     }
                 </style>
@@ -3430,6 +3431,12 @@ window.syncRpsState = function(roomId) {
                 document.getElementById('rps-opponent-img').style.backgroundImage = "url('playroom-rps-onion-other-ready.png')";
                 
                 document.querySelectorAll('.rps-choice-img').forEach(el => el.classList.remove('rps-choice-selected'));
+                // 修正1：依據資料庫中已選擇的選項，重新補回發亮特效，防止被 onValue 重置
+                if (myData.rpsChoice) {
+                    let selBtn = document.getElementById(`rps-choice-${myData.rpsChoice}`);
+                    if (selBtn) selBtn.classList.add('rps-choice-selected');
+                }
+                
                 let meC = document.getElementById('rps-me-container');
                 let opC = document.getElementById('rps-opponent-container');
                 meC.className = ""; opC.className = ""; // 拔除連擊階段的鎖定 class
@@ -3518,16 +3525,16 @@ window.syncRpsState = function(roomId) {
                 meC.style.cssText = "position:absolute; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:20;";
                 opC.style.cssText = "position:absolute; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:10;";
                 
-                // 修正5：套用自定義 class 以支援手機版自適應大小與位置
+                // 修正2.1：套用明確區分攻防的 class 以支援手機版精準定位
                 if (isWinner) {
-                    meC.className = "spam-phase-pos-me";
-                    opC.className = "spam-phase-pos-op";
+                    meC.className = "spam-phase-pos-atk";
+                    opC.className = "spam-phase-pos-def";
                     meC.style.left = '35%'; meC.style.top = '50%'; meC.style.transform = 'translate(-50%, -50%)';
                     opC.style.left = '65%'; opC.style.top = '50%'; opC.style.transform = 'translate(-50%, -50%)';
                 } else {
-                    meC.className = "spam-phase-pos-op";
+                    meC.className = "spam-phase-pos-def";
                     meC.style.left = '65%'; meC.style.top = '50%'; meC.style.transform = 'translate(-50%, -50%)';
-                    opC.className = "spam-phase-pos-me";
+                    opC.className = "spam-phase-pos-atk";
                     opC.style.left = '35%'; opC.style.top = '50%'; opC.style.transform = 'translate(-50%, -50%)';
                 }
                 
