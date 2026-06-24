@@ -480,14 +480,15 @@ function createSystemUI() {
                     @keyframes play-rps { 100% { background-position: -600px center; } }
                     /* 手機版面位置拉高調整與大小修正 */
                     @media (max-width: 768px) {
-                        #rps-choices { bottom: 35% !important; left: 50% !important; transform: translateX(-50%) !important; gap: 15px !important; }
+                        /* 修正：將選項按鈕改為中央偏上 */
+                        #rps-choices { top: 35% !important; bottom: auto !important; left: 50% !important; transform: translateX(-50%) !important; gap: 15px !important; z-index: 50 !important; }
                         #rps-choices img { width: 70px !important; }
                         #rps-opponent-img { width: 220px !important; height: 220px !important; }
                         #rps-me-img { width: 250px !important; height: 250px !important; }
                         #rps-me-container { bottom: 15px !important; left: 10px !important; }
-                        /* 修正：統一縮小並固定比例防止被裁切 */
-                        .spam-phase-pos-atk { left: 30% !important; right: auto !important; transform: translate(-50%, -50%) scale(0.7) !important; bottom: auto !important; top: 45% !important; }
-                        .spam-phase-pos-def { left: 70% !important; right: auto !important; transform: translate(-50%, -50%) scale(0.7) !important; bottom: auto !important; top: 45% !important; }
+                        /* 修正：將攻擊方與防守方往畫面中央靠近 (35% 與 65%) */
+                        .spam-phase-pos-atk { left: 35% !important; right: auto !important; transform: translate(-50%, -50%) scale(0.7) !important; bottom: auto !important; top: 45% !important; }
+                        .spam-phase-pos-def { left: 65% !important; right: auto !important; transform: translate(-50%, -50%) scale(0.7) !important; bottom: auto !important; top: 45% !important; }
                         #rps-center-msg { font-size: 80px !important; white-space: nowrap; }
                     }
                 </style>
@@ -3734,10 +3735,11 @@ window.syncRpsState = function(roomId) {
                     let tEl = document.getElementById('rps-spam-timer');
                     
                     if (remain > 0) {
-                        if (tEl.innerText != remain) {
-                            tEl.innerText = remain;
-                            // 秒數漸變放大並淡出 (放大兩倍)
-                            tEl.animate([ { transform: 'scale(2)', opacity: 1 }, { transform: 'scale(3.6)', opacity: 0 } ], { duration: 900, easing: 'ease-out' });
+                        if (rpsMsg.innerText != remain) {
+                            rpsMsg.innerText = remain;
+                            if (tEl) tEl.innerText = remain; // 確保連擊計時器也被同步設定
+                            // 修正：對中央的大字體做漸變放大與淡出
+                            rpsMsg.animate([ { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 }, { transform: 'translate(-50%, -50%) scale(3)', opacity: 0 } ], { duration: 900, easing: 'ease-out' });
                             
                             // 播放倒數音效
                             if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) {
