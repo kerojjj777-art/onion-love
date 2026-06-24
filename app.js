@@ -3156,17 +3156,45 @@ window.replyInvite = function(replyType) {
     if (attacker) {
         import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
             module.update(module.ref(window.GameLogic.db, `serverEvents/inviteReplies/${attacker}`), { reply: replyType, replierUid: window.GameLogic.currentUser.uid, time: Date.now() });
+            
+            if (replyType === 'yes') {
+                window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null;
+                let roomId = `playroom_${attacker}_${window.GameLogic.currentUser.uid}`;
+                
+                // 修正2：進入 Playroom 前，強迫清空舊有房間狀態，確保一切從頭開始
+                module.set(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'none' });
+                
+                window.switchScene('playroom', { roomId: roomId });
+            }
         });
-        if (replyType === 'yes') {
-            window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null;
-            let roomId = `playroom_${attacker}_${window.GameLogic.currentUser.uid}`;
-            window.switchScene('playroom', { roomId: roomId });
-        }
     }
+};
+
+// 修正2：補上遺失的重置與斷線處理函式，確保隨時可將機台清空
+window.cancelRpsGame = function(roomId) {
+    let id = roomId || window.GameLogic.currentRoomId;
+    if (!id) return;
+    
+    document.getElementById('rps-modal').style.display = 'none';
+    let waitPhase = document.getElementById('rps-phase-waiting');
+    if (waitPhase) waitPhase.style.display = 'none';
+    
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.update(module.ref(window.GameLogic.db, `playroomGames/${id}`), { state: 'none' });
+        if (window.GameLogic.currentUser) {
+            module.update(module.ref(window.GameLogic.db, `playroomGames/${id}/p_${window.GameLogic.currentUser.uid}`), { machineReady: null, betReady: null });
+        }
+    });
+};
+
+window.handleRpsDisconnect = function(roomId) {
+    alert("對方已離線或離開交誼廳，機台連線中斷！");
+    window.cancelRpsGame(roomId);
 };
 
 window.exitPlayroom = function() {
     document.getElementById('rps-modal').style.display = 'none';
+    window.cancelRpsGame(); // 離開時連帶重置
     window.switchScene('doghouse');
 };
 
@@ -3175,10 +3203,9 @@ window.openRpsBetting = function(roomId) {
     let players = Object.keys(window.GameLogic.playroomPlayers || {});
     if (players.length < 2) return alert("等對方進來再開始喔！");
     
-    // 僅透過寫入 Firebase 觸發雙方同步介面開啟，由 syncRpsState 接管防呆同步
+    // 修正1：按下A只改變自己的機台準備狀態，不強制所有人進入下注
     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'betting' });
-        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}/p_${window.GameLogic.currentUser.uid}`), { betReady: false, betValue: 0 });
+        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}/p_${window.GameLogic.currentUser.uid}`), { machineReady: true });
     });
 };
 
@@ -3294,6 +3321,43 @@ window.syncRpsState = function(roomId) {
             
             let myData = data[`p_${myUid}`] || {};
             let otherData = data[`p_${otherUid}`] || {};
+
+            // --- 修正1：動態插入等待機台畫面 ---
+            let waitPhase = document.getElementById('rps-phase-waiting');
+            if (!waitPhase) {
+                waitPhase = document.createElement('div');
+                waitPhase.id = 'rps-phase-waiting';
+                waitPhase.style.cssText = 'display:none; flex-direction:column; align-items:center; z-index:10;';
+                waitPhase.innerHTML = '<h2 style="color:#00ffff;">機台連線中...</h2><p style="margin-bottom: 20px;">等待另一位玩家也對機台按下 A 鍵確認加入</p><button class="btn-secondary" style="padding:10px 30px; font-size:18px;" onclick="window.cancelRpsGame()">取消連線</button>';
+                document.getElementById('rps-modal').appendChild(waitPhase);
+            }
+
+            // 判斷是否雙方都按了 A，進入等待或由主機端觸發正式下注
+            if (!state || state === 'none') {
+                if (myData.machineReady) {
+                    if (otherData.machineReady) {
+                        if (uids.sort()[0] === myUid) {
+                            module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'betting' });
+                            module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}/p_${myUid}`), { betReady: false, betValue: 0, machineReady: null });
+                            module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}/p_${otherUid}`), { betReady: false, betValue: 0, machineReady: null });
+                        }
+                    } else {
+                        // 只有我按了 A，顯示等待畫面
+                        document.getElementById('rps-modal').style.display = 'flex';
+                        document.getElementById('rps-modal').classList.remove('rps-gaming-bg');
+                        document.getElementById('rps-phase-bet').style.display = 'none';
+                        document.getElementById('rps-phase-game').style.display = 'none';
+                        document.getElementById('rps-phase-result').style.display = 'none';
+                        waitPhase.style.display = 'flex';
+                    }
+                } else {
+                    document.getElementById('rps-modal').style.display = 'none';
+                    waitPhase.style.display = 'none';
+                }
+                return; 
+            }
+            
+            waitPhase.style.display = 'none'; // 進入正式階段後隱藏等待畫面
 
             if (state === 'betting') {
                 // 清除戰鬥漸變背景
