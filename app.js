@@ -3247,27 +3247,6 @@ window.replyInvite = function(replyType) {
 
 // 修正2：補上遺失的重置與斷線處理函式，確保隨時可將機台清空
 window.cancelRpsGame = function(roomId) {
-    let id = roomId || window.GameLogic.currentRoomId;
-    if (!id) return;
-    
-    document.getElementById('rps-modal').style.display = 'none';
-    let waitPhase = document.getElementById('rps-phase-waiting');
-    if (waitPhase) waitPhase.style.display = 'none';
-    let summaryEl = document.getElementById('rps-phase-summary');
-    if (summaryEl) summaryEl.style.display = 'none';
-    
-    // 清除結算音效鎖與落金粉粒子
-    window.calcResultSoundPlayed = false;
-    let dust = document.getElementById('rps-dust-container');
-    if (dust) dust.innerHTML = '';
-    
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        module.update(module.ref(window.GameLogic.db, `playroomGames/${id}`), { state: 'none' });
-        if (window.GameLogic.currentUser) {
-            module.update(module.ref(window.GameLogic.db, `playroomGames/${id}/p_${window.GameLogic.currentUser.uid}`), { machineReady: null, betReady: null });
-        }
-    });
-};
 
 window.handleRpsDisconnect = function(roomId) {
     if (window.rpsPhase === 'calc_result') {
@@ -3486,6 +3465,11 @@ window.syncRpsState = function(roomId) {
             waitPhase.style.display = 'none'; // 進入正式階段後隱藏等待畫面
 
             if (state === 'betting') {
+                // ==========================================
+                // 新增：確保進入下注階段時，重置本機金流鎖定
+                window.rpsLocalBetDeducted = false; 
+                window.rpsLocalRewardAdded = false;
+                // ==========================================
                 // 清除所有背景動畫 class
                 document.getElementById('rps-modal').className = '';
                 
@@ -3601,7 +3585,15 @@ window.syncRpsState = function(roomId) {
                     <hr style="width:100%; border:1px dashed #777; margin:15px 0;">
                     <h1 style="color:#ff4500; font-size:36px; margin:0; text-shadow:0 0 10px #ff0000;">總獎金池: ${finalPool}</h1>
                 `;
-                
+                // ==========================================
+                // 新增：雙方在本機端同步扣除下注金額，並立即更新 UI
+                if (!window.rpsLocalBetDeducted) {
+                    window.rpsLocalBetDeducted = true;
+                    window.GameLogic.myProfile.coins = Math.max(0, (window.GameLogic.myProfile.coins || 0) - (data.agreedBet || 0));
+                    let coinsEl = document.getElementById("vp-coins");
+                    if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
+                }
+                // ==========================================
                 if (uids.sort()[0] === myUid && !data.summaryProcessed) {
                     module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { summaryProcessed: true });
                     setTimeout(() => {
@@ -4135,6 +4127,16 @@ window.syncRpsState = function(roomId) {
                 
                 document.getElementById('rps-result-desc').innerHTML = tDesc;
                 
+                // ==========================================
+                // 新增：雙方在本機端同步發放最終獲得的獎金，並立即更新 UI
+                if (!window.rpsLocalRewardAdded) {
+                    window.rpsLocalRewardAdded = true;
+                    window.GameLogic.myProfile.coins = (window.GameLogic.myProfile.coins || 0) + getAmt;
+                    let coinsEl = document.getElementById("vp-coins");
+                    if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
+                }
+                // ==========================================
+                
                 // 播放結算音效與撒滿金粉特效
                 if (!window.calcResultSoundPlayed) {
                     window.calcResultSoundPlayed = true;
@@ -4166,6 +4168,36 @@ window.syncRpsState = function(roomId) {
                             { transform: `translateY(${window.innerHeight + 100}px) rotate(360deg)`, opacity: 0 }
                         ], { duration: duration, delay: delay, iterations: Infinity });
                     }
+                }
+                
+                if (uids.sort()[0] === myUid && !data.moneyDistributed) {
+                    module.get(module.ref(window.GameLogic.db, `users`)).then(uSnap => {
+                        let uDB = uSnap.val();
+                        let p1C = uDB[myUid]?.coins || 0;
+                        let p2C = uDB[otherUid]?.coins || 0;
+                        
+                        // ==========================================
+                        // 修正：主機端分配資料庫獎金時，必須用客觀視角判斷，不能直接套用上方只算給本機看的 getAmt
+                        let hostTie = (myWins === otherWins);
+                        let hostWin = (myWins > otherWins);
+                        let halfPool = Math.round(finalPool / 2);
+                        
+                        if (hostTie) { 
+                            p1C += halfPool; 
+                            p2C += halfPool; 
+                        }
+                        else if (hostWin) { 
+                            p1C += finalPool; 
+                        }
+                        else { 
+                            p2C += finalPool; 
+                        }
+                        // ==========================================
+                        
+                        module.update(module.ref(window.GameLogic.db, `users/${myUid}`), { coins: p1C });
+                        module.update(module.ref(window.GameLogic.db, `users/${otherUid}`), { coins: p2C });
+                        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { moneyDistributed: true });
+                    });
                 }
                 
                 if (uids.sort()[0] === myUid && !data.moneyDistributed) {
