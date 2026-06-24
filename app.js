@@ -514,7 +514,7 @@ function createSystemUI() {
                     <div id="rps-me-status" style="font-size:24px; font-weight:bold; color:#44ff44; text-shadow:2px 2px 0 #000;">等待中</div>
                 </div>
                 
-                <div id="rps-center-msg" style="position:absolute; top:20%; left:50%; transform:translate(-50%, -50%); font-size:160px; font-weight:bold; color:#ffcc00; text-shadow: 6px 6px 0 #d9534f; z-index:10; transition: top 0.5s ease;">START!</div>
+                <div id="rps-center-msg" style="position:absolute; top:20%; left:50%; transform:translate(-50%, -50%); font-size:120px; font-weight:bold; color:#ffcc00; text-shadow: 6px 6px 0 #d9534f; z-index:100; white-space:nowrap; transition: top 0.5s ease;">START!</div>
                 
                 <div id="rps-choices" style="position:absolute; bottom:80px; left:50%; transform:translateX(-50%); display:flex; gap:20px; z-index:30;">
                     <img id="rps-choice-scissors" class="rps-choice-img" src="playroom-rps-machine-scissors.png" style="width:120px; cursor:pointer;" onpointerdown="window.selectRps('scissors'); event.stopPropagation();">
@@ -1718,7 +1718,9 @@ class MainScene extends Phaser.Scene {
                     if (data.state === 'stealing') this.mimiSprite.play('mimi-steal', true);
                     else if (data.state === 'laughing') this.mimiSprite.play('mimi-laugh', true);
                     else if (data.state === 'down') { 
-                        this.mimiSprite.play('mimi-down', true); 
+                        if (this.mimiSprite.anims.currentAnim?.key !== 'mimi-down') {
+                            this.mimiSprite.play('mimi-down', true);
+                        }
                         if (!this.mimiSprite.isBlinking) {
                             this.mimiSprite.isBlinking = true;
                             // 閃爍維持三秒後才會因為 active 變 false 被清除
@@ -3232,6 +3234,8 @@ window.cancelRpsGame = function(roomId) {
     document.getElementById('rps-modal').style.display = 'none';
     let waitPhase = document.getElementById('rps-phase-waiting');
     if (waitPhase) waitPhase.style.display = 'none';
+    let summaryEl = document.getElementById('rps-phase-summary');
+    if (summaryEl) summaryEl.style.display = 'none';
     
     // 清除結算音效鎖與落金粉粒子
     window.calcResultSoundPlayed = false;
@@ -3532,13 +3536,58 @@ window.syncRpsState = function(roomId) {
                         let uDB = uSnap.val();
                         let p1C = (uDB[myUid]?.coins || 0) - avgBet;
                         let p2C = (uDB[otherUid]?.coins || 0) - avgBet;
+                        
+                        let maxBet = Math.max(0, Math.min(uDB[myUid]?.coins || 0, uDB[otherUid]?.coins || 0, 10000));
+                        let ratio = maxBet > 0 ? (avgBet / maxBet) : 0;
+                        let mult = 1;
+                        if (ratio > 2/3) mult = 2;
+                        else if (ratio > 1/3) mult = 1.5;
+
                         module.update(module.ref(window.GameLogic.db, `users/${myUid}`), { coins: Math.max(0, p1C) });
                         module.update(module.ref(window.GameLogic.db, `users/${otherUid}`), { coins: Math.max(0, p2C) });
                         
-                        // 初始化三戰兩勝計數與輪次
+                        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { 
+                            state: 'bet_summary', 
+                            agreedBet: avgBet, 
+                            bonusMult: mult,
+                            summaryStartTime: Date.now()
+                        });
+                    });
+                }
+            }
+            else if (state === 'bet_summary') {
+                document.getElementById('rps-phase-bet').style.display = 'none';
+                document.getElementById('rps-phase-game').style.display = 'none';
+                document.getElementById('rps-phase-result').style.display = 'none';
+                
+                let summaryEl = document.getElementById('rps-phase-summary');
+                if (!summaryEl) {
+                    summaryEl = document.createElement('div');
+                    summaryEl.id = 'rps-phase-summary';
+                    summaryEl.style.cssText = 'display:flex; flex-direction:column; align-items:center; z-index:10; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:80%; max-width:400px; text-align:center; background:rgba(0,0,0,0.85); border:3px solid #ffcc00; padding:25px; border-radius:15px; box-shadow: 0 0 30px #ffcc00;';
+                    document.getElementById('rps-modal').appendChild(summaryEl);
+                }
+                summaryEl.style.display = 'flex';
+                
+                let totalBet = (data.agreedBet || 0) * 2;
+                let mult = data.bonusMult || 1;
+                let multText = mult === 2 ? '2.0倍 (激進下注！)' : (mult === 1.5 ? '1.5倍 (勇敢下注)' : '無加成 (保守下注)');
+                let multColor = mult === 2 ? '#ff00ff' : (mult === 1.5 ? '#00ffff' : '#aaa');
+                let finalPool = Math.round(totalBet * mult);
+                
+                summaryEl.innerHTML = `
+                    <h2 style="color:#ffcc00; margin-top:0; border-bottom:1px solid #ffcc00; padding-bottom:10px;">結算下注</h2>
+                    <p style="font-size:18px; color:#fff; margin:10px 0;">雙方平均確認下注: <span style="color:#ffcc00;">${data.agreedBet}</span></p>
+                    <p style="font-size:18px; color:#fff; margin:10px 0;">系統獎勵: <span style="color:${multColor}; font-weight:bold;">${multText}</span></p>
+                    <hr style="width:100%; border:1px dashed #777; margin:15px 0;">
+                    <h1 style="color:#ff4500; font-size:36px; margin:0; text-shadow:0 0 10px #ff0000;">總獎金池: ${finalPool}</h1>
+                `;
+                
+                if (uids.sort()[0] === myUid && !data.summaryProcessed) {
+                    module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { summaryProcessed: true });
+                    setTimeout(() => {
                         module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { 
                             state: 'rps_countdown', 
-                            agreedBet: avgBet, 
                             rpsStartTime: Date.now(),
                             roundCount: 1,
                             [`p_${myUid}/roundWins`]: 0,
@@ -3546,10 +3595,13 @@ window.syncRpsState = function(roomId) {
                             [`p_${myUid}/rpsChoice`]: null,
                             [`p_${otherUid}/rpsChoice`]: null
                         });
-                    });
+                    }, 3000);
                 }
             }
             else if (state === 'rps_countdown') {
+                let summaryEl = document.getElementById('rps-phase-summary');
+                if (summaryEl) summaryEl.style.display = 'none';
+                
                 // 進入猜拳倒數，套用漸變底色 (5秒黑變深橘)
                 document.getElementById('rps-modal').className = 'rps-bg-phase-count';
                 
@@ -3641,6 +3693,12 @@ window.syncRpsState = function(roomId) {
                 // 移除跳躍動畫，套用定格放大
                 document.getElementById('rps-me-img').className = "rps-anim-result-scale";
                 document.getElementById('rps-opponent-img').className = "rps-anim-result-scale";
+                
+                // 讓雙方角色容器斜向中央靠攏，模擬對戰衝突感
+                let meC = document.getElementById('rps-me-container');
+                let opC = document.getElementById('rps-opponent-container');
+                meC.style.transform = "translate(15vw, -15vh)";
+                opC.style.transform = "translate(-15vw, 15vh)";
                 
                 let result = 'tie';
                 if ((mC === 'scissors' && oC === 'paper') || (mC === 'stone' && oC === 'scissors') || (mC === 'paper' && oC === 'stone')) result = 'win';
@@ -4035,7 +4093,7 @@ window.syncRpsState = function(roomId) {
                 
                 let myWins = myData.roundWins || 0;
                 let otherWins = otherData.roundWins || 0;
-                let totalPool = (data.agreedBet || 0) * 2;
+                let totalPool = Math.round((data.agreedBet || 0) * 2 * (data.bonusMult || 1));
                 
                 let taxRate = 0;
                 if (totalPool >= 5000) taxRate = 0.15;
