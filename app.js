@@ -1939,8 +1939,8 @@ class MainScene extends Phaser.Scene {
                     this.localPlayer.isThrowing = true;
                     this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
                     
-                    // 新增11：向全服發送投擲動畫訊號
-                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `serverEvents/planeThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), targetUid: targetUid, scene: this.sceneName }); });
+                    // 新增11：向全服發送投擲動畫訊號 (修正 targetUid 為空會報錯的問題)
+                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `serverEvents/planeThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), targetUid: targetUid || 'none', scene: this.sceneName }); });
                     
                     if (targetUid && targetSprite) {
                         let plane = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'plane').setDepth(15);
@@ -2219,14 +2219,16 @@ class MainScene extends Phaser.Scene {
             for (let uid in throws) { 
                 if (uid === window.GameLogic.currentUser.uid) continue; 
                 let data = throws[uid]; 
-                if (data && data.time && (Date.now() - data.time < 1000) && data.scene === this.sceneName) { 
-                    if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { 
+                // 修正2：放大容錯時間至 3000ms 解決兩台電腦間的時差導致接收不到動畫，並加上 lastPlaneTime 標記避免重複播放
+                if (data && data.time && (Date.now() - data.time < 3000) && data.scene === this.sceneName) { 
+                    if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite && (!this.otherPlayers[uid].lastPlaneTime || this.otherPlayers[uid].lastPlaneTime !== data.time)) { 
+                        this.otherPlayers[uid].lastPlaneTime = data.time;
                         let opSprite = this.otherPlayers[uid].sprite; 
                         opSprite.play('throw', true); 
                         window.playSFX(this, 'launcher1'); 
                         let targetX = opSprite.x + (opSprite.flipX ? -200 : 200);
                         let targetY = opSprite.y;
-                        if (data.targetUid && this.otherPlayers[data.targetUid]) {
+                        if (data.targetUid && data.targetUid !== 'none' && this.otherPlayers[data.targetUid]) {
                             targetX = this.otherPlayers[data.targetUid].sprite.x;
                             targetY = this.otherPlayers[data.targetUid].sprite.y;
                         } else if (data.targetUid === window.GameLogic.currentUser.uid) {
@@ -2344,8 +2346,8 @@ class MainScene extends Phaser.Scene {
         if (entity.lastNameData !== nameHash) { entity.lastNameData = nameHash; entity.nameText.setText(displayName); if(pData.color) entity.nameText.setColor(pData.color); const nameBounds = entity.nameText.getBounds(); const bgWidth = nameBounds.width + 16; entity.nameBg.clear().fillStyle(0x000000, 0.6).fillRoundedRect(-bgWidth / 2, -10, bgWidth, 20, 4); }
         entity.nameContainer.setPosition(sx, sy - 45);
         if (pData.bubbleMsg && (Date.now() - pData.bubbleTime < 10000)) { entity.bubbleContainer.setVisible(true); 
-            if (entity.lastBubbleData !== pData.bubbleMsg) { entity.lastBubbleData = pData.bubbleMsg; entity.bubbleText.setText(pData.bubbleMsg); const bounds = entity.bubbleText.getBounds(); const boxWidth = bounds.width + 20, boxHeight = bounds.height + 16; entity.bubbleBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 8).strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 8); }
-            const bounds = entity.bubbleText.getBounds(); entity.bubbleContainer.setPosition(sx, sy - 65 - (bounds.height + 16) / 2);
+            if (entity.lastBubbleData !== pData.bubbleMsg) { entity.lastBubbleData = pData.bubbleMsg; entity.bubbleText.setText(pData.bubbleMsg); const bounds = entity.bubbleText.getBounds(); const boxWidth = bounds.width + 20, boxHeight = bounds.height + 16; entity.bubbleBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 8).strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 8); entity.bubbleOffsetY = 65 + boxHeight / 2; }
+            entity.bubbleContainer.setPosition(sx, sy - (entity.bubbleOffsetY || 80)); // 修正3：避免每幀調用 getBounds 造成嚴重 Lag
         } else { entity.bubbleContainer.setVisible(false); } 
     }
     createFurniture(key, data) { 
@@ -2990,9 +2992,11 @@ class MainScene extends Phaser.Scene {
                 if (d < 150) { minDist = d; promptTarget = this.rpsMachine; promptMsg = "按A進行拳頭PK"; } 
             }
             if (promptTarget && !isPlacing) {
-                this.smartPromptText.setText(promptMsg).setVisible(true); const pBounds = this.smartPromptText.getBounds(); const pWidth = pBounds.width + 16, pHeight = pBounds.height + 8, ptX = promptTarget.x, ptY = promptTarget.y - 60; 
-                this.smartPromptBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(ptX - pWidth/2, ptY - pHeight/2, pWidth, pHeight, 6).strokeRoundedRect(ptX - pWidth/2, ptY - pHeight/2, pWidth, pHeight, 6).setVisible(true); this.smartPromptText.setPosition(ptX, ptY);
-            } else { this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false); }
+                if (this.lastPromptMsg !== promptMsg) { this.lastPromptMsg = promptMsg; this.smartPromptText.setText(promptMsg); const pBounds = this.smartPromptText.getBounds(); this.smartPromptW = pBounds.width + 16; this.smartPromptH = pBounds.height + 8; }
+                const ptX = promptTarget.x, ptY = promptTarget.y - 60; 
+                if (this.lastPromptDrawX !== ptX || this.lastPromptDrawY !== ptY || this.lastPromptDrawMsg !== promptMsg) { this.smartPromptBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(ptX - this.smartPromptW/2, ptY - this.smartPromptH/2, this.smartPromptW, this.smartPromptH, 6).strokeRoundedRect(ptX - this.smartPromptW/2, ptY - this.smartPromptH/2, this.smartPromptW, this.smartPromptH, 6); this.lastPromptDrawX = ptX; this.lastPromptDrawY = ptY; this.lastPromptDrawMsg = promptMsg; }
+                this.smartPromptBg.setVisible(true); this.smartPromptText.setPosition(ptX, ptY).setVisible(true);
+            } else { this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false); this.lastPromptDrawMsg = null; }
 
             if (window.GameLogic.armedItemState) {
                 let itemName = window.GameLogic.armedItemName || '水球'; let msg = "按A施放" + itemName; let lockOnDist = (window.GameLogic.energyActive && (window.GameLogic.myProfile.energy || 0) > 0) ? 350 : 150; let lockTargetUid = null; let lockTargetSprite = null; let isDummy = false;
@@ -3013,10 +3017,12 @@ class MainScene extends Phaser.Scene {
                     if (d < lockOnDist) { lockOnDist = d; lockTargetUid = 'mimi'; lockTargetSprite = this.mimiSprite; isDummy = false; isMimi = true; }
                 }
                 if (itemName === '煙火' && window.GameLogic.armedItemState === 'ready' && !lockTargetSprite) { msg = "按A施放全頻煙火"; }
-                this.waterPromptText.setText(msg).setVisible(true); const wpBounds = this.waterPromptText.getBounds(); const wpWidth = wpBounds.width + 20, wpHeight = wpBounds.height + 10; const wptX = px, wptY = py + 45; 
-                this.waterPromptBg.clear().fillStyle(0x0077cc, 0.8).lineStyle(2, 0xffffff, 1).fillRoundedRect(wptX - wpWidth/2, wptY - wpHeight/2, wpWidth, wpHeight, 6).strokeRoundedRect(wptX - wpWidth/2, wptY - wpHeight/2, wpWidth, wpHeight, 6).setVisible(true); this.waterPromptText.setPosition(wptX, wptY);
+                if (this.lastWaterPromptMsg !== msg) { this.lastWaterPromptMsg = msg; this.waterPromptText.setText(msg); const wpBounds = this.waterPromptText.getBounds(); this.waterPromptW = wpBounds.width + 20; this.waterPromptH = wpBounds.height + 10; }
+                const wptX = px, wptY = py + 45; 
+                if (this.lastWaterDrawX !== wptX || this.lastWaterDrawY !== wptY || this.lastWaterDrawMsg !== msg) { this.waterPromptBg.clear().fillStyle(0x0077cc, 0.8).lineStyle(2, 0xffffff, 1).fillRoundedRect(wptX - this.waterPromptW/2, wptY - this.waterPromptH/2, this.waterPromptW, this.waterPromptH, 6).strokeRoundedRect(wptX - this.waterPromptW/2, wptY - this.waterPromptH/2, this.waterPromptW, this.waterPromptH, 6); this.lastWaterDrawX = wptX; this.lastWaterDrawY = wptY; this.lastWaterDrawMsg = msg; } // 修正3：避免每幀 getBounds 造成嚴重 Lag
+                this.waterPromptBg.setVisible(true); this.waterPromptText.setPosition(wptX, wptY).setVisible(true);
                 if (lockTargetSprite) { this.lockOnTarget.setPosition(lockTargetSprite.x, lockTargetSprite.y - 40).setVisible(true); window.GameLogic.currentTargetSprite = lockTargetSprite; window.GameLogic.currentTargetUid = lockTargetUid; window.GameLogic.currentTargetType = isMimi ? 'mimi' : (isDummy ? 'dummy' : 'player'); } else { this.lockOnTarget.setVisible(false); window.GameLogic.currentTargetSprite = null; window.GameLogic.currentTargetUid = null; }
-            } else { if (this.waterPromptBg) { this.waterPromptBg.setVisible(false); this.waterPromptText.setVisible(false); this.lockOnTarget.setVisible(false); } }
+            } else { if (this.waterPromptBg) { this.waterPromptBg.setVisible(false); this.waterPromptText.setVisible(false); this.lockOnTarget.setVisible(false); this.lastWaterDrawMsg = null; } }
         }
         
         if (this.localPlayer.isInvincible) { this.localPlayer.sprite.setAlpha((Math.floor(time / 100) % 2 === 0) ? 0.5 : 1); } else { 
@@ -3688,7 +3694,9 @@ window.syncRpsState = function(roomId) {
                 if (window.rpsInterval) clearInterval(window.rpsInterval);
                 window.rpsInterval = setInterval(() => {
                     let elapsed = Date.now() - data.rpsStartTime;
+                    if (elapsed < 0) elapsed = 0; // 修正1：防止時差導致出現 6、7 秒
                     let remain = 5 - Math.floor(elapsed / 1000);
+                    if (remain > 5) remain = 5;
                     if (remain > 0) {
                         let textArr = [1, 2, 3, 4, 5];
                         let newText = textArr[remain-1] || remain;
@@ -3848,7 +3856,9 @@ window.syncRpsState = function(roomId) {
                 if (window.rpsInterval) clearInterval(window.rpsInterval);
                 window.rpsInterval = setInterval(() => {
                     let elapsed = Date.now() - data.spamStartTime;
+                    if (elapsed < 0) elapsed = 0; // 修正：防止時差導致出現 4、5 秒
                     let remain = 3 - Math.floor(elapsed / 1000);
+                    if (remain > 3) remain = 3;
                     let tEl = document.getElementById('rps-spam-timer');
                     
                     if (remain > 0) {
