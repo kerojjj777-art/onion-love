@@ -439,16 +439,18 @@ function createSystemUI() {
                 .rps-bg-phase-spam { animation: rps-bg-spam 0.5s infinite alternate !important; }
                 .rps-bg-phase-result { transition: background 1s; background: #000 !important; }
 
-                .rps-orbit { position: absolute; top: 50%; left: 50%; width: 150vw; height: 150vw; transform-origin: center; animation: orbit-spin 6s linear infinite, orbit-breathe 4s ease-in-out infinite; pointer-events: none; z-index: 0; margin-left: -75vw; margin-top: -75vw; opacity: 0.8; }
+                .rps-orbit { position: absolute; top: 50%; left: 50%; width: 150vw; height: 150vw; transform-origin: center; animation: orbit-breathe 4s ease-in-out infinite; pointer-events: none; z-index: 0; margin-left: -75vw; margin-top: -75vw; opacity: 0.8; }
                 .rps-orbit-dot { position: absolute; background: #39ff14; border-radius: 50%; box-shadow: 0 0 10px #39ff14, 0 0 20px #ffffff; animation: particle-rainbow 3s linear infinite; }
             </style>
             <div class="rps-orbit" id="rps-orbit-container">
-                ${Array.from({length: 200}).map(() => `<div class="rps-orbit-dot" style="top:${Math.random()*100}%; left:${Math.random()*100}%; width:${Math.random()*8+4}px; height:${Math.random()*8+4}px; animation-delay:${Math.random()*3}s;"></div>`).join('')}
+                <div style="position:absolute; top:0; left:0; width:100%; height:100%; animation: orbit-spin 2s linear infinite; transform-origin: center;">
+                    ${Array.from({length: 200}).map(() => `<div class="rps-orbit-dot" style="top:${Math.random()*100}%; left:${Math.random()*100}%; width:${Math.random()*8+4}px; height:${Math.random()*8+4}px; animation-delay:${Math.random()*3}s;"></div>`).join('')}
+                </div>
             </div>
-            <div id="rps-bubble-container">
-                ${Array.from({length: 50}).map(() => `<div class="rps-blue-bubble" style="left:${Math.random()*100}%; width:${Math.random()*10+5}px; height:${Math.random()*10+5}px; animation-duration:${Math.random()*4+3}s; animation-delay:${Math.random()*5}s;"></div>`).join('')}
+            <div id="rps-bubble-container" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:1;">
+                ${Array.from({length: 50}).map(() => `<div class="rps-blue-bubble" style="position:absolute; bottom:-20px; left:${Math.random()*100}%; width:${Math.random()*10+5}px; height:${Math.random()*10+5}px; animation-duration:${Math.random()*4+3}s; animation-delay:${Math.random()*5}s;"></div>`).join('')}
             </div>
-            <div id="rps-phase-bet" style="display:none; flex-direction:column; align-items:center; width:80%; z-index:10;">
+            <div id="rps-phase-bet" style="display:none; flex-direction:column; align-items:center; width:80%; z-index:10; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);">
                 <h2 style="color:#ffcc00;">選擇籌碼</h2>
                 <p>最多只能押雙方存款較低者的全部身家</p>
                 
@@ -3391,7 +3393,7 @@ window.syncRpsState = function(roomId) {
             if (!waitPhase) {
                 waitPhase = document.createElement('div');
                 waitPhase.id = 'rps-phase-waiting';
-                waitPhase.style.cssText = 'display:none; flex-direction:column; align-items:center; z-index:10;';
+                waitPhase.style.cssText = 'display:none; flex-direction:column; align-items:center; z-index:10; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:100%; text-align:center;';
                 waitPhase.innerHTML = '<h2 style="color:#00ffff;">機台連線中...</h2><p style="margin-bottom: 20px;">等待另一位玩家也對機台按下 A 鍵確認加入</p><button class="btn-secondary" style="padding:10px 30px; font-size:18px;" onclick="window.cancelRpsGame()">取消連線</button>';
                 document.getElementById('rps-modal').appendChild(waitPhase);
             }
