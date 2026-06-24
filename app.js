@@ -427,14 +427,21 @@ function createSystemUI() {
         <div id="rps-modal" onpointerdown="event.stopPropagation()" onwheel="event.stopPropagation()" ontouchmove="event.stopPropagation()" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:9999; flex-direction:column; align-items:center; justify-content:center; color:#fff; overflow:hidden;">
             <style>
                 @keyframes orbit-spin { 100% { transform: rotate(360deg); } }
-                @keyframes rps-bg-breathe { 0% { background: #000; } 50% { background: #1a331a; } 100% { background: #000; } }
+                @keyframes orbit-spin { 100% { transform: rotate(360deg); } }
+                @keyframes rps-bg-breathe { 0% { background: #000; } 50% { background: #ffffff; } 100% { background: #000; } }
+                @keyframes rps-bubble-up { 0% { transform: translateY(100vh) scale(0.5); opacity: 0; } 20% { opacity: 0.8; } 100% { transform: translateY(-10vh) scale(1.5); opacity: 0; } }
                 .rps-gaming-bg { animation: rps-bg-breathe 4s infinite !important; }
                 .rps-orbit { position: absolute; top: 50%; left: 50%; width: 150vw; height: 150vw; transform-origin: center; animation: orbit-spin 6s linear infinite; pointer-events: none; z-index: 0; margin-left: -75vw; margin-top: -75vw; opacity: 0.6; }
                 .rps-orbit-dot { position: absolute; background: #39ff14; border-radius: 50%; box-shadow: 0 0 10px #39ff14, 0 0 20px #39ff14, 0 0 30px #ffffff; }
+                .rps-blue-bubble { position: absolute; background: #00ffff; border-radius: 50%; box-shadow: 0 0 10px #00ffff, 0 0 20px #00aaff; animation: rps-bubble-up linear infinite; z-index: 1; pointer-events: none; }
             </style>
             <div class="rps-orbit" id="rps-orbit-container">
-                ${Array.from({length: 40}).map(() => `<div class="rps-orbit-dot" style="top:${Math.random()*100}%; left:${Math.random()*100}%; width:${Math.random()*8+4}px; height:${Math.random()*8+4}px;"></div>`).join('')}
+                ${Array.from({length: 200}).map(() => `<div class="rps-orbit-dot" style="top:${Math.random()*100}%; left:${Math.random()*100}%; width:${Math.random()*8+4}px; height:${Math.random()*8+4}px;"></div>`).join('')}
             </div>
+            <div id="rps-bubble-container">
+                ${Array.from({length: 50}).map(() => `<div class="rps-blue-bubble" style="left:${Math.random()*100}%; width:${Math.random()*10+5}px; height:${Math.random()*10+5}px; animation-duration:${Math.random()*4+3}s; animation-delay:${Math.random()*5}s;"></div>`).join('')}
+            </div>
+            <div id="rps-phase-bet" style="display:none; flex-direction:column; align-items:center; width:80%; z-index:10;">
             <div id="rps-phase-bet" style="display:none; flex-direction:column; align-items:center; width:80%; z-index:10;">
                 <h2 style="color:#ffcc00;">選擇籌碼</h2>
                 <p>最多只能押雙方存款較低者的全部身家</p>
@@ -470,18 +477,20 @@ function createSystemUI() {
                         #rps-opponent-img { width: 220px !important; height: 220px !important; }
                         #rps-me-img { width: 250px !important; height: 250px !important; }
                         #rps-me-container { bottom: 15px !important; left: 10px !important; }
-                        /* 修正2：將連擊區分為明確的攻擊方(atk)與防守方(def)，徹底避免位置飄移 */
-                        .spam-phase-pos-atk { left: -5% !important; right: auto !important; transform: translateY(-50%) scale(0.65) !important; bottom: auto !important; top: 50% !important; }
-                        .spam-phase-pos-def { left: auto !important; right: -5% !important; transform: translateY(-50%) scale(0.65) !important; bottom: auto !important; top: 50% !important; }
+                        /* 調整：手機版連擊階段將雙方對齊在畫面中央水平線 (top: 40%)，並稍微放大 (scale 0.85) */
+                        .spam-phase-pos-atk { left: 5% !important; right: auto !important; transform: translateY(-50%) scale(0.85) !important; bottom: auto !important; top: 40% !important; }
+                        .spam-phase-pos-def { left: auto !important; right: 5% !important; transform: translateY(-50%) scale(0.85) !important; bottom: auto !important; top: 40% !important; }
                         #rps-center-msg { font-size: 40px !important; white-space: nowrap; }
                     }
                 </style>
 
                 <div id="rps-opponent-container" style="position:absolute; top:20px; right:20px; text-align:center; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:10;">
+                    <div id="rps-opponent-name" style="position:absolute; width:100%; top:-30px; font-size:20px; font-weight:bold; color:#fff; text-shadow:2px 2px 0 #000;">對手</div>
                     <div id="rps-opponent-img" style="width:300px; height:300px; background: url('playroom-rps-onion-other-ready.png') no-repeat center center; background-size: contain; margin: 0 auto;"></div>
                     <div id="rps-opponent-status" style="font-size:24px; font-weight:bold; color:#ff4444; text-shadow:2px 2px 0 #000;">等待中</div>
                 </div>
                 <div id="rps-me-container" style="position:absolute; bottom:20px; left:20px; text-align:center; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);">
+                    <div id="rps-me-name" style="position:absolute; width:100%; top:-30px; font-size:20px; font-weight:bold; color:#fff; text-shadow:2px 2px 0 #000;">我</div>
                     <div id="rps-me-img" style="width:300px; height:300px; background: url('playroom-rps-onion-me-ready.png') no-repeat center center; background-size: contain; margin: 0 auto;"></div>
                     <div id="rps-me-status" style="font-size:24px; font-weight:bold; color:#44ff44; text-shadow:2px 2px 0 #000;">等待中</div>
                 </div>
@@ -3205,7 +3214,7 @@ window.handleRpsDisconnect = function(roomId) {
 window.exitPlayroom = function() {
     document.getElementById('rps-modal').style.display = 'none';
     window.cancelRpsGame(); // 離開時連帶重置
-    window.switchScene('doghouse');
+    window.switchScene('cafe');
 };
 
 window.openRpsBetting = function(roomId) {
@@ -3388,6 +3397,10 @@ window.syncRpsState = function(roomId) {
                 document.getElementById('rps-bet-name-me').innerText = pList[myUid] ? pList[myUid].name : '我';
                 document.getElementById('rps-bet-name-op').innerText = pList[otherUid] ? pList[otherUid].name : '對手';
                 
+                // 同步更新戰鬥畫面的暱稱
+                if (document.getElementById('rps-me-name')) document.getElementById('rps-me-name').innerText = pList[myUid] ? pList[myUid].name : '我';
+                if (document.getElementById('rps-opponent-name')) document.getElementById('rps-opponent-name').innerText = pList[otherUid] ? pList[otherUid].name : '對手';
+                
                 let meStatusEl = document.getElementById('rps-bet-status-me');
                 let opStatusEl = document.getElementById('rps-bet-status-op');
                 let inputArea = document.getElementById('rps-bet-input-area');
@@ -3480,6 +3493,10 @@ window.syncRpsState = function(roomId) {
                 meC.style.cssText = "position:absolute; bottom:20px; left:20px; text-align:center; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:20;";
                 opC.style.cssText = "position:absolute; top:20px; right:20px; text-align:center; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:10;";
                 
+                // 猜拳階段：暱稱顯示在圖片上方
+                if(document.getElementById('rps-me-name')) { document.getElementById('rps-me-name').style.top = '-30px'; document.getElementById('rps-me-name').style.bottom = 'auto'; }
+                if(document.getElementById('rps-opponent-name')) { document.getElementById('rps-opponent-name').style.top = '-30px'; document.getElementById('rps-opponent-name').style.bottom = 'auto'; }
+                
                 let rpsMsg = document.getElementById('rps-center-msg');
                 rpsMsg.style.top = '20%';
                 rpsMsg.style.opacity = '1';
@@ -3529,6 +3546,32 @@ window.syncRpsState = function(roomId) {
                 document.getElementById('rps-me-status').innerText = result === 'win' ? '贏！' : (result === 'lose' ? '輸！' : '平手');
                 document.getElementById('rps-opponent-status').innerText = result === 'lose' ? '贏！' : (result === 'win' ? '輸！' : '平手');
                 
+                // 猜拳結果判定當下：勝利方產生大量橘紅氣泡特效
+                if (result !== 'tie') {
+                    let winnerEl = result === 'win' ? document.getElementById('rps-me-container') : document.getElementById('rps-opponent-container');
+                    let pContainer = document.getElementById('rps-spam-particles');
+                    if (pContainer && winnerEl) {
+                        let rect = winnerEl.getBoundingClientRect();
+                        let cx = rect.left + rect.width / 2;
+                        let cy = rect.top + rect.height / 2;
+                        for (let i = 0; i < 40; i++) {
+                            let dot = document.createElement('div');
+                            let color = Math.random() > 0.5 ? '#ff4500' : '#ff0000'; // 橘紅相間
+                            let size = Math.random() * 15 + 10;
+                            dot.style.cssText = `position:fixed; top:${cy}px; left:${cx}px; width:${size}px; height:${size}px; background:${color}; border-radius:50%; box-shadow:0 0 15px ${color}; pointer-events:none; z-index:999; mix-blend-mode: screen;`;
+                            pContainer.appendChild(dot);
+                            let angle = Math.random() * Math.PI * 2;
+                            let dist = Math.random() * 300 + 100;
+                            let tx = Math.cos(angle) * dist;
+                            let ty = Math.sin(angle) * dist;
+                            dot.animate([
+                                { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
+                                { transform: `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(0)`, opacity: 0 }
+                            ], { duration: 600 + Math.random() * 400, easing: 'ease-out' }).onfinish = () => dot.remove();
+                        }
+                    }
+                }
+                
                 if (uids.sort()[0] === myUid) {
                     if (!window.rpsStateTimeout) {
                         window.rpsStateTimeout = setTimeout(() => {
@@ -3559,6 +3602,10 @@ window.syncRpsState = function(roomId) {
                 let opC = document.getElementById('rps-opponent-container');
                 meC.style.cssText = "position:absolute; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:20;";
                 opC.style.cssText = "position:absolute; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:10;";
+                
+                // 連擊階段：暱稱顯示在圖片下方
+                if(document.getElementById('rps-me-name')) { document.getElementById('rps-me-name').style.bottom = '-30px'; document.getElementById('rps-me-name').style.top = 'auto'; }
+                if(document.getElementById('rps-opponent-name')) { document.getElementById('rps-opponent-name').style.bottom = '-30px'; document.getElementById('rps-opponent-name').style.top = 'auto'; }
                 
                 // 修正2.1：套用明確區分攻防的 class 以支援手機版精準定位
                 if (isWinner) {
