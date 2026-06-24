@@ -485,10 +485,10 @@ function createSystemUI() {
                         #rps-opponent-img { width: 220px !important; height: 220px !important; }
                         #rps-me-img { width: 250px !important; height: 250px !important; }
                         #rps-me-container { bottom: 15px !important; left: 10px !important; }
-                        /* 修正2：將連擊區分為明確的攻擊方與防守方，手機版放大居中水平對齊 */
-                        .spam-phase-pos-atk { left: 25% !important; right: auto !important; transform: translate(-50%, -50%) scale(0.85) !important; bottom: auto !important; top: 40% !important; }
-                        .spam-phase-pos-def { left: 75% !important; right: auto !important; transform: translate(-50%, -50%) scale(0.85) !important; bottom: auto !important; top: 40% !important; }
-                        #rps-center-msg { font-size: 40px !important; white-space: nowrap; }
+                        /* 修正：統一縮小並固定比例防止被裁切 */
+                        .spam-phase-pos-atk { left: 30% !important; right: auto !important; transform: translate(-50%, -50%) scale(0.7) !important; bottom: auto !important; top: 45% !important; }
+                        .spam-phase-pos-def { left: 70% !important; right: auto !important; transform: translate(-50%, -50%) scale(0.7) !important; bottom: auto !important; top: 45% !important; }
+                        #rps-center-msg { font-size: 80px !important; white-space: nowrap; }
                     }
                 </style>
 
@@ -505,7 +505,7 @@ function createSystemUI() {
                     <div id="rps-me-status" style="font-size:24px; font-weight:bold; color:#44ff44; text-shadow:2px 2px 0 #000;">等待中</div>
                 </div>
                 
-                <div id="rps-center-msg" style="position:absolute; top:20%; left:50%; transform:translate(-50%, -50%); font-size:80px; font-weight:bold; color:#ffcc00; text-shadow: 4px 4px 0 #d9534f; z-index:10; transition: top 0.5s ease;">START!</div>
+                <div id="rps-center-msg" style="position:absolute; top:20%; left:50%; transform:translate(-50%, -50%); font-size:160px; font-weight:bold; color:#ffcc00; text-shadow: 6px 6px 0 #d9534f; z-index:10; transition: top 0.5s ease;">START!</div>
                 
                 <div id="rps-choices" style="position:absolute; bottom:80px; left:50%; transform:translateX(-50%); display:flex; gap:20px; z-index:30;">
                     <img id="rps-choice-scissors" class="rps-choice-img" src="playroom-rps-machine-scissors.png" style="width:120px; cursor:pointer;" onpointerdown="window.selectRps('scissors'); event.stopPropagation();">
@@ -517,7 +517,7 @@ function createSystemUI() {
                     <div style="position:relative; display:inline-block;">
                         <button id="rps-spam-btn" style="font-size:48px; font-weight:bold; padding:20px 60px; border-radius:20px; background:#d9534f; color:#fff; border:4px solid #ffcc00; cursor:pointer; box-shadow:0 10px 0 #aa0000; user-select:none; -webkit-user-select:none; touch-action:manipulation; outline:none; transition: transform 0.1s; position:relative; z-index:2;" onclick="window.clickRpsSpam()">打！</button>
                     </div>
-                    <div style="margin-top:10px; font-size:20px;">剩餘時間: <span id="rps-spam-timer">5</span></div>
+                    <div style="margin-top:10px; font-size:30px; font-weight:bold; color:#fff; text-shadow:0 0 5px #000;">剩餘時間: <span id="rps-spam-timer" style="font-size:48px;">5</span></div>
                 </div>
             </div>
 
@@ -1291,8 +1291,13 @@ class BootScene extends Phaser.Scene {
         this.load.audio('shrine-purify-success-win', 'shrine-purify-success-win.mp3');
         this.load.audio('shrine-purify-success', 'shrine-purify-success.mp3');
 
-        // 新增：猜拳連擊按鈕音效
+        // 新增：猜拳連擊按鈕音效與倒數、結算音效
         this.load.audio('playroom-figjt-buttom', 'playroom-figjt-buttom-sound.mp3');
+        this.load.audio('playroom-figjt-buttom-sound-2', 'playroom-figjt-buttom-sound-2.mp3');
+        this.load.audio('playroom-count-down', 'playroom-count-down.mp3');
+        this.load.audio('playroom-count-down-times-up', 'playroom-count-down-times-up.mp3');
+        this.load.audio('playroom-figjt-winner', 'playroom-figjt-winner.mp3');
+        this.load.audio('playroom-figjt-loser', 'playroom-figjt-loser.mp3');
       
         this.load.audio('onion-sleep', 'onion-sleep.mp3');
         this.load.audio('sleep-wakeup', 'sleep-wakeup-rooster-call.mp3');
@@ -1694,11 +1699,22 @@ class MainScene extends Phaser.Scene {
 
                     if (data.state === 'laughing' && !this.mimiLaughed) { this.mimiLaughed = true; window.playSFX(this, 'mimi-laugh'); }
                     if (data.state !== 'laughing') this.mimiLaughed = false;
+                    
+                    if (data.state !== 'down' && this.mimiSprite.isBlinking) {
+                        this.mimiSprite.isBlinking = false;
+                        this.tweens.killTweensOf(this.mimiSprite);
+                        this.mimiSprite.setAlpha(1);
+                    }
 
                     if (data.state === 'stealing') this.mimiSprite.play('mimi-steal', true);
                     else if (data.state === 'laughing') this.mimiSprite.play('mimi-laugh', true);
                     else if (data.state === 'down') { 
-                        this.mimiSprite.play('mimi-down', true); this.mimiSprite.setAlpha(0.6); 
+                        this.mimiSprite.play('mimi-down', true); 
+                        if (!this.mimiSprite.isBlinking) {
+                            this.mimiSprite.isBlinking = true;
+                            // 閃爍維持三秒後才會因為 active 變 false 被清除
+                            this.tweens.add({ targets: this.mimiSprite, alpha: 0.2, yoyo: true, repeat: -1, duration: 150 });
+                        }
                         if (this.sound.get('mimi-walk')) this.sound.stopByKey('mimi-walk'); 
                     }
                     else this.mimiSprite.play('mimi-walk', true);
@@ -3208,6 +3224,11 @@ window.cancelRpsGame = function(roomId) {
     let waitPhase = document.getElementById('rps-phase-waiting');
     if (waitPhase) waitPhase.style.display = 'none';
     
+    // 清除結算音效鎖與落金粉粒子
+    window.calcResultSoundPlayed = false;
+    let dust = document.getElementById('rps-dust-container');
+    if (dust) dust.innerHTML = '';
+    
     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
         module.update(module.ref(window.GameLogic.db, `playroomGames/${id}`), { state: 'none' });
         if (window.GameLogic.currentUser) {
@@ -3273,10 +3294,13 @@ window.clickRpsSpam = function() {
     window.rpsLastClickTimes = window.rpsLastClickTimes.filter(t => now - t < 1000);
     if (window.rpsLastClickTimes.length >= 15) return; 
     
-    // 修正7：新增按鈕打擊音效
+    // 修正7：新增按鈕打擊音效 (同時播放兩種)
     if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) {
         let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
-        if (ms) window.playSFX(ms, 'playroom-figjt-buttom');
+        if (ms) {
+            window.playSFX(ms, 'playroom-figjt-buttom');
+            window.playSFX(ms, 'playroom-figjt-buttom-sound-2');
+        }
     }
     
     window.rpsLastClickTimes.push(now);
@@ -3566,18 +3590,25 @@ window.syncRpsState = function(roomId) {
                         let newText = textArr[remain-1] || remain;
                         if (rpsMsg.innerText != newText) {
                             rpsMsg.innerText = newText;
-                            // 漸變大且淡出特效
+                            // 漸變大且淡出特效 (放大兩倍)
                             rpsMsg.animate([
-                                { transform: 'translate(-50%, -50%) scale(0.5)', opacity: 1 },
-                                { transform: 'translate(-50%, -50%) scale(1.5)', opacity: 0 }
+                                { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
+                                { transform: 'translate(-50%, -50%) scale(3)', opacity: 0 }
                             ], { duration: 900, easing: 'ease-out' });
+                            
+                            // 播放倒數音效
+                            if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) {
+                                let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
+                                if (remain >= 2 && remain <= 5) window.playSFX(ms, 'playroom-count-down');
+                                else if (remain === 1) window.playSFX(ms, 'playroom-count-down-times-up');
+                            }
                         }
                     } else {
                         if (rpsMsg.innerText !== "出拳！") {
                             rpsMsg.innerText = "出拳！";
                             rpsMsg.animate([
-                                { transform: 'translate(-50%, -50%) scale(0.5)', opacity: 1 },
-                                { transform: 'translate(-50%, -50%) scale(1.5)', opacity: 0 }
+                                { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
+                                { transform: 'translate(-50%, -50%) scale(3)', opacity: 0 }
                             ], { duration: 900, easing: 'ease-out' });
                         }
                         clearInterval(window.rpsInterval);
@@ -3679,40 +3710,37 @@ window.syncRpsState = function(roomId) {
                 if(document.getElementById('rps-me-name')) { document.getElementById('rps-me-name').style.bottom = '-30px'; document.getElementById('rps-me-name').style.top = 'auto'; }
                 if(document.getElementById('rps-opponent-name')) { document.getElementById('rps-opponent-name').style.bottom = '-30px'; document.getElementById('rps-opponent-name').style.top = 'auto'; }
                 
-                // 攻擊方固定在左(30%)，防守方固定在右(70%)，且水平置中放大
+                // 攻擊方必定在左(30%)，防守方必定在右(70%)，確保畫面對稱且縮小防跑版
                 if (isWinner) {
                     meC.className = "spam-phase-pos-atk";
                     opC.className = "spam-phase-pos-def";
-                    meC.style.left = '30%'; meC.style.top = '40%'; meC.style.transform = 'translate(-50%, -50%) scale(1.1)';
-                    opC.style.left = '70%'; opC.style.top = '40%'; opC.style.transform = 'translate(-50%, -50%) scale(1.1)';
+                    meC.style.left = '30%'; meC.style.top = '45%'; meC.style.transform = 'translate(-50%, -50%) scale(0.85)';
+                    opC.style.left = '70%'; opC.style.top = '45%'; opC.style.transform = 'translate(-50%, -50%) scale(0.85)';
                 } else {
                     meC.className = "spam-phase-pos-def";
-                    meC.style.left = '70%'; meC.style.top = '40%'; meC.style.transform = 'translate(-50%, -50%) scale(1.1)';
                     opC.className = "spam-phase-pos-atk";
-                    opC.style.left = '30%'; opC.style.top = '40%'; opC.style.transform = 'translate(-50%, -50%) scale(1.1)';
+                    meC.style.left = '70%'; meC.style.top = '45%'; meC.style.transform = 'translate(-50%, -50%) scale(0.85)';
+                    opC.style.left = '30%'; opC.style.top = '45%'; opC.style.transform = 'translate(-50%, -50%) scale(0.85)';
                 }
                 
                 let rpsMsg = document.getElementById('rps-center-msg');
-                rpsMsg.style.top = '20%';
-                document.getElementById('rps-spam-area').style.display = 'block';
-                document.getElementById('rps-spam-btn').innerText = isWinner ? "打！" : "擋！";
-                
-                if (window.rpsInterval) clearInterval(window.rpsInterval);
-                window.rpsInterval = setInterval(() => {
-                    let elapsed = Date.now() - data.spamStartTime;
-                    let remain = 5 - Math.floor(elapsed / 1000);
-                    if (remain > 0) {
-                        if (rpsMsg.innerText !== "連擊準備") { rpsMsg.innerText = "連擊準備"; rpsMsg.style.opacity = '1'; }
-                        let tEl = document.getElementById('rps-spam-timer');
+                // ... 中間不變 ...
                         if (tEl.innerText != remain) {
                             tEl.innerText = remain;
-                            // 秒數漸變放大並淡出
-                            tEl.animate([ { transform: 'scale(1)', opacity: 1 }, { transform: 'scale(1.8)', opacity: 0 } ], { duration: 900, easing: 'ease-out' });
+                            // 秒數漸變放大並淡出 (放大兩倍)
+                            tEl.animate([ { transform: 'scale(2)', opacity: 1 }, { transform: 'scale(3.6)', opacity: 0 } ], { duration: 900, easing: 'ease-out' });
+                            
+                            // 播放倒數音效
+                            if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) {
+                                let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
+                                if (remain >= 2 && remain <= 5) window.playSFX(ms, 'playroom-count-down');
+                                else if (remain === 1) window.playSFX(ms, 'playroom-count-down-times-up');
+                            }
                         }
                     } else {
                         if (rpsMsg.innerText !== "GO!") {
                             rpsMsg.innerText = "GO!";
-                            rpsMsg.animate([ { transform: 'translate(-50%, -50%) scale(0.5)', opacity: 1 }, { transform: 'translate(-50%, -50%) scale(2)', opacity: 0 } ], { duration: 900, easing: 'ease-out' });
+                            rpsMsg.animate([ { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 }, { transform: 'translate(-50%, -50%) scale(4)', opacity: 0 } ], { duration: 900, easing: 'ease-out' });
                         }
                         clearInterval(window.rpsInterval);
                         if (uids.sort()[0] === myUid) module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'spamming', spamPlayTime: Date.now() });
@@ -3836,6 +3864,39 @@ window.syncRpsState = function(roomId) {
                 else tDesc += iWinMoney ? `🎉 最終勝利！贏得了 ${getAmt} 馬德幣！` : `😭 最終敗北... 失去所有押注。`;
                 
                 document.getElementById('rps-result-desc').innerHTML = tDesc;
+                
+                // 播放結算音效與撒滿金粉特效
+                if (!window.calcResultSoundPlayed) {
+                    window.calcResultSoundPlayed = true;
+                    if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) {
+                        let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
+                        if (iWinMoney) window.playSFX(ms, 'playroom-figjt-winner');
+                        else if (!tieMoney) window.playSFX(ms, 'playroom-figjt-loser');
+                    }
+                    
+                    // 從上而下撒大量閃爍金粉的粒子特效
+                    let rpsModal = document.getElementById('rps-modal');
+                    let dustContainer = document.getElementById('rps-dust-container');
+                    if(!dustContainer) {
+                        dustContainer = document.createElement('div');
+                        dustContainer.id = 'rps-dust-container';
+                        dustContainer.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:5; overflow:hidden;';
+                        rpsModal.appendChild(dustContainer);
+                    }
+                    dustContainer.innerHTML = ''; 
+                    for(let i=0; i<100; i++) {
+                        let p = document.createElement('div');
+                        let size = Math.random() * 8 + 4;
+                        p.style.cssText = `position:absolute; top:-30px; left:${Math.random()*100}%; width:${size}px; height:${size}px; background:#ffd700; border-radius:50%; box-shadow:0 0 15px #ffcc00, 0 0 25px #ffffff; opacity:0;`;
+                        dustContainer.appendChild(p);
+                        let duration = Math.random()*2500 + 2000;
+                        let delay = Math.random()*1500;
+                        p.animate([
+                            { transform: 'translateY(0) rotate(0deg)', opacity: 1 },
+                            { transform: `translateY(${window.innerHeight + 100}px) rotate(360deg)`, opacity: 0 }
+                        ], { duration: duration, delay: delay, iterations: Infinity });
+                    }
+                }
                 
                 if (uids.sort()[0] === myUid && !data.moneyDistributed) {
                     module.get(module.ref(window.GameLogic.db, `users`)).then(uSnap => {
