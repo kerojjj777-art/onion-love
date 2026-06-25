@@ -2102,13 +2102,10 @@ class MainScene extends Phaser.Scene {
                 let isPartyMode = this.sceneName === 'partyroom' && itemName === '水球';
                 
                 if (itemName === '派對喇叭') {
-                    // 全服廣播喇叭播放
-                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-                        module.update(module.ref(window.GameLogic.db, `serverEvents/trumpetPlay/${window.GameLogic.currentUser.uid}`), { time: Date.now(), scene: this.sceneName });
-                    });
+                    // 全服廣播喇叭播放，修正移除無效的 import 確保能正常觸發
+                    update(ref(window.GameLogic.db, `serverEvents/trumpetPlay/${window.GameLogic.currentUser.uid}`), { time: Date.now(), scene: this.sceneName });
                     return;
                 }
-
                 if (window.GameLogic.energyActive && !isPartyMode) {
                     let currentEnergy = window.GameLogic.myProfile.energy || 0;
                     if (currentEnergy >= 5) {
@@ -2185,7 +2182,7 @@ class MainScene extends Phaser.Scene {
                     this.localPlayer.sprite.play('fw-throw', true);
                     this.localPlayer.isThrowing = true;
                     this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
-                    update(ref(window.GameLogic.db, `serverEvents/fireworkThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), scene: this.sceneName });
+                    update(ref(window.GameLogic.db, `serverEvents/fireworkThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), targetUid: targetUid || 'none', scene: this.sceneName });
                     
                     if (targetUid && targetSprite) {
                         let fw = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'fireworks-shoot').setDepth(15);
@@ -2217,6 +2214,7 @@ class MainScene extends Phaser.Scene {
                     this.localPlayer.sprite.play('throw', true);
                     this.localPlayer.isThrowing = true;
                     this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
+                    update(ref(window.GameLogic.db, `serverEvents/waterThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), targetUid: targetUid || 'none', scene: this.sceneName });
                     
                     if (targetUid && targetSprite) {
                         let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15);
@@ -2494,7 +2492,58 @@ class MainScene extends Phaser.Scene {
         this.fwPlayersHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworksHits'), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { window.playSFX(this, 'bomb'); opSprite.isStunned = true; opSprite.play('fw-hit', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
         this.fwDummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworksDummyHits'), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { window.playSFX(this, 'bomb'); dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
         this.globalFwListener = onValue(ref(window.GameLogic.db, 'serverEvents/globalFireworks'), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 3000) && data.scene === this.sceneName) { if (this.lastGlobalFwTime !== data.time) { this.lastGlobalFwTime = data.time; this.playGlobalFireworks(); } } });
-        this.fwThrowsListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworkThrows'), (snap) => { let throws = snap.val() || {}; for (let uid in throws) { if (uid === window.GameLogic.currentUser.uid) continue; let data = throws[uid]; if (data && data.time && (Date.now() - data.time < 1000) && data.scene === this.sceneName) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; opSprite.play('fw-throw', true); opSprite.isThrowing = true; this.time.delayedCall(300, () => { if (opSprite && opSprite.active) opSprite.isThrowing = false; }); } } } });
+        this.fwThrowsListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworkThrows'), (snap) => {
+            let throws = snap.val() || {};
+            for (let uid in throws) {
+                if (uid === window.GameLogic.currentUser.uid) continue;
+                let data = throws[uid];
+                if (data && data.time && (Date.now() - data.time < 3000) && data.scene === this.sceneName) {
+                    if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite && (!this.otherPlayers[uid].lastFwTime || this.otherPlayers[uid].lastFwTime !== data.time)) {
+                        this.otherPlayers[uid].lastFwTime = data.time;
+                        let opSprite = this.otherPlayers[uid].sprite;
+                        opSprite.play('fw-throw', true);
+                        opSprite.isThrowing = true;
+                        this.time.delayedCall(300, () => { if (opSprite && opSprite.active) opSprite.isThrowing = false; });
+                        
+                        if (data.targetUid && data.targetUid !== 'none') {
+                            let targetX = opSprite.x + (opSprite.flipX ? -200 : 200); let targetY = opSprite.y;
+                            if (this.otherPlayers[data.targetUid]) { targetX = this.otherPlayers[data.targetUid].sprite.x; targetY = this.otherPlayers[data.targetUid].sprite.y; } 
+                            else if (data.targetUid === window.GameLogic.currentUser.uid) { targetX = this.localPlayer.sprite.x; targetY = this.localPlayer.sprite.y; }
+                            let fw = this.physics.add.sprite(opSprite.x, opSprite.y, 'fireworks-shoot').setDepth(15).setDisplaySize(30, 30);
+                            fw.play('fw-shoot', true);
+                            this.tweens.add({ targets: fw, x: targetX, y: targetY, duration: 300, onComplete: () => fw.destroy() });
+                        }
+                    }
+                }
+            }
+        });
+        
+        this.waterThrowsListener = onValue(ref(window.GameLogic.db, 'serverEvents/waterThrows'), (snap) => {
+            let throws = snap.val() || {};
+            for (let uid in throws) {
+                if (uid === window.GameLogic.currentUser.uid) continue;
+                let data = throws[uid];
+                if (data && data.time && (Date.now() - data.time < 3000) && data.scene === this.sceneName) {
+                    if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite && (!this.otherPlayers[uid].lastWaterTime || this.otherPlayers[uid].lastWaterTime !== data.time)) {
+                        this.otherPlayers[uid].lastWaterTime = data.time;
+                        let opSprite = this.otherPlayers[uid].sprite;
+                        opSprite.play('throw', true);
+                        opSprite.isThrowing = true;
+                        this.time.delayedCall(300, () => { if (opSprite && opSprite.active) opSprite.isThrowing = false; });
+                        
+                        if (data.targetUid && data.targetUid !== 'none') {
+                            let targetX = opSprite.x + (opSprite.flipX ? -200 : 200); let targetY = opSprite.y;
+                            if (this.otherPlayers[data.targetUid]) { targetX = this.otherPlayers[data.targetUid].sprite.x; targetY = this.otherPlayers[data.targetUid].sprite.y; } 
+                            else if (data.targetUid === window.GameLogic.currentUser.uid) { targetX = this.localPlayer.sprite.x; targetY = this.localPlayer.sprite.y; }
+                            let wb = this.physics.add.sprite(opSprite.x, opSprite.y, 'water-ball-blast').setDepth(15).setDisplaySize(30, 30);
+                            wb.play('wb-blast', true);
+                            this.tweens.add({ targets: wb, x: targetX, y: targetY, duration: 300, onComplete: () => wb.destroy() });
+                        }
+                    }
+                }
+            }
+        });
+
         this.playersHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/waterHits'), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { opSprite.isStunned = true; opSprite.play('wet', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
         this.dummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/dummyHits'), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
         
@@ -2613,6 +2662,7 @@ class MainScene extends Phaser.Scene {
             if (this.playersHitListener) this.playersHitListener(); 
             if (this.dummyHitListener) this.dummyHitListener(); 
             if (this.fwThrowsListener) this.fwThrowsListener(); 
+            if (this.waterThrowsListener) this.waterThrowsListener(); 
         });
     }
 
