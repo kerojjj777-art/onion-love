@@ -916,7 +916,32 @@ window.openInventoryModal = function() {
 
 window.viewOtherProfile = function(uid) { import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.get(module.ref(window.GameLogic.db, `users/${uid}`)).then(snap => { if (snap.exists()) { document.getElementById('phone-modal').style.display = 'none'; showProfileModal(snap.val(), uid); } }); }); };
 window.openPhoneModal = function() { document.getElementById('inventory-modal').style.display = 'none'; document.getElementById('phone-modal').style.display = 'block'; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.get(module.ref(window.GameLogic.db, 'users')).then(snap => { let users = snap.val() || {}; let html = ''; for (let uid in users) { if (uid === window.GameLogic.currentUser.uid) continue; let u = users[uid]; let unreadDot = (window.GameLogic.unreadPMs && window.GameLogic.unreadPMs[uid]) ? ' <span style="color:red; font-size:10px;">🔴</span>' : ''; html += `<div class="catalog-item phone-contact" style="flex-direction:row; justify-content:space-between; padding: 10px;"><span style="font-weight:bold; color: ${u.color || '#fff'}; text-shadow: 1px 1px 2px #000;">${u.name || '匿名'} (Lv.${u.level || 1})${unreadDot}</span><div><button class="btn-secondary" style="padding: 4px 12px; font-size:12px; margin-right: 5px; color:#333;" onclick="window.viewOtherProfile('${uid}')">查看</button><button class="btn-primary" style="padding: 4px 12px; font-size:12px;" onclick="window.openPM('${uid}', '${u.name || '匿名'}')">私訊</button></div></div>`; } if (html === '') html = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">目前沒有其他聯絡人</div>'; document.getElementById('phone-contacts').innerHTML = html; }); }); };
-window.openPM = function(targetUid, targetName) { document.getElementById('phone-modal').style.display = 'none'; document.getElementById('pm-modal').style.display = 'block'; document.getElementById('pm-title').innerText = `💬 與 ${targetName} 密語`; window.currentPMUid = targetUid; let myUid = window.GameLogic.currentUser.uid; let chatId = [myUid, targetUid].sort().join('_'); import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.remove(module.ref(window.GameLogic.db, `users/${myUid}/unreadPMs/${targetUid}`)); }); import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { if (window.pmUnsubscribe) window.pmUnsubscribe(); window.pmUnsubscribe = module.onValue(module.ref(window.GameLogic.db, `privateChats/${chatId}`), snap => { let msgs = snap.val() || {}; let box = document.getElementById('pm-chat-box'); box.innerHTML = ''; Object.values(msgs).forEach(m => { if (m.uid === myUid) { box.innerHTML += `<div style="text-align:right; margin-bottom: 8px;"><div class="pm-bubble-me">${m.msg}</div></div>`; } else { box.innerHTML += `<div style="text-align:left; margin-bottom: 8px;"><div class="pm-bubble-other"><div style="font-size:11px; color:#558b2f; font-weight:bold; margin-bottom:2px;">${m.name}</div>${m.msg}</div></div>`; } }); box.scrollTop = box.scrollHeight; }); }); };
+window.openPM = function(targetUid, targetName) { 
+    document.getElementById('phone-modal').style.display = 'none'; 
+    document.getElementById('pm-modal').style.display = 'block'; 
+    document.getElementById('pm-title').innerText = `💬 與 ${targetName} 密語`; 
+    window.currentPMUid = targetUid; 
+    let myUid = window.GameLogic.currentUser.uid; 
+    let chatId = [myUid, targetUid].sort().join('_'); 
+    
+    // 系統健康修正：移除雙重動態 import，直接使用頂部已載入的 remove, onValue 與 ref
+    remove(ref(window.GameLogic.db, `users/${myUid}/unreadPMs/${targetUid}`)); 
+    
+    if (window.pmUnsubscribe) window.pmUnsubscribe(); 
+    window.pmUnsubscribe = onValue(ref(window.GameLogic.db, `privateChats/${chatId}`), snap => { 
+        let msgs = snap.val() || {}; 
+        let box = document.getElementById('pm-chat-box'); 
+        box.innerHTML = ''; 
+        Object.values(msgs).forEach(m => { 
+            if (m.uid === myUid) { 
+                box.innerHTML += `<div style="text-align:right; margin-bottom: 8px;"><div class="pm-bubble-me">${m.msg}</div></div>`; 
+            } else { 
+                box.innerHTML += `<div style="text-align:left; margin-bottom: 8px;"><div class="pm-bubble-other"><div style="font-size:11px; color:#558b2f; font-weight:bold; margin-bottom:2px;">${m.name}</div>${m.msg}</div></div>`; 
+            } 
+        }); 
+        box.scrollTop = box.scrollHeight; 
+    }); 
+};
 window.closePM = function() { if (window.pmUnsubscribe) { window.pmUnsubscribe(); window.pmUnsubscribe = null; } document.getElementById('pm-modal').style.display = 'none'; document.getElementById('phone-modal').style.display = 'block'; };
 window.sendPM = function() { let input = document.getElementById('pm-input'); let msg = input.value.trim(); if (!msg || !window.currentPMUid) return; let myUid = window.GameLogic.currentUser.uid; let chatId = [myUid, window.currentPMUid].sort().join('_'); import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, `privateChats/${chatId}`), { uid: myUid, name: window.GameLogic.myProfile.name, msg: msg, time: Date.now() }); module.update(module.ref(window.GameLogic.db, `users/${window.currentPMUid}/unreadPMs`), { [myUid]: true }); }); input.value = ''; };
 
@@ -1241,11 +1266,10 @@ function joinPlayroom(roomId) {
 }
 function leavePlayroom() {
     if (window.GameLogic.currentRoomId && window.GameLogic.currentUser) {
-        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-            module.set(module.ref(db, `playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`), null);
-            // 離開時防呆：強迫清理正在進行的 RPS
-            window.cancelRpsGame(window.GameLogic.currentRoomId);
-        });
+        // 修正死碼：直接呼叫全域已引入的 set 與 ref，避免非同步落差導致 currentRoomId 遺失
+        set(ref(db, `playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`), null);
+        // 離開時防呆：強迫清理正在進行的 RPS
+        window.cancelRpsGame(window.GameLogic.currentRoomId);
     }
     if (playroomUnsubscribe) { playroomUnsubscribe(); playroomUnsubscribe = null; }
     window.GameLogic.currentRoomId = null;
