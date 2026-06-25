@@ -4345,3 +4345,238 @@ window.syncRpsState = function(roomId) {
         });
     });
 };
+
+// ==================== 派對系統全域邏輯 ====================
+window.PartyLogic = { roomId: null, ammo: 666, state: 'none', scores: {}, players: {}, mySlotIndex: 0, speedBoost: false, selectedGame: '水球礁谷', playPhase: 0 };
+let partyUnsubscribe = null; let partyInvitesUnsubscribe = null;
+
+window.createPartyRoom = function() {
+    let modal = document.getElementById('party-select-modal'); modal.style.display = 'none';
+    window.PartyLogic.roomId = 'party_' + Date.now() + '_' + window.GameLogic.currentUser.uid;
+    window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null;
+    
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        module.set(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'waiting', host: window.GameLogic.currentUser.uid, game: window.PartyLogic.selectedGame, startTime: Date.now() });
+        module.set(module.ref(window.GameLogic.db, `serverEvents/partyInvites/${window.PartyLogic.roomId}`), { time: Date.now(), inviterUid: window.GameLogic.currentUser.uid, inviterName: window.GameLogic.myProfile.name, game: window.PartyLogic.selectedGame });
+        window.switchScene('partyroom', { roomId: window.PartyLogic.roomId });
+    });
+};
+
+window.joinPartyroom = function(roomId) {
+    window.PartyLogic.roomId = roomId; window.PartyLogic.ammo = 666; window.PartyLogic.speedBoost = false; window.PartyLogic.playPhase = 0;
+    document.getElementById('party-waiting-modal').style.display = 'flex';
+    document.getElementById('party-red-flash').style.display = 'none'; document.getElementById('party-red-flash').style.opacity = 0;
+    
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+        const playerRef = module.ref(window.GameLogic.db, `partyRooms/${roomId}/players/${window.GameLogic.currentUser.uid}`);
+        module.set(playerRef, { x: 1920/2, y: 1080/2, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1, ready: false });
+        module.onDisconnect(playerRef).remove();
+        
+        partyUnsubscribe = module.onValue(module.ref(window.GameLogic.db, `partyRooms/${roomId}`), snap => {
+            let data = snap.val(); if(!data) { window.leavePartyroom(); return; }
+            window.PartyLogic.state = data.state;
+            window.PartyLogic.players = data.players || {};
+            window.PartyLogic.scores = data.scores || {};
+            window.PartyLogic.host = data.host;
+            window.PartyLogic.gameData = data;
+            
+            let pUids = Object.keys(window.PartyLogic.players);
+            if (pUids.length >= 10 && data.state === 'waiting') module.update(module.ref(window.GameLogic.db, `serverEvents/partyInvites/${roomId}`), { closed: true });
+            
+            if (data.state === 'waiting') {
+                document.getElementById('party-waiting-modal').style.display = 'flex';
+                let grid = document.getElementById('party-wait-grid'); grid.innerHTML = '';
+                pUids.sort().forEach((uid, idx) => {
+                    if (uid === window.GameLogic.currentUser.uid) window.PartyLogic.mySlotIndex = idx;
+                    let pd = window.PartyLogic.players[uid];
+                    let hostLabel = uid === data.host ? '<div class="party-slot-host">房主</div>' : '';
+                    let readyCls = pd.ready ? 'ready' : '';
+                    grid.innerHTML += `<div class="party-slot ${readyCls}">${hostLabel}<img src="onion-sprite.png"><span>${pd.name}</span></div>`;
+                });
+                for(let i=pUids.length; i<10; i++) { grid.innerHTML += `<div class="party-slot" style="opacity:0.3;">等待加入...</div>`; }
+                
+                let isHost = data.host === window.GameLogic.currentUser.uid;
+                let allReady = pUids.every(u => window.PartyLogic.players[u].ready);
+                document.getElementById('party-start-btn').style.display = (isHost && allReady && pUids.length > 1) ? 'block' : 'none';
+            } else {
+                document.getElementById('party-waiting-modal').style.display = 'none';
+            }
+        });
+    });
+};
+
+window.leavePartyroom = function() {
+    if (partyUnsubscribe) { partyUnsubscribe(); partyUnsubscribe = null; }
+    document.getElementById('party-waiting-modal').style.display = 'none';
+    document.getElementById('party-result-modal').style.display = 'none';
+    let rFlash = document.getElementById('party-red-flash'); if (rFlash) { rFlash.style.display = 'none'; rFlash.style.opacity = 0; }
+    if (window.PartyLogic.roomId && window.GameLogic.currentUser) {
+        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.set(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), null); });
+    }
+    window.PartyLogic.roomId = null;
+    if (window.GameLogic.currentScene === 'partyroom') window.switchScene('cafe');
+};
+
+window.togglePartyReady = function() {
+    let btn = document.getElementById('party-ready-btn');
+    let isReady = btn.innerText === '取消準備';
+    btn.innerText = isReady ? '準備好了' : '取消準備';
+    btn.style.background = isReady ? 'var(--mucha-gold)' : '#5cb85c';
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), { ready: !isReady }); });
+};
+
+window.startPartyGame = function() {
+    let stones = [];
+    for(let i=0; i<30; i++) {
+        let maxTries = 50;
+        while(maxTries-- > 0) {
+            let x = Phaser.Math.Between(100, 1820); let y = Phaser.Math.Between(100, 980);
+            let ok = true; for(let s of stones) { if(Phaser.Math.Distance.Between(x,y, s.x, s.y) < 100) { ok = false; break; } }
+            if(ok) { stones.push({x,y}); break; }
+        }
+    }
+    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { 
+        module.update(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'starting', stones: stones, gameStartTime: Date.now() });
+        module.update(module.ref(window.GameLogic.db, `serverEvents/partyInvites/${window.PartyLogic.roomId}`), { closed: true });
+        
+        let pUids = Object.keys(window.PartyLogic.players);
+        pUids.forEach(uid => {
+            let rx = Phaser.Math.Between(0,1) ? Phaser.Math.Between(100, 300) : Phaser.Math.Between(1620, 1820);
+            let ry = Phaser.Math.Between(0,1) ? Phaser.Math.Between(100, 300) : Phaser.Math.Between(780, 980);
+            module.update(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${uid}`), { x: rx, y: ry });
+            module.set(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${uid}`), { hitCount: 0, gotHitCount: 0, ammo: 666 });
+        });
+    });
+};
+
+window.replyPartyInvite = function(reply) {
+    document.getElementById('party-invite-modal').style.display = 'none';
+    if (reply === 'yes') {
+        if ((window.GameLogic.myProfile.coins || 0) < 50) return alert("馬德幣不足50！無法參加派對。");
+        window.GameLogic.myProfile.coins -= 50;
+        let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
+        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: window.GameLogic.myProfile.coins }); });
+        window.switchScene('partyroom', { roomId: window.PartyLogic.pendingInviteId });
+    }
+};
+
+window.processPartyEventLogic = function(scene) {
+    let data = window.PartyLogic.gameData; if(!data) return;
+    let state = data.state;
+    
+    if (state === 'starting') {
+        let elapsed = Date.now() - data.gameStartTime;
+        let phase = Math.floor(elapsed / 1000); // 0=START, 1=READY, 2=GO, 3=Begin
+        if (phase !== window.PartyLogic.playPhase && phase < 3) {
+            window.PartyLogic.playPhase = phase;
+            let texts = ["START", "READY", "GO!"];
+            scene.partyAnnounceText.setText(texts[phase]).setVisible(true);
+            scene.partyAnnounceText.setScale(0).setAlpha(1);
+            scene.tweens.add({ targets: scene.partyAnnounceText, scale: 2, alpha: 0, duration: 900 });
+            window.playSFX(scene, 'party-start');
+        } else if (phase >= 3 && window.PartyLogic.playPhase < 3) {
+            window.PartyLogic.playPhase = 3;
+            scene.partyAnnounceText.setVisible(false);
+            if (data.host === window.GameLogic.currentUser.uid) import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => module.update(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'gaming', gamingStartTime: Date.now() }));
+        }
+    } else if (state === 'gaming') {
+        let elapsed = Date.now() - data.gamingStartTime;
+        let remain = 60 - Math.floor(elapsed / 1000);
+        if (remain <= 20) {
+            window.PartyLogic.speedBoost = true;
+            let bgm = scene.sound.get('bgm-party'); if(bgm) bgm.setRate(1.5);
+            let rFlash = document.getElementById('party-red-flash');
+            if (rFlash) { rFlash.style.opacity = (Math.floor(Date.now() / 250) % 2 === 0) ? 0.3 : 0; }
+        }
+        
+        if (remain <= 0 && data.host === window.GameLogic.currentUser.uid) {
+            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { 
+                module.update(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`), { ammo: window.PartyLogic.ammo });
+                module.update(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'finished', finishTime: Date.now() }); 
+            });
+        }
+    } else if (state === 'finished') {
+        window.PartyLogic.speedBoost = false;
+        let bgm = scene.sound.get('bgm-party'); if(bgm) bgm.setRate(1);
+        let rFlash = document.getElementById('party-red-flash'); if (rFlash) { rFlash.style.display = 'none'; }
+        
+        if (window.PartyLogic.playPhase < 4) {
+            window.PartyLogic.playPhase = 4;
+            scene.partyAnnounceText.setText("FINISH").setVisible(true).setScale(0).setAlpha(1);
+            scene.tweens.add({ targets: scene.partyAnnounceText, scale: 2, duration: 500 });
+            window.playSFX(scene, 'party-finish');
+            
+            // Upload final ammo before scoring
+            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`), { ammo: window.PartyLogic.ammo }); });
+            
+            setTimeout(() => {
+                scene.partyAnnounceText.setVisible(false);
+                let scoresObj = window.PartyLogic.scores || {};
+                let pUids = Object.keys(window.PartyLogic.players || {});
+                let results = pUids.map(uid => {
+                    let s = scoresObj[uid] || {hitCount:0, gotHitCount:0, ammo:0};
+                    let score = (s.hitCount * 10) - (s.gotHitCount * 5) + (s.ammo * 0.1);
+                    return { uid: uid, name: window.PartyLogic.players[uid].name, hitCount: s.hitCount, gotHitCount: s.gotHitCount, ammo: s.ammo, score: score };
+                });
+                results.sort((a, b) => {
+                    if (b.score !== a.score) return b.score - a.score;
+                    if (a.gotHitCount !== b.gotHitCount) return a.gotHitCount - b.gotHitCount;
+                    if (b.hitCount !== a.hitCount) return b.hitCount - a.hitCount;
+                    return b.ammo - a.ammo;
+                });
+                
+                let html = '';
+                results.forEach((r, idx) => {
+                    let medal = idx === 0 ? '🥇' : (idx === 1 ? '🥈' : (idx === 2 ? '🥉' : `${idx + 1}.`));
+                    let reward = idx === 0 ? 888 : (idx === 1 ? 250 : (idx === 2 ? 150 : 88));
+                    html += `<div style="display:flex; justify-content:space-between; padding:8px 5px; border-bottom:1px solid #ccc; font-size:14px;">
+                        <span style="font-weight:bold; color:var(--mucha-brown); width:35%;">${medal} ${r.name}</span>
+                        <span style="color:#005599; width:45%; font-size:12px;">擊中:${r.hitCount} / 被擊:${r.gotHitCount} / 餘彈:${r.ammo}<br>評分: ${r.score.toFixed(1)}</span>
+                        <span style="color:var(--mucha-green); font-weight:bold; width:20%; text-align:right;">💰 ${reward}</span>
+                    </div>`;
+                    
+                    if (r.uid === window.GameLogic.currentUser.uid && !window.PartyLogic.rewardClaimed) {
+                        window.PartyLogic.rewardClaimed = true;
+                        window.GameLogic.myProfile.coins = (window.GameLogic.myProfile.coins || 0) + reward;
+                        let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
+                        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: window.GameLogic.myProfile.coins }); });
+                    }
+                });
+                document.getElementById('party-result-list').innerHTML = html;
+                document.getElementById('party-result-modal').style.display = 'block';
+                window.playSFX(scene, 'chorus_of_angels1');
+            }, 3000);
+        }
+    }
+};
+
+// Global Listener for Party Invites
+import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+    partyInvitesUnsubscribe = module.onValue(module.ref(window.GameLogic.db, 'serverEvents/partyInvites'), snap => {
+        if (!window.GameLogic.currentUser) return;
+        let invites = snap.val() || {};
+        let activeInvites = Object.keys(invites).filter(k => !invites[k].closed && (Date.now() - invites[k].time < 60000));
+        
+        let minList = document.getElementById('party-active-rooms');
+        let minUI = document.getElementById('party-minimized-list');
+        if (minUI) {
+            minUI.style.display = activeInvites.length > 0 ? 'flex' : 'none';
+            minList.innerHTML = '';
+            activeInvites.forEach(k => {
+                let inv = invites[k];
+                if (inv.inviterUid !== window.GameLogic.currentUser.uid) {
+                    minList.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #555; padding:5px 0; color:#fff; font-size:13px;"><span>${inv.inviterName} 的派對</span><button class="btn-primary" style="padding:2px 8px; font-size:12px;" onclick="window.PartyLogic.pendingInviteId='${k}'; window.replyPartyInvite('yes')">加入</button></div>`;
+                    
+                    if (inv.time > (window.PartyLogic.lastInviteTime || 0)) {
+                        window.PartyLogic.lastInviteTime = inv.time;
+                        document.getElementById('party-inviter-name').innerText = inv.inviterName;
+                        window.PartyLogic.pendingInviteId = k;
+                        if (window.GameLogic.currentScene !== 'partyroom') document.getElementById('party-invite-modal').style.display = 'block';
+                    }
+                }
+            });
+        }
+    });
+});
+
+}
