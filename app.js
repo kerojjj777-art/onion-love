@@ -1650,10 +1650,16 @@ class UIScene extends Phaser.Scene {
         let expY = -bgH * 0.12 + 4; let expW = bgW * 0.50; let expH = 22 * scaleRatio; this.expBarWidth = expW;
         this.expBarBg.clear().fillStyle(0x3e2723, 0.8).fillRoundedRect(bgW * 0.5 - expW / 2, expY - expH / 2, expW, expH, 4); this.expLiquid.setPosition(bgW * 0.5 - expW / 2, expY).setScale(1, expH / 16); this.expText.setPosition(bgW * 0.5, expY).setFontSize(`${Math.max(10, 13 * scaleRatio)}px`);
         this.statusText.setPosition(bgW * 0.32, -bgH * 0.30).setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); this.equipText.setPosition(bgW * 0.75, -bgH * 0.30).setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); this.statusToggleBtn.setPosition(bgW, -bgH * 0.30);
-        let clusterX = gameSize.width - 90; let clusterY = gameSize.height - bottomOffset - 70; let d = 45; 
-        this.btnB.setPosition(clusterX, clusterY + d); this.txtB.setPosition(this.btnB.x, this.btnB.y); this.furnBtn.setPosition(clusterX - d, clusterY); this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
+        let clusterX = gameSize.width - 90; let clusterY = gameSize.height - bottomOffset - 70; let d = 55; 
+        // 修正1：為 A 鍵與給西按鈕補上定位點，使這四顆按鈕整齊排列在右下角
+        this.btnA.setPosition(clusterX, clusterY + d); this.txtA.setPosition(this.btnA.x, this.btnA.y);
+        this.btnB.setPosition(clusterX - d, clusterY + d); this.txtB.setPosition(this.btnB.x, this.btnB.y);
+        this.itemBtn.setPosition(clusterX, clusterY); this.itemText.setPosition(this.itemBtn.x, this.itemBtn.y);
+        this.furnBtn.setPosition(clusterX - d, clusterY); this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
+        
         if (this.magicMenuEmitter) this.magicMenuEmitter.setPosition(gameSize.width / 2, gameSize.height - 185);
-        if (this.partyDash) this.partyDash.setPosition(20, gameSize.height - 100);
+        // 修正3：派對儀表板往上移，設定為搖桿 Y 軸上方，避免重疊
+        if (this.partyDash) this.partyDash.setPosition(20, joystickY - 120);
     }
 
     playExpGainEffect() {
@@ -2705,7 +2711,15 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
         let partyBgA = this.add.image(25, 0, 'party-attack-number').setScale(1);
         entity.partyShotText = this.add.text(-25, 0, '0', {fontSize:'14px', color:'#000', fontStyle:'bold'}).setOrigin(0.5);
         entity.partyAttackText = this.add.text(25, 0, '0', {fontSize:'14px', color:'#000', fontStyle:'bold'}).setOrigin(0.5);
-        if (pData.uid === window.GameLogic.currentUser.uid || isLocal) { let meBg = this.add.graphics().fillStyle(0xd9534f, 1).fillRoundedRect(-18, -32, 36, 18, 4); let meTxt = this.add.text(0, -23, '這我', {fontSize:'12px', color:'#fff', fontStyle:'bold'}).setOrigin(0.5); entity.partyScoreContainer.add([meBg, meTxt]); }
+        if (pData.uid === window.GameLogic.currentUser.uid || isLocal) { 
+            let meBg = this.add.graphics().fillStyle(0xd9534f, 1).fillRoundedRect(-18, -32, 36, 18, 4); 
+            let meTxt = this.add.text(0, -23, '這我', {fontSize:'12px', color:'#fff', fontStyle:'bold'}).setOrigin(0.5); 
+            entity.partyScoreContainer.add([meBg, meTxt]); 
+            
+            // 修正4：新增派對專用底部紅色呼吸光環，方便己方在戰鬥中辨識位置
+            entity.localAura = this.add.circle(x, y, 45, 0xff0000, 0.4).setDepth(9).setVisible(false);
+            this.tweens.add({ targets: entity.localAura, scale: 1.3, alpha: 0.1, yoyo: true, repeat: -1, duration: 800 });
+        }
         entity.partyScoreContainer.add([partyBgH, partyBgA, entity.partyShotText, entity.partyAttackText]);
 
         entity.lastNameData = ""; entity.lastBubbleData = ""; if (this.minimap) this.minimap.ignore([entity.nameContainer, entity.bubbleContainer, entity.partyScoreContainer]); return entity; 
@@ -2718,7 +2732,11 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
             entity.partyScoreContainer.setVisible(true).setPosition(sx, sy - 75);
             let sData = window.PartyLogic && window.PartyLogic.scores && window.PartyLogic.scores[currentUid] ? window.PartyLogic.scores[currentUid] : {hitCount: 0, gotHitCount: 0};
             entity.partyShotText.setText(sData.gotHitCount || 0); entity.partyAttackText.setText(sData.hitCount || 0);
-        } else { entity.partyScoreContainer.setVisible(false); }
+            if (entity.localAura) { entity.localAura.setVisible(true).setPosition(sx, sy); }
+        } else { 
+            entity.partyScoreContainer.setVisible(false); 
+            if (entity.localAura) { entity.localAura.setVisible(false); }
+        }
         if (pData.bubbleMsg && (Date.now() - pData.bubbleTime < 10000)) { entity.bubbleContainer.setVisible(true);
             if (entity.lastBubbleData !== pData.bubbleMsg) { entity.lastBubbleData = pData.bubbleMsg; entity.bubbleText.setText(pData.bubbleMsg); const bounds = entity.bubbleText.getBounds(); const boxWidth = bounds.width + 20, boxHeight = bounds.height + 16; entity.bubbleBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 8).strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 8); entity.bubbleOffsetY = 65 + boxHeight / 2; }
             entity.bubbleContainer.setPosition(sx, sy - (entity.bubbleOffsetY || 80)); // 修正3：避免每幀調用 getBounds 造成嚴重 Lag
@@ -4769,6 +4787,19 @@ partyInvitesUnsubscribe = onValue(ref(window.GameLogic.db, 'serverEvents/partyIn
     let invites = snap.val() || {};
     let activeInvites = Object.keys(invites).filter(k => !invites[k].closed && (Date.now() - invites[k].time < 60000));
     
+    // 修正2：立即處理邀請彈出，不等待非同步檢查房間是否建立完成，確保第一時間彈出通知
+    activeInvites.forEach(k => {
+        let inv = invites[k];
+        if (inv.inviterUid !== window.GameLogic.currentUser.uid) {
+            if (inv.time > (window.PartyLogic.lastInviteTime || 0)) {
+                window.PartyLogic.lastInviteTime = inv.time;
+                document.getElementById('party-inviter-name').innerText = inv.inviterName;
+                window.PartyLogic.pendingInviteId = k;
+                if (window.GameLogic.currentScene !== 'partyroom') document.getElementById('party-invite-modal').style.display = 'block';
+            }
+        }
+    });
+
     let minList = document.getElementById('party-active-rooms');
     let minUI = document.getElementById('party-minimized-list');
     if (minUI) {
@@ -4794,13 +4825,6 @@ partyInvitesUnsubscribe = onValue(ref(window.GameLogic.db, 'serverEvents/partyIn
                 let inv = invites[k];
                 if (inv.inviterUid !== window.GameLogic.currentUser.uid) {
                     minList.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #555; padding:5px 0; color:#fff; font-size:13px;"><span>${inv.inviterName} 的派對</span><button class="btn-primary" style="padding:2px 8px; font-size:12px;" onclick="window.PartyLogic.pendingInviteId='${k}'; window.replyPartyInvite('yes')">加入</button></div>`;
-                    
-                    if (inv.time > (window.PartyLogic.lastInviteTime || 0)) {
-                        window.PartyLogic.lastInviteTime = inv.time;
-                        document.getElementById('party-inviter-name').innerText = inv.inviterName;
-                        window.PartyLogic.pendingInviteId = k;
-                        if (window.GameLogic.currentScene !== 'partyroom') document.getElementById('party-invite-modal').style.display = 'block';
-                    }
                 }
             });
         });
