@@ -815,8 +815,27 @@ window.triggerPoopSplatter = function() {
 };
 
 window.currentPurchaseItem = null; window.currentPurchasePrice = 0; window.currentPurchaseQty = 1;
-window.useItem = function(itemName) { let inv = window.GameLogic.myProfile.inventory || {}; if (inv[itemName] && inv[itemName] > 0) { if (itemName === '水球' || itemName === '煙火') { window.GameLogic.armedItemState = 'armed'; window.GameLogic.armedItemName = itemName; document.getElementById('inventory-modal').style.display = 'none'; return; } inv[itemName] -= 1; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv }); }); alert(`你成功使用了 ${itemName}！`); window.openInventoryModal(); } };
-window.stopUsingItem = function(itemName) { if (itemName === '水球' || itemName === '煙火') { window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; } };
+// 修正死碼與邏輯漏洞：將「蔥友機」加入裝備判斷，避免被當成普通消耗品吃掉。同步移除耗能的動態 import。
+window.useItem = function(itemName) { 
+    let inv = window.GameLogic.myProfile.inventory || {}; 
+    if (inv[itemName] && inv[itemName] > 0) { 
+        if (itemName === '水球' || itemName === '煙火' || itemName === '蔥友機') { 
+            window.GameLogic.armedItemState = 'armed'; 
+            window.GameLogic.armedItemName = itemName; 
+            document.getElementById('inventory-modal').style.display = 'none'; 
+            return; 
+        } 
+        inv[itemName] -= 1; 
+        update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv }); 
+        alert(`你成功使用了 ${itemName}！`); 
+        window.openInventoryModal(); 
+    } 
+};
+// 修正死碼邏輯：改為泛用解除機制，確保後續新增的法寶(如蔥友機)也能被正常點擊卸下
+window.stopUsingItem = function(itemName) { 
+    window.GameLogic.armedItemState = null; 
+    window.GameLogic.armedItemName = null; 
+};
 window.toggleInventoryEdit = function() { window.GameLogic.inventoryEditMode = !window.GameLogic.inventoryEditMode; let btn = document.getElementById('inventory-edit-btn'); if (btn) { btn.innerText = window.GameLogic.inventoryEditMode ? '完成' : '編輯排序'; btn.className = window.GameLogic.inventoryEditMode ? 'btn-primary' : 'btn-edit'; } window.openInventoryModal(); };
 window.moveInvItem = function(index, dir) { let order = window.GameLogic.myProfile.inventoryOrder || []; if (index + dir >= 0 && index + dir < order.length) { let temp = order[index]; order[index] = order[index + dir]; order[index + dir] = temp; window.GameLogic.myProfile.inventoryOrder = order; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventoryOrder: order }); }); window.openInventoryModal(); } };
 
@@ -2014,12 +2033,13 @@ class MainScene extends Phaser.Scene {
                                 this.createMiniExplosion(targetSprite.x, targetSprite.y);
                                 if (targetType === 'player') {
                                     update(ref(window.GameLogic.db, `serverEvents/fireworksHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
-                                } else if (targetType === 'dummy') {
+                                else if (targetType === 'dummy') {
                                     update(ref(window.GameLogic.db, `serverEvents/fireworksDummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                                     for (let i = 0; i < 3; i++) {
                                         let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
-                                        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: 15 }); });
+                                        push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: 15 });
                                     }
+                                }
                                 } else if (targetType === 'mimi') {
                                     this.handleMimiHit(targetSprite.x, targetSprite.y);
                                 }
@@ -2046,11 +2066,11 @@ class MainScene extends Phaser.Scene {
                                 this.time.delayedCall(300, () => { wb.destroy(); });
                                 if (targetType === 'player') {
                                     update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
-                                } else if (targetType === 'dummy') {
+                                else if (targetType === 'dummy') {
                                     update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                                     for (let i = 0; i < 3; i++) {
                                         let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
-                                        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: 5 }); });
+                                        push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: 5 });
                                     }
                                 } else if (targetType === 'mimi') {
                                     this.handleMimiHit(targetSprite.x, targetSprite.y);
@@ -2456,11 +2476,11 @@ class MainScene extends Phaser.Scene {
             if (leveledUp) { window.playSFX(this, 'chorus_of_angels1'); } 
             
             let coinAmounts = [Math.floor(totalCoins/3), Math.floor(totalCoins/3), totalCoins - 2*Math.floor(totalCoins/3)];
-            // 補回遺失的噴發金幣邏輯與閉合括號
+            // 修正：移除高耗能的動態 import，直接使用已在頂部引入的 push 與 ref，大幅提升遊戲幀數平順度
             for (let i = 0; i < 3; i++) { 
                 let cx = px + Phaser.Math.Between(-40, 40); 
                 let cy = py + Phaser.Math.Between(-40, 40) + 20; 
-                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: coinAmounts[i] }); }); 
+                push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: coinAmounts[i] }); 
             } 
         } 
     }
@@ -2745,45 +2765,40 @@ class MainScene extends Phaser.Scene {
     }
 
     handleMimiHit(x, y) {
-        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-            module.get(module.ref(window.GameLogic.db, 'cafeMimi/hp')).then(snap => {
-                let chp = snap.val() || 0;
-                if (chp > 0) {
-                    let newHp = chp - 1; 
-                    // 這裡修正了重複包裝 module.ref 的錯誤
-                    module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { hp: newHp });
+        // 修正：徹底拔除多餘的動態 import，直接使用全域引入的 get, ref, update，解決打擊瞬間的卡頓感
+        get(ref(db, 'cafeMimi/hp')).then(snap => {
+            let chp = snap.val() || 0;
+            if (chp > 0) {
+                let newHp = chp - 1; 
+                update(ref(db, 'cafeMimi'), { hp: newHp });
+                
+                window.playSFX(this, 'mimi-thief-stealing');
+
+                if (newHp <= 0) {
+                    update(ref(db, 'cafeMimi'), { state: 'down' });
                     
-                    // 老鼠被水球或煙火砸中時，立刻播放一次受擊/尖叫聲
-                    window.playSFX(this, 'mimi-thief-stealing');
-
-                    if (newHp <= 0) {
-                        module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { state: 'down' });
-                        
-                        window.playSFX(this, 'mimi-thief-get-down');
-                        
-                        // 修正10：強制立刻播放倒下動畫，避免等待網路同步的延遲或錯失
-                        if (this.mimiSprite) {
-                            this.mimiSprite.play('mimi-down', true);
-                            this.mimiSprite.setAlpha(0.6);
-                        }
-
-                        let mData = window.GameLogic.cafeMimiData || {}; 
-                        let baseCoins = 300 * (mData.playersInvolved || 1); 
-                        let totalValue = baseCoins + (mData.stolenPool || 0); 
-                        let coinValue = Math.floor(totalValue / 10);
-                        let dropUpdates = {};
-                        for(let i=0; i<10; i++) { 
-                            // 修正：強行限制噴濺的錢幣座標在安全範圍 [100, 1948] 內，保證一定撿得到
-                            let cx = Phaser.Math.Clamp(x + Phaser.Math.Between(-80, 80), 100, 1948);
-                            let cy = Phaser.Math.Clamp(y + Phaser.Math.Between(-80, 80) + 20, 100, 1948);
-                            dropUpdates[`droppedCoins/mimi_coin_${Date.now()}_${i}`] = { x: cx, y: cy, amount: coinValue }; 
-                        }
-                        dropUpdates['serverEvents/mimiNextSpawn'] = Date.now() + Phaser.Math.Between(600000, 900000);
-                        module.update(module.ref(window.GameLogic.db), dropUpdates);
-                        sendBubble("打倒鼠偷米米啦！掉出滿地金幣！");
+                    window.playSFX(this, 'mimi-thief-get-down');
+                    
+                    if (this.mimiSprite) {
+                        this.mimiSprite.play('mimi-down', true);
+                        this.mimiSprite.setAlpha(0.6);
                     }
+
+                    let mData = window.GameLogic.cafeMimiData || {}; 
+                    let baseCoins = 300 * (mData.playersInvolved || 1); 
+                    let totalValue = baseCoins + (mData.stolenPool || 0); 
+                    let coinValue = Math.floor(totalValue / 10);
+                    let dropUpdates = {};
+                    for(let i=0; i<10; i++) { 
+                        let cx = Phaser.Math.Clamp(x + Phaser.Math.Between(-80, 80), 100, 1948);
+                        let cy = Phaser.Math.Clamp(y + Phaser.Math.Between(-80, 80) + 20, 100, 1948);
+                        dropUpdates[`droppedCoins/mimi_coin_${Date.now()}_${i}`] = { x: cx, y: cy, amount: coinValue }; 
+                    }
+                    dropUpdates['serverEvents/mimiNextSpawn'] = Date.now() + Phaser.Math.Between(600000, 900000);
+                    update(ref(db), dropUpdates);
+                    sendBubble("打倒鼠偷米米啦！掉出滿地金幣！");
                 }
-            });
+            }
         });
     }
 
