@@ -223,6 +223,15 @@ function createSystemUI() {
             #magic-modal { background: linear-gradient(180deg, #02111d 0%, #003a5e 100%) !important; border: 2px solid #0088cc !important; box-shadow: inset 0 0 30px #00aaff !important; overflow: hidden; }
             .water-drop { position: absolute; width: 3px; height: 15px; background: linear-gradient(to bottom, transparent, rgba(135,206,235,0.8)); border-radius: 50%; animation: drip linear infinite; pointer-events:none; z-index:0;}
             @keyframes drip { 0% { transform: translateY(-30px); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(300px); opacity: 0; } }
+
+            /* 派對 UI 特效 */
+            .party-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding: 10px; width: 100%; box-sizing: border-box; }
+            @media (max-width: 768px) { .party-grid { grid-template-columns: repeat(2, 1fr); } }
+            .party-slot { background: rgba(0,0,0,0.6); border: 2px solid #ffcc00; border-radius: 8px; height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; color: #fff; text-shadow: 1px 1px 2px #000; transition: 0.3s; }
+            .party-slot-host { position: absolute; top: -10px; left: -10px; background: #d9534f; color: #fff; padding: 2px 8px; border-radius: 8px; font-size: 12px; font-weight: bold; border: 2px solid #fff; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+            .party-slot.ready { border-color: #00ff00; box-shadow: inset 0 0 15px #00ff00; }
+            .party-slot img { width: 50px; height: 50px; margin-bottom: 5px; border-radius: 50%; border: 2px solid var(--mucha-gold); }
+            #party-red-flash { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: red; z-index: 900; pointer-events: none; opacity: 0; transition: opacity 0.2s; display: none; }
         </style>
 
         <div id="energy-modal" class="modal" style="z-index: 260; position: relative; padding: 25px;">
@@ -363,6 +372,51 @@ function createSystemUI() {
             </div>
         </div>
 
+        <div id="party-select-modal" class="modal" style="z-index: 270; width: 300px;">
+            <h3 style="color:var(--mucha-green);">選擇派對遊戲</h3>
+            <div style="display:flex; flex-direction:column; gap:10px; margin: 15px 0;">
+                <div class="catalog-item" style="border-color:#00aaff; background:rgba(0,170,255,0.1);" onclick="window.PartyLogic.selectedGame = '水球礁谷'; document.querySelectorAll('#party-select-modal .catalog-item').forEach(e=>e.style.background='rgba(0,170,255,0.1)'); this.style.background='rgba(0,170,255,0.4)';">
+                    <span style="font-size:24px;">🌊</span><span style="font-weight:bold; margin-top:5px; color:#005599;">水球礁谷</span>
+                </div>
+            </div>
+            <div class="modal-btns">
+                <button class="btn-primary" onclick="window.createPartyRoom()">確定開趴</button>
+                <button class="btn-secondary" onclick="document.getElementById('party-select-modal').style.display='none'">取消</button>
+            </div>
+        </div>
+
+        <div id="party-invite-modal" class="modal" style="z-index: 500;">
+            <h3 style="color:var(--mucha-green);">收到派對邀請函！</h3>
+            <p><strong id="party-inviter-name" style="color:var(--mucha-gold);"></strong> 吹響喇叭，邀請你參加派對！</p>
+            <div class="modal-btns">
+                <button class="btn-primary" style="background:#d9534f; border: 2px solid #ffcc00;" onclick="window.replyPartyInvite('yes')">派對!!</button>
+                <button class="btn-secondary" onclick="window.replyPartyInvite('no')">我現在沒感覺</button>
+            </div>
+        </div>
+
+        <div id="party-minimized-list" style="display:none; position:fixed; right:10px; top:160px; z-index:150; flex-direction:column; align-items:flex-end;">
+            <button class="btn-primary" style="border-radius:20px; padding:8px 15px; font-weight:bold; box-shadow:0 4px 8px rgba(0,0,0,0.5); animation: shake-gold 2s infinite;" onclick="let el = document.getElementById('party-active-rooms'); el.style.display = el.style.display === 'none' ? 'block' : 'none';">🎉 派對招募中</button>
+            <div id="party-active-rooms" style="display:none; background:rgba(0,0,0,0.8); border:2px solid #ffcc00; border-radius:8px; padding:10px; margin-top:5px; max-height:200px; overflow-y:auto; min-width:180px;"></div>
+        </div>
+
+        <div id="party-waiting-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:260; flex-direction:column; align-items:center; overflow-y:auto;">
+            <h1 style="color:#ffcc00; text-shadow:0 0 10px #ff0000; margin:20px 0;">🎉 派對準備中</h1>
+            <p style="color:#ccc; margin-bottom:10px;">請在框格內隨意走動等待，準備好就按下按鈕！</p>
+            <div id="party-wait-grid" class="party-grid"></div>
+            <div style="display:flex; gap:20px; margin: 20px 0;">
+                <button id="party-ready-btn" class="btn-primary" style="font-size:24px; padding:10px 40px; border-radius:25px;" onclick="window.togglePartyReady()">準備好了</button>
+                <button id="party-start-btn" class="btn-primary" style="display:none; background:#8a2be2; font-size:24px; padding:10px 40px; border-radius:25px;" onclick="window.startPartyGame()">開始派對</button>
+                <button class="btn-secondary" style="font-size:18px; padding:10px 30px; border-radius:25px;" onclick="window.leavePartyroom()">我先出去</button>
+            </div>
+        </div>
+
+        <div id="party-result-modal" class="modal" style="z-index: 500; width: 90%; max-width: 500px;">
+            <h2 style="color:#ffcc00; border-bottom:2px solid #ffcc00; padding-bottom:10px; margin-top:0;">🏆 派對結算</h2>
+            <div id="party-result-list" style="max-height: 40vh; overflow-y: auto; text-align: left; background: rgba(0,0,0,0.1); padding: 10px; border-radius: 8px;"></div>
+            <button class="btn-primary" style="width:100%; margin-top:15px; font-size:18px; padding:10px;" onclick="window.leavePartyroom()">離開派對房間</button>
+        </div>
+        <div id="party-red-flash"></div>
+
         <div id="game-layout-container"><div id="phaser-app"></div><div id="chat-section"><button id="chat-toggle-btn">收起對話 ▲</button><div id="chat-content"><div id="chat-box"></div><div id="chat-input-area"><input type="text" id="chat-input" placeholder="說點什麼..."><button id="send-btn">發送</button></div></div></div></div>
         
         <div id="magic-modal" class="modal" style="z-index: 260; width: 85%; max-width: 320px; position:relative;">
@@ -394,6 +448,7 @@ function createSystemUI() {
                     <div class="catalog-item" onclick="window.openPurchaseModal('水球', 20)"><div class="sprite-waterball"></div><span style="margin-top:5px;">水球</span><span style="color:#d4af37; font-size:12px; font-weight:bold;">20 馬德幣</span></div>
                     <div class="catalog-item" onclick="window.openPurchaseModal('煙火', 100)"><img src="shop-fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin-top:5px;">煙火</span><span style="color:#d4af37; font-size:12px; font-weight:bold;">100 馬德幣</span></div>
                     <div class="catalog-item" onclick="window.openPurchaseModal('蔥友機', 20)"><img src="playroom-onion-friend-plane.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin-top:5px;">蔥友機</span><span style="color:#d4af37; font-size:12px; font-weight:bold;">20 馬德幣</span></div>
+                    <div class="catalog-item" onclick="window.openPurchaseModal('派對喇叭', 150)"><img src="tools-onion-party-trumpet.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin-top:5px;">派對喇叭</span><span style="color:#d4af37; font-size:12px; font-weight:bold;">150 馬德幣</span></div>
                 </div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('store-modal').style.display='none'; window.GameLogic.isShopping = false;">離開商店</button>
             </div>
         </div>
@@ -848,7 +903,8 @@ window.openMagicModal = function() {
     let magics = [
         { name: '水球', icon: '<div class="sprite-waterball" style="transform: scale(0.8); transform-origin: center;"></div>', desc: '聞說水是生命的起源，洋蔥喜歡感受生命，使勁地丟吧！\n按B填充後按A擲出' },
         { name: '煙火', icon: '<img src="shop-fireworks.png" style="width:40px; height:40px; object-fit:contain;">', desc: '喜歡煙火咻蹦的美麗光彩，但也喜歡拿來朝著其他洋蔥丟～\n按B填充後按A擲出，鎖定目標與不鎖定目標會有不同的效果。' },
-        { name: '蔥友機', icon: '<img src="playroom-onion-friend-plane.png" style="width:40px; height:40px; object-fit:contain;">', desc: '隨時發動好(ㄓㄢˋ)友(ㄉㄡˋ)邀請，按B捏緊再按A投射，被射中的好友會收到你的訊息。' }
+        { name: '蔥友機', icon: '<img src="playroom-onion-friend-plane.png" style="width:40px; height:40px; object-fit:contain;">', desc: '隨時發動好(ㄓㄢˋ)友(ㄉㄡˋ)邀請，按B捏緊再按A投射，被射中的好友會收到你的訊息。' },
+        { name: '派對喇叭', icon: '<img src="tools-onion-party-trumpet.png" style="width:40px; height:40px; object-fit:contain;">', desc: '據說是埋在深山裡的洋蔥蔘淬煉製成的器具，吹奏他會自動調頻與洋蔥人們的腦波連結，「是時候開戰了」。按B緊握按A向全宇宙的洋蔥人發起械鬥號召。' }
     ];
     for(let i = 0; i < 16; i++) {
         if (i < magics.length) {
@@ -910,7 +966,7 @@ window.devAddCoins = function() {
 
 window.openInventoryModal = function() {
     const list = document.getElementById('inventory-list'); let hasUnread = Object.keys(window.GameLogic.unreadPMs || {}).length > 0; let dotHtml = hasUnread ? '<div style="position:absolute; top:5px; right:5px; width:12px; height:12px; background:red; border-radius:50%; box-shadow:0 0 5px red; z-index:10;"></div>' : '';
-    let rawItems = {}; let isEdit = window.GameLogic.inventoryEditMode; let inv = window.GameLogic.myProfile.inventory || {}; let sysKeys = ['phone', 'portal', 'profile', 'music', 'manual', 'logout', 'dev', 'magic_items']; let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥' && !sysKeys.includes(k) && k !== '水球' && k !== '煙火' && k !== '蔥友機');
+    let rawItems = {}; let isEdit = window.GameLogic.inventoryEditMode; let inv = window.GameLogic.myProfile.inventory || {}; let sysKeys = ['phone', 'portal', 'profile', 'music', 'manual', 'logout', 'dev', 'magic_items']; let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥' && !sysKeys.includes(k) && k !== '水球' && k !== '煙火' && k !== '蔥友機' && k !== '派對喇叭');
     keys.forEach(k => {
         let iconHtml = (k === '水球') ? '<div class="sprite-waterball"></div>' : (k === '煙火' ? '<img src="shop-fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">' : '<span style="font-size:24px; margin-bottom:5px;">📦</span>');
         let isUsing = ((k === '水球' || k === '煙火') && window.GameLogic.armedItemState != null && window.GameLogic.armedItemName === k);
@@ -969,7 +1025,7 @@ window.sendPM = function() {
     input.value = ''; 
 };
 
-window.openPurchaseModal = function(name, price) { let currentCoins = window.GameLogic.myProfile.coins || 0; let maxQty = Math.floor(currentCoins / price); if (maxQty <= 0) { alert("馬德幣不足！快去打掃賺錢吧！"); return; } window.currentPurchaseItem = name; window.currentPurchasePrice = price; window.currentPurchaseQty = 1; document.getElementById('purchase-title').innerText = `購買 ${name}`; let desc = ""; if (name === '水球') { desc = "聽說洋蔥都躲在大廳裡面玩水球大戰，為了讓我可以賺更多錢，我在水球裡加了魔法，被擊中的對象也會噴錢，然後他們就會.....一直噴錢，一直撿錢，來找我花錢!!! 嘿嘿嘿..."; } else if (name === '煙火') { desc = "曾經聽我朋友說他的同事們很奇怪，遇到好事就要說『咻蹦～』還要搭配放煙火手勢，我都懶得講話所以做了這個神奇的煙火拿來賣，畫面漂亮((還可以攻擊別人))多麼棒～"; } else if (name === '蔥友機') { desc = "那些洋蔥好像平常太互相傷害了，是時候來點友情的昇華。"; } document.getElementById('purchase-desc').innerText = desc; document.getElementById('purchase-qty').innerText = window.currentPurchaseQty; document.getElementById('purchase-total').innerText = window.currentPurchasePrice; document.getElementById('purchase-modal').style.display = 'block'; };
+window.openPurchaseModal = function(name, price) { let currentCoins = window.GameLogic.myProfile.coins || 0; let maxQty = Math.floor(currentCoins / price); if (maxQty <= 0) { alert("馬德幣不足！快去打掃賺錢吧！"); return; } window.currentPurchaseItem = name; window.currentPurchasePrice = price; window.currentPurchaseQty = 1; document.getElementById('purchase-title').innerText = `購買 ${name}`; let desc = ""; if (name === '水球') { desc = "聽說洋蔥都躲在大廳裡面玩水球大戰，為了讓我可以賺更多錢，我在水球裡加了魔法，被擊中的對象也會噴錢，然後他們就會.....一直噴錢，一直撿錢，來找我花錢!!! 嘿嘿嘿..."; } else if (name === '煙火') { desc = "曾經聽我朋友說他的同事們很奇怪，遇到好事就要說『咻蹦～』還要搭配放煙火手勢，我都懶得講話所以做了這個神奇的煙火拿來賣，畫面漂亮((還可以攻擊別人))多麼棒～"; } else if (name === '蔥友機') { desc = "那些洋蔥好像平常太互相傷害了，是時候來點友情的昇華。"; } else if (name === '派對喇叭') { desc = "上次有一顆洋蔥跑來跟我說：『可不可以不要再賣紙飛機了』，我以為他是被射怕了，殊不知他請我搞一個更大的！戰意的號角隨時響起，讓洋蔥開拓新戰場的絕妙好商品來嘍！"; } document.getElementById('purchase-desc').innerText = desc; document.getElementById('purchase-qty').innerText = window.currentPurchaseQty; document.getElementById('purchase-total').innerText = window.currentPurchasePrice; document.getElementById('purchase-modal').style.display = 'block'; };
 window.adjustPurchaseQty = function(delta) { let maxQty = Math.floor((window.GameLogic.myProfile.coins || 0) / window.currentPurchasePrice); let newQty = window.currentPurchaseQty + delta; if (newQty >= 1 && newQty <= maxQty) { window.currentPurchaseQty = newQty; document.getElementById('purchase-qty').innerText = window.currentPurchaseQty; document.getElementById('purchase-total').innerText = window.currentPurchaseQty * window.currentPurchasePrice; } };
 window.confirmPurchase = function() { let cost = window.currentPurchaseQty * window.currentPurchasePrice; if ((window.GameLogic.myProfile.coins || 0) >= cost) { window.GameLogic.myProfile.coins -= cost; window.GameLogic.myProfile.inventory = window.GameLogic.myProfile.inventory || {}; window.GameLogic.myProfile.inventory[window.currentPurchaseItem] = (window.GameLogic.myProfile.inventory[window.currentPurchaseItem] || 0) + window.currentPurchaseQty; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: window.GameLogic.myProfile.coins, inventory: window.GameLogic.myProfile.inventory }); }); document.getElementById('purchase-modal').style.display = 'none'; if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if (scene) { window.playSFX(scene, 'shop-boss-thank-you'); window.playSFX(scene, 'shop-check-buying'); } } let msgEl = document.getElementById('purchase-success-msg'); msgEl.style.display = 'block'; msgEl.classList.remove('flash-text'); void msgEl.offsetWidth; msgEl.classList.add('flash-text'); setTimeout(() => { msgEl.style.display = 'none'; }, 2000); let smBubble = document.getElementById('store-manager-bubble'); if (smBubble) { smBubble.innerText = "懂買的都是好蔥！"; setTimeout(() => { smBubble.innerText = "這顆臭洋蔥打什麼主意啊"; }, 3000); } let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins; let storeCoinsEl = document.getElementById("store-current-coins"); if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins}`; } };
 
@@ -1220,11 +1276,12 @@ function switchScene(sceneName, extraData = null) {
         window.GameLogic.currentScene = sceneName; window.GameLogic.placingFurnitureKey = null; 
         
         // 離開原本的房間
-        leaveCafe(); leaveShrine(); leavePlayroom();
+        leaveCafe(); leaveShrine(); leavePlayroom(); window.leavePartyroom();
 
         if (sceneName === "cafe") joinCafe(); 
         else if (sceneName === "shrine") joinShrine(); 
         else if (sceneName === "playroom") joinPlayroom(extraData.roomId);
+        else if (sceneName === "partyroom") window.joinPartyroom(extraData.roomId);
 
         window.updateOnlinePlayersUI();
         if (window.GameLogic.phaserGame && window.GameLogic.phaserLoaded) { 
@@ -1379,6 +1436,15 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('mimi-laugh', 'mimi-laugh.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('mimi-thief-get-down', 'mimi-thief-get-down.png', { frameWidth: 75, frameHeight: 75 });
         this.load.image('plane', 'playroom-onion-friend-plane.png');
+        this.load.image('trumpet', 'tools-onion-party-trumpet.png');
+        this.load.spritesheet('onion-trumpet', 'onion-party-trumpet.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.image('bgPartyroom', 'partyroom-under-water-reef-valley.jpg');
+        this.load.image('party-stone', 'partyroom-under-water-reef-valley-stone.png');
+        this.load.image('party-shot-number', 'partyroom-under-water-reef-valley-got-shot-number.png');
+        this.load.image('party-attack-number', 'partyroom-under-water-reef-valley-attack-number.png');
+        this.load.audio('bgm-party', 'partyroom-under-water-reef-valley-bgm.mp3');
+        this.load.audio('party-start', 'partyroom-start-ready-go.mp3');
+        this.load.audio('party-finish', 'partyroom-finish.mp3');
         this.load.image('bgPlayroom', 'playroom-bg.jpg');
         this.load.image('rps-machine', 'playroom-rps-machine.png');
         this.load.image('rps-me-ready', 'playroom-rps-onion-me-ready.png');
@@ -1423,6 +1489,7 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'mimi-steal', frames: this.anims.generateFrameNumbers('mimi-thief-stealing'), frameRate: 12, repeat: -1 });
         this.anims.create({ key: 'mimi-laugh', frames: this.anims.generateFrameNumbers('mimi-laugh'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'mimi-down', frames: this.anims.generateFrameNumbers('mimi-thief-get-down'), frameRate: 10, repeat: 0 });
+        this.anims.create({ key: 'trumpet-play', frames: this.anims.generateFrameNumbers('onion-trumpet'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'seat-idle', frames: this.anims.generateFrameNumbers('onion-seat-shrine'), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'purify-target', frames: this.anims.generateFrameNumbers('onion-got-purify'), frameRate: 8, repeat: -1 }); this.anims.create({ key: 'purify-magic', frames: this.anims.generateFrameNumbers('onion-doing-purify'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'charger-anim', frames: this.anims.generateFrameNumbers('sleep-charger'), frameRate: 8, repeat: -1 });
 
@@ -1621,6 +1688,7 @@ class MainScene extends Phaser.Scene {
 
         if (this.sceneName === 'shrine') {
             allBgms.forEach(k => { if (this.sound.getAll(k)) this.sound.getAll(k).forEach(s => s.stop()); this.sound.removeByKey(k); });
+            if (this.sound.getAll('bgm-party')) this.sound.getAll('bgm-party').forEach(s => s.stop());
             
             let evData = window.GameLogic.shrineEventData;
             let evState = evData ? evData.state : 'none';
@@ -1632,8 +1700,18 @@ class MainScene extends Phaser.Scene {
                     this.sound.add('shrine-wierd-people-sound', { loop: true, volume: vol }).play();
                 }
             }
+        } else if (this.sceneName === 'partyroom') {
+            allBgms.forEach(k => { if (this.sound.getAll(k)) this.sound.getAll(k).forEach(s => s.stop()); this.sound.removeByKey(k); });
+            shrineBgms.forEach(k => { if (this.sound.getAll(k)) this.sound.getAll(k).forEach(s => s.stop()); this.sound.removeByKey(k); });
+            
+            let currentSnd = this.sound.get('bgm-party');
+            if (!currentSnd || !currentSnd.isPlaying) {
+                this.sound.removeByKey('bgm-party');
+                this.sound.add('bgm-party', { loop: true, volume: vol }).play();
+            }
         } else {
             shrineBgms.forEach(k => { if (this.sound.getAll(k)) this.sound.getAll(k).forEach(s => s.stop()); this.sound.removeByKey(k); });
+            if (this.sound.getAll('bgm-party')) this.sound.getAll('bgm-party').forEach(s => s.stop());
 
             let currentTrackKey = allBgms[window.GameLogic.currentTrackIdx] || 'bgm';
             allBgms.forEach(k => { if (k !== currentTrackKey && this.sound.getAll(k)) { this.sound.getAll(k).forEach(s => s.stop()); this.sound.removeByKey(k); } });
@@ -1661,8 +1739,9 @@ class MainScene extends Phaser.Scene {
             this.tweens.add({ targets: [topBlack, botBlack], scaleY: 0, duration: 200, ease: 'Cubic.easeOut', onComplete: () => { topBlack.destroy(); botBlack.destroy(); whiteLine.destroy(); } });
         }});
 
-        const mapW = this.isCafe ? 2048 : 1280; const mapH = this.isCafe ? 2048 : 720;
-        this.physics.world.setBounds(0, 0, mapW, mapH); 
+        const mapW = this.isCafe ? 2048 : (this.sceneName === 'partyroom' ? 1920 : 1280); 
+        const mapH = this.isCafe ? 2048 : (this.sceneName === 'partyroom' ? 1080 : 720);
+        this.physics.world.setBounds(0, 0, mapW, mapH);
         
         // 修正：動態計算鏡頭邊界。當螢幕解析度大於地圖尺寸時，自動推算偏移量讓地圖完美置中，解決電腦版靠左上的裁切感
         this.updateCameraBounds = (gameSize) => {
@@ -1711,6 +1790,24 @@ class MainScene extends Phaser.Scene {
         } else if (this.sceneName === "playroom") {
             this.add.image(mapW/2, mapH/2, 'bgPlayroom').setDisplaySize(mapW, mapH);
             this.rpsMachine = this.physics.add.staticSprite(mapW/2, mapH/2, 'rps-machine').setDepth(5);
+        } else if (this.sceneName === "partyroom") {
+            this.add.image(mapW/2, mapH/2, 'bgPartyroom').setDisplaySize(mapW, mapH);
+            this.partyStonesGroup = this.physics.add.staticGroup();
+            this.partyStonesListener = import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                return module.onValue(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/stones`), snap => {
+                    let stones = snap.val();
+                    if (stones) {
+                        this.partyStonesGroup.clear(true, true);
+                        stones.forEach(st => {
+                            let stone = this.partyStonesGroup.create(st.x, st.y, 'party-stone').setDepth(5);
+                            stone.body.setCircle(37); // Ensure accurate collision for 75x75 obstacle
+                        });
+                    }
+                });
+            });
+            let rFlash = document.getElementById('party-red-flash');
+            if (rFlash) rFlash.style.display = 'block';
+            this.partyAnnounceText = this.add.text(mapW/2, mapH/2, '', {fontSize:'100px', fontStyle:'bold', color:'#fff', stroke:'#f00', strokeThickness:10}).setOrigin(0.5).setDepth(1000).setScrollFactor(0).setVisible(false);
         }
 
         const uiScene = this.scene.manager.getScene('UIScene');
@@ -1968,8 +2065,18 @@ class MainScene extends Phaser.Scene {
            if (window.GameLogic.armedItemState === 'ready') {
                 let itemName = window.GameLogic.armedItemName || '水球';
                 let inv = window.GameLogic.myProfile.inventory || {};
+                let isPartyMode = this.sceneName === 'partyroom' && itemName === '水球';
                 
-                if (window.GameLogic.energyActive) {
+                if (itemName === '派對喇叭') {
+                    window.playSFX(this, 'launcher1');
+                    this.localPlayer.sprite.play('trumpet-play', true);
+                    this.localPlayer.isThrowing = true;
+                    this.time.delayedCall(500, () => { this.localPlayer.isThrowing = false; });
+                    document.getElementById('party-select-modal').style.display = 'block';
+                    return;
+                }
+
+                if (window.GameLogic.energyActive && !isPartyMode) {
                     let currentEnergy = window.GameLogic.myProfile.energy || 0;
                     if (currentEnergy >= 5) {
                         window.GameLogic.myProfile.energy = currentEnergy - 5;
@@ -1980,9 +2087,15 @@ class MainScene extends Phaser.Scene {
                     }
                 }
 
-                inv[itemName] = Math.max(0, (inv[itemName] || 0) - 1);
-                update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
-                if (inv[itemName] > 0) { window.GameLogic.armedItemState = 'ready'; } else { window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; sendBubble("法寶已耗盡！"); }
+                if (!isPartyMode) inv[itemName] = Math.max(0, (inv[itemName] || 0) - 1);
+                if (!isPartyMode) update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
+                
+                if (isPartyMode) {
+                    if (window.PartyLogic.ammo > 0) { window.GameLogic.armedItemState = 'ready'; window.PartyLogic.ammo--; } 
+                    else { window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; sendBubble("水球已耗盡！"); return; }
+                } else {
+                    if (inv[itemName] > 0) { window.GameLogic.armedItemState = 'ready'; } else { window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; sendBubble("法寶已耗盡！"); }
+                }
                 
                 let targetUid = window.GameLogic.currentTargetUid;
                 let targetSprite = window.GameLogic.currentTargetSprite;
@@ -2075,13 +2188,19 @@ class MainScene extends Phaser.Scene {
                     if (targetUid && targetSprite) {
                         let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15);
                         wb.setFrame(0);
+                        if (this.sceneName === 'partyroom') { this.physics.add.collider(wb, this.partyStonesGroup, () => { wb.destroy(); }); }
                         this.tweens.add({
                             targets: wb, x: targetSprite.x, y: targetSprite.y, duration: 200, onComplete: () => {
+                                if (!wb.active) return; // if destroyed by collider
                                 window.playSFX(this, 'powerdown07');
                                 wb.play('wb-blast', true);
                                 this.time.delayedCall(300, () => { wb.destroy(); });
                                 if (targetType === 'player') {
-                                    update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                    if (this.sceneName === 'partyroom') {
+                                        update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/hits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                    } else {
+                                        update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                    }
                                 } else if (targetType === 'dummy') {
                                     update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                                     for (let i = 0; i < 3; i++) {
@@ -2158,7 +2277,8 @@ class MainScene extends Phaser.Scene {
                 { name: 'none', icon: '<span style="font-size:24px; pointer-events:none;">❌</span>', qty: '' },
                 { name: '水球', icon: '<div class="sprite-waterball" style="transform: scale(0.8); transform-origin: center; pointer-events:none;"></div>', qty: inv['水球'] || 0 },
                 { name: '煙火', icon: '<img src="shop-fireworks.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['煙火'] || 0 },
-                { name: '蔥友機', icon: '<img src="playroom-onion-friend-plane.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['蔥友機'] || 0 }
+                { name: '蔥友機', icon: '<img src="playroom-onion-friend-plane.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['蔥友機'] || 0 },
+                { name: '派對喇叭', icon: '<img src="tools-onion-party-trumpet.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['派對喇叭'] || 0 }
             ];
             
             let html = `<div style="flex: 0 0 calc(50% - 30px);"></div>`;
@@ -2266,6 +2386,25 @@ class MainScene extends Phaser.Scene {
         this.placePrompt = this.add.text(0, 0, '洋蔥精靈: 按A確定擺放', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#fff', backgroundColor: 'rgba(74, 93, 78, 0.8)', padding: {x:8, y:4} }).setOrigin(0.5).setDepth(20).setVisible(false); if (this.minimap) this.minimap.ignore(this.placePrompt);
       
         this.hitListener = onValue(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 2000)) { if (this.localPlayer.isInvincible) return; this.localPlayer.isInvincible = true; this.localPlayer.isStunned = true; this.localPlayer.sprite.play('wet', true); let p = window.GameLogic.myProfile; let loss = Math.min(p.coins || 0, 15); p.coins -= loss; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins; let amounts = [12, 12, 11]; for (let i = 0; i < 3; i++) { let cx = this.localPlayer.sprite.x + Phaser.Math.Between(-40, 40); let cy = this.localPlayer.sprite.y + Phaser.Math.Between(-40, 40) + 20; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: amounts[i] }); }); } this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); remove(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`)); } });
+      
+      this.partyHitListener = onValue(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic?.roomId}/hits/${window.GameLogic.currentUser.uid}`), (snap) => {
+            let data = snap.val();
+            if (data && data.time && (Date.now() - data.time < 2000)) {
+                if (this.localPlayer.isInvincible) return;
+                this.localPlayer.isStunned = true;
+                this.localPlayer.isInvincible = true;
+                this.localPlayer.sprite.play('wet', true);
+                
+                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
+                    module.get(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}/gotHitCount`)).then(s => { module.update(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`), { gotHitCount: (s.val()||0) + 1 }); });
+                    module.get(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}/hitCount`)).then(s => { module.update(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}`), { hitCount: (s.val()||0) + 1 }); });
+                    module.remove(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/hits/${window.GameLogic.currentUser.uid}`));
+                });
+                
+                this.time.delayedCall(1000, () => { this.localPlayer.isStunned = false; });
+                this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; });
+            }
+      });
         this.fwHitListener = onValue(ref(window.GameLogic.db, `serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 2000)) { if (this.localPlayer.isInvincible) return; window.playSFX(this, 'bomb'); this.localPlayer.isInvincible = true; this.localPlayer.isStunned = true; this.localPlayer.sprite.play('fw-hit', true); let p = window.GameLogic.myProfile; let loss = Math.min(p.coins || 0, 100); p.coins -= loss; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins; if (loss > 0) { let amounts = [Math.floor(loss * 0.4), Math.floor(loss * 0.3), loss - Math.floor(loss * 0.4) - Math.floor(loss * 0.3)]; for (let i = 0; i < 3; i++) { if(amounts[i] <= 0) continue; let cx = this.localPlayer.sprite.x + Phaser.Math.Between(-50, 50); let cy = this.localPlayer.sprite.y + Phaser.Math.Between(-50, 50) + 20; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: amounts[i] }); }); } } this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); remove(ref(window.GameLogic.db, `serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`)); } });
         this.fwPlayersHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworksHits'), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { window.playSFX(this, 'bomb'); opSprite.isStunned = true; opSprite.play('fw-hit', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
         this.fwDummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworksDummyHits'), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { window.playSFX(this, 'bomb'); dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
@@ -2378,8 +2517,10 @@ class MainScene extends Phaser.Scene {
             if (this.sound && this.sound.get('mimi-walk')) this.sound.stopByKey('mimi-walk');
             
             if (this.hitListener) this.hitListener(); 
+            if (this.partyHitListener) this.partyHitListener();
+            if (this.partyStonesListener) { this.partyStonesListener.then(unsub => unsub()); }
             if (this.fwHitListener) this.fwHitListener(); 
-            if (this.fwPlayersHitListener) this.fwPlayersHitListener(); 
+            if (this.fwPlayersHitListener) this.fwPlayersHitListener();
             if (this.fwDummyHitListener) this.fwDummyHitListener(); 
             if (this.globalFwListener) this.globalFwListener(); 
             if (this.playersHitListener) this.playersHitListener(); 
@@ -2406,12 +2547,28 @@ class MainScene extends Phaser.Scene {
         // 修正1：使用 Container 取代直接繪製，解決每幀重繪造成的掉幀問題
         entity.nameContainer = this.add.container(x, y).setDepth(12); entity.nameBg = this.add.graphics(); entity.nameText = this.add.text(0, 0, pData.name || '匿名', { fontSize: '13px', fontFamily: 'Georgia', color: pData.color || '#fff', fontStyle: 'bold' }).setOrigin(0.5); entity.nameContainer.add([entity.nameBg, entity.nameText]);
         entity.bubbleContainer = this.add.container(x, y).setDepth(14).setVisible(false); entity.bubbleBg = this.add.graphics(); entity.bubbleText = this.add.text(0, 0, '', { fontSize: '14px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold', wordWrap: { width: 160, useAdvancedWrap: true }, align: 'center' }).setOrigin(0.5); entity.bubbleContainer.add([entity.bubbleBg, entity.bubbleText]);
-        entity.lastNameData = ""; entity.lastBubbleData = ""; if (this.minimap) this.minimap.ignore([entity.nameContainer, entity.bubbleContainer]); return entity; 
+        
+        entity.partyScoreContainer = this.add.container(x, y).setDepth(13).setVisible(false);
+        let partyBgH = this.add.image(-25, 0, 'party-shot-number').setScale(1);
+        let partyBgA = this.add.image(25, 0, 'party-attack-number').setScale(1);
+        entity.partyShotText = this.add.text(-25, 0, '0', {fontSize:'14px', color:'#000', fontStyle:'bold'}).setOrigin(0.5);
+        entity.partyAttackText = this.add.text(25, 0, '0', {fontSize:'14px', color:'#000', fontStyle:'bold'}).setOrigin(0.5);
+        if (pData.uid === window.GameLogic.currentUser.uid || isLocal) { let meBg = this.add.graphics().fillStyle(0xd9534f, 1).fillRoundedRect(-18, -32, 36, 18, 4); let meTxt = this.add.text(0, -23, '這我', {fontSize:'12px', color:'#fff', fontStyle:'bold'}).setOrigin(0.5); entity.partyScoreContainer.add([meBg, meTxt]); }
+        entity.partyScoreContainer.add([partyBgH, partyBgA, entity.partyShotText, entity.partyAttackText]);
+
+        entity.lastNameData = ""; entity.lastBubbleData = ""; if (this.minimap) this.minimap.ignore([entity.nameContainer, entity.bubbleContainer, entity.partyScoreContainer]); return entity; 
     }
     updatePlayerEntity(entity, pData) { let sx = entity.sprite.x; let sy = entity.sprite.y; let displayName = `${pData.name || '匿名'} Lv.${pData.level || 1}`; let nameHash = displayName + (pData.color || ''); 
         if (entity.lastNameData !== nameHash) { entity.lastNameData = nameHash; entity.nameText.setText(displayName); if(pData.color) entity.nameText.setColor(pData.color); const nameBounds = entity.nameText.getBounds(); const bgWidth = nameBounds.width + 16; entity.nameBg.clear().fillStyle(0x000000, 0.6).fillRoundedRect(-bgWidth / 2, -10, bgWidth, 20, 4); }
         entity.nameContainer.setPosition(sx, sy - 45);
-        if (pData.bubbleMsg && (Date.now() - pData.bubbleTime < 10000)) { entity.bubbleContainer.setVisible(true); 
+        
+        if (this.sceneName === 'partyroom') {
+            entity.partyScoreContainer.setVisible(true).setPosition(sx, sy - 75);
+            let sData = window.PartyLogic && window.PartyLogic.scores && window.PartyLogic.scores[pData.uid] ? window.PartyLogic.scores[pData.uid] : {hitCount: 0, gotHitCount: 0};
+            entity.partyShotText.setText(sData.gotHitCount || 0); entity.partyAttackText.setText(sData.hitCount || 0);
+        } else { entity.partyScoreContainer.setVisible(false); }
+
+        if (pData.bubbleMsg && (Date.now() - pData.bubbleTime < 10000)) { entity.bubbleContainer.setVisible(true);
             if (entity.lastBubbleData !== pData.bubbleMsg) { entity.lastBubbleData = pData.bubbleMsg; entity.bubbleText.setText(pData.bubbleMsg); const bounds = entity.bubbleText.getBounds(); const boxWidth = bounds.width + 20, boxHeight = bounds.height + 16; entity.bubbleBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 8).strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 8); entity.bubbleOffsetY = 65 + boxHeight / 2; }
             entity.bubbleContainer.setPosition(sx, sy - (entity.bubbleOffsetY || 80)); // 修正3：避免每幀調用 getBounds 造成嚴重 Lag
         } else { entity.bubbleContainer.setVisible(false); } 
@@ -2824,7 +2981,10 @@ class MainScene extends Phaser.Scene {
         let vx = 0; let vy = 0; let speed = 180; const uiScene = this.scene.manager.getScene('UIScene'); let px = this.localPlayer.sprite.x; let py = this.localPlayer.sprite.y;
         let evData = window.GameLogic.shrineEventData; let isPurifying = (this.sceneName === 'shrine' && evData && evData.state === 'purifying');
 
+        if (this.sceneName === 'partyroom' && window.PartyLogic && window.PartyLogic.speedBoost) speed = 360;
+
         this.processShrineEventLogic(time);
+        if (this.sceneName === 'partyroom') window.processPartyEventLogic(this);
 
       if (this.isCafe) {
             let pUids = Object.keys(window.GameLogic.cafePlayers || {}).filter(uid => window.GameLogic.onlinePlayers && window.GameLogic.onlinePlayers[uid]);
@@ -3020,6 +3180,22 @@ class MainScene extends Phaser.Scene {
                 if (document.activeElement.tagName !== 'INPUT') { if (this.cursors.left.isDown) vx = -speed; else if (this.cursors.right.isDown) vx = speed; if (this.cursors.up.isDown) vy = -speed; else if (this.cursors.down.isDown) vy = speed; }
                 if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; } 
             }
+            
+            if (this.sceneName === 'partyroom' && window.PartyLogic && window.PartyLogic.state === 'waiting') {
+                let myIdx = window.PartyLogic.mySlotIndex || 0;
+                let isMobile = window.innerWidth <= 768;
+                let cols = isMobile ? 2 : 5; let rows = isMobile ? 5 : 2;
+                let col = myIdx % cols; let row = Math.floor(myIdx / cols);
+                let cw = 1920/cols; let ch = 1080/rows;
+                let minX = col*cw + 40; let maxX = (col+1)*cw - 40;
+                let minY = row*ch + 40; let maxY = (row+1)*ch - 40;
+                let nx = this.localPlayer.sprite.x + vx * (delta/1000);
+                let ny = this.localPlayer.sprite.y + vy * (delta/1000);
+                if (nx < minX) { nx = minX; vx = 0; } if (nx > maxX) { nx = maxX; vx = 0; }
+                if (ny < minY) { ny = minY; vy = 0; } if (ny > maxY) { ny = maxY; vy = 0; }
+                this.localPlayer.sprite.x = nx; this.localPlayer.sprite.y = ny;
+            }
+
             let isPlacing = window.GameLogic.placingFurnitureKey !== null && (this.isCafe || this.sceneName === 'doghouse' || this.sceneName === 'shrine');
 
             if (isPlacing) {
@@ -3036,7 +3212,12 @@ class MainScene extends Phaser.Scene {
                 }
                 let absX = Math.abs(vx); let absY = Math.abs(vy); if (absX < 1) vx = 0; if (absY < 1) vy = 0;
                 if (vx === 0 && vy === 0) { this.localPlayer.sprite.play('idle', true); } else if (absX >= absY) { this.localPlayer.sprite.setFlipX(vx < 0); this.localPlayer.sprite.play('walk', true); } else { if (vy < 0) { this.localPlayer.sprite.play('walk-up', true); } else { this.localPlayer.sprite.play('walk-down', true); } }
-                if ((this.isCafe || this.sceneName === 'shrine' || this.sceneName === 'playroom') && (vx !== 0 || vy !== 0)) { if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) { let path = this.isCafe ? `cafePlayers/${window.GameLogic.currentUser.uid}` : (this.sceneName === 'shrine' ? `shrinePlayers/${window.GameLogic.currentUser.uid}` : `playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`); update(ref(window.GameLogic.db, path), { x: this.localPlayer.sprite.x, y: this.localPlayer.sprite.y }); this.lastSyncTime = Date.now(); } }
+                if ((this.isCafe || this.sceneName === 'shrine' || this.sceneName === 'playroom' || this.sceneName === 'partyroom') && (vx !== 0 || vy !== 0)) { 
+                    if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) { 
+                        let path = this.isCafe ? `cafePlayers/${window.GameLogic.currentUser.uid}` : (this.sceneName === 'shrine' ? `shrinePlayers/${window.GameLogic.currentUser.uid}` : (this.sceneName === 'playroom' ? `playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}` : `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`)); 
+                        update(ref(window.GameLogic.db, path), { x: this.localPlayer.sprite.x, y: this.localPlayer.sprite.y }); this.lastSyncTime = Date.now(); 
+                    } 
+                }
             }
 
             let minDist = 90; let promptTarget = null; let promptMsg = ""; this.closestTrash = null;
@@ -3148,9 +3329,9 @@ class MainScene extends Phaser.Scene {
             }
         }
 
-        if (this.isCafe || this.sceneName === 'shrine' || this.sceneName === 'playroom') {
-            const playersData = this.isCafe ? window.GameLogic.cafePlayers : (this.sceneName === 'shrine' ? window.GameLogic.shrinePlayers : window.GameLogic.playroomPlayers);
-            const globalOnline = window.GameLogic.onlinePlayers || {}; 
+        if (this.isCafe || this.sceneName === 'shrine' || this.sceneName === 'playroom' || this.sceneName === 'partyroom') {
+            const playersData = this.isCafe ? window.GameLogic.cafePlayers : (this.sceneName === 'shrine' ? window.GameLogic.shrinePlayers : (this.sceneName === 'playroom' ? window.GameLogic.playroomPlayers : (window.PartyLogic ? window.PartyLogic.players : {})));
+            const globalOnline = window.GameLogic.onlinePlayers || {};
             for (let uid in playersData) {
                 if (uid === window.GameLogic.currentUser.uid) continue; if (!globalOnline[uid]) continue; 
                 let pd = playersData[uid]; pd.uid = uid; if (!this.otherPlayers[uid]) this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
