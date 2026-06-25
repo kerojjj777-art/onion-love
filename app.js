@@ -4697,18 +4697,19 @@ import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(mo
                 minList.innerHTML = '';
                 validInvites.forEach(k => {
                     let inv = invites[k];
-                if (inv.inviterUid !== window.GameLogic.currentUser.uid) {
-                    minList.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #555; padding:5px 0; color:#fff; font-size:13px;"><span>${inv.inviterName} 的派對</span><button class="btn-primary" style="padding:2px 8px; font-size:12px;" onclick="window.PartyLogic.pendingInviteId='${k}'; window.replyPartyInvite('yes')">加入</button></div>`;
-                    
-                    if (inv.time > (window.PartyLogic.lastInviteTime || 0)) {
-                        window.PartyLogic.lastInviteTime = inv.time;
-                        document.getElementById('party-inviter-name').innerText = inv.inviterName;
-                        window.PartyLogic.pendingInviteId = k;
-                        if (window.GameLogic.currentScene !== 'partyroom') document.getElementById('party-invite-modal').style.display = 'block';
+                    if (inv.inviterUid !== window.GameLogic.currentUser.uid) {
+                        minList.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #555; padding:5px 0; color:#fff; font-size:13px;"><span>${inv.inviterName} 的派對</span><button class="btn-primary" style="padding:2px 8px; font-size:12px;" onclick="window.PartyLogic.pendingInviteId='${k}'; window.replyPartyInvite('yes')">加入</button></div>`;
+                        
+                        if (inv.time > (window.PartyLogic.lastInviteTime || 0)) {
+                            window.PartyLogic.lastInviteTime = inv.time;
+                            document.getElementById('party-inviter-name').innerText = inv.inviterName;
+                            window.PartyLogic.pendingInviteId = k;
+                            if (window.GameLogic.currentScene !== 'partyroom') document.getElementById('party-invite-modal').style.display = 'block';
+                        }
                     }
-                }
-            });
-        }
+                });
+            }); // <-- 修正 1：補上 Promise.all 遺失的 );
+        } // <-- 修正 2：補上 if (minUI) 遺失的 }
     });
 });
 // 檔案到這裡結束，不要有任何多餘的 }
