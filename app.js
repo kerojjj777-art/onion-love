@@ -2033,7 +2033,7 @@ class MainScene extends Phaser.Scene {
                                 this.createMiniExplosion(targetSprite.x, targetSprite.y);
                                 if (targetType === 'player') {
                                     update(ref(window.GameLogic.db, `serverEvents/fireworksHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
-                                else if (targetType === 'dummy') {
+                                } else if (targetType === 'dummy') {
                                     update(ref(window.GameLogic.db, `serverEvents/fireworksDummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                                     for (let i = 0; i < 3; i++) {
                                         let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
@@ -2066,7 +2066,7 @@ class MainScene extends Phaser.Scene {
                                 this.time.delayedCall(300, () => { wb.destroy(); });
                                 if (targetType === 'player') {
                                     update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
-                                else if (targetType === 'dummy') {
+                                } else if (targetType === 'dummy') {
                                     update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                                     for (let i = 0; i < 3; i++) {
                                         let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
