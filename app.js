@@ -79,9 +79,8 @@ window.playSFX = function(scene, key) {
     if (window.GameLogic.muteSFX) return;
     let vol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 50) / 100;
     if (vol <= 0) return;
-    let snd = scene.sound.get(key);
-    if (snd) { snd.setVolume(vol); snd.play(); }
-    else scene.sound.add(key, { volume: vol }).play();
+    // 直接調用原生 play，讓 Phaser 幫你處理音效疊加與資源回收，解決連續金幣音效被截斷的問題
+    scene.sound.play(key, { volume: vol });
 };
 
 window.changeTrack = function(dir) {
@@ -1286,7 +1285,8 @@ function joinCafe() { const playerRef = ref(db, `cafePlayers/${window.GameLogic.
 function leaveCafe() { if (window.GameLogic.currentUser) set(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), null); if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; } }
 
 function gainRewards(coins, exp) {
-    let p = window.GameLogic.myProfile; p.coins = (p.coins || 0) + coins; p.exp = (p.exp || 0) + exp; p.sweeps = (p.sweeps || 0) + 1;
+    let p = window.GameLogic.myProfile; p.coins = (p.coins || 0) + coins; p.exp = (p.exp || 0) + exp; p.sweeps = (p.sweeps || 0) + 1; 
+    p.level = p.level || 1; // 補上防呆，確保缺少等級資料時預設為 1，避免計算出 NaN
     let requiredExp = p.level * 100; let leveledUp = false;
     if (p.exp >= requiredExp) { p.level++; p.exp -= requiredExp; leveledUp = true; }
     update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins, exp: p.exp, level: p.level, sweeps: p.sweeps });
@@ -2672,10 +2672,16 @@ class MainScene extends Phaser.Scene {
                 if (this.pooBoss.lastBubbleData !== this.pooBoss.bubbleText.text) { this.pooBoss.lastBubbleData = this.pooBoss.bubbleText.text; let bBounds = this.pooBoss.bubbleText.getBounds(); let bW = bBounds.width + 16, bH = bBounds.height + 12; this.pooBoss.bubbleBg.clear().fillStyle(0x3e2723, 0.9).lineStyle(2, 0xffcc00, 1).fillRoundedRect(-bW/2, -bH/2, bW, bH, 8).strokeRoundedRect(-bW/2, -bH/2, bW, bH, 8); }
                 let bBounds = this.pooBoss.bubbleText.getBounds(); let bH = bBounds.height + 12; this.pooBoss.bubbleContainer.setPosition(this.pooBoss.x, this.pooBoss.y - 60 - bH/2);
             }
-        } 
-        else if (evState === 'success') {
+        } else if (evState === 'success') {
             this.stopPurifyEffects(true); let tUid = eventData.targetUid;
-            if (this.pooBoss) { this.pooBoss.bubbleText.setText("我還會再回來的..!!!!"); this.tweens.add({ targets: this.pooBoss, y: this.pooBoss.y - 300, alpha: 0, duration: 2000 }); if(this.pooBoss.bubbleContainer) this.pooBoss.bubbleContainer.destroy(); this.pooBoss = null; }
+            if (this.pooBoss) { 
+                let boss = this.pooBoss; // 先抓住實體參考
+                boss.bubbleText.setText("我還會再回來的..!!!!"); 
+                // 必須在 Tween 結束時 (onComplete) 確實呼叫 destroy() 釋放記憶體
+                this.tweens.add({ targets: boss, y: boss.y - 300, alpha: 0, duration: 2000, onComplete: () => boss.destroy() }); 
+                if(boss.bubbleContainer) boss.bubbleContainer.destroy(); 
+                this.pooBoss = null; 
+            }
             if (!this.successTextShown) {
                 this.successTextShown = true;
                 // 修正4：儀式成功瞬間，鏡頭立即恢復追蹤玩家並取消縮放
