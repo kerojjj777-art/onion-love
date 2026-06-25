@@ -1775,9 +1775,10 @@ class MainScene extends Phaser.Scene {
                             module.update(module.ref(window.GameLogic.db, `cafeMimi/stolenUids`), { [window.GameLogic.currentUser.uid]: true });
                         });
                         
-                        // 修正：延長玩家被打劫後的閃爍與僵直時間為 3 秒
+                        // 修正：調整玩家被打劫後的懲罰時間，僵直無法行動與受傷動畫維持3秒，閃爍無敵狀態縮短為2秒
                         sendBubble(`被老鼠偷走了 ${amt} 元！`); 
-                        this.time.delayedCall(3000, () => { this.localPlayer.isStunned = false; this.localPlayer.isInvincible = false; });
+                        this.time.delayedCall(2000, () => { this.localPlayer.isInvincible = false; });
+                        this.time.delayedCall(3000, () => { this.localPlayer.isStunned = false; });
                     }
                     if (data.state !== 'stealing' && this.localPlayer.isMimiRobbed) this.localPlayer.isMimiRobbed = false;
 
@@ -1833,6 +1834,10 @@ class MainScene extends Phaser.Scene {
         }
         if (this.sceneName === "7eonion" && this.storeManager) this.physics.add.collider(this.localPlayer.sprite, this.storeManager);
         this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
+
+        // 修正：重置文字緩存變數，避免 Phaser 重新啟動場景時因為變數殘留，導致判定相同而不更新 UI，進而使法寶提示字消失
+        this.lastPromptMsg = null; this.lastPromptDrawX = null; this.lastPromptDrawY = null; this.lastPromptDrawMsg = null;
+        this.lastWaterPromptMsg = null; this.lastWaterDrawX = null; this.lastWaterDrawY = null; this.lastWaterDrawMsg = null;
 
         this.smartPromptBg = this.add.graphics().setDepth(100).setVisible(false); this.smartPromptText = this.add.text(0, 0, '', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#4a5d4e' }).setOrigin(0.5).setDepth(101).setVisible(false);
         this.waterPromptBg = this.add.graphics().setDepth(100).setVisible(false); this.waterPromptText = this.add.text(0, 0, '', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#fff' }).setOrigin(0.5).setDepth(101).setVisible(false);
