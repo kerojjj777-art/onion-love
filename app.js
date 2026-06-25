@@ -582,7 +582,7 @@ window.claimEnergyBank = function() {
         return;
     }
     p.coins = (p.coins || 0) + amount; p.energyBank = 0;
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins, energyBank: 0 }); });
+    update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins, energyBank: 0 });
     document.getElementById('energy-bank-val').innerText = '0'; let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins;
     
     document.getElementById('energy-modal').style.display = 'none';
@@ -943,7 +943,13 @@ window.openPM = function(targetUid, targetName) {
     }); 
 };
 window.closePM = function() { if (window.pmUnsubscribe) { window.pmUnsubscribe(); window.pmUnsubscribe = null; } document.getElementById('pm-modal').style.display = 'none'; document.getElementById('phone-modal').style.display = 'block'; };
-window.sendPM = function() { let input = document.getElementById('pm-input'); let msg = input.value.trim(); if (!msg || !window.currentPMUid) return; let myUid = window.GameLogic.currentUser.uid; let chatId = [myUid, window.currentPMUid].sort().join('_'); import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, `privateChats/${chatId}`), { uid: myUid, name: window.GameLogic.myProfile.name, msg: msg, time: Date.now() }); module.update(module.ref(window.GameLogic.db, `users/${window.currentPMUid}/unreadPMs`), { [myUid]: true }); }); input.value = ''; };
+window.sendPM = function() { 
+    let input = document.getElementById('pm-input'); let msg = input.value.trim(); if (!msg || !window.currentPMUid) return; 
+    let myUid = window.GameLogic.currentUser.uid; let chatId = [myUid, window.currentPMUid].sort().join('_'); 
+    push(ref(db, `privateChats/${chatId}`), { uid: myUid, name: window.GameLogic.myProfile.name, msg: msg, time: Date.now() }); 
+    update(ref(db, `users/${window.currentPMUid}/unreadPMs`), { [myUid]: true }); 
+    input.value = ''; 
+};
 
 window.openPurchaseModal = function(name, price) { let currentCoins = window.GameLogic.myProfile.coins || 0; let maxQty = Math.floor(currentCoins / price); if (maxQty <= 0) { alert("馬德幣不足！快去打掃賺錢吧！"); return; } window.currentPurchaseItem = name; window.currentPurchasePrice = price; window.currentPurchaseQty = 1; document.getElementById('purchase-title').innerText = `購買 ${name}`; let desc = ""; if (name === '水球') { desc = "聽說洋蔥都躲在大廳裡面玩水球大戰，為了讓我可以賺更多錢，我在水球裡加了魔法，被擊中的對象也會噴錢，然後他們就會.....一直噴錢，一直撿錢，來找我花錢!!! 嘿嘿嘿..."; } else if (name === '煙火') { desc = "曾經聽我朋友說他的同事們很奇怪，遇到好事就要說『咻蹦～』還要搭配放煙火手勢，我都懶得講話所以做了這個神奇的煙火拿來賣，畫面漂亮((還可以攻擊別人))多麼棒～"; } else if (name === '蔥友機') { desc = "那些洋蔥好像平常太互相傷害了，是時候來點友情的昇華。"; } document.getElementById('purchase-desc').innerText = desc; document.getElementById('purchase-qty').innerText = window.currentPurchaseQty; document.getElementById('purchase-total').innerText = window.currentPurchasePrice; document.getElementById('purchase-modal').style.display = 'block'; };
 window.adjustPurchaseQty = function(delta) { let maxQty = Math.floor((window.GameLogic.myProfile.coins || 0) / window.currentPurchasePrice); let newQty = window.currentPurchaseQty + delta; if (newQty >= 1 && newQty <= maxQty) { window.currentPurchaseQty = newQty; document.getElementById('purchase-qty').innerText = window.currentPurchaseQty; document.getElementById('purchase-total').innerText = window.currentPurchaseQty * window.currentPurchasePrice; } };
@@ -3212,7 +3218,18 @@ document.getElementById("save-edit-btn").addEventListener("click", () => { let n
 
 document.getElementById("send-btn").addEventListener("click", sendChat);
 window.addEventListener("keydown", (e) => { if (e.key === "Enter") { if (document.activeElement === chatInput) sendChat(); else if (document.activeElement === document.getElementById("pm-input")) window.sendPM(); } });
-function sendBubble(msg) { if (window.GameLogic.currentUser) { window.GameLogic.myProfile.bubbleMsg = msg; window.GameLogic.myProfile.bubbleTime = Date.now(); if (window.GameLogic.currentScene === "cafe") update(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { bubbleMsg: msg, bubbleTime: window.GameLogic.myProfile.bubbleTime }); } }
+function sendBubble(msg) { 
+    if (window.GameLogic.currentUser) { 
+        window.GameLogic.myProfile.bubbleMsg = msg; 
+        window.GameLogic.myProfile.bubbleTime = Date.now(); 
+        let path = "";
+        if (window.GameLogic.currentScene === "cafe") path = `cafePlayers/${window.GameLogic.currentUser.uid}`;
+        else if (window.GameLogic.currentScene === "shrine") path = `shrinePlayers/${window.GameLogic.currentUser.uid}`;
+        else if (window.GameLogic.currentScene === "playroom" && window.GameLogic.currentRoomId) path = `playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`;
+        
+        if (path !== "") update(ref(db, path), { bubbleMsg: msg, bubbleTime: window.GameLogic.myProfile.bubbleTime }); 
+    } 
+}
 function sendChat() { const msg = chatInput.value.trim(); if (msg !== "" && window.GameLogic.currentUser) { const now = new Date(); push(ref(db, 'chats'), { name: window.GameLogic.myProfile.name, msg: msg, date: now.toLocaleDateString('zh-TW', {month: '2-digit', day: '2-digit'}), time: now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute:'2-digit' }) }); sendBubble(msg); chatInput.value = ""; } }
 function listenToChat() { onValue(ref(db, 'chats'), (snapshot) => { const chatBox = document.getElementById("chat-box"); chatBox.innerHTML = ""; const chats = snapshot.val(); if (chats) { let lastMsg = ""; let html = ""; let chatArray = Object.values(chats); if (chatArray.length > 0) { let latest = chatArray[chatArray.length - 1]; lastMsg = `${latest.name}：${latest.msg}`; } chatArray.reverse().forEach(c => { html += `<div style="margin-bottom: 4px;"><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg} <span style="font-size:10px; color:#bbb; margin-left:8px;">${c.date||''} ${c.time||''}</span></div>`; }); chatBox.innerHTML = html; const topBar = document.getElementById("top-notification-bar"); if (topBar && lastMsg) { topBar.innerText = `💬 最新發言｜ ${lastMsg}`; } requestAnimationFrame(() => { setTimeout(() => { chatBox.scrollTop = 0; }, 10); }); } }); }
 
