@@ -4660,19 +4660,6 @@ window.processPartyEventLogic = function(scene) {
                 });
                 html += `<div style="font-size:12px; color:#666; margin-top:10px; text-align:center; background:#eee; padding:5px; border-radius:4px;">評分計算方式：(擊中人數 x 10) - (被擊中次數 x 5) + (遊戲結束時剩餘水球數 x 0.1)</div>`;
                 document.getElementById('party-result-list').innerHTML = html;
-                        <span style="font-weight:bold; color:var(--mucha-brown); width:35%;">${medal} ${r.name}</span>
-                        <span style="color:#005599; width:45%; font-size:12px;">擊中:${r.hitCount} / 被擊:${r.gotHitCount} / 餘彈:${r.ammo}<br>評分: ${r.score.toFixed(1)}</span>
-                        <span style="color:var(--mucha-green); font-weight:bold; width:20%; text-align:right;">💰 ${reward}</span>
-                    </div>`;
-                    
-                    if (r.uid === window.GameLogic.currentUser.uid && !window.PartyLogic.rewardClaimed) {
-                        window.PartyLogic.rewardClaimed = true;
-                        window.GameLogic.myProfile.coins = (window.GameLogic.myProfile.coins || 0) + reward;
-                        let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
-                        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: window.GameLogic.myProfile.coins }); });
-                    }
-                });
-                document.getElementById('party-result-list').innerHTML = html;
                 document.getElementById('party-result-modal').style.display = 'block';
                 window.playSFX(scene, 'chorus_of_angels1');
             }, 3000);
