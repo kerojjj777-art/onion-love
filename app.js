@@ -1438,7 +1438,7 @@ class BootScene extends Phaser.Scene {
         this.load.image('plane', 'playroom-onion-friend-plane.png');
         this.load.image('trumpet', 'tools-onion-party-trumpet.png');
         this.load.spritesheet('onion-trumpet', 'onion-party-trumpet.png', { frameWidth: 75, frameHeight: 75 });
-        this.load.image('bgPartyroom', 'partyroom-under-water-reef-valley.jpg');
+        this.load.image('bgPartyroom', 'partyroom-under-water-reef-valley-bg.jpg');
         this.load.image('party-stone', 'partyroom-under-water-reef-valley-stone.png');
         this.load.image('party-shot-number', 'partyroom-under-water-reef-valley-got-shot-number.png');
         this.load.image('party-attack-number', 'partyroom-under-water-reef-valley-attack-number.png');
