@@ -2302,8 +2302,12 @@ class MainScene extends Phaser.Scene {
             if (this.inviteRepliesListener) this.inviteRepliesListener();
             if (this.planeThrowsListener) this.planeThrowsListener(); // 新增：離開場景時註銷
             
+            // 修復：清理忘記註銷的家俱監聽器 (解決記憶體流失死碼)
+            if (this.doghouseFurnListener) this.doghouseFurnListener();
+            if (this.shrineFurnListener) this.shrineFurnListener();
+            
             // 【修正1 & 2】：離開場景時，徹底註銷米米監聽器並強制切斷走路音效
-            if (this.mimiListener) this.mimiListener(); 
+            if (this.mimiListener) this.mimiListener();
             if (this.sound && this.sound.get('mimi-walk')) this.sound.stopByKey('mimi-walk');
             
             if (this.hitListener) this.hitListener(); 
