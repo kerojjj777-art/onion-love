@@ -3557,10 +3557,6 @@ window.syncRpsState = function(roomId) {
                 document.getElementById('rps-bet-name-me').innerText = pList[myUid] ? pList[myUid].name : '我';
                 document.getElementById('rps-bet-name-op').innerText = pList[otherUid] ? pList[otherUid].name : '對手';
                 
-                // 同步更新戰鬥畫面的暱稱
-                if (document.getElementById('rps-me-name')) document.getElementById('rps-me-name').innerText = pList[myUid] ? pList[myUid].name : '我';
-                if (document.getElementById('rps-opponent-name')) document.getElementById('rps-opponent-name').innerText = pList[otherUid] ? pList[otherUid].name : '對手';
-                
                 let meStatusEl = document.getElementById('rps-bet-status-me');
                 let opStatusEl = document.getElementById('rps-bet-status-op');
                 let inputArea = document.getElementById('rps-bet-input-area');
@@ -3719,10 +3715,6 @@ window.syncRpsState = function(roomId) {
                 meC.style.cssText = "position:absolute; bottom:20px; left:20px; text-align:center; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:20;";
                 opC.style.cssText = "position:absolute; top:20px; right:20px; text-align:center; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:10;";
                 
-                // 猜拳階段：暱稱顯示在圖片上方
-                if(document.getElementById('rps-me-name')) { document.getElementById('rps-me-name').style.top = '-30px'; document.getElementById('rps-me-name').style.bottom = 'auto'; }
-                if(document.getElementById('rps-opponent-name')) { document.getElementById('rps-opponent-name').style.top = '-30px'; document.getElementById('rps-opponent-name').style.bottom = 'auto'; }
-                
                 let rpsMsg = document.getElementById('rps-center-msg');
                 rpsMsg.style.top = '20%';
                 rpsMsg.style.opacity = '1';
@@ -3867,10 +3859,6 @@ window.syncRpsState = function(roomId) {
                 meC.className = ""; opC.className = ""; // 確保清理乾淨
                 meC.style.cssText = "position:absolute; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:20;";
                 opC.style.cssText = "position:absolute; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); z-index:10;";
-                
-                // 連擊階段：暱稱顯示在圖片下方
-                if(document.getElementById('rps-me-name')) { document.getElementById('rps-me-name').style.bottom = '-30px'; document.getElementById('rps-me-name').style.top = 'auto'; }
-                if(document.getElementById('rps-opponent-name')) { document.getElementById('rps-opponent-name').style.bottom = '-30px'; document.getElementById('rps-opponent-name').style.top = 'auto'; }
                 
                 // 攻擊方必定在左(35%)，防守方必定在右(65%)，網頁版也向中間靠攏增加打架感
                 if (isWinner) {
