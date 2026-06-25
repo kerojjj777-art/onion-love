@@ -1594,10 +1594,9 @@ class UIScene extends Phaser.Scene {
             this.statusContainer.setVisible(false);
             
             if (!this.partyDash) {
-                this.partyDash = this.add.container(20, 20).setDepth(200);
+                this.partyDash = this.add.container(20, this.cameras.main.height - 100).setDepth(200).setScrollFactor(0);
                 let dashBg = this.add.graphics().fillStyle(0x000, 0.6).lineStyle(2, 0x00ffff).fillRoundedRect(0, 0, 160, 60, 8).strokeRoundedRect(0, 0, 160, 60, 8);
-                let dashIcon = this.add.sprite(25, 30, 'shop-water-ball.png'); // 假設這是水球圖
-                dashIcon.setTexture('onion-skin'); // 防護：使用通用水球圖或任意可用圖取代
+                let dashIcon = this.add.sprite(25, 30, 'onion-skin'); // 防護：使用通用水球圖或任意可用圖取代
                 this.partyDashText = this.add.text(90, 30, '', { fontSize: '18px', color: '#00ffff', fontStyle: 'bold' }).setOrigin(0.5);
                 this.partyDash.add([dashBg, dashIcon, this.partyDashText]);
             }
@@ -1652,8 +1651,9 @@ class UIScene extends Phaser.Scene {
         this.expBarBg.clear().fillStyle(0x3e2723, 0.8).fillRoundedRect(bgW * 0.5 - expW / 2, expY - expH / 2, expW, expH, 4); this.expLiquid.setPosition(bgW * 0.5 - expW / 2, expY).setScale(1, expH / 16); this.expText.setPosition(bgW * 0.5, expY).setFontSize(`${Math.max(10, 13 * scaleRatio)}px`);
         this.statusText.setPosition(bgW * 0.32, -bgH * 0.30).setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); this.equipText.setPosition(bgW * 0.75, -bgH * 0.30).setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); this.statusToggleBtn.setPosition(bgW, -bgH * 0.30);
         let clusterX = gameSize.width - 90; let clusterY = gameSize.height - bottomOffset - 70; let d = 45; 
-        this.itemBtn.setPosition(clusterX, clusterY - d); this.itemText.setPosition(this.itemBtn.x, this.itemBtn.y); this.btnA.setPosition(clusterX + d, clusterY); this.txtA.setPosition(this.btnA.x, this.btnA.y); this.btnB.setPosition(clusterX, clusterY + d); this.txtB.setPosition(this.btnB.x, this.btnB.y); this.furnBtn.setPosition(clusterX - d, clusterY); this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
+        this.btnB.setPosition(clusterX, clusterY + d); this.txtB.setPosition(this.btnB.x, this.btnB.y); this.furnBtn.setPosition(clusterX - d, clusterY); this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
         if (this.magicMenuEmitter) this.magicMenuEmitter.setPosition(gameSize.width / 2, gameSize.height - 185);
+        if (this.partyDash) this.partyDash.setPosition(20, gameSize.height - 100);
     }
 
     playExpGainEffect() {
@@ -2322,6 +2322,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
 
         this.events.off('action_B_long');
         this.events.on('action_B_long', () => {
+            if (this.sceneName === 'partyroom') return; // 禁用長按B
             let menu = document.getElementById('quick-select-menu');
             let blocker = document.getElementById('magic-menu-blocker');
             let uiScene = this.scene.manager.getScene('UIScene');
@@ -2542,6 +2543,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                         let opSprite = this.otherPlayers[uid].sprite;
                         opSprite.play('throw', true);
                         opSprite.isThrowing = true;
+                        window.playSFX(this, 'minimum_laser'); // 全域播放水球投擲音效
                         this.time.delayedCall(300, () => { if (opSprite && opSprite.active) opSprite.isThrowing = false; });
                         
                         if (data.targetUid && data.targetUid !== 'none') {
@@ -2708,16 +2710,15 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
 
         entity.lastNameData = ""; entity.lastBubbleData = ""; if (this.minimap) this.minimap.ignore([entity.nameContainer, entity.bubbleContainer, entity.partyScoreContainer]); return entity; 
     }
-    updatePlayerEntity(entity, pData) { let sx = entity.sprite.x; let sy = entity.sprite.y; let displayName = `${pData.name || '匿名'} Lv.${pData.level || 1}`; let nameHash = displayName + (pData.color || ''); 
+    updatePlayerEntity(entity, pData) { let sx = entity.sprite.x; let sy = entity.sprite.y; let currentUid = pData.uid || window.GameLogic.currentUser.uid; let displayName = `${pData.name || '匿名'} Lv.${pData.level || 1}`; let nameHash = displayName + (pData.color || ''); 
         if (entity.lastNameData !== nameHash) { entity.lastNameData = nameHash; entity.nameText.setText(displayName); if(pData.color) entity.nameText.setColor(pData.color); const nameBounds = entity.nameText.getBounds(); const bgWidth = nameBounds.width + 16; entity.nameBg.clear().fillStyle(0x000000, 0.6).fillRoundedRect(-bgWidth / 2, -10, bgWidth, 20, 4); }
         entity.nameContainer.setPosition(sx, sy - 45);
         
         if (this.sceneName === 'partyroom') {
             entity.partyScoreContainer.setVisible(true).setPosition(sx, sy - 75);
-            let sData = window.PartyLogic && window.PartyLogic.scores && window.PartyLogic.scores[pData.uid] ? window.PartyLogic.scores[pData.uid] : {hitCount: 0, gotHitCount: 0};
+            let sData = window.PartyLogic && window.PartyLogic.scores && window.PartyLogic.scores[currentUid] ? window.PartyLogic.scores[currentUid] : {hitCount: 0, gotHitCount: 0};
             entity.partyShotText.setText(sData.gotHitCount || 0); entity.partyAttackText.setText(sData.hitCount || 0);
         } else { entity.partyScoreContainer.setVisible(false); }
-
         if (pData.bubbleMsg && (Date.now() - pData.bubbleTime < 10000)) { entity.bubbleContainer.setVisible(true);
             if (entity.lastBubbleData !== pData.bubbleMsg) { entity.lastBubbleData = pData.bubbleMsg; entity.bubbleText.setText(pData.bubbleMsg); const bounds = entity.bubbleText.getBounds(); const boxWidth = bounds.width + 20, boxHeight = bounds.height + 16; entity.bubbleBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 8).strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 8); entity.bubbleOffsetY = 65 + boxHeight / 2; }
             entity.bubbleContainer.setPosition(sx, sy - (entity.bubbleOffsetY || 80)); // 修正3：避免每幀調用 getBounds 造成嚴重 Lag
@@ -4503,17 +4504,44 @@ let partyUnsubscribe = null; let partyInvitesUnsubscribe = null;
 window.createPartyRoom = function() {
     let modal = document.getElementById('party-select-modal'); modal.style.display = 'none';
     window.PartyLogic.roomId = 'party_' + Date.now() + '_' + window.GameLogic.currentUser.uid;
+    
+    // 扣除派對喇叭
+    let inv = window.GameLogic.myProfile.inventory || {};
+    if (inv['派對喇叭'] > 0) {
+        inv['派對喇叭'] -= 1;
+        update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv });
+    }
     window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null;
     
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        module.set(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'waiting', host: window.GameLogic.currentUser.uid, game: window.PartyLogic.selectedGame, startTime: Date.now() });
-        module.set(module.ref(window.GameLogic.db, `serverEvents/partyInvites/${window.PartyLogic.roomId}`), { time: Date.now(), inviterUid: window.GameLogic.currentUser.uid, inviterName: window.GameLogic.myProfile.name, game: window.PartyLogic.selectedGame });
+    // 播放喇叭動畫與音效
+    if (window.GameLogic.phaserGame) {
+        let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
+        if (ms && ms.localPlayer) {
+            window.playSFX(ms, 'tools-onion-party-trumpet');
+            ms.localPlayer.sprite.play('trumpet-play', true);
+            ms.localPlayer.isThrowing = true;
+            setTimeout(() => { if(ms.localPlayer && ms.localPlayer.sprite) ms.localPlayer.isThrowing = false; }, 1500);
+        }
+    }
+    
+    // 向全服廣播喇叭吹奏
+    update(ref(window.GameLogic.db, `serverEvents/trumpetPlay/${window.GameLogic.currentUser.uid}`), { time: Date.now(), scene: window.GameLogic.currentScene });
+
+    // 延遲跳轉場景，讓動畫播完
+    setTimeout(() => {
+        set(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'waiting', host: window.GameLogic.currentUser.uid, game: window.PartyLogic.selectedGame, startTime: Date.now() });
+        set(ref(window.GameLogic.db, `serverEvents/partyInvites/${window.PartyLogic.roomId}`), { time: Date.now(), inviterUid: window.GameLogic.currentUser.uid, inviterName: window.GameLogic.myProfile.name, game: window.PartyLogic.selectedGame });
         window.switchScene('partyroom', { roomId: window.PartyLogic.roomId });
-    });
+    }, 1500);
 };
 
 window.joinPartyroom = function(roomId) {
-    window.PartyLogic.roomId = roomId; window.PartyLogic.ammo = 666; window.PartyLogic.speedBoost = false; window.PartyLogic.playPhase = 0;
+    // 將 playPhase 初始化為 -1 解決 0 秒階段 START 音效被跳過的問題
+    window.PartyLogic.roomId = roomId; window.PartyLogic.ammo = 666; window.PartyLogic.speedBoost = false; window.PartyLogic.playPhase = -1;
+    
+    // 自動裝備水球並隱藏聊天室
+    window.GameLogic.armedItemState = 'ready'; window.GameLogic.armedItemName = '水球';
+    document.getElementById('chat-section').style.display = 'none';
     
     let pModal = document.getElementById('party-waiting-modal');
     pModal.style.display = 'flex';
@@ -4576,8 +4604,13 @@ window.leavePartyroom = function() {
     document.getElementById('party-waiting-modal').style.display = 'none';
     document.getElementById('party-result-modal').style.display = 'none';
     let rFlash = document.getElementById('party-red-flash'); if (rFlash) { rFlash.style.display = 'none'; rFlash.style.opacity = 0; }
+    
+    // 離開時恢復聊天室與卸下裝備
+    document.getElementById('chat-section').style.display = 'flex';
+    window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null;
+    
     if (window.PartyLogic.roomId && window.GameLogic.currentUser) {
-        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.set(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), null); });
+        set(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), null);
     }
     window.PartyLogic.roomId = null;
     if (window.GameLogic.currentScene === 'partyroom') window.switchScene('cafe');
@@ -4731,48 +4764,45 @@ window.processPartyEventLogic = function(scene) {
 };
 
 // Global Listener for Party Invites
-import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-    partyInvitesUnsubscribe = module.onValue(module.ref(window.GameLogic.db, 'serverEvents/partyInvites'), snap => {
-        if (!window.GameLogic.currentUser) return;
-        let invites = snap.val() || {};
-        let activeInvites = Object.keys(invites).filter(k => !invites[k].closed && (Date.now() - invites[k].time < 60000));
+partyInvitesUnsubscribe = onValue(ref(window.GameLogic.db, 'serverEvents/partyInvites'), snap => {
+    if (!window.GameLogic.currentUser) return;
+    let invites = snap.val() || {};
+    let activeInvites = Object.keys(invites).filter(k => !invites[k].closed && (Date.now() - invites[k].time < 60000));
+    
+    let minList = document.getElementById('party-active-rooms');
+    let minUI = document.getElementById('party-minimized-list');
+    if (minUI) {
+        if (activeInvites.length === 0) {
+            minUI.style.display = 'none';
+            minList.innerHTML = '';
+            return;
+        }
         
-        let minList = document.getElementById('party-active-rooms');
-        let minUI = document.getElementById('party-minimized-list');
-        if (minUI) {
-            if (activeInvites.length === 0) {
-                minUI.style.display = 'none';
-                minList.innerHTML = '';
-                return;
-            }
-            
-            let validInvites = [];
-            let checkPromises = activeInvites.map(k => {
-                return module.get(module.ref(window.GameLogic.db, `partyRooms/${k}/players`)).then(snap => {
-                    if (snap.exists() && Object.keys(snap.val() || {}).length > 0) {
-                        validInvites.push(k);
-                    }
-                });
+        let validInvites = [];
+        let checkPromises = activeInvites.map(k => {
+            return get(ref(window.GameLogic.db, `partyRooms/${k}/players`)).then(snap => {
+                if (snap.exists() && Object.keys(snap.val() || {}).length > 0) {
+                    validInvites.push(k);
+                }
             });
-            
-            Promise.all(checkPromises).then(() => {
-                minUI.style.display = validInvites.length > 0 ? 'flex' : 'none';
-                minList.innerHTML = '';
-                validInvites.forEach(k => {
-                    let inv = invites[k];
-                    if (inv.inviterUid !== window.GameLogic.currentUser.uid) {
-                        minList.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #555; padding:5px 0; color:#fff; font-size:13px;"><span>${inv.inviterName} 的派對</span><button class="btn-primary" style="padding:2px 8px; font-size:12px;" onclick="window.PartyLogic.pendingInviteId='${k}'; window.replyPartyInvite('yes')">加入</button></div>`;
-                        
-                        if (inv.time > (window.PartyLogic.lastInviteTime || 0)) {
-                            window.PartyLogic.lastInviteTime = inv.time;
-                            document.getElementById('party-inviter-name').innerText = inv.inviterName;
-                            window.PartyLogic.pendingInviteId = k;
-                            if (window.GameLogic.currentScene !== 'partyroom') document.getElementById('party-invite-modal').style.display = 'block';
-                        }
+        });
+        
+        Promise.all(checkPromises).then(() => {
+            minUI.style.display = validInvites.length > 0 ? 'flex' : 'none';
+            minList.innerHTML = '';
+            validInvites.forEach(k => {
+                let inv = invites[k];
+                if (inv.inviterUid !== window.GameLogic.currentUser.uid) {
+                    minList.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #555; padding:5px 0; color:#fff; font-size:13px;"><span>${inv.inviterName} 的派對</span><button class="btn-primary" style="padding:2px 8px; font-size:12px;" onclick="window.PartyLogic.pendingInviteId='${k}'; window.replyPartyInvite('yes')">加入</button></div>`;
+                    
+                    if (inv.time > (window.PartyLogic.lastInviteTime || 0)) {
+                        window.PartyLogic.lastInviteTime = inv.time;
+                        document.getElementById('party-inviter-name').innerText = inv.inviterName;
+                        window.PartyLogic.pendingInviteId = k;
+                        if (window.GameLogic.currentScene !== 'partyroom') document.getElementById('party-invite-modal').style.display = 'block';
                     }
-                });
-            }); // <-- 修正 1：補上 Promise.all 遺失的 );
-        } // <-- 修正 2：補上 if (minUI) 遺失的 }
-    });
+                }
+            });
+        });
+    }
 });
-// 檔案到這裡結束，不要有任何多餘的 }
