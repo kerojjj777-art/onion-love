@@ -4578,5 +4578,4 @@ import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(mo
         }
     });
 });
-
-}
+// 檔案到這裡結束，不要有任何多餘的 }
