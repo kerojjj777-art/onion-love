@@ -2032,17 +2032,16 @@ class MainScene extends Phaser.Scene {
                                 fw.destroy();
                                 this.createMiniExplosion(targetSprite.x, targetSprite.y);
                                 if (targetType === 'player') {
-                                    update(ref(window.GameLogic.db, `serverEvents/fireworksHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
-                                } else if (targetType === 'dummy') {
-                                    update(ref(window.GameLogic.db, `serverEvents/fireworksDummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
-                                    for (let i = 0; i < 3; i++) {
-                                        let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
-                                        push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: 15 });
-                                    }
+                                update(ref(window.GameLogic.db, `serverEvents/fireworksHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                            } else if (targetType === 'dummy') {
+                                update(ref(window.GameLogic.db, `serverEvents/fireworksDummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                for (let i = 0; i < 3; i++) {
+                                    let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
+                                    push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: 15 });
                                 }
-                                } else if (targetType === 'mimi') {
-                                    this.handleMimiHit(targetSprite.x, targetSprite.y);
-                                }
+                            } else if (targetType === 'mimi') {
+                                this.handleMimiHit(targetSprite.x, targetSprite.y);
+                            }
                             }
                         });
                     } else {
