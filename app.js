@@ -1662,7 +1662,19 @@ class MainScene extends Phaser.Scene {
         }});
 
         const mapW = this.isCafe ? 2048 : 1280; const mapH = this.isCafe ? 2048 : 720;
-        this.physics.world.setBounds(0, 0, mapW, mapH); this.cameras.main.setBounds(0, 0, mapW, mapH);
+        this.physics.world.setBounds(0, 0, mapW, mapH); 
+        
+        // 修正：動態計算鏡頭邊界。當螢幕解析度大於地圖尺寸時，自動推算偏移量讓地圖完美置中，解決電腦版靠左上的裁切感
+        this.updateCameraBounds = (gameSize) => {
+            let vw = gameSize ? gameSize.width : this.scale.gameSize.width;
+            let vh = gameSize ? gameSize.height : this.scale.gameSize.height;
+            let bw = Math.max(mapW, vw);
+            let bh = Math.max(mapH, vh);
+            this.cameras.main.setBounds((mapW - bw) / 2, (mapH - bh) / 2, bw, bh);
+        };
+        this.updateCameraBounds();
+        this.scale.on('resize', this.updateCameraBounds, this);
+        
         this.trashes = [];
         
         if (this.isCafe) {
@@ -2343,9 +2355,10 @@ class MainScene extends Phaser.Scene {
         this.playerEnergyEmitter.isEnergyEmitting = false; // 自製旗標防呆，避免頻繁呼叫 start 導致卡頓
 
         this.events.on('shutdown', () => {
+            this.scale.off('resize', this.updateCameraBounds, this); // 確保離開場景時註銷視窗尺寸監聽，防止記憶體溢出卡頓
             if (this.leaderboardListener) this.leaderboardListener(); 
             if (this.trashListener) this.trashListener();
-            if (this.coinsListener) this.coinsListener(); 
+            if (this.coinsListener) this.coinsListener();
             if (this.dummiesListener) this.dummiesListener(); 
             if (this.planeHitsListener) this.planeHitsListener();
             if (this.inviteRepliesListener) this.inviteRepliesListener();
