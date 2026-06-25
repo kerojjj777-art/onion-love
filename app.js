@@ -18,8 +18,7 @@ window.GameLogic = {
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0, inventoryOrder: [] },
     cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, placingFurnitureKey: null, 
     phaserGame: null, phaserLoaded: false, pendingScene: null, db: db,
-    armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false,
-    shrineRitualActive: false // 新增：用於判斷神龕儀式是否啟動
+    armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false
 };
 
 let cafeUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, profileViewingUid = null;
@@ -667,7 +666,6 @@ window.updateOnlinePlayersUI = function() {
 // 新增：啟動神龕儀式的共用函式，停止背景音樂並開始詭異音效
 window.startShrineRitual = function() {
     window.forceAudioNormal();
-    window.GameLogic.shrineRitualActive = true;
     if (window.GameLogic.phaserGame) {
         let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
         if (ms) {
@@ -710,7 +708,8 @@ window.attemptJoinShrine = function() {
 
 window.acceptSummon = function() {
     document.getElementById('forced-summon-modal').style.display = 'none';
-    if (window.summonInterval) { clearInterval(window.summonInterval); window.summonInterval = null; }
+    // 修正死碼：變數參照錯誤，原本的全域計時器為 globalSummonInterval
+    if (window.globalSummonInterval) { clearInterval(window.globalSummonInterval); window.globalSummonInterval = null; }
     
     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
         module.get(module.ref(window.GameLogic.db, 'shrineEvents/current')).then(snap => {
@@ -1159,7 +1158,6 @@ function checkShrineVotingTrigger() {
 
 function switchScene(sceneName, extraData = null) {
     if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if (scene) window.playSFX(scene, 'jump04'); }
-    if (sceneName !== 'shrine') window.GameLogic.shrineRitualActive = false;
     
     if (sceneName !== 'doghouse') {
         if (window.GameLogic.myProfile && window.GameLogic.myProfile.sleepStartTime > 0) {
@@ -2351,9 +2349,6 @@ class MainScene extends Phaser.Scene {
         let imgKey = key.includes('scoreboard') ? 'hall-screen' : (key.includes('fridge') ? 'fridge' : (key.includes('shrine') ? 'shrine' : (key.includes('dummy') ? 'dummy' : (key.includes('bed') ? 'doghouse-bed' : (key === 'altar' ? 'shrine-altar' : (key.startsWith('seat_') ? 'shrine-seat' : 'memory')))))); 
         let f = { sprite: this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true) }; 
         f.sprite.isLocked = data.locked; 
-        if (imgKey === 'dummy') { 
-            f.bubbleContainer = this.add.container(data.x, data.y).setDepth(14).setVisible(false); f.bubbleBg = this.add.graphics(); f.bubbleText = this.add.text(0, 0, '', { fontSize: '12px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold', wordWrap: { width: 100, useAdvancedWrap: true }, align: 'center' }).setOrigin(0.5); f.bubbleContainer.add([f.bubbleBg, f.bubbleText]); f.lastBubbleData = ""; if (this.minimap) this.minimap.ignore(f.bubbleContainer); f.dummyMsgs = ["我在這幹嘛？", "怎麼有洋蔥？", "該不會要打我吧......"]; f.msgIndex = 0; f.lastMsgTime = 0; f.isHit = false; 
-        } 
         if (imgKey === 'hall-screen') {
             f.sprite.setOrigin(0.5, 0.5); // 靜態圖不需播放動畫
 
@@ -3075,7 +3070,7 @@ class MainScene extends Phaser.Scene {
                 if (window.GameLogic.placingFurnitureKey === key) { window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); }
                 if (this.furnitureSprites[key].particleEmitter) this.furnitureSprites[key].particleEmitter.destroy(); // [新增] 銷毀粒子
                 if (this.furnitureSprites[key].textContainer) this.furnitureSprites[key].textContainer.destroy();
-                if (this.furnitureSprites[key].bubbleContainer) this.furnitureSprites[key].bubbleContainer.destroy();
+                // 移除已失效的假人氣泡銷毀死碼
                 this.furnitureSprites[key].sprite.destroy();
                 delete this.furnitureSprites[key];
             }
