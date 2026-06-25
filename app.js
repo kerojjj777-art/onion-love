@@ -1882,12 +1882,21 @@ class MainScene extends Phaser.Scene {
                         this.mimiHpText = this.add.text(0, 0, '', { fontSize: '14px', color: '#ff0000', fontStyle: 'bold', stroke: '#fff', strokeThickness: 2 }).setOrigin(0.5).setDepth(12);
                         window.playSFX(this, 'mimi-laugh');
                         
-                        // 【新增】只要他還在場上，就自動無限循環走路音效
-                        let mVol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100;
-                        if (this.sound.get('mimi-walk')) this.sound.play('mimi-walk', {loop: true, volume: mVol});
-                        else this.sound.add('mimi-walk', {loop: true, volume: mVol}).play();
-                    }
-                    if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; this.mimiSprite.y = data.y; }
+                        // ...原有邏輯保持不變...
+// 【新增】只要他還在場上，就自動無限循環走路音效
+let mVol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100;
+// 修正：檢查音樂實體是否存在，避免重複 add 導致報錯
+if (this.sound.get('mimi-walk')) {
+    if (!this.sound.get('mimi-walk').isPlaying) this.sound.play('mimi-walk', {loop: true, volume: mVol});
+} else {
+    this.sound.add('mimi-walk', {loop: true, volume: mVol}).play();
+}
+}
+// 修正：增加對「派對喇叭」的處理，若玩家處於喇叭動作，禁止米米邏輯干擾
+if (this.localPlayer.isThrowing) return; 
+
+if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; this.mimiSprite.y = data.y; }
+// ...原有邏輯保持不變...
                     else { this.mimiSprite.x = Phaser.Math.Linear(this.mimiSprite.x, data.x, 0.3); this.mimiSprite.y = Phaser.Math.Linear(this.mimiSprite.y, data.y, 0.3); }
                     this.mimiSprite.setFlipX(data.flipX);
 
@@ -2007,7 +2016,12 @@ class MainScene extends Phaser.Scene {
         this.events.on('action_A_place', () => { let key = window.GameLogic.placingFurnitureKey; if(key && this.furnitureSprites[key]) { let f = this.furnitureSprites[key]; f.sprite.setVelocity(0, 0); let path = this.isCafe ? `cafeFurniture/${key}` : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}` : `shrineFurniture/${key}`); update(ref(window.GameLogic.db, path), { locked: true, x: f.sprite.x, y: f.sprite.y, ownerUid: window.GameLogic.currentUser.uid }); window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); } });
 
         this.events.on('action_A_short', () => {
-            if (this.localPlayer.isSleeping) { 
+            // 修正：檢查是否手持派對喇叭，若是，觸發喇叭廣播流程
+    if (window.GameLogic.armedItemState === 'ready' && window.GameLogic.armedItemName === '派對喇叭') {
+        document.getElementById('party-select-modal').style.display = 'block';
+        return;
+    }
+    if (this.localPlayer.isSleeping) { 
                 this.localPlayer.isSleeping = false; this.sleepTopBg.setVisible(false); this.sleepTopText.setVisible(false); this.sleepBotBg.setVisible(false); this.sleepBotText.setVisible(false); this.localPlayer.sprite.play('idle'); 
                 if (this.sound.get('onion-sleep')) this.sound.stopByKey('onion-sleep');
                 window.playSFX(this, 'sleep-wakeup');
@@ -2438,12 +2452,11 @@ class MainScene extends Phaser.Scene {
                         pEntity.sprite.play('trumpet-play', true);
                         pEntity.isThrowing = true;
                         
+                        
                         // 播放兩次循環動畫後解除 (約 1500ms)
                         this.time.delayedCall(1500, () => {
-                            if (pEntity && pEntity.sprite) pEntity.isThrowing = false;
-                            if (uid === window.GameLogic.currentUser.uid) {
-                                document.getElementById('party-select-modal').style.display = 'block';
-                            }
+                           if (pEntity && pEntity.sprite) pEntity.isThrowing = false;
+                           // 修正：移除此處的自動彈出選單，改由 A 鍵邏輯處理，避免非擁有者也會彈出選單
                         });
                     }
                 }
