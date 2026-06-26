@@ -955,12 +955,15 @@ window.devFillMagic = function() {
 window.devAddCoins = function() {
     let p = window.GameLogic.myProfile;
     p.coins = (p.coins || 0) + 100000;
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }).then(() => {
-            let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins;
-            document.getElementById('dev-modal').style.display = 'none';
-            alert("已成功匯入 100,000 馬德幣！");
-        });
+
+    update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { 
+        coins: p.coins 
+    }).then(() => {
+        let coinsEl = document.getElementById("vp-coins"); 
+        if (coinsEl) coinsEl.innerText = p.coins;
+
+        document.getElementById('dev-modal').style.display = 'none';
+        alert("已成功匯入 100,000 馬德幣！");
     });
 };
 
@@ -1265,10 +1268,11 @@ function switchScene(sceneName, extraData = null) {
     if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if (scene) window.playSFX(scene, 'jump04'); }
     
     if (sceneName !== 'doghouse') {
-        if (window.GameLogic.myProfile && window.GameLogic.myProfile.sleepStartTime > 0) {
-            window.GameLogic.myProfile.sleepStartTime = 0; localStorage.removeItem('onion_sleepStartTime');
-            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { sleepStartTime: 0 }));
-        }
+    if (window.GameLogic.myProfile && window.GameLogic.myProfile.sleepStartTime > 0) {
+        window.GameLogic.myProfile.sleepStartTime = 0; 
+        localStorage.removeItem('onion_sleepStartTime');
+        update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { sleepStartTime: 0 });
+    }
         if (window.GameLogic.phaserGame) { let ms = window.GameLogic.phaserGame.scene.getScene('MainScene'); if (ms && ms.sound && ms.sound.get('onion-sleep')) ms.sound.stopByKey('onion-sleep'); }
     }
 
@@ -2696,7 +2700,16 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
     }
     spawnTrash() {
         if (!this.isCafe) return; let playerCount = Object.keys(window.GameLogic.cafePlayers || {}).length || 1; let limits = [10, 12, 15, 17, 20]; let maxTrash = limits[Math.min(playerCount - 1, 4)]; let spawnChance = 0.3 + (playerCount * 0.1); let currentTrashCount = this.trashes.length;
-        if (Math.random() < spawnChance && currentTrashCount < maxTrash) { let tx = Phaser.Math.Between(150, 1898); let ty = Phaser.Math.Between(150, 1898); let isOld = Math.random() < 0.05; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, 'cafeTrashes'), { x: tx, y: ty, type: isOld ? 'old' : 'normal' }); }); }
+        if (Math.random() < spawnChance && currentTrashCount < maxTrash) { 
+    let tx = Phaser.Math.Between(150, 1898); 
+    let ty = Phaser.Math.Between(150, 1898); 
+    let isOld = Math.random() < 0.05; 
+    push(ref(window.GameLogic.db, 'cafeTrashes'), { 
+        x: tx, 
+        y: ty, 
+        type: isOld ? 'old' : 'normal' 
+    }); 
+}
     }
     updateQTEBar(progress) { this.qteBar.clear(); let width = Math.min(100, (progress / 100) * 100); this.qteBar.fillStyle(0xd9534f, 1); this.qteBar.fillRoundedRect(-50, -8, width, 16, 8); }
     createPlayerEntity(x, y, pData, isLocal = false) { let entity = { sprite: this.physics.add.sprite(x, y, 'onion').setCollideWorldBounds(true).setDepth(10) }; if (!isLocal) { entity.sprite.setInteractive(); entity.sprite.on('pointerdown', (pointer) => { const actionMenu = document.getElementById("action-menu"); actionMenu.style.display = "flex"; actionMenu.style.left = pointer.event.pageX + "px"; actionMenu.style.top = pointer.event.pageY + "px"; actionMenu.dataset.uid = pData.uid; }); } 
@@ -2807,12 +2820,15 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
             // 修正9：體力滿電啟動時，扣除 2% 體力，經驗 x2，金錢 x3
             let expGain = 10; let totalCoins = isOld ? Phaser.Math.Between(50, 60) : Phaser.Math.Between(10, 18);
             if (window.GameLogic.energyActive && (window.GameLogic.myProfile.energy || 0) >= 2) {
-                window.GameLogic.myProfile.energy -= 2;
-                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { energy: window.GameLogic.myProfile.energy }); });
-                expGain *= 2; totalCoins *= 3;
-            }
+            window.GameLogic.myProfile.energy -= 2;
+            update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { 
+                energy: window.GameLogic.myProfile.energy 
+            });
+            expGain *= 2; 
+            totalCoins *= 3;
+        }
 
-            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.remove(module.ref(window.GameLogic.db, 'cafeTrashes/' + trashKey)); }); 
+            remove(ref(window.GameLogic.db, 'cafeTrashes/' + trashKey)); 
             this.closestTrash = null; let leveledUp = gainRewards(0, expGain); 
             if (leveledUp) { window.playSFX(this, 'chorus_of_angels1'); } 
             
@@ -3454,7 +3470,45 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                 coin.x = Phaser.Math.Linear(coin.x, tgtX, 0.1);
                 coin.y = Phaser.Math.Linear(coin.y, tgtY, 0.1);
             }
-            let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, coin.x, coin.y); if (dist < 30) { window.playSFX(this, 'coin03'); let coinAmount = coin.amount; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { let coinRef = module.ref(window.GameLogic.db, `droppedCoins/${key}`); module.get(coinRef).then((coinSnap) => { if (coinSnap.exists()) { module.remove(coinRef).then(() => { let p = window.GameLogic.myProfile; p.coins = (p.coins || 0) + coinAmount; module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins; let px = this.localPlayer.sprite.x; let py = this.localPlayer.sprite.y - 40; let pickupText = this.add.text(px, py, `+${coinAmount} 💰`, { fontSize: '16px', color: '#d4af37', fontStyle: 'bold', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5).setDepth(200); this.tweens.add({ targets: pickupText, y: py - 40, alpha: 0, duration: 1000, onComplete: () => pickupText.destroy() }); }); } }); }); } 
+            let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, coin.x, coin.y); 
+if (dist < 30) { 
+    window.playSFX(this, 'coin03'); 
+    let coinAmount = coin.amount; 
+    let coinRef = ref(window.GameLogic.db, `droppedCoins/${key}`);
+
+    get(coinRef).then((coinSnap) => { 
+        if (coinSnap.exists()) { 
+            remove(coinRef).then(() => { 
+                let p = window.GameLogic.myProfile; 
+                p.coins = (p.coins || 0) + coinAmount; 
+                update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { 
+                    coins: p.coins 
+                }); 
+
+                let coinsEl = document.getElementById("vp-coins"); 
+                if (coinsEl) coinsEl.innerText = p.coins; 
+
+                let px = this.localPlayer.sprite.x; 
+                let py = this.localPlayer.sprite.y - 40; 
+                let pickupText = this.add.text(px, py, `+${coinAmount} 💰`, { 
+                    fontSize: '16px', 
+                    color: '#d4af37', 
+                    fontStyle: 'bold', 
+                    stroke: '#000', 
+                    strokeThickness: 3 
+                }).setOrigin(0.5).setDepth(200); 
+
+                this.tweens.add({ 
+                    targets: pickupText, 
+                    y: py - 40, 
+                    alpha: 0, 
+                    duration: 1000, 
+                    onComplete: () => pickupText.destroy() 
+                }); 
+            }); 
+        } 
+    }); 
+} 
         }
         this.updatePlayerEntity(this.localPlayer, window.GameLogic.myProfile);
 
