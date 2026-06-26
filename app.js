@@ -1812,7 +1812,23 @@ class MainScene extends Phaser.Scene {
             const mapSize = 120; const marginX = 20; const marginY = 60;
             this.minimap = this.cameras.add(this.cameras.main.width - mapSize - marginX, marginY, mapSize, mapSize).setZoom(mapSize / 2048).setName('minimap'); this.minimap.setBackgroundColor('rgba(26, 16, 8, 0.7)'); this.minimap.centerOn(1024, 1024);
             this.scale.on('resize', (gameSize) => { if (this.minimap) this.minimap.setPosition(gameSize.width - mapSize - marginX, marginY); });
-            this.trashListener = onValue(ref(window.GameLogic.db, 'cafeTrashes'), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.trashes.find(t => t.key === key)) { let tData = data[key]; let isOld = tData.type === 'old'; let spriteKey = isOld ? 'onion-skin-old' : 'onion-skin'; let animKey = isOld ? 'skin-old-anim' : 'skin-anim'; let skin = this.physics.add.sprite(tData.x, tData.y, spriteKey).setDepth(4); skin.play(animKey); skin.type = isOld ? 'onion-skin-old' : 'onion-skin'; skin.key = key; this.trashes.push(skin); } } this.trashes = this.trashes.filter(t => { if (!data[t.key]) { t.destroy(); if (this.closestTrash === t) { this.closestTrash = null; if (this.localPlayer && this.localPlayer.isSweeping) { this.localPlayer.isSweeping = false; this.qteContainer.setVisible(false); if (this.sound.get('brooming1')) this.sound.stopByKey('brooming1'); } } return false; } return true; }); });
+            this.trashListener = onValue(ref(window.GameLogic.db, 'cafeTrashes'), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.trashes.find(t => t.key === key)) { let tData = data[key]; let isOld = tData.type === 'old'; let spriteKey = isOld ? 'onion-skin-old' : 'onion-skin'; let animKey = isOld ? 'skin-old-anim' : 'skin-anim'; let skin = this.physics.add.sprite(tData.x, tData.y, spriteKey).setDepth(4); skin.play(animKey); skin.type = isOld ? 'onion-skin-old' : 'onion-skin'; skin.key = key; this.trashes.push(skin); } } this.trashes = this.trashes.filter(t => { if (!data[t.key]) { t.destroy(); if (this.closestTrash === t) { 
+    this.closestTrash = null; 
+
+    if (this.localPlayer && this.localPlayer.isSweeping) { 
+        this.localPlayer.isSweeping = false; 
+        this.qteContainer.setVisible(false); 
+        if (this.sound.get('brooming1')) this.sound.stopByKey('brooming1'); 
+
+        if (this.isCafe && window.GameLogic.currentUser) {
+            update(ref(window.GameLogic.db, `cafePlayers/${window.GameLogic.currentUser.uid}`), {
+                isSweeping: false,
+                x: this.localPlayer.sprite.x,
+                y: this.localPlayer.sprite.y
+            });
+        }
+    } 
+} return false; } return true; }); });
        } else if (this.sceneName === "doghouse") {
             this.add.image(mapW/2, mapH/2, 'bgDoghouse').setDisplaySize(mapW, mapH); 
             this.doghouseFurnListener = onValue(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}/doghouseFurniture`), (snap) => { 
@@ -2444,7 +2460,22 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                 } 
             }
             
-            if (!this.localPlayer.isSweeping && this.closestTrash) { this.localPlayer.isSweeping = true; this.qteProgress = 0; this.qteTotalClicks = Phaser.Math.Between(5, 10); this.qteContainer.setVisible(true); } else if (!this.localPlayer.isSweeping) { sendBubble("使用了 B 技能!"); }
+            if (!this.localPlayer.isSweeping && this.closestTrash) { 
+    this.localPlayer.isSweeping = true; 
+    this.qteProgress = 0; 
+    this.qteTotalClicks = Phaser.Math.Between(5, 10); 
+    this.qteContainer.setVisible(true); 
+
+    if (this.isCafe && window.GameLogic.currentUser) {
+        update(ref(window.GameLogic.db, `cafePlayers/${window.GameLogic.currentUser.uid}`), {
+            isSweeping: true,
+            x: this.localPlayer.sprite.x,
+            y: this.localPlayer.sprite.y
+        });
+    }
+} else if (!this.localPlayer.isSweeping) { 
+    sendBubble("使用了 B 技能!"); 
+}
         });
 
         this.placePrompt = this.add.text(0, 0, '洋蔥精靈: 按A確定擺放', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#fff', backgroundColor: 'rgba(74, 93, 78, 0.8)', padding: {x:8, y:4} }).setOrigin(0.5).setDepth(20).setVisible(false); if (this.minimap) this.minimap.ignore(this.placePrompt);
@@ -2811,8 +2842,18 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
         return f; 
     }
     finishSweeping(success) { 
-        this.localPlayer.isSweeping = false; this.qteContainer.setVisible(false); 
+        this.localPlayer.isSweeping = false; 
+        this.qteContainer.setVisible(false); 
         if (this.sound.get('brooming1')) this.sound.stopByKey('brooming1'); 
+
+        if (this.isCafe && window.GameLogic.currentUser) {
+            update(ref(window.GameLogic.db, `cafePlayers/${window.GameLogic.currentUser.uid}`), {
+                isSweeping: false,
+                x: this.localPlayer.sprite.x,
+                y: this.localPlayer.sprite.y
+            });
+        }
+
         if (success && this.closestTrash) { 
             let px = this.localPlayer.sprite.x; let py = this.localPlayer.sprite.y - 40; 
             let trashKey = this.closestTrash.key; let isOld = this.closestTrash.type === 'onion-skin-old'; 
@@ -3557,7 +3598,10 @@ if (dist < 30) {
                 if (uid === window.GameLogic.currentUser.uid) continue; if (!globalOnline[uid]) continue; 
                 let pd = playersData[uid]; pd.uid = uid; if (!this.otherPlayers[uid]) this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
                 let op = this.otherPlayers[uid]; let oldX = op.sprite.x; let oldY = op.sprite.y; op.sprite.x = Phaser.Math.Linear(op.sprite.x, pd.x, 0.2); op.sprite.y = Phaser.Math.Linear(op.sprite.y, pd.y, 0.2); let diffX = op.sprite.x - oldX; let diffY = op.sprite.y - oldY; let absX = Math.abs(diffX); let absY = Math.abs(diffY);
-                if (op.sprite.isStunned || op.sprite.isThrowing) { } else if (pd.isSeated) {
+                if (op.sprite.isStunned || op.sprite.isThrowing) { 
+                } else if (pd.isSweeping) { 
+                    op.sprite.play('clean', true); 
+                } else if (pd.isSeated) {
                     if (isPurifying) {
                         if (evData.targetUid === uid) {
                             op.sprite.play('purify-target', true);
