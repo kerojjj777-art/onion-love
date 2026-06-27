@@ -3127,18 +3127,16 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                                 let mapW = this.physics.world.bounds.width;
                                 let mapH = this.physics.world.bounds.height;
                                 
-                                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-                                    let dropUpdates = {};
-                                    let altar = this.furnitureSprites['altar'] ? this.furnitureSprites['altar'].sprite : {x: cx, y: cy};
-                                    for (let i = 0; i < totalCoins; i++) {
-                                        // 修正1：縮小隨機半徑並加入嚴格 Clamp 邊界防禦，絕不讓金幣貼在畫面最頂端或死角
-                                        let rx = Phaser.Math.Clamp(altar.x + Phaser.Math.Between(-250, 250), 100, mapW - 100);
-                                        let ry = Phaser.Math.Clamp(altar.y + Phaser.Math.Between(-150, 150), 120, mapH - 120);
-                                        let key = 'shrine_coin_' + Date.now() + '_' + i;
-                                        dropUpdates[`droppedCoins/${key}`] = { x: rx, y: ry, amount: coinValue };
-                                    }
-                                    module.update(module.ref(window.GameLogic.db), dropUpdates);
-                                });
+                                                                let dropUpdates = {};
+                                let altar = this.furnitureSprites['altar'] ? this.furnitureSprites['altar'].sprite : {x: cx, y: cy};
+                                for (let i = 0; i < totalCoins; i++) {
+                                    // 修正1：縮小隨機半徑並加入嚴格 Clamp 邊界防禦，絕不讓金幣貼在畫面最頂端或死角
+                                    let rx = Phaser.Math.Clamp(altar.x + Phaser.Math.Between(-250, 250), 100, mapW - 100);
+                                    let ry = Phaser.Math.Clamp(altar.y + Phaser.Math.Between(-150, 150), 120, mapH - 120);
+                                    let key = 'shrine_coin_' + Date.now() + '_' + i;
+                                    dropUpdates[`droppedCoins/${key}`] = { x: rx, y: ry, amount: coinValue };
+                                }
+                                update(ref(window.GameLogic.db), dropUpdates);
                             }
                             
                             let rewardText = this.add.text(cx, cy + 100, `滿地金幣快去撿！`, { fontSize: '48px', color: '#ffcc00', fontStyle: 'bold', stroke: '#000', strokeThickness: 6 }).setOrigin(0.5).setDepth(300).setScrollFactor(0); 
@@ -3641,13 +3639,11 @@ function openFurnitureCatalog() {
         div.onclick = () => {
             if (item.isAction) {
                 if (item.key === 'clear_seats') {
-                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-                        let seats = Object.keys(window.GameLogic.shrineFurniture || {}).filter(k => k.startsWith('seat_'));
-                        let updates = {}; seats.forEach(s => updates[`shrineFurniture/${s}`] = null);
-                        module.update(module.ref(window.GameLogic.db), updates).then(() => { 
-                            sendBubble("已回收所有禁屎坐墊！"); 
-                            modal.style.display = 'none'; 
-                        });
+                                        let seats = Object.keys(window.GameLogic.shrineFurniture || {}).filter(k => k.startsWith('seat_'));
+                    let updates = {}; seats.forEach(s => updates[`shrineFurniture/${s}`] = null);
+                    update(ref(window.GameLogic.db), updates).then(() => { 
+                        sendBubble("已回收所有禁屎坐墊！"); 
+                        modal.style.display = 'none'; 
                     });
                 }
                 return;
@@ -3671,7 +3667,7 @@ function openFurnitureCatalog() {
 
             let fData = targetDict && targetDict[itemKey];
             if (fData && fData.locked && !item.infinite) {
-                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.remove(module.ref(window.GameLogic.db, pathPrefix + itemKey)); });
+                remove(ref(window.GameLogic.db, pathPrefix + itemKey));
                 window.GameLogic.placingFurnitureKey = null; if(window.GameLogic.phaserGame) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if(scene && scene.localPlayer) { scene.cameras.main.startFollow(scene.localPlayer.sprite, true, 0.08, 0.08); } }
                 sendBubble("傢俱收起來了!");
             } else {
@@ -3681,7 +3677,7 @@ function openFurnitureCatalog() {
                 else if (isCafe) window.GameLogic.cafeFurniture[itemKey] = newData;
                 // 修正：為神龕加入 || {} 的防護機制，避免資料庫為空時引發 null 取值報錯卡死
                 else if (isShrine) { window.GameLogic.shrineFurniture = window.GameLogic.shrineFurniture || {}; window.GameLogic.shrineFurniture[itemKey] = newData; }
-                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, pathPrefix + itemKey), newData); });
+                update(ref(window.GameLogic.db, pathPrefix + itemKey), newData);
                 window.GameLogic.placingFurnitureKey = itemKey;
             }
         }; list.appendChild(div);
