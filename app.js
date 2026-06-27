@@ -1843,17 +1843,15 @@ class MainScene extends Phaser.Scene {
         } else if (this.sceneName === "partyroom") {
             this.add.image(mapW/2, mapH/2, 'bgPartyroom').setDisplaySize(mapW, mapH);
             this.partyStonesGroup = this.physics.add.staticGroup();
-            this.partyStonesListener = import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-                return module.onValue(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/stones`), snap => {
-                    let stones = snap.val();
-                    if (stones) {
-                        this.partyStonesGroup.clear(true, true);
-                        stones.forEach(st => {
-                            let stone = this.partyStonesGroup.create(st.x, st.y, 'party-stone').setDepth(5);
-                            stone.body.setCircle(37); // Ensure accurate collision for 75x75 obstacle
-                        });
-                    }
-                });
+            this.partyStonesListener = onValue(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/stones`), snap => {
+                let stones = snap.val();
+                if (stones) {
+                    this.partyStonesGroup.clear(true, true);
+                    stones.forEach(st => {
+                        let stone = this.partyStonesGroup.create(st.x, st.y, 'party-stone').setDepth(5);
+                        stone.body.setCircle(37); // Ensure accurate collision for 75x75 obstacle
+                    });
+                }
             });
             let rFlash = document.getElementById('party-red-flash');
             if (rFlash) rFlash.style.display = 'block';
@@ -2524,11 +2522,13 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                 this.localPlayer.isInvincible = true;
                 this.localPlayer.sprite.play('fw-hit', true);
                 
-                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-                    module.get(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}/gotHitCount`)).then(s => { module.update(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`), { gotHitCount: (s.val()||0) + 1 }); });
-                    module.get(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}/hitCount`)).then(s => { module.update(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}`), { hitCount: (s.val()||0) + 1 }); });
-                    module.remove(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/hits/${window.GameLogic.currentUser.uid}`));
+                get(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}/gotHitCount`)).then(s => {
+                    update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`), { gotHitCount: (s.val() || 0) + 1 });
                 });
+                get(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}/hitCount`)).then(s => {
+                    update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}`), { hitCount: (s.val() || 0) + 1 });
+                });
+                remove(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/hits/${window.GameLogic.currentUser.uid}`));
                 
                 this.time.delayedCall(1000, () => { this.localPlayer.isStunned = false; });
                 this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; });
@@ -2701,7 +2701,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
             if (this.partyAllHitsListener) this.partyAllHitsListener();
             if (this.hitListener) this.hitListener(); 
             if (this.partyHitListener) this.partyHitListener();
-            if (this.partyStonesListener) { this.partyStonesListener.then(unsub => unsub()); }
+            if (this.partyStonesListener) this.partyStonesListener();
             if (this.fwHitListener) this.fwHitListener(); 
             if (this.fwPlayersHitListener) this.fwPlayersHitListener();
             if (this.fwDummyHitListener) this.fwDummyHitListener(); 
@@ -4664,41 +4664,39 @@ window.joinPartyroom = function(roomId) {
     }
     document.getElementById('party-red-flash').style.display = 'none'; document.getElementById('party-red-flash').style.opacity = 0;
     
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        const playerRef = module.ref(window.GameLogic.db, `partyRooms/${roomId}/players/${window.GameLogic.currentUser.uid}`);
-        module.set(playerRef, { x: 1920/2, y: 1080/2, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1, ready: false });
-        module.onDisconnect(playerRef).remove();
+    const playerRef = ref(window.GameLogic.db, `partyRooms/${roomId}/players/${window.GameLogic.currentUser.uid}`);
+    set(playerRef, { x: 1920/2, y: 1080/2, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1, ready: false });
+    onDisconnect(playerRef).remove();
+    
+    partyUnsubscribe = onValue(ref(window.GameLogic.db, `partyRooms/${roomId}`), snap => {
+        let data = snap.val(); if(!data) { window.leavePartyroom(); return; }
+        window.PartyLogic.state = data.state;
+        window.PartyLogic.players = data.players || {};
+        window.PartyLogic.scores = data.scores || {};
+        window.PartyLogic.host = data.host;
+        window.PartyLogic.gameData = data;
         
-        partyUnsubscribe = module.onValue(module.ref(window.GameLogic.db, `partyRooms/${roomId}`), snap => {
-            let data = snap.val(); if(!data) { window.leavePartyroom(); return; }
-            window.PartyLogic.state = data.state;
-            window.PartyLogic.players = data.players || {};
-            window.PartyLogic.scores = data.scores || {};
-            window.PartyLogic.host = data.host;
-            window.PartyLogic.gameData = data;
+        let pUids = Object.keys(window.PartyLogic.players);
+        if (pUids.length >= 10 && data.state === 'waiting') update(ref(window.GameLogic.db, `serverEvents/partyInvites/${roomId}`), { closed: true });
+        
+        if (data.state === 'waiting') {
+            document.getElementById('party-waiting-modal').style.display = 'flex';
+            let grid = document.getElementById('party-wait-grid'); grid.innerHTML = '';
+            pUids.sort().forEach((uid, idx) => {
+                if (uid === window.GameLogic.currentUser.uid) window.PartyLogic.mySlotIndex = idx;
+                let pd = window.PartyLogic.players[uid];
+                let hostLabel = uid === data.host ? '<div class="party-slot-host">房主</div>' : '';
+                let readyCls = pd.ready ? 'ready' : '';
+                grid.innerHTML += `<div class="party-slot ${readyCls}">${hostLabel}<img src="onion-sprite.png"><span>${pd.name}</span></div>`;
+            });
+            for(let i=pUids.length; i<10; i++) { grid.innerHTML += `<div class="party-slot" style="opacity:0.3;">等待加入...</div>`; }
             
-            let pUids = Object.keys(window.PartyLogic.players);
-            if (pUids.length >= 10 && data.state === 'waiting') module.update(module.ref(window.GameLogic.db, `serverEvents/partyInvites/${roomId}`), { closed: true });
-            
-            if (data.state === 'waiting') {
-                document.getElementById('party-waiting-modal').style.display = 'flex';
-                let grid = document.getElementById('party-wait-grid'); grid.innerHTML = '';
-                pUids.sort().forEach((uid, idx) => {
-                    if (uid === window.GameLogic.currentUser.uid) window.PartyLogic.mySlotIndex = idx;
-                    let pd = window.PartyLogic.players[uid];
-                    let hostLabel = uid === data.host ? '<div class="party-slot-host">房主</div>' : '';
-                    let readyCls = pd.ready ? 'ready' : '';
-                    grid.innerHTML += `<div class="party-slot ${readyCls}">${hostLabel}<img src="onion-sprite.png"><span>${pd.name}</span></div>`;
-                });
-                for(let i=pUids.length; i<10; i++) { grid.innerHTML += `<div class="party-slot" style="opacity:0.3;">等待加入...</div>`; }
-                
-                let isHost = data.host === window.GameLogic.currentUser.uid;
-                let allReady = pUids.every(u => window.PartyLogic.players[u].ready);
-                document.getElementById('party-start-btn').style.display = (isHost && allReady && pUids.length > 1) ? 'block' : 'none';
-            } else {
-                document.getElementById('party-waiting-modal').style.display = 'none';
-            }
-        });
+            let isHost = data.host === window.GameLogic.currentUser.uid;
+            let allReady = pUids.every(u => window.PartyLogic.players[u].ready);
+            document.getElementById('party-start-btn').style.display = (isHost && allReady && pUids.length > 1) ? 'block' : 'none';
+        } else {
+            document.getElementById('party-waiting-modal').style.display = 'none';
+        }
     });
 };
 
@@ -4724,7 +4722,7 @@ window.togglePartyReady = function() {
     let isReady = btn.innerText === '取消準備';
     btn.innerText = isReady ? '準備好了' : '取消準備';
     btn.style.background = isReady ? 'var(--mucha-gold)' : '#5cb85c';
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), { ready: !isReady }); });
+    update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), { ready: !isReady });
 };
 
 window.startPartyGame = function() {
@@ -4887,7 +4885,7 @@ window.processPartyEventLogic = function(scene) {
                         window.PartyLogic.rewardClaimed = true;
                         window.GameLogic.myProfile.coins = (window.GameLogic.myProfile.coins || 0) + reward;
                         let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
-                        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: window.GameLogic.myProfile.coins }); });
+                        update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: window.GameLogic.myProfile.coins });
                     }
                 });
                 html += `<div style="font-size:12px; color:#666; margin-top:10px; text-align:center; background:#eee; padding:5px; border-radius:4px;">評分計算方式：(擊中人數 x 10) - (被擊中次數 x 5) + (遊戲結束時剩餘水球數 x 0.1)</div>`;
