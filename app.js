@@ -1319,28 +1319,27 @@ function switchScene(sceneName, extraData = null) {
 let playroomUnsubscribe = null;
 function joinPlayroom(roomId) {
     window.GameLogic.currentRoomId = roomId;
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        const playerRef = module.ref(db, `playroomPlayers/${roomId}/${window.GameLogic.currentUser.uid}`);
-        let startX = 640 + (Math.random() * 100 - 50); // 稍微錯開出生點避免疊加卡死
-        module.set(playerRef, { x: startX, y: 450, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1 });
-        module.onDisconnect(playerRef).remove();
-        module.onDisconnect(module.ref(db, `playroomGames/${roomId}/p_${window.GameLogic.currentUser.uid}`)).remove();
 
-        playroomUnsubscribe = module.onValue(module.ref(db, `playroomPlayers/${roomId}`), (snapshot) => { 
-            window.GameLogic.playroomPlayers = snapshot.val() || {}; 
-            
-            // 偵測對方離線邏輯
-            let players = window.GameLogic.playroomPlayers;
-            let uids = Object.keys(players);
-            let modal = document.getElementById('rps-modal');
-            if (window.GameLogic.currentRoomId && modal && modal.style.display === 'flex') {
-                if (uids.length < 2 && uids.includes(window.GameLogic.currentUser.uid)) {
-                    window.handleRpsDisconnect(roomId);
-                }
+    const playerRef = ref(db, `playroomPlayers/${roomId}/${window.GameLogic.currentUser.uid}`);
+    let startX = 640 + (Math.random() * 100 - 50); // 稍微錯開出生點避免疊加卡死
+    set(playerRef, { x: startX, y: 450, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1 });
+    onDisconnect(playerRef).remove();
+    onDisconnect(ref(db, `playroomGames/${roomId}/p_${window.GameLogic.currentUser.uid}`)).remove();
+
+    playroomUnsubscribe = onValue(ref(db, `playroomPlayers/${roomId}`), (snapshot) => {
+        window.GameLogic.playroomPlayers = snapshot.val() || {};
+
+        // 偵測對方離線邏輯
+        let players = window.GameLogic.playroomPlayers;
+        let uids = Object.keys(players);
+        let modal = document.getElementById('rps-modal');
+        if (window.GameLogic.currentRoomId && modal && modal.style.display === 'flex') {
+            if (uids.length < 2 && uids.includes(window.GameLogic.currentUser.uid)) {
+                window.handleRpsDisconnect(roomId);
             }
-        });
-        window.syncRpsState(roomId); 
+        }
     });
+    window.syncRpsState(roomId);
 }
 function leavePlayroom() {
     if (window.GameLogic.currentRoomId && window.GameLogic.currentUser) {
@@ -3742,22 +3741,20 @@ window.replyInvite = function(replyType) {
     let modal = document.getElementById('invite-modal');
     modal.style.display = 'none';
     if (window.inviteTimerInterval) clearInterval(window.inviteTimerInterval);
-    
+
     let attacker = window.currentInviteAttacker;
     if (attacker) {
-        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-            module.update(module.ref(window.GameLogic.db, `serverEvents/inviteReplies/${attacker}`), { reply: replyType, replierUid: window.GameLogic.currentUser.uid, time: Date.now() });
-            
-            if (replyType === 'yes') {
-                window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null;
-                let roomId = `playroom_${attacker}_${window.GameLogic.currentUser.uid}`;
-                
-                // 修正2：進入 Playroom 前，強迫清空舊有房間狀態，確保一切從頭開始
-                module.set(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'none' });
-                
-                window.switchScene('playroom', { roomId: roomId });
-            }
-        });
+        update(ref(window.GameLogic.db, `serverEvents/inviteReplies/${attacker}`), { reply: replyType, replierUid: window.GameLogic.currentUser.uid, time: Date.now() });
+
+        if (replyType === 'yes') {
+            window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null;
+            let roomId = `playroom_${attacker}_${window.GameLogic.currentUser.uid}`;
+
+            // 修正2：進入 Playroom 前，強迫清空舊有房間狀態，確保一切從頭開始
+            set(ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'none' });
+
+            window.switchScene('playroom', { roomId: roomId });
+        }
     }
 };
 
@@ -3783,12 +3780,10 @@ window.cancelRpsGame = function(roomId) {
     let dust = document.getElementById('rps-dust-container');
     if (dust) dust.innerHTML = '';
     
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        module.update(module.ref(window.GameLogic.db, `playroomGames/${id}`), { state: 'none' });
-        if (window.GameLogic.currentUser) {
-            module.update(module.ref(window.GameLogic.db, `playroomGames/${id}/p_${window.GameLogic.currentUser.uid}`), { machineReady: null, betReady: null });
-        }
-    });
+    update(ref(window.GameLogic.db, `playroomGames/${id}`), { state: 'none' });
+    if (window.GameLogic.currentUser) {
+        update(ref(window.GameLogic.db, `playroomGames/${id}/p_${window.GameLogic.currentUser.uid}`), { machineReady: null, betReady: null });
+    }
 };
 
 window.handleRpsDisconnect = function(roomId) {
@@ -3813,9 +3808,7 @@ window.openRpsBetting = function(roomId) {
     if (players.length < 2) return alert("等對方進來再開始喔！");
     
     // 修正1：按下A只改變自己的機台準備狀態，不強制所有人進入下注
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}/p_${window.GameLogic.currentUser.uid}`), { machineReady: true });
-    });
+    update(ref(window.GameLogic.db, `playroomGames/${roomId}/p_${window.GameLogic.currentUser.uid}`), { machineReady: true });
 };
 
 window.confirmRpsBet = function() {
@@ -3823,9 +3816,7 @@ window.confirmRpsBet = function() {
     document.getElementById('rps-bet-input-area').style.display = 'none';
     document.getElementById('rps-bet-status-me').innerText = "✅已下注";
     document.getElementById('rps-bet-status-me').style.color = "#00ff00";
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        module.update(module.ref(window.GameLogic.db, `playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { betReady: true, betValue: betVal });
-    });
+        update(ref(window.GameLogic.db, `playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { betReady: true, betValue: betVal });
 };
 
 window.selectRps = function(choice) {
@@ -3836,9 +3827,7 @@ window.selectRps = function(choice) {
     document.getElementById('rps-choice-' + choice).classList.add('rps-choice-selected');
 
     document.getElementById('rps-me-img').style.backgroundImage = `url('playroom-rps-onion-me-${choice}.png')`;
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        module.update(module.ref(window.GameLogic.db, `playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { rpsChoice: choice });
-    });
+    update(ref(window.GameLogic.db, `playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { rpsChoice: choice });
 };
 
 window.clickRpsSpam = function() {
@@ -3916,15 +3905,12 @@ window.clickRpsSpam = function() {
     // 人物連擊精靈圖切換 (自己)
     window.triggerRpsAnim('rps-me-img', window.rpsMyRole === 'attacker');
     
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        module.update(module.ref(window.GameLogic.db, `playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { spamCount: window.rpsMySpamCount });
-    });
+    update(ref(window.GameLogic.db, `playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { spamCount: window.rpsMySpamCount });
 };
 
 window.syncRpsState = function(roomId) {
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        if (window.rpsUnsubscribe) window.rpsUnsubscribe();
-        window.rpsUnsubscribe = module.onValue(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), snap => {
+    if (window.rpsUnsubscribe) window.rpsUnsubscribe();
+    window.rpsUnsubscribe = onValue(ref(window.GameLogic.db, `playroomGames/${roomId}`), snap => {
             let data = snap.val(); if (!data) return;
             let state = data.state;
             window.rpsPhase = state;
@@ -3981,9 +3967,9 @@ window.syncRpsState = function(roomId) {
                 if (myData.machineReady) {
                     if (otherData.machineReady) {
                         if (uids.sort()[0] === myUid) {
-                            module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'betting' });
-                            module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}/p_${myUid}`), { betReady: false, betValue: 0, machineReady: null });
-                            module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}/p_${otherUid}`), { betReady: false, betValue: 0, machineReady: null });
+                            update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'betting' });
+                            update(ref(window.GameLogic.db, `playroomGames/${roomId}/p_${myUid}`), { betReady: false, betValue: 0, machineReady: null });
+                            update(ref(window.GameLogic.db, `playroomGames/${roomId}/p_${otherUid}`), { betReady: false, betValue: 0, machineReady: null });
                         }
                     } else {
                         // 只有我按了 A，顯示等待畫面
@@ -4050,7 +4036,7 @@ window.syncRpsState = function(roomId) {
 
                 // 只有自己還沒確認時，才需要重新讀取拉條並綁定事件
                 if (!myData.betReady) {
-                    module.get(module.ref(window.GameLogic.db, `users`)).then(uSnap => {
+                    get(ref(window.GameLogic.db, `users`)).then(uSnap => {
                         let uDB = uSnap.val() || {};
                         let p1Coins = (uDB[uids[0]] && uDB[uids[0]].coins) ? uDB[uids[0]].coins : 0;
                         let p2Coins = (uDB[uids[1]] && uDB[uids[1]].coins) ? uDB[uids[1]].coins : 0;
@@ -4074,7 +4060,7 @@ window.syncRpsState = function(roomId) {
                 
                 if (myData.betReady && otherData.betReady && uids.sort()[0] === myUid) {
                     let avgBet = Math.round((myData.betValue + otherData.betValue) / 2);
-                    module.get(module.ref(window.GameLogic.db, `users`)).then(uSnap => {
+                    get(ref(window.GameLogic.db, `users`)).then(uSnap => {
                         let uDB = uSnap.val();
                         let p1C = (uDB[myUid]?.coins || 0) - avgBet;
                         let p2C = (uDB[otherUid]?.coins || 0) - avgBet;
@@ -4085,10 +4071,10 @@ window.syncRpsState = function(roomId) {
                         if (ratio > 2/3) mult = 2;
                         else if (ratio > 1/3) mult = 1.5;
 
-                        module.update(module.ref(window.GameLogic.db, `users/${myUid}`), { coins: Math.max(0, p1C) });
-                        module.update(module.ref(window.GameLogic.db, `users/${otherUid}`), { coins: Math.max(0, p2C) });
+                        update(ref(window.GameLogic.db, `users/${myUid}`), { coins: Math.max(0, p1C) });
+                        update(ref(window.GameLogic.db, `users/${otherUid}`), { coins: Math.max(0, p2C) });
                         
-                        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { 
+                        update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { 
                             state: 'bet_summary', 
                             agreedBet: avgBet, 
                             bonusMult: mult,
@@ -4134,9 +4120,9 @@ window.syncRpsState = function(roomId) {
                 }
                 // ==========================================
                 if (uids.sort()[0] === myUid && !data.summaryProcessed) {
-                    module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { summaryProcessed: true });
+                    update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { summaryProcessed: true });
                     setTimeout(() => {
-                        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { 
+                        update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { 
                             state: 'rps_countdown', 
                             rpsStartTime: Date.now(),
                             roundCount: 1,
@@ -4226,7 +4212,7 @@ window.syncRpsState = function(roomId) {
                             ], { duration: 900, easing: 'ease-out' });
                         }
                         clearInterval(window.rpsInterval);
-                        if (uids.sort()[0] === myUid) module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'rps_result' });
+                        if (uids.sort()[0] === myUid) update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'rps_result' });
                     }
                 }, 100);
             }
@@ -4259,7 +4245,7 @@ window.syncRpsState = function(roomId) {
                     else if (result === 'lose') window.triggerRpsWinExplosion('rps-opponent-img');
                     
                     if (uids.sort()[0] === myUid) {
-                         import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { explosionPlayed: true }));
+                         update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { explosionPlayed: true });
                     }
                 }
                 // 猜拳結果判定當下：勝利方產生大量橘紅氣泡特效
@@ -4292,9 +4278,9 @@ window.syncRpsState = function(roomId) {
                     if (!window.rpsStateTimeout) {
                         window.rpsStateTimeout = setTimeout(() => {
                             if (result === 'tie') {
-                                module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'rps_countdown', rpsStartTime: Date.now(), [`p_${myUid}/rpsChoice`]: null, [`p_${otherUid}/rpsChoice`]: null });
+                                update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'rps_countdown', rpsStartTime: Date.now(), [`p_${myUid}/rpsChoice`]: null, [`p_${otherUid}/rpsChoice`]: null });
                             } else {
-                                module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'spam_countdown', winnerUid: result === 'win' ? myUid : otherUid, spamStartTime: Date.now(), [`p_${myUid}/spamCount`]: 0, [`p_${otherUid}/spamCount`]: 0 });
+                                update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'spam_countdown', winnerUid: result === 'win' ? myUid : otherUid, spamStartTime: Date.now(), [`p_${myUid}/spamCount`]: 0, [`p_${otherUid}/spamCount`]: 0 });
                             }
                             window.rpsStateTimeout = null;
                         }, 2000);
@@ -4380,7 +4366,7 @@ window.syncRpsState = function(roomId) {
                                 anim.onfinish = () => { rpsMsg.style.opacity = '0'; }; // 動畫結束後徹底隱藏 GO!
                             }
                             clearInterval(window.rpsInterval);
-                            if (uids.sort()[0] === myUid) module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'spamming', spamPlayTime: Date.now() });
+                            if (uids.sort()[0] === myUid) update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'spamming', spamPlayTime: Date.now() });
                         }
                     }, 100);
             }
@@ -4424,7 +4410,7 @@ window.syncRpsState = function(roomId) {
                     } else {
                         document.getElementById('rps-spam-area').style.display = 'none';
                         clearInterval(window.rpsInterval);
-                        if (uids.sort()[0] === myUid) module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'round_result' });
+                        if (uids.sort()[0] === myUid) update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'round_result' });
                     }
                 }, 100);
             }
@@ -4487,10 +4473,10 @@ window.syncRpsState = function(roomId) {
                             updates[`p_${myUid}/rpsChoice`] = null;
                             updates[`p_${otherUid}/rpsChoice`] = null;
                         }
-                        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), updates);
+                        update(ref(window.GameLogic.db, `playroomGames/${roomId}`), updates);
                     }, 3000);
                     
-                    module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { roundProcessed: true });
+                    update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { roundProcessed: true });
                 }
             }
             else if (state === 'calc_result') {
@@ -4567,7 +4553,7 @@ window.syncRpsState = function(roomId) {
                 }
                 
                 if (uids.sort()[0] === myUid && !data.moneyDistributed) {
-                    module.get(module.ref(window.GameLogic.db, `users`)).then(uSnap => {
+                    get(ref(window.GameLogic.db, `users`)).then(uSnap => {
                         let uDB = uSnap.val();
                         let p1C = uDB[myUid]?.coins || 0;
                         let p2C = uDB[otherUid]?.coins || 0;
@@ -4590,13 +4576,12 @@ window.syncRpsState = function(roomId) {
                         }
                         // ==========================================
                         
-                        module.update(module.ref(window.GameLogic.db, `users/${myUid}`), { coins: p1C });
-                        module.update(module.ref(window.GameLogic.db, `users/${otherUid}`), { coins: p2C });
-                        module.update(module.ref(window.GameLogic.db, `playroomGames/${roomId}`), { moneyDistributed: true });
+                        update(ref(window.GameLogic.db, `users/${myUid}`), { coins: p1C });
+                        update(ref(window.GameLogic.db, `users/${otherUid}`), { coins: p2C });
+                        update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { moneyDistributed: true });
                     });
                 }
             }
-        });
     });
 };
 
