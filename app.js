@@ -104,6 +104,34 @@ window.closeProfileModal = function() {
 };
 window.openPortalModal = function() { document.getElementById('inventory-modal').style.display = 'none'; document.getElementById('portal-modal').style.display = 'block'; };
 
+// 使用者輸入安全工具：避免玩家文字直接進 innerHTML
+function escapeHTML(value, fallback = '') {
+    const raw = (value === undefined || value === null || value === '') ? fallback : value;
+    return String(raw)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function cleanUserText(value, maxLen = 120, fallback = '') {
+    const raw = String(value ?? '')
+        .replace(/[\u0000-\u001F\u007F]/g, '')
+        .trim();
+    const text = raw.slice(0, maxLen);
+    return text || fallback;
+}
+
+function safePlayerName(value) {
+    return cleanUserText(value, 20, '匿名');
+}
+
+function safeColor(value, fallback = '#c5a059') {
+    const color = String(value || '').trim();
+    return /^#[0-9a-fA-F]{6}$/.test(color) ? color : fallback;
+}
+
 // 新增：空間傳送門點擊時的粒子噴發效果
 window.popPortalParticles = function(e) {
     let x = e.clientX; let y = e.clientY;
@@ -712,7 +740,9 @@ window.updateOnlinePlayersUI = function() {
         let p = players[uid];
         // 修正4：過濾掉沒有發送心跳，或心跳超過 20 秒未更新的幽靈人口
         if (!p.lastActive || (now - p.lastActive > 20000)) continue;
-        html += `<div style="margin-top:5px; display:flex; align-items:center;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${p.color || '#fff'}; margin-right:8px; border:1px solid #000;"></span>${p.name || '匿名'}</div>`;
+    let safeOnlineName = escapeHTML(p.name, '匿名');
+    let safeOnlineColor = safeColor(p.color, '#fff');
+    html += `<div style="margin-top:5px; display:flex; align-items:center;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${safeOnlineColor}; margin-right:8px; border:1px solid #000;"></span>${safeOnlineName}</div>`;
     }
     listEl.innerHTML = html;
 };
@@ -987,8 +1017,87 @@ window.openInventoryModal = function() {
 };
 
 window.viewOtherProfile = function(uid) { get(ref(window.GameLogic.db, `users/${uid}`)).then(snap => { if (snap.exists()) { document.getElementById('phone-modal').style.display = 'none'; showProfileModal(snap.val(), uid); } }); };
-window.openPhoneModal = function() { document.getElementById('inventory-modal').style.display = 'none'; document.getElementById('phone-modal').style.display = 'block'; get(ref(window.GameLogic.db, 'users')).then(snap => { let users = snap.val() || {}; let html = ''; for (let uid in users) { if (uid === window.GameLogic.currentUser.uid) continue; let u = users[uid]; let unreadDot = (window.GameLogic.unreadPMs && window.GameLogic.unreadPMs[uid]) ? ' <span style="color:red; font-size:10px;">🔴</span>' : ''; html += `<div class="catalog-item phone-contact" style="flex-direction:row; justify-content:space-between; padding: 10px;"><span style="font-weight:bold; color: ${u.color || '#fff'}; text-shadow: 1px 1px 2px #000;">${u.name || '匿名'} (Lv.${u.level || 1})${unreadDot}</span><div><button class="btn-secondary" style="padding: 4px 12px; font-size:12px; margin-right: 5px; color:#333;" onclick="window.viewOtherProfile('${uid}')">查看</button><button class="btn-primary" style="padding: 4px 12px; font-size:12px;" onclick="window.openPM('${uid}', '${u.name || '匿名'}')">私訊</button></div></div>`; } if (html === '') html = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">目前沒有其他聯絡人</div>'; document.getElementById('phone-contacts').innerHTML = html; }); };
+window.openPhoneModal = function() { 
+    document.getElementById('inventory-modal').style.display = 'none'; 
+    document.getElementById('phone-modal').style.display = 'block'; 
+
+    get(ref(window.GameLogic.db, 'users')).then(snap => { 
+        let users = snap.val() || {}; 
+        let html = ''; 
+
+        for (let uid in users) { 
+            if (uid === window.GameLogic.currentUser.uid) continue; 
+
+            let u = users[uid]; 
+            let rawName = safePlayerName(u.name);
+            let safeName = escapeHTML(rawName, '匿名');
+            let safeLevel = Number.isFinite(Number(u.level)) ? Number(u.level) : 1;
+            let color = safeColor(u.color, '#fff');
+            let uidArg = encodeURIComponent(uid);
+            let nameArg = encodeURIComponent(rawName);
+            let unreadDot = (window.GameLogic.unreadPMs && window.GameLogic.unreadPMs[uid]) ? ' <span style="color:red; font-size:10px;">🔴</span>' : ''; 
+
+            html += `<div class="catalog-item phone-contact" style="flex-direction:row; justify-content:space-between; padding: 10px;"><span style="font-weight:bold; color: ${color}; text-shadow: 1px 1px 2px #000;">${safeName} (Lv.${safeLevel})${unreadDot}</span><div><button class="btn-secondary" style="padding: 4px 12px; font-size:12px; margin-right: 5px; color:#333;" onclick="window.viewOtherProfile(decodeURIComponent('${uidArg}'))">查看</button><button class="btn-primary" style="padding: 4px 12px; font-size:12px;" onclick="window.openPM(decodeURIComponent('${uidArg}'), decodeURIComponent('${nameArg}'))">私訊</button></div></div>`; 
+        } 
+
+        if (html === '') html = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">目前沒有其他聯絡人</div>'; 
+        document.getElementById('phone-contacts').innerHTML = html; 
+    }); 
+};
+get(ref(window.GameLogic.db, 'users')).then(snap => { let users = snap.val() || {}; let html = ''; for (let uid in users) { if (uid === window.GameLogic.currentUser.uid) continue; let u = users[uid]; let unreadDot = (window.GameLogic.unreadPMs && window.GameLogic.unreadPMs[uid]) ? ' <span style="color:red; font-size:10px;">🔴</span>' : ''; html += `<div class="catalog-item phone-contact" style="flex-direction:row; justify-content:space-between; padding: 10px;"><span style="font-weight:bold; color: ${u.color || '#fff'}; text-shadow: 1px 1px 2px #000;">${u.name || '匿名'} (Lv.${u.level || 1})${unreadDot}</span><div><button class="btn-secondary" style="padding: 4px 12px; font-size:12px; margin-right: 5px; color:#333;" onclick="window.viewOtherProfile('${uid}')">查看</button><button class="btn-primary" style="padding: 4px 12px; font-size:12px;" onclick="window.openPM('${uid}', '${u.name || '匿名'}')">私訊</button></div></div>`; } if (html === '') html = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">目前沒有其他聯絡人</div>'; document.getElementById('phone-contacts').innerHTML = html; }); };
 window.openPM = function(targetUid, targetName) { 
+    document.getElementById('phone-modal').style.display = 'none'; 
+    document.getElementById('pm-modal').style.display = 'block'; 
+    document.getElementById('pm-title').innerText = `💬 與 ${safePlayerName(targetName)} 密語`; 
+    window.currentPMUid = targetUid; 
+
+    let myUid = window.GameLogic.currentUser.uid; 
+    let chatId = [myUid, targetUid].sort().join('_'); 
+
+    remove(ref(window.GameLogic.db, `users/${myUid}/unreadPMs/${targetUid}`)); 
+
+    if (window.pmUnsubscribe) window.pmUnsubscribe(); 
+
+    window.pmUnsubscribe = onValue(ref(window.GameLogic.db, `privateChats/${chatId}`), snap => { 
+        let msgs = snap.val() || {}; 
+        let box = document.getElementById('pm-chat-box'); 
+        box.innerHTML = ''; 
+
+        let html = '';
+        Object.values(msgs).forEach(m => { 
+            const safeName = escapeHTML(m.name, '匿名');
+            const safeMsg = escapeHTML(m.msg, '');
+
+            if (m.uid === myUid) { 
+                html += `<div style="text-align:right; margin-bottom: 8px;"><div class="pm-bubble-me">${safeMsg}</div></div>`; 
+            } else { 
+                html += `<div style="text-align:left; margin-bottom: 8px;"><div class="pm-bubble-other"><div style="font-size:11px; color:#558b2f; font-weight:bold; margin-bottom:2px;">${safeName}</div>${safeMsg}</div></div>`; 
+            } 
+        }); 
+
+        box.innerHTML = html;
+        box.scrollTop = box.scrollHeight; 
+    }); 
+};
+
+window.sendPM = function() { 
+    let input = document.getElementById('pm-input'); 
+    let msg = cleanUserText(input.value, 120, ''); 
+    if (!msg || !window.currentPMUid) return; 
+
+    let myUid = window.GameLogic.currentUser.uid; 
+    let chatId = [myUid, window.currentPMUid].sort().join('_'); 
+
+    push(ref(db, `privateChats/${chatId}`), {
+        uid: myUid,
+        name: safePlayerName(window.GameLogic.myProfile.name),
+        msg: msg,
+        time: Date.now()
+    }); 
+
+    update(ref(db, `users/${window.currentPMUid}/unreadPMs`), { [myUid]: true }); 
+    input.value = ''; 
+}; 
     document.getElementById('phone-modal').style.display = 'none'; 
     document.getElementById('pm-modal').style.display = 'block'; 
     document.getElementById('pm-title').innerText = `💬 與 ${targetName} 密語`; 
@@ -1154,7 +1263,8 @@ function joinShrine() {
             for (let uid in seatedPlayers) { 
                 if (!seatedPlayers[uid].isSeated || !onlineGlobal[uid]) continue; 
                 let isSel = (voteTarget === uid) ? 'selected' : ''; 
-                tHtml += `<div id="vote-tgt-${uid}" class="vote-item ${isSel}" onclick="window.selectVoteTarget('${uid}')">👤 ${seatedPlayers[uid].name}</div>`; 
+                let safeSeatName = escapeHTML(seatedPlayers[uid].name, '匿名');
+            tHtml += `<div id="vote-tgt-${uid}" class="vote-item ${isSel}" onclick="window.selectVoteTarget('${uid}')">👤 ${safeSeatName}</div>`; 
             }
             tHtml += `<div id="vote-tgt-any" class="vote-item ${(voteTarget === 'any') ? 'selected' : ''}" onclick="window.selectVoteTarget('any')">🎲 都可以</div>`;
             document.getElementById('voting-targets').innerHTML = tHtml;
@@ -1169,12 +1279,13 @@ function joinShrine() {
             for (let uid in votes) {
                 if (!onlineGlobal[uid]) continue;
                 let v = votes[uid]; 
-                let tName = v.target === 'any' ? '都可以' : (seatedPlayers[v.target] ? seatedPlayers[v.target].name : '...');
+                let tName = v.target === 'any' ? '都可以' : (seatedPlayers[v.target] ? escapeHTML(seatedPlayers[v.target].name, '匿名') : '...');
                 let taliObj = talismans.find(x => x.id === v.talisman);
                 let tIcon = taliObj ? `<img src="${taliObj.img}" style="width:20px; vertical-align:middle;">` : '...';
                 let statusColor = v.confirmed ? '#00ff00' : '#aaa';
                 let statusText = v.confirmed ? '✅已確認' : '🤔選擇中';
-                sHtml += `<div style="color:${statusColor}; font-size:13px; margin-bottom:4px;">${v.name}: [${tName}] + ${tIcon} (${statusText})</div>`;
+                let safeVoterName = escapeHTML(v.name, '匿名');
+                sHtml += `<div style="color:${statusColor}; font-size:13px; margin-bottom:4px;">${safeVoterName}: [${tName}] + ${tIcon} (${statusText})</div>`;
             }
             document.getElementById('voting-status').innerHTML = sHtml;
 
@@ -3686,7 +3797,7 @@ function openFurnitureCatalog() {
 document.getElementById("view-profile-btn").addEventListener("click", async () => { actionMenu.style.display = "none"; const targetUid = actionMenu.dataset.uid; if (targetUid === window.GameLogic.currentUser.uid) showProfileModal(window.GameLogic.myProfile, targetUid); else { const snap = await get(ref(db, `users/${targetUid}`)); if (snap.exists()) showProfileModal(snap.val(), targetUid); } });
 function showProfileModal(p, uid) { profileViewingUid = uid; document.getElementById("vp-level").innerText = p.level || 1; document.getElementById("vp-exp").innerText = p.exp || 0; document.getElementById("vp-coins").innerText = p.coins || 0; document.getElementById("vp-sweeps").innerText = p.sweeps || 0; document.getElementById("vp-name").innerText = p.name || '匿名'; document.getElementById("vp-color").style.backgroundColor = p.color || '#c5a059'; document.getElementById("vp-birth").innerText = p.birth || '未知'; document.getElementById("vp-food").innerText = p.food || '無'; document.getElementById("vp-motto").innerText = p.motto || '無'; ['name', 'color', 'birth', 'food', 'motto'].forEach(k => { document.getElementById(`vp-${k}`).style.display = k === 'color' ? 'inline-block' : 'inline'; document.getElementById(`edit-${k}`).style.display = 'none'; }); const isMe = uid === window.GameLogic.currentUser.uid; document.getElementById("start-edit-btn").style.display = isMe ? "inline-block" : "none"; document.getElementById("save-edit-btn").style.display = "none"; viewProfileModal.style.display = "block"; }
 document.getElementById("start-edit-btn").addEventListener("click", () => { document.getElementById("start-edit-btn").style.display = "none"; document.getElementById("save-edit-btn").style.display = "inline-block"; ['name', 'color', 'birth', 'food', 'motto'].forEach(k => { let t = document.getElementById(`vp-${k}`); let i = document.getElementById(`edit-${k}`); if (k === 'color') { i.value = window.GameLogic.myProfile.color || '#c5a059'; } else if (k === 'name') { i.value = window.GameLogic.myProfile.name || '匿名'; } else { i.value = t.innerText === '未知' || t.innerText === '無' ? '' : t.innerText; } t.style.display = 'none'; i.style.display = 'inline-block'; }); });
-document.getElementById("save-edit-btn").addEventListener("click", () => { let newData = { name: document.getElementById("edit-name").value.trim() || '匿名', color: document.getElementById("edit-color").value || '#c5a059', birth: document.getElementById("edit-birth").value.trim() || '未知', food: document.getElementById("edit-food").value.trim() || '無', motto: document.getElementById("edit-motto").value.trim() || '無' }; update(ref(db, `users/${window.GameLogic.currentUser.uid}`), newData).then(() => { window.GameLogic.myProfile = { ...window.GameLogic.myProfile, ...newData }; if (window.GameLogic.currentScene === "cafe") { update(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { name: newData.name, color: newData.color }); } update(ref(db, `onlinePlayers/${window.GameLogic.currentUser.uid}`), { name: newData.name, color: newData.color }); showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); }); });
+document.getElementById("save-edit-btn").addEventListener("click", () => { let newData = { name: safePlayerName(document.getElementById("edit-name").value), color: safeColor(document.getElementById("edit-color").value), birth: cleanUserText(document.getElementById("edit-birth").value, 20, '未知'), food: cleanUserText(document.getElementById("edit-food").value, 20, '無'), motto: cleanUserText(document.getElementById("edit-motto").value, 60, '無') }; update(ref(db, `users/${window.GameLogic.currentUser.uid}`), newData).then(() => { window.GameLogic.myProfile = { ...window.GameLogic.myProfile, ...newData }; if (window.GameLogic.currentScene === "cafe") { update(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { name: newData.name, color: newData.color }); } update(ref(db, `onlinePlayers/${window.GameLogic.currentUser.uid}`), { name: newData.name, color: newData.color }); showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); }); });
 
 document.getElementById("send-btn").addEventListener("click", sendChat);
 window.addEventListener("keydown", (e) => { if (e.key === "Enter") { if (document.activeElement === chatInput) sendChat(); else if (document.activeElement === document.getElementById("pm-input")) window.sendPM(); } });
@@ -3702,7 +3813,62 @@ function sendBubble(msg) {
         if (path !== "") update(ref(db, path), { bubbleMsg: msg, bubbleTime: window.GameLogic.myProfile.bubbleTime }); 
     } 
 }
-function sendChat() { const msg = chatInput.value.trim(); if (msg !== "" && window.GameLogic.currentUser) { const now = new Date(); push(ref(db, 'chats'), { name: window.GameLogic.myProfile.name, msg: msg, date: now.toLocaleDateString('zh-TW', {month: '2-digit', day: '2-digit'}), time: now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute:'2-digit' }) }); sendBubble(msg); chatInput.value = ""; } }
+function sendChat() {
+    const msg = cleanUserText(chatInput.value, 120, '');
+    if (msg !== "" && window.GameLogic.currentUser) {
+        const now = new Date();
+        push(ref(db, 'chats'), {
+            name: safePlayerName(window.GameLogic.myProfile.name),
+            msg: msg,
+            date: now.toLocaleDateString('zh-TW', {month: '2-digit', day: '2-digit'}),
+            time: now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute:'2-digit' })
+        });
+        sendBubble(msg);
+        chatInput.value = "";
+    }
+}
+
+function listenToChat() {
+    onValue(ref(db, 'chats'), (snapshot) => {
+        const chatBox = document.getElementById("chat-box");
+        chatBox.innerHTML = "";
+        const chats = snapshot.val();
+
+        if (chats) {
+            let lastMsg = "";
+            let html = "";
+            let chatArray = Object.values(chats);
+
+            if (chatArray.length > 0) {
+                let latest = chatArray[chatArray.length - 1];
+                lastMsg = `${safePlayerName(latest.name)}：${cleanUserText(latest.msg, 120, '')}`;
+            }
+
+            chatArray.reverse().forEach(c => {
+                const safeName = escapeHTML(c.name, '匿名');
+                const safeMsg = escapeHTML(c.msg, '');
+                const safeDate = escapeHTML(c.date || '');
+                const safeTime = escapeHTML(c.time || '');
+
+                html += `<div style="margin-bottom: 4px;"><strong style="color:var(--mucha-gold);">${safeName}</strong>: ${safeMsg} <span style="font-size:10px; color:#bbb; margin-left:8px;">${safeDate} ${safeTime}</span></div>`;
+            });
+
+            chatBox.innerHTML = html;
+
+            const topBar = document.getElementById("top-notification-bar");
+            if (topBar && lastMsg) {
+                topBar.innerText = `💬 最新發言｜ ${lastMsg}`;
+            }
+
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    chatBox.scrollTop = 0;
+                }, 10);
+            });
+        }
+    });
+} 
+const now = new Date(); push(ref(db, 'chats'), { name: window.GameLogic.myProfile.name, msg: msg, date: now.toLocaleDateString('zh-TW', {month: '2-digit', day: '2-digit'}), time: now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute:'2-digit' }) }); sendBubble(msg); chatInput.value = ""; } }
 function listenToChat() { onValue(ref(db, 'chats'), (snapshot) => { const chatBox = document.getElementById("chat-box"); chatBox.innerHTML = ""; const chats = snapshot.val(); if (chats) { let lastMsg = ""; let html = ""; let chatArray = Object.values(chats); if (chatArray.length > 0) { let latest = chatArray[chatArray.length - 1]; lastMsg = `${latest.name}：${latest.msg}`; } chatArray.reverse().forEach(c => { html += `<div style="margin-bottom: 4px;"><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg} <span style="font-size:10px; color:#bbb; margin-left:8px;">${c.date||''} ${c.time||''}</span></div>`; }); chatBox.innerHTML = html; const topBar = document.getElementById("top-notification-bar"); if (topBar && lastMsg) { topBar.innerText = `💬 最新發言｜ ${lastMsg}`; } requestAnimationFrame(() => { setTimeout(() => { chatBox.scrollTop = 0; }, 10); }); } }); }
 
 document.getElementById("upload-memory-btn").onclick = () => { const fileInput = document.getElementById("memory-file"); const textInput = document.getElementById("memory-text"); const file = fileInput.files[0]; const text = textInput.value.trim(); if (!file && !text) return alert("請上傳圖片或填寫文字！"); if (file) { const reader = new FileReader(); reader.onload = e => { const img = new Image(); img.onload = () => { const cvs = document.createElement('canvas'); let w = img.width, h = img.height; if (w > 300) { h *= 300 / w; w = 300; } cvs.width = w; cvs.height = h; cvs.getContext('2d').drawImage(img, 0, 0, w, h); saveMemoryToDB(cvs.toDataURL('image/jpeg', 0.7), text); }; img.src = e.target.result; }; reader.readAsDataURL(file); } else saveMemoryToDB("", text); fileInput.value = ""; textInput.value = ""; };
@@ -4672,7 +4838,8 @@ window.joinPartyroom = function(roomId) {
                 let pd = window.PartyLogic.players[uid];
                 let hostLabel = uid === data.host ? '<div class="party-slot-host">房主</div>' : '';
                 let readyCls = pd.ready ? 'ready' : '';
-                grid.innerHTML += `<div class="party-slot ${readyCls}">${hostLabel}<img src="onion-sprite.png"><span>${pd.name}</span></div>`;
+                let safePartyName = escapeHTML(pd.name, '匿名');
+                grid.innerHTML += `<div class="party-slot ${readyCls}">${hostLabel}<img src="onion-sprite.png"><span>${safePartyName}</span></div>`;
             });
             for(let i=pUids.length; i<10; i++) { grid.innerHTML += `<div class="party-slot" style="opacity:0.3;">等待加入...</div>`; }
             
@@ -4838,7 +5005,7 @@ window.processPartyEventLogic = function(scene) {
                 let results = pUids.map(uid => {
                     let s = scoresObj[uid] || {hitCount:0, gotHitCount:0, ammo:0};
                     let score = (s.hitCount * 10) - (s.gotHitCount * 5) + (s.ammo * 0.1);
-                    return { uid: uid, name: window.PartyLogic.players[uid].name, hitCount: s.hitCount, gotHitCount: s.gotHitCount, ammo: s.ammo, score: score };
+                    return { uid: uid, name: escapeHTML(window.PartyLogic.players[uid].name, '匿名'), hitCount: s.hitCount, gotHitCount: s.gotHitCount, ammo: s.ammo, score: score };
                 });
                 results.sort((a, b) => {
                     if (b.score !== a.score) return b.score - a.score;
@@ -4905,7 +5072,9 @@ window.partyInviteTimer = setInterval(() => {
         if (inv.inviterUid !== window.GameLogic.currentUser.uid) {
             let remain = 60 - Math.floor((Date.now() - inv.time)/1000);
             if (remain > 0) {
-                html += `<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #555; padding:5px 0; color:#fff; font-size:13px;"><span>${inv.inviterName} 的派對</span><div><span style="color:#ff4444; font-weight:bold; margin-right:8px;">${remain}s</span><button class="btn-primary" style="padding:2px 8px; font-size:12px;" onclick="window.PartyLogic.pendingInviteId='${k}'; window.replyPartyInvite('yes')">加入</button></div></div>`;
+                let safeInviterName = escapeHTML(inv.inviterName, '匿名');
+        let inviteKey = encodeURIComponent(k);
+        html += `<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #555; padding:5px 0; color:#fff; font-size:13px;"><span>${safeInviterName} 的派對</span><div><span style="color:#ff4444; font-weight:bold; margin-right:8px;">${remain}s</span><button class="btn-primary" style="padding:2px 8px; font-size:12px;" onclick="window.PartyLogic.pendingInviteId=decodeURIComponent('${inviteKey}'); window.replyPartyInvite('yes')">加入</button></div></div>`;<div><span style="color:#ff4444; font-weight:bold; margin-right:8px;">${remain}s</span><button class="btn-primary" style="padding:2px 8px; font-size:12px;" onclick="window.PartyLogic.pendingInviteId='${k}'; window.replyPartyInvite('yes')">加入</button></div></div>`;
             }
         }
     });
