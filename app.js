@@ -743,20 +743,17 @@ window.confirmSummon = function(isYes) {
     sendBubble("已發出神聖的召喚...");
     window.startShrineRitual();
 };
-
 window.attemptJoinShrine = function() {
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        module.get(module.ref(window.GameLogic.db, 'shrineEvents/current')).then(snap => {
-            let ev = snap.val();
-            // 判斷是否已經有儀式在進行，且超過 60 秒或是狀態不是等待入座 (summoned)
-            if (ev && ev.state && ev.state !== 'finished' && ev.state !== 'none') {
-                let elapsed = Date.now() - (ev.startTime || 0);
-                if (elapsed > 60000 || ev.state !== 'summoned') {
-                    alert("已經正在進行儀式，請下次再來。"); return;
-                }
+    get(ref(window.GameLogic.db, 'shrineEvents/current')).then(snap => {
+        let ev = snap.val();
+        // 判斷是否已經有儀式在進行，且超過 60 秒或是狀態不是等待入座 (summoned)
+        if (ev && ev.state && ev.state !== 'finished' && ev.state !== 'none') {
+            let elapsed = Date.now() - (ev.startTime || 0);
+            if (elapsed > 60000 || ev.state !== 'summoned') {
+                alert("已經正在進行儀式，請下次再來。"); return;
             }
-            window.switchScene('shrine'); sendBubble("神龕發出耀眼的光芒...");
-        });
+        }
+        window.switchScene('shrine'); sendBubble("神龕發出耀眼的光芒...");
     });
 };
 
@@ -765,18 +762,16 @@ window.acceptSummon = function() {
     // 修正死碼：變數參照錯誤，原本的全域計時器為 globalSummonInterval
     if (window.globalSummonInterval) { clearInterval(window.globalSummonInterval); window.globalSummonInterval = null; }
     
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        module.get(module.ref(window.GameLogic.db, 'shrineEvents/current')).then(snap => {
-            let ev = snap.val();
-            // 雙重驗證：如果點擊按鈕時已經超時或儀式已經開始，則拒絕進入
-            if (ev && ev.state && ev.state !== 'finished' && ev.state !== 'none') {
-                let elapsed = Date.now() - (ev.startTime || 0);
-                if (elapsed > 60000 || ev.state !== 'summoned') {
-                    alert("已經正在進行儀式，請下次再來。"); return;
-                }
+    get(ref(window.GameLogic.db, 'shrineEvents/current')).then(snap => {
+        let ev = snap.val();
+        // 雙重驗證：如果點擊按鈕時已經超時或儀式已經開始，則拒絕進入
+        if (ev && ev.state && ev.state !== 'finished' && ev.state !== 'none') {
+            let elapsed = Date.now() - (ev.startTime || 0);
+            if (elapsed > 60000 || ev.state !== 'summoned') {
+                alert("已經正在進行儀式，請下次再來。"); return;
             }
-            window.startShrineRitual(); window.switchScene('shrine');
-        });
+        }
+        window.startShrineRitual(); window.switchScene('shrine');
     });
 };
 
@@ -1226,15 +1221,13 @@ function leaveShrine() {
             if (window.GameLogic.shrineEventData && window.GameLogic.shrineEventData.state !== 'finished') {
                 update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'finished' });
             }
-            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-                module.get(module.ref(window.GameLogic.db, 'droppedCoins')).then(snap => {
-                    let coins = snap.val() || {};
-                    let updates = {};
-                    Object.keys(coins).forEach(k => {
-                        if (k.startsWith('shrine_coin_')) updates[`droppedCoins/${k}`] = null;
-                    });
-                    if (Object.keys(updates).length > 0) module.update(module.ref(window.GameLogic.db), updates);
+            get(ref(window.GameLogic.db, 'droppedCoins')).then(snap => {
+                let coins = snap.val() || {};
+                let updates = {};
+                Object.keys(coins).forEach(k => {
+                    if (k.startsWith('shrine_coin_')) updates[`droppedCoins/${k}`] = null;
                 });
+                if (Object.keys(updates).length > 0) update(ref(window.GameLogic.db), updates);
             });
         }
         set(ref(db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), null); 
