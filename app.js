@@ -2353,7 +2353,22 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                     this.localPlayer.sprite.play('throw', true);
                     this.localPlayer.isThrowing = true;
                     this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
-                    update(ref(window.GameLogic.db, `serverEvents/waterThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), targetUid: targetUid || 'none', scene: this.sceneName });
+
+                    let waterActionTime = Date.now();
+
+                    if (this.sceneName === 'partyroom' && window.PartyLogic?.roomId) {
+                        update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), {
+                            action: 'throw',
+                            actionTime: waterActionTime,
+                            targetUid: targetUid || 'none'
+                        });
+                    }
+
+                    update(ref(window.GameLogic.db, `serverEvents/waterThrows/${window.GameLogic.currentUser.uid}`), {
+                        time: waterActionTime,
+                        targetUid: targetUid || 'none',
+                        scene: this.sceneName
+                    });
                     
                     if (targetUid && targetSprite) {
                         let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15);
@@ -2376,11 +2391,25 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                                 window.playSFX(this, 'powerdown07');
                                 this.time.delayedCall(150, () => { if (wb && wb.active) wb.destroy(); });
                                 if (targetType === 'player') {
-                                    if (this.sceneName === 'partyroom') {
-                                        update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/hits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
-                                    } else {
-                                        update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
-                                    }
+if (this.sceneName === 'partyroom') {
+    let hitActionTime = Date.now();
+
+    update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/hits/${targetUid}`), {
+        time: hitActionTime,
+        attacker: window.GameLogic.currentUser.uid
+    });
+
+    update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${targetUid}`), {
+        action: 'hit',
+        actionTime: hitActionTime,
+        targetUid: window.GameLogic.currentUser.uid
+    });
+} else {
+    update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), {
+        time: Date.now(),
+        attacker: window.GameLogic.currentUser.uid
+    });
+}
                                 } else if (targetType === 'dummy') {
                                     update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                                     for (let i = 0; i < 3; i++) {
@@ -2624,7 +2653,13 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
 
         this.hitListener = onValue(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 2000)) { if (this.localPlayer.isInvincible) return; this.localPlayer.isInvincible = true; this.localPlayer.isStunned = true; this.localPlayer.sprite.play('wet', true); let p = window.GameLogic.myProfile; let loss = Math.min(p.coins || 0, 15); p.coins -= loss; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins; let amounts = [12, 12, 11]; for (let i = 0; i < 3; i++) { let cx = this.localPlayer.sprite.x + Phaser.Math.Between(-40, 40); let cy = this.localPlayer.sprite.y + Phaser.Math.Between(-40, 40) + 20; import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => { module.push(module.ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: amounts[i] }); }); } this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); remove(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`)); } });
       
-      this.partyHitListener = onValue(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic?.roomId}/hits/${window.GameLogic.currentUser.uid}`), (snap) => {
+      this.localPlayer.sprite.play('fw-hit', true);
+
+update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), {
+    action: 'hit',
+    actionTime: data.time || Date.now(),
+    targetUid: data.attacker || 'none'
+});
             let data = snap.val();
             if (data && data.time && (Date.now() - data.time < 2000)) {
                 if (this.localPlayer.isInvincible) return;
@@ -2674,7 +2709,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
             }
         });
         
-        this.waterThrowsListener = onValue(ref(window.GameLogic.db, 'serverEvents/waterThrows'), (snap) => {
+        if (this.sceneName !== 'partyroom' && data && data.time && (Date.now() - data.time < 3000) && data.scene === this.sceneName) {
             let throws = snap.val() || {};
             for (let uid in throws) {
                 if (uid === window.GameLogic.currentUser.uid) continue;
@@ -3699,9 +3734,59 @@ if (dist < 30) {
                 if (uid === window.GameLogic.currentUser.uid) continue; if (!globalOnline[uid]) continue; 
                 let pd = playersData[uid]; pd.uid = uid; if (!this.otherPlayers[uid]) this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
                 let op = this.otherPlayers[uid]; let oldX = op.sprite.x; let oldY = op.sprite.y; op.sprite.x = Phaser.Math.Linear(op.sprite.x, pd.x, 0.2); op.sprite.y = Phaser.Math.Linear(op.sprite.y, pd.y, 0.2); let diffX = op.sprite.x - oldX; let diffY = op.sprite.y - oldY; let absX = Math.abs(diffX); let absY = Math.abs(diffY);
-                if (op.sprite.isStunned || op.sprite.isThrowing) { 
-                } else if (pd.isSweeping) { 
-                    op.sprite.play('clean', true); 
+                if (
+    this.sceneName === 'partyroom' &&
+    pd.action &&
+    pd.actionTime &&
+    Date.now() - pd.actionTime < 1500 &&
+    op.lastPartyActionTime !== pd.actionTime
+) {
+    op.lastPartyActionTime = pd.actionTime;
+
+    if (pd.action === 'throw') {
+        op.sprite.play('throw', true);
+        op.sprite.isThrowing = true;
+        window.playSFX(this, 'minimum_laser');
+
+        if (pd.targetUid && pd.targetUid !== 'none') {
+            let targetX = op.sprite.x + (op.sprite.flipX ? -200 : 200);
+            let targetY = op.sprite.y;
+
+            if (this.otherPlayers[pd.targetUid]) {
+                targetX = this.otherPlayers[pd.targetUid].sprite.x;
+                targetY = this.otherPlayers[pd.targetUid].sprite.y;
+            } else if (pd.targetUid === window.GameLogic.currentUser.uid) {
+                targetX = this.localPlayer.sprite.x;
+                targetY = this.localPlayer.sprite.y;
+            }
+
+            let wb = this.physics.add.sprite(op.sprite.x, op.sprite.y, 'water-ball-blast').setDepth(15).setDisplaySize(30, 30);
+            wb.play('wb-blast', true);
+            this.tweens.add({
+                targets: wb,
+                x: targetX,
+                y: targetY,
+                duration: 300,
+                onComplete: () => wb.destroy()
+            });
+        }
+
+        this.time.delayedCall(300, () => {
+            if (op.sprite && op.sprite.active) op.sprite.isThrowing = false;
+        });
+    } else if (pd.action === 'hit') {
+        op.sprite.isStunned = true;
+        op.sprite.play('fw-hit', true);
+
+        this.time.delayedCall(1000, () => {
+            if (op.sprite && op.sprite.active) op.sprite.isStunned = false;
+        });
+    }
+}
+
+if (op.sprite.isStunned || op.sprite.isThrowing) { 
+} else if (pd.isSweeping) { 
+    op.sprite.play('clean', true); 
                 } else if (pd.isSeated) {
                     if (isPurifying) {
                         if (evData.targetUid === uid) {
@@ -4816,7 +4901,17 @@ window.joinPartyroom = function(roomId) {
     document.getElementById('party-red-flash').style.display = 'none'; document.getElementById('party-red-flash').style.opacity = 0;
     
     const playerRef = ref(window.GameLogic.db, `partyRooms/${roomId}/players/${window.GameLogic.currentUser.uid}`);
-    set(playerRef, { x: 1920/2, y: 1080/2, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1, ready: false });
+    set(playerRef, {
+    x: 1920/2,
+    y: 1080/2,
+    name: window.GameLogic.myProfile.name,
+    color: window.GameLogic.myProfile.color,
+    level: window.GameLogic.myProfile.level || 1,
+    ready: false,
+    action: 'idle',
+    actionTime: 0,
+    targetUid: 'none'
+});
     onDisconnect(playerRef).remove();
     
     partyUnsubscribe = onValue(ref(window.GameLogic.db, `partyRooms/${roomId}`), snap => {
@@ -4907,7 +5002,13 @@ window.startPartyGame = function() {
         let rx = Phaser.Math.Between(0,1) ? Phaser.Math.Between(100, 300) : Phaser.Math.Between(1620, 1820);
         let ry = Phaser.Math.Between(0,1) ? Phaser.Math.Between(100, 300) : Phaser.Math.Between(780, 980);
         update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${uid}`), { x: rx, y: ry });
-        set(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${uid}`), { hitCount: 0, gotHitCount: 0, ammo: 666 });
+        update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${uid}`), {
+    x: rx,
+    y: ry,
+    action: 'idle',
+    actionTime: 0,
+    targetUid: 'none'
+});
     });
 };
 
