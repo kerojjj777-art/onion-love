@@ -2667,7 +2667,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                         }
                     }, 1000);
                 }
-                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => module.remove(module.ref(window.GameLogic.db, `serverEvents/planeHits/${window.GameLogic.currentUser.uid}`))); 
+                remove(ref(window.GameLogic.db, `serverEvents/planeHits/${window.GameLogic.currentUser.uid}`)); 
             } 
         });
 
@@ -2688,7 +2688,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                     window.GameLogic.planeCooldowns = window.GameLogic.planeCooldowns || {};
                     window.GameLogic.planeCooldowns[data.replierUid] = Date.now();
                 }
-                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => module.remove(module.ref(window.GameLogic.db, `serverEvents/inviteReplies/${window.GameLogic.currentUser.uid}`))); 
+                remove(ref(window.GameLogic.db, `serverEvents/inviteReplies/${window.GameLogic.currentUser.uid}`)); 
             }
         });
 
