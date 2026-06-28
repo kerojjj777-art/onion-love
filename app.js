@@ -2242,7 +2242,21 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                     this.localPlayer.sprite.play('throw', true);
                     this.localPlayer.isThrowing = true;
                     this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
-                    update(ref(window.GameLogic.db, `serverEvents/waterThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), targetUid: targetUid || 'none', scene: this.sceneName });
+                    const waterActionTime = Date.now();
+
+                    update(ref(window.GameLogic.db, `serverEvents/waterThrows/${window.GameLogic.currentUser.uid}`), {
+                        time: waterActionTime,
+                        targetUid: targetUid || 'none',
+                        scene: this.sceneName
+                    });
+
+                    if (this.sceneName === 'partyroom' && window.PartyLogic?.roomId) {
+                        update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), {
+                            action: 'throwWater',
+                            actionTime: waterActionTime,
+                            targetUid: targetUid || 'none'
+                        });
+                    }
                     
                     if (targetUid && targetSprite) {
                         let wb = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'water-ball-blast').setDepth(15);
@@ -2266,7 +2280,18 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                                 this.time.delayedCall(150, () => { if (wb && wb.active) wb.destroy(); });
                                 if (targetType === 'player') {
                                     if (this.sceneName === 'partyroom') {
-                                        update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/hits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                        const hitActionTime = Date.now();
+
+                                        update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/hits/${targetUid}`), {
+                                            time: hitActionTime,
+                                            attacker: window.GameLogic.currentUser.uid
+                                        });
+
+                                        update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${targetUid}`), {
+                                            action: 'hitWater',
+                                            actionTime: hitActionTime,
+                                            targetUid: window.GameLogic.currentUser.uid
+                                        });
                                     } else {
                                         update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                                     }
@@ -3588,7 +3613,27 @@ if (dist < 30) {
                 if (uid === window.GameLogic.currentUser.uid) continue; if (!globalOnline[uid]) continue; 
                 let pd = playersData[uid]; pd.uid = uid; if (!this.otherPlayers[uid]) this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
                 let op = this.otherPlayers[uid]; let oldX = op.sprite.x; let oldY = op.sprite.y; op.sprite.x = Phaser.Math.Linear(op.sprite.x, pd.x, 0.2); op.sprite.y = Phaser.Math.Linear(op.sprite.y, pd.y, 0.2); let diffX = op.sprite.x - oldX; let diffY = op.sprite.y - oldY; let absX = Math.abs(diffX); let absY = Math.abs(diffY);
-                if (op.sprite.isStunned || op.sprite.isThrowing) { 
+                if (pd.action && pd.actionTime && Date.now() - pd.actionTime < 1200) {
+                    if (op.lastActionTime !== pd.actionTime) {
+                        op.lastActionTime = pd.actionTime;
+
+                        if (pd.action === 'throwWater') {
+                            op.sprite.isThrowing = true;
+                            op.sprite.play('throw', true);
+                            this.time.delayedCall(300, () => {
+                                if (op.sprite && op.sprite.active) op.sprite.isThrowing = false;
+                            });
+                        }
+
+                        if (pd.action === 'hitWater') {
+                            op.sprite.isStunned = true;
+                            op.sprite.play('wet', true);
+                            this.time.delayedCall(1000, () => {
+                                if (op.sprite && op.sprite.active) op.sprite.isStunned = false;
+                            });
+                        }
+                    }
+                } else if (op.sprite.isStunned || op.sprite.isThrowing) { 
                 } else if (pd.isSweeping) { 
                     op.sprite.play('clean', true); 
                 } else if (pd.isSeated) {
