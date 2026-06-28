@@ -914,19 +914,29 @@ window.openMagicModal = function() {
 
 // 【新增】開發者一鍵測試：在交誼廳中央直接生成米米
 window.devSummonMimi = function() {
+    if (window.GameLogic.currentScene !== 'cafe') {
+        sendBubble("請先到洋蔥大廳再召喚米米！");
+        document.getElementById('dev-modal').style.display = 'none';
+        return;
+    }
+
     let pUids = Object.keys(window.GameLogic.cafePlayers || {}).filter(uid => window.GameLogic.onlinePlayers && window.GameLogic.onlinePlayers[uid]);
-    let requiredHp = Math.min(6, 2 + pUids.length);
+    let requiredHp = Math.min(6, 2 + Math.max(1, pUids.length));
+
+    let scene = window.GameLogic.phaserGame ? window.GameLogic.phaserGame.scene.getScene('MainScene') : null;
+    let playerSprite = scene && scene.localPlayer ? scene.localPlayer.sprite : null;
+    let spawnX = playerSprite ? Phaser.Math.Clamp(playerSprite.x - 260, 100, 1948) : 1024;
+    let spawnY = playerSprite ? Phaser.Math.Clamp(playerSprite.y, 100, 1948) : 1024;
     
-    // 繞過冷卻計時器，改為從地圖左側外緣隨機高度生成
     set(ref(window.GameLogic.db, 'cafeMimi'), {
         active: true,
-        x: -50,
-        y: Phaser.Math.Between(200, 1800),
+        x: spawnX,
+        y: spawnY,
         state: 'walk',
         hp: requiredHp,
-        playersInvolved: pUids.length,
+        playersInvolved: Math.max(1, pUids.length),
         stolenPool: 0,
-        flipX: false,
+        flipX: true,
         stolenUids: null
     }).then(() => {
         document.getElementById('dev-modal').style.display = 'none';
@@ -1920,8 +1930,10 @@ class MainScene extends Phaser.Scene {
             this.dummiesListener = onValue(ref(window.GameLogic.db, 'cafeDummies'), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.dummySprites[key]) { let dData = data[key]; let dummySprite = this.physics.add.sprite(dData.x, dData.y, 'dummy').setDepth(8); this.dummySprites[key] = dummySprite; } } for (let key in this.dummySprites) { if (!data[key]) { this.dummySprites[key].destroy(); delete this.dummySprites[key]; } } });
           this.mimiListener = onValue(ref(window.GameLogic.db, 'cafeMimi'), (snap) => {
                 let data = snap.val(); window.GameLogic.cafeMimiData = data;
-                if (data && data.active) {
-                   if (!this.mimiSprite) {
+                    if (data && data.active) {
+                    if (this.sceneName !== 'cafe') return;
+                    if (!this.localPlayer || !this.localPlayer.sprite) return;
+                    if (!this.mimiSprite) {
                         this.mimiSprite = this.physics.add.sprite(data.x, data.y, 'mimi-thief-walk').setDepth(11);
                         this.mimiNameBg = this.add.graphics().setDepth(12);
                         this.mimiNameText = this.add.text(0, 0, '鼠偷米米', { fontSize: '12px', color: '#ffcc00', fontStyle: 'bold' }).setOrigin(0.5).setDepth(12);
@@ -3297,8 +3309,10 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                         if (!nextSpawn || now > nextSpawn) {
                             let mimiData = window.GameLogic.cafeMimiData;
                             if (!mimiData || (!mimiData.active && mimiData.state !== 'down')) {
-                                let requiredHp = Math.min(6, 2 + pUids.length);
-                                update(ref(window.GameLogic.db, 'cafeMimi'), { active: true, x: -50, y: Phaser.Math.Between(200, 1800), state: 'walk', hp: requiredHp, playersInvolved: pUids.length, stolenPool: 0, flipX: false, stolenUids: null });
+                                                                let requiredHp = Math.min(6, 2 + Math.max(1, pUids.length));
+                                let spawnX = Phaser.Math.Clamp(px - 260, 100, 1948);
+                                let spawnY = Phaser.Math.Clamp(py, 100, 1948);
+                                update(ref(window.GameLogic.db, 'cafeMimi'), { active: true, x: spawnX, y: spawnY, state: 'walk', hp: requiredHp, playersInvolved: Math.max(1, pUids.length), stolenPool: 0, flipX: true, stolenUids: null });
                             }
                         }
                     });
