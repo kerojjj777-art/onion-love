@@ -1427,6 +1427,18 @@ class BootScene extends Phaser.Scene {
         this.load.audio('shrine-purify-fight', 'shrine-purify-fight.mp3');
         this.load.audio('shrine-purify-success-win', 'shrine-purify-success-win.mp3');
         this.load.audio('shrine-purify-success', 'shrine-purify-success.mp3');
+        // 領獎與勳章資源
+        this.load.image('gift-box-stay', 'gift-box-stay.png');
+        this.load.image('gift-box-open', 'gift-box-open.png');
+        this.load.image('ranking-medal-cleanking-no1.png', 'ranking-medal-cleanking-no1.png');
+        this.load.image('ranking-medal-cleanking-no2.png', 'ranking-medal-cleanking-no2.png');
+        this.load.image('ranking-medal-cleanking-no3.png', 'ranking-medal-cleanking-no3.png');
+        this.load.image('ranking-medal-cleanking-500ps.png', 'ranking-medal-cleanking-500ps.png');
+        this.load.image('ranking-medal-cleanking-1000ps.png', 'ranking-medal-cleanking-1000ps.png');
+        this.load.spritesheet('onion-show-off', 'onion-show-off.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.audio('reward-open-box', 'reward-open-box.mp3');
+        this.load.audio('reward-get-sounds', 'reward-get-sounds.mp3');
+        this.load.audio('onion-show-off-reward', 'onion-show-off-reward.mp3');
 
         // 新增：猜拳連擊按鈕音效與倒數、結算音效
         this.load.audio('playroom-figjt-buttom', 'playroom-figjt-buttom-sound.mp3');
@@ -1501,6 +1513,7 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'mimi-steal', frames: this.anims.generateFrameNumbers('mimi-thief-stealing'), frameRate: 12, repeat: -1 });
         this.anims.create({ key: 'mimi-laugh', frames: this.anims.generateFrameNumbers('mimi-laugh'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'mimi-down', frames: this.anims.generateFrameNumbers('mimi-thief-get-down'), frameRate: 10, repeat: 0 });
+        this.anims.create({ key: 'show-off', frames: this.anims.generateFrameNumbers('onion-show-off'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'trumpet-play', frames: this.anims.generateFrameNumbers('onion-trumpet'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'seat-idle', frames: this.anims.generateFrameNumbers('onion-seat-shrine'), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'purify-target', frames: this.anims.generateFrameNumbers('onion-got-purify'), frameRate: 8, repeat: -1 }); this.anims.create({ key: 'purify-magic', frames: this.anims.generateFrameNumbers('onion-doing-purify'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'charger-anim', frames: this.anims.generateFrameNumbers('sleep-charger'), frameRate: 8, repeat: -1 });
@@ -2346,7 +2359,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                     return; 
                 } 
             }
-            if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!"); let interacted = false; for (const key in this.furnitureSprites) { let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y); if (dist < 90) { if (key === 'fridge') document.getElementById('fridge-modal').style.display = 'block'; if (key.startsWith('memory')) document.getElementById('memory-modal').style.display = 'block'; if (key.includes('scoreboard')) { window.openLeaderboardModal(); interacted = true; break; } if (key === 'shrine') { window.attemptJoinShrine(); interacted = true; break; } } } if(!interacted) sendBubble("使用了 A 技能!");
+            if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!"); let interacted = false; for (const key in this.furnitureSprites) { let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y); if (dist < 120) { if (key.includes('giftbox')) { window.GameLogic.activeGiftBox = f; f.sprite.setTexture('gift-box-open'); window.playSFX(this, 'reward-open-box'); if (!f.glow) { f.glow = this.add.pointlight(f.sprite.x, f.sprite.y, 0xffd700, 180, 0.6).setDepth(4); this.tweens.add({ targets: f.glow, radius: 220, yoyo: true, repeat: -1, duration: 800 }); } f.glow.setVisible(true); window.openRewardModal(f); interacted = true; break; } if (key === 'fridge') { document.getElementById('fridge-modal').style.display = 'block'; interacted = true; break; } if (key.startsWith('memory')) { document.getElementById('memory-modal').style.display = 'block'; interacted = true; break; } if (key.includes('scoreboard')) { window.openLeaderboardModal(); interacted = true; break; } if (key === 'shrine') { window.attemptJoinShrine(); interacted = true; break; } } } if(!interacted) sendBubble("使用了 A 技能!");
         });
 
         window.closeQuickMenu = () => {
@@ -2761,6 +2774,29 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
         let particles = this.add.particles(x, y, 'fw-particle', { speed: { min: 100, max: 250 }, angle: { min: 0, max: 360 }, scale: { start: 1.5, end: 0 }, blendMode: 'ADD', tint: mixColors, lifespan: { min: 1000, max: 2000 }, gravityY: 100, quantity: 60 });
         particles.setDepth(200); particles.explode(); this.time.delayedCall(2000, () => particles.destroy());
     }
+    startShowOff(medalIcon, dateStr) {
+        this.localPlayer.isShowingOff = true;
+        this.localPlayer.sprite.setVelocity(0, 0);
+        this.localPlayer.sprite.play('show-off', true);
+        window.playSFX(this, 'onion-show-off-reward');
+        
+        if (this.showOffContainer) this.showOffContainer.destroy();
+        this.showOffContainer = this.add.container(this.localPlayer.sprite.x + 80, this.localPlayer.sprite.y - 40).setDepth(200);
+        
+        let medal = this.add.image(0, 0, medalIcon).setDisplaySize(120, 120);
+        let dateText = this.add.text(0, 70, dateStr, { fontSize: '14px', color: '#ffd700', fontStyle: 'bold', stroke: '#000', strokeThickness: 4 }).setOrigin(0.5);
+        this.showOffContainer.add([medal, dateText]);
+        
+        this.tweens.add({ targets: this.showOffContainer, y: this.showOffContainer.y - 15, yoyo: true, repeat: -1, duration: 1000, ease: 'Sine.easeInOut' });
+        
+        if (this.showOffEmitter) this.showOffEmitter.destroy();
+        this.showOffEmitter = this.add.particles(0, 0, 'fw-particle', {
+            x: { min: -60, max: 60 }, y: { min: -60, max: 60 },
+            speed: { min: 10, max: 30 }, scale: { start: 1, end: 0 },
+            tint: [0xffd700, 0xffffff], blendMode: 'ADD', lifespan: 800, frequency: 150
+        }).setDepth(199);
+        this.showOffEmitter.startFollow(this.showOffContainer);
+    }
     playGlobalFireworks() {
         window.playSFX(this, 'fireworks-in-the-sky'); let cam = this.cameras.main; let colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff, 0xff8800];
         for (let i = 0; i < 7; i++) { this.time.delayedCall(i * 500, () => { let x = cam.scrollX + Phaser.Math.Between(100, cam.width - 100); let y = cam.scrollY + Phaser.Math.Between(100, cam.height - 100); let mixColors = [Phaser.Utils.Array.GetRandom(colors), Phaser.Utils.Array.GetRandom(colors), Phaser.Utils.Array.GetRandom(colors)]; let emitter = this.add.particles(x, y, 'fw-particle', { speed: { min: 200, max: 450 }, angle: { min: 0, max: 360 }, scale: { start: 2, end: 0 }, blendMode: 'ADD', tint: mixColors, lifespan: { min: 1500, max: 3000 }, gravityY: 150, quantity: 100 }); emitter.setDepth(200); emitter.explode(); let flash = this.add.circle(x, y, 150, mixColors[0], 0.5).setDepth(199).setBlendMode('ADD'); this.tweens.add({ targets: flash, alpha: 0, scale: 2.5, duration: 600, onComplete: () => flash.destroy() }); this.time.delayedCall(3000, () => emitter.destroy()); }); }
@@ -2821,8 +2857,9 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
         } else { entity.bubbleContainer.setVisible(false); } 
     }
     createFurniture(key, data) { 
-        let imgKey = key.includes('scoreboard') ? 'hall-screen' : (key.includes('fridge') ? 'fridge' : (key.includes('shrine') ? 'shrine' : (key.includes('dummy') ? 'dummy' : (key.includes('bed') ? 'doghouse-bed' : (key === 'altar' ? 'shrine-altar' : (key.startsWith('seat_') ? 'shrine-seat' : 'memory')))))); 
+        let imgKey = key.includes('giftbox') ? 'gift-box-stay' : (key.includes('scoreboard') ? 'hall-screen' : (key.includes('fridge') ? 'fridge' : (key.includes('shrine') ? 'shrine' : (key.includes('dummy') ? 'dummy' : (key.includes('bed') ? 'doghouse-bed' : (key === 'altar' ? 'shrine-altar' : (key.startsWith('seat_') ? 'shrine-seat' : 'memory'))))))); 
         let f = { sprite: this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true) }; 
+        if (key.includes('giftbox')) f.sprite.setDisplaySize(120, 120);
         f.sprite.isLocked = data.locked; 
         if (imgKey === 'hall-screen') {
             f.sprite.setOrigin(0.5, 0.5); // 靜態圖不需播放動畫
@@ -3398,6 +3435,18 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
             });
         }
 
+        if (this.localPlayer.isShowingOff) {
+            if (document.activeElement.tagName !== 'INPUT' && (this.cursors.left.isDown || this.cursors.right.isDown || this.cursors.up.isDown || this.cursors.down.isDown || (uiScene && uiScene.joyStick && uiScene.joyStick.force > 0))) {
+                this.localPlayer.isShowingOff = false;
+                if (this.showOffContainer) { this.showOffContainer.destroy(); this.showOffContainer = null; }
+                if (this.showOffEmitter) { this.showOffEmitter.destroy(); this.showOffEmitter = null; }
+            } else {
+                this.localPlayer.sprite.setVelocity(0, 0); this.localPlayer.sprite.play('show-off', true);
+                this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
+                vx = 0; vy = 0; // 強制阻斷後續移動計算
+            }
+        }
+        
         if (this.localPlayer.isSweeping) {
             this.localPlayer.sprite.setVelocity(0, 0); this.localPlayer.sprite.play('clean', true); 
             this.qteProgress -= (delta * 0.02); if (this.qteProgress < 0) this.qteProgress = 0; this.updateQTEBar(this.qteProgress);
@@ -3487,7 +3536,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                         if (key === 'altar' && d < 150) { this._cachedMinDist = d; this._cachedPromptTarget = f.sprite; this._cachedPromptMsg = "按A召喚教友"; }
                         if (key.startsWith('seat_') && d < 150) { this._cachedMinDist = d; this._cachedPromptTarget = f.sprite; this._cachedPromptMsg = "按B入席"; }
                     } else {
-                        if (d < this._cachedMinDist) { this._cachedMinDist = d; this._cachedPromptTarget = f.sprite; if (key.includes('fridge')) this._cachedPromptMsg = "按A打開冰箱"; else if (key.includes('shrine')) this._cachedPromptMsg = "按A參拜神龕"; else if (key.includes('dummy')) this._cachedPromptMsg = "假人洋蔥 (裝飾中)"; else if (key.includes('bed')) this._cachedPromptMsg = "按A歐歐睏"; else if (key.includes('scoreboard')) this._cachedPromptMsg = "按A查看洋蔥王排行榜"; else this._cachedPromptMsg = "按A打開回憶錄"; }
+                        if (d < this._cachedMinDist) { this._cachedMinDist = d; this._cachedPromptTarget = f.sprite; if (key.includes('giftbox')) this._cachedPromptMsg = "按A領取週結算獎勵"; else if (key.includes('fridge')) this._cachedPromptMsg = "按A打開冰箱"; else if (key.includes('shrine')) this._cachedPromptMsg = "按A參拜神龕"; else if (key.includes('dummy')) this._cachedPromptMsg = "假人洋蔥 (裝飾中)"; else if (key.includes('bed')) this._cachedPromptMsg = "按A歐歐睏"; else if (key.includes('scoreboard')) this._cachedPromptMsg = "按A查看洋蔥王排行榜"; else this._cachedPromptMsg = "按A打開回憶錄"; }
                     }
                 }
                 for (let t of this.trashes) { if (!t.active) continue; let d = Phaser.Math.Distance.Between(px, py, t.x, t.y); if (d < this._cachedMinDist) { this._cachedMinDist = d; this._cachedPromptTarget = t; this._cachedPromptMsg = "按B使出掃地"; this.closestTrash = t; } }
@@ -3702,7 +3751,7 @@ function initPhaser() { const config = { type: Phaser.AUTO, parent: 'phaser-app'
 function openFurnitureCatalog() {
     const modal = document.getElementById('furniture-catalog-modal'); const list = document.getElementById('catalog-list'); const title = document.getElementById('catalog-title'); list.innerHTML = "";
     let items = [];
-    if (window.GameLogic.currentScene === "cafe") { title.innerText = "📦 大廳家俱目錄"; items = [ { key: 'scoreboard', name: '🏆 戰況看板', img: 'hall-screen-in-list.png' }, { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' }, { key: 'memory', name: '📖 洋蔥回憶錄', img: 'memory.png' }, { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' }, { key: 'dummy', name: '🧍 假人洋蔥', img: 'dummy.png' } ]; }
+    if (window.GameLogic.currentScene === "cafe") { title.innerText = "📦 大廳家俱目錄"; items = [ { key: 'giftbox', name: '🎁 領獎大粉蔥', img: 'gift-box-stay.png' }, { key: 'scoreboard', name: '🏆 戰況看板', img: 'hall-screen-in-list.png' }, { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' }, { key: 'memory', name: '📖 洋蔥回憶錄', img: 'memory.png' }, { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' }, { key: 'dummy', name: '🧍 假人洋蔥', img: 'dummy.png' } ]; }
     else if (window.GameLogic.currentScene === "doghouse") { title.innerText = "🏠 房間家具擺設"; items = [ { key: 'bed', name: '🛏️ 狗窩床鋪', img: 'doghouse-bed.png' } ]; }
     else if (window.GameLogic.currentScene === "shrine") { 
         title.innerText = "☯️ 神龕法器目錄"; 
@@ -3765,7 +3814,7 @@ function openFurnitureCatalog() {
 }
 
 document.getElementById("view-profile-btn").addEventListener("click", async () => { actionMenu.style.display = "none"; const targetUid = actionMenu.dataset.uid; if (targetUid === window.GameLogic.currentUser.uid) showProfileModal(window.GameLogic.myProfile, targetUid); else { const snap = await get(ref(db, `users/${targetUid}`)); if (snap.exists()) showProfileModal(snap.val(), targetUid); } });
-function showProfileModal(p, uid) { profileViewingUid = uid; document.getElementById("vp-level").innerText = p.level || 1; document.getElementById("vp-exp").innerText = p.exp || 0; document.getElementById("vp-coins").innerText = p.coins || 0; document.getElementById("vp-sweeps").innerText = p.sweeps || 0; document.getElementById("vp-name").innerText = p.name || '匿名'; document.getElementById("vp-color").style.backgroundColor = p.color || '#c5a059'; document.getElementById("vp-birth").innerText = p.birth || '未知'; document.getElementById("vp-food").innerText = p.food || '無'; document.getElementById("vp-motto").innerText = p.motto || '無'; ['name', 'color', 'birth', 'food', 'motto'].forEach(k => { document.getElementById(`vp-${k}`).style.display = k === 'color' ? 'inline-block' : 'inline'; document.getElementById(`edit-${k}`).style.display = 'none'; }); const isMe = uid === window.GameLogic.currentUser.uid; document.getElementById("start-edit-btn").style.display = isMe ? "inline-block" : "none"; document.getElementById("save-edit-btn").style.display = "none"; viewProfileModal.style.display = "block"; }
+function showProfileModal(p, uid) { profileViewingUid = uid; document.getElementById("vp-level").innerText = p.level || 1; document.getElementById("vp-exp").innerText = p.exp || 0; document.getElementById("vp-coins").innerText = p.coins || 0; document.getElementById("vp-sweeps").innerText = p.sweeps || 0; document.getElementById("vp-name").innerText = p.name || '匿名'; document.getElementById("vp-color").style.backgroundColor = p.color || '#c5a059'; document.getElementById("vp-birth").innerText = p.birth || '未知'; document.getElementById("vp-food").innerText = p.food || '無'; document.getElementById("vp-motto").innerText = p.motto || '無'; ['name', 'color', 'birth', 'food', 'motto'].forEach(k => { document.getElementById(`vp-${k}`).style.display = k === 'color' ? 'inline-block' : 'inline'; document.getElementById(`edit-${k}`).style.display = 'none'; }); const isMe = uid === window.GameLogic.currentUser.uid; document.getElementById("start-edit-btn").style.display = isMe ? "inline-block" : "none"; document.getElementById("save-edit-btn").style.display = "none"; let viewMedalsBtn = document.getElementById("view-medals-btn"); if(!viewMedalsBtn) { viewMedalsBtn = document.createElement("button"); viewMedalsBtn.id = "view-medals-btn"; viewMedalsBtn.className = "btn-primary"; viewMedalsBtn.innerText = "我的戰績"; viewMedalsBtn.onclick = window.openMedalList; document.querySelector("#view-profile-modal .modal-btns").insertBefore(viewMedalsBtn, document.getElementById("start-edit-btn")); } viewMedalsBtn.style.display = isMe ? "inline-block" : "none"; viewProfileModal.style.display = "block"; }
 document.getElementById("start-edit-btn").addEventListener("click", () => { document.getElementById("start-edit-btn").style.display = "none"; document.getElementById("save-edit-btn").style.display = "inline-block"; ['name', 'color', 'birth', 'food', 'motto'].forEach(k => { let t = document.getElementById(`vp-${k}`); let i = document.getElementById(`edit-${k}`); if (k === 'color') { i.value = window.GameLogic.myProfile.color || '#c5a059'; } else if (k === 'name') { i.value = window.GameLogic.myProfile.name || '匿名'; } else { i.value = t.innerText === '未知' || t.innerText === '無' ? '' : t.innerText; } t.style.display = 'none'; i.style.display = 'inline-block'; }); });
 document.getElementById("save-edit-btn").addEventListener("click", () => { let newData = { name: document.getElementById("edit-name").value.trim() || '匿名', color: document.getElementById("edit-color").value || '#c5a059', birth: document.getElementById("edit-birth").value.trim() || '未知', food: document.getElementById("edit-food").value.trim() || '無', motto: document.getElementById("edit-motto").value.trim() || '無' }; update(ref(db, `users/${window.GameLogic.currentUser.uid}`), newData).then(() => { window.GameLogic.myProfile = { ...window.GameLogic.myProfile, ...newData }; if (window.GameLogic.currentScene === "cafe") { update(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { name: newData.name, color: newData.color }); } update(ref(db, `onlinePlayers/${window.GameLogic.currentUser.uid}`), { name: newData.name, color: newData.color }); showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); }); });
 
@@ -5019,3 +5068,248 @@ partyInvitesUnsubscribe = onValue(ref(window.GameLogic.db, 'serverEvents/partyIn
         }
     });
 });
+
+// ====== 新增：領獎系統與勳章展示 UI ======
+const rewardStyles = `
+<style>
+    .reward-bg { background: #d32f2f !important; border: 4px solid #ffd700 !important; box-shadow: 0 0 20px #ffcc00, inset 0 0 30px #8b0000 !important; overflow: hidden; }
+    .reward-neon-btn { background: #ffd700 !important; color: #b8860b !important; font-size: 18px; font-weight: bold; border: 2px solid #fff; box-shadow: 0 0 10px #ffd700, 0 0 20px #ffaa00; text-shadow: 0 0 5px #fff; border-radius: 8px; transition: 0.2s; }
+    .reward-neon-btn:hover { transform: scale(1.05); box-shadow: 0 0 20px #fff, 0 0 30px #ffaa00; }
+    .reward-grid { display: grid; grid-template-columns: 1fr; gap: 10px; max-height: 40vh; overflow-y: auto; padding-right: 5px; z-index: 10; position: relative; }
+    .reward-item { background: rgba(255,255,255,0.9); border: 2px solid #ffd700; border-radius: 8px; padding: 10px; display: flex; align-items: center; justify-content: space-between; position: relative; }
+    .reward-item.claimed { background: #555; border-color: #888; filter: grayscale(100%); }
+    .reward-claimed-text { color: #00ff00; font-weight: bold; text-shadow: 0 0 5px #000; font-size: 16px; display: none; }
+    .reward-item.claimed .reward-claimed-text { display: block; }
+    .reward-item.claimed button { display: none; }
+    @keyframes reward-fall { 0% { transform: translateY(-50px) rotate(0deg); opacity: 1; } 100% { transform: translateY(120vh) rotate(360deg); opacity: 0; } }
+    @keyframes confetti-burst-left { 0% { transform: translate(0, 0) scale(0); opacity: 1; } 100% { transform: translate(-100px, -100px) scale(1.5); opacity: 0; } }
+    @keyframes confetti-burst-right { 0% { transform: translate(0, 0) scale(0); opacity: 1; } 100% { transform: translate(100px, -100px) scale(1.5); opacity: 0; } }
+    #medal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-height: 50vh; overflow-y: auto; }
+    .medal-item { display: flex; flex-direction: column; align-items: center; background: rgba(197, 160, 89, 0.2); padding: 10px; border-radius: 8px; cursor: pointer; border: 1px solid var(--mucha-gold); }
+    .medal-item:hover { background: rgba(197, 160, 89, 0.4); }
+</style>
+<div id="reward-main-modal" class="modal reward-bg" style="z-index: 300;">
+    <div id="reward-effects-container1" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0;"></div>
+    <h2 style="color:#ffd700; text-shadow: 0 0 10px #ff0000; position:relative; z-index:1;">🎁 領取派獎</h2>
+    <div style="position:relative; z-index:1; display:flex; flex-direction:column; gap:15px; margin-top:20px;">
+        <button class="reward-neon-btn" style="padding: 15px;" onclick="window.openWeeklyRewardDetail()">本週掃地王</button>
+        <button class="btn-secondary" style="padding: 10px;" onclick="window.closeRewardModal()">關閉</button>
+    </div>
+</div>
+<div id="reward-detail-modal" class="modal reward-bg" style="z-index: 310; width: 90%; max-width: 400px;">
+    <div id="reward-effects-container2" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0;"></div>
+    <div style="position:relative; z-index:1;">
+        <h3 style="color:#ffd700; margin-top:0; border-bottom: 2px dashed #ffd700;">本週掃地王</h3>
+        <div style="background:rgba(0,0,0,0.5); padding:10px; border-radius:8px; margin-bottom:10px; text-align:left; color:#fff; font-size:13px;">
+            <strong>【派獎規則】</strong><br>結算至每週一 00:00。<br>第1名: 10000幣+金勳章 / 第2名: 5000幣+銀勳章 / 第3名: 3000幣+銅勳章 / 參加獎: 500幣。<br>滿500次加贈5000幣及專屬勳章(滿1000次另有高階勳章)。<br>未領取將於一週後消失。
+        </div>
+        <div style="color:#fff; font-size:16px; font-weight:bold; margin-bottom:15px; text-shadow: 0 0 5px #000;">你的排名: <span id="reward-my-rank" style="color:#00ff00;">計算中...</span></div>
+        <div id="reward-items-grid" class="reward-grid"></div>
+        <button class="btn-secondary" style="width:100%; margin-top:15px; padding:10px;" onclick="document.getElementById('reward-detail-modal').style.display='none'">返回</button>
+    </div>
+</div>
+<div id="reward-congrats-overlay" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:9999; pointer-events:none; text-align:center;">
+    <div id="congrats-text" style="font-size:36px; color:#ffd700; font-weight:bold; text-shadow: 0 0 10px #ff0000, 0 0 20px #fff; animation: shake-gold-text 0.5s infinite;">恭喜獲得！</div>
+    <div id="congrats-confetti-left" style="position:absolute; top:50%; left:-50px; font-size:40px;">🎉</div>
+    <div id="congrats-confetti-right" style="position:absolute; top:50%; right:-50px; font-size:40px;">🎊</div>
+</div>
+
+<div id="medal-list-modal" class="modal" style="z-index: 280; width: 90%; max-width: 400px;">
+    <h3 style="color:var(--mucha-green); margin-top:0;">🎖️ 我的戰績</h3>
+    <div id="medal-grid"></div>
+    <button class="close-modal-btn btn-secondary" style="width:100%; margin-top:15px;" onclick="document.getElementById('medal-list-modal').style.display='none'">關閉</button>
+</div>
+<div id="medal-detail-modal" class="modal" style="z-index: 290; text-align:center; background:#111; color:#fff; border: 3px solid var(--mucha-gold);">
+    <h3 id="md-event-name" style="color:#ffd700; margin-top:0;"></h3>
+    <img id="md-icon" src="" style="width:150px; height:150px; object-fit:contain; filter:drop-shadow(0 0 10px #ffd700); margin: 15px 0;">
+    <div id="md-date" style="color:#aaa; font-size:14px; margin-bottom:15px;"></div>
+    <div style="display:flex; gap:10px;">
+        <button class="btn-primary" style="flex:1; background:#d9534f; font-weight:bold; border:2px solid #ffcc00;" onclick="window.triggerShowOff()">炫耀</button>
+        <button class="btn-secondary" style="flex:1;" onclick="document.getElementById('medal-detail-modal').style.display='none'">關閉</button>
+    </div>
+</div>
+`;
+document.getElementById('app-container').insertAdjacentHTML('beforeend', rewardStyles);
+
+window.openRewardModal = function(furnitureObj) {
+    window.GameLogic.activeGiftBox = furnitureObj;
+    document.getElementById('reward-main-modal').style.display = 'block';
+    
+    ['reward-effects-container1', 'reward-effects-container2'].forEach(id => {
+        let container = document.getElementById(id);
+        if(!container) return;
+        container.innerHTML = '';
+        let emojis = ['💵','💰','💶','💷','💎','🤑','🧧'];
+        for(let i=0; i<25; i++) {
+            let emj = document.createElement('div');
+            emj.innerText = emojis[Math.floor(Math.random()*emojis.length)];
+            emj.style.cssText = `position:absolute; top:-50px; left:${Math.random()*100}%; font-size:${20+Math.random()*15}px; animation: reward-fall ${2+Math.random()*3}s linear infinite; opacity:0.8; z-index:0;`;
+            container.appendChild(emj);
+            let particle = document.createElement('div');
+            particle.style.cssText = `position:absolute; top:-50px; left:${Math.random()*100}%; width:4px; height:12px; background:#ffd700; box-shadow:0 0 10px #ffcc00; animation: reward-fall ${1+Math.random()*2}s linear infinite; z-index:0;`;
+            container.appendChild(particle);
+        }
+    });
+};
+
+window.closeRewardModal = function() {
+    document.getElementById('reward-main-modal').style.display = 'none';
+    document.getElementById('reward-detail-modal').style.display = 'none';
+    if (window.GameLogic.activeGiftBox) {
+        window.GameLogic.activeGiftBox.sprite.setTexture('gift-box-stay');
+        if (window.GameLogic.activeGiftBox.glow) window.GameLogic.activeGiftBox.glow.setVisible(false);
+        window.GameLogic.activeGiftBox = null;
+    }
+};
+
+window.openWeeklyRewardDetail = async function() {
+    document.getElementById('reward-detail-modal').style.display = 'block';
+    let lastWeekId = window.getWeekId(-1);
+    let uid = window.GameLogic.currentUser.uid;
+    let grid = document.getElementById('reward-items-grid');
+    grid.innerHTML = '<div style="color:#fff; text-align:center;">結算中...</div>';
+    
+    let [sweepSnap, rewardSnap] = await Promise.all([
+        get(ref(window.GameLogic.db, `weeklySweeps/${lastWeekId}`)),
+        get(ref(window.GameLogic.db, `users/${uid}/weeklyRewards/${lastWeekId}`))
+    ]);
+    
+    let sweepsData = sweepSnap.val() || {};
+    let sorted = Object.entries(sweepsData).map(([k, v]) => ({uid: k, ...v})).sort((a,b) => b.count - a.count);
+    let myRankIndex = sorted.findIndex(p => p.uid === uid);
+    let mySweeps = myRankIndex >= 0 ? sorted[myRankIndex].count : 0;
+    
+    let rankText = myRankIndex === 0 ? '🏆 第 1 名' : (myRankIndex === 1 ? '🥈 第 2 名' : (myRankIndex === 2 ? '🥉 第 3 名' : (myRankIndex === -1 ? '未參賽' : `第 ${myRankIndex + 1} 名`)));
+    document.getElementById('reward-my-rank').innerText = `${rankText} (掃了 ${mySweeps} 次)`;
+    
+    let myRewards = rewardSnap.exists() ? rewardSnap.val() : [];
+    
+    // 初次載入，生成該週專屬獎勵快取
+    if (!rewardSnap.exists() && myRankIndex >= 0) {
+        if (myRankIndex === 0) myRewards.push({ id: 'rank', type: 'both', coins: 10000, medal: 'ranking-medal-cleanking-no1.png', name: '掃地王第一名勳章', claimed: false });
+        else if (myRankIndex === 1) myRewards.push({ id: 'rank', type: 'both', coins: 5000, medal: 'ranking-medal-cleanking-no2.png', name: '掃地王第二名勳章', claimed: false });
+        else if (myRankIndex === 2) myRewards.push({ id: 'rank', type: 'both', coins: 3000, medal: 'ranking-medal-cleanking-no3.png', name: '掃地王第三名勳章', claimed: false });
+        else myRewards.push({ id: 'rank', type: 'coin', coins: 500, name: '參加獎', claimed: false });
+        
+        if (mySweeps >= 500) {
+            let mult = Math.floor(mySweeps / 500);
+            myRewards.push({ id: 'sweep_coins', type: 'coin', coins: mult * 5000, name: `滿500次倍數獎金 x${mult}`, claimed: false });
+            myRewards.push({ id: 'sweep_500', type: 'medal', medal: 'ranking-medal-cleanking-500ps.png', name: '猛掃五百片蔥皮勳章', claimed: false });
+        }
+        if (mySweeps >= 1000) {
+            myRewards.push({ id: 'sweep_1000', type: 'medal', medal: 'ranking-medal-cleanking-1000ps.png', name: '猛掃一千片蔥皮勳章', claimed: false });
+        }
+        await update(ref(window.GameLogic.db, `users/${uid}/weeklyRewards/${lastWeekId}`), myRewards);
+    }
+    
+    window.currentViewingRewards = myRewards;
+    window.currentViewingWeekId = lastWeekId;
+    
+    if (myRewards.length === 0) {
+        grid.innerHTML = '<div style="color:#aaa; text-align:center;">上週無可領取獎勵，這週繼續加油！</div>';
+        return;
+    }
+    
+    let html = '';
+    myRewards.forEach((r, idx) => {
+        let isClaimed = r.claimed ? 'claimed' : '';
+        let iconHtml = '';
+        if (r.medal) iconHtml += `<img src="${r.medal}" style="width:40px; height:40px; margin-right:5px; object-fit:contain;">`;
+        if (r.coins) iconHtml += `<span style="color:#d4af37; font-weight:bold; font-size:16px;">💰 ${r.coins}</span>`;
+        
+        html += `<div class="reward-item ${isClaimed}" id="rew-item-${idx}">
+            <div style="display:flex; align-items:center;">${iconHtml}</div>
+            <div style="flex:1; margin-left:10px; color:#333; font-weight:bold; font-size:13px; text-align:left;">${r.name}</div>
+            <button class="btn-primary reward-neon-btn" style="padding:6px 12px; font-size:14px;" onclick="window.claimWeeklyReward(${idx})">領取</button>
+            <div class="reward-claimed-text">已領取</div>
+        </div>`;
+    });
+    grid.innerHTML = html;
+};
+
+window.claimWeeklyReward = async function(idx) {
+    let r = window.currentViewingRewards[idx];
+    if (r.claimed) return;
+    
+    let uid = window.GameLogic.currentUser.uid;
+    r.claimed = true;
+    
+    let updates = {};
+    updates[`users/${uid}/weeklyRewards/${window.currentViewingWeekId}/${idx}/claimed`] = true;
+    
+    if (r.coins) {
+        window.GameLogic.myProfile.coins = (window.GameLogic.myProfile.coins || 0) + r.coins;
+        updates[`users/${uid}/coins`] = window.GameLogic.myProfile.coins;
+        let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
+    }
+    
+    if (r.medal) {
+        let newMedal = { id: r.id + '_' + Date.now(), date: new Date().toLocaleDateString('zh-TW'), eventName: '本週掃地王', name: r.name, icon: r.medal };
+        let currentMedals = window.GameLogic.myProfile.medals || [];
+        currentMedals.push(newMedal);
+        window.GameLogic.myProfile.medals = currentMedals;
+        updates[`users/${uid}/medals`] = currentMedals;
+    }
+    
+    await update(ref(window.GameLogic.db), updates);
+    
+    document.getElementById(`rew-item-${idx}`).classList.add('claimed');
+    
+    if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) {
+        let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
+        if (ms) window.playSFX(ms, 'reward-get-sounds');
+    }
+    
+    let overlay = document.getElementById('reward-congrats-overlay');
+    document.getElementById('congrats-text').innerText = `恭喜獲得 ${r.name}！`;
+    overlay.style.display = 'block';
+    
+    let cl = document.getElementById('congrats-confetti-left');
+    let cr = document.getElementById('congrats-confetti-right');
+    cl.style.animation = 'none'; cr.style.animation = 'none';
+    void cl.offsetWidth; void cr.offsetWidth;
+    cl.style.animation = 'confetti-burst-left 1s ease-out forwards';
+    cr.style.animation = 'confetti-burst-right 1s ease-out forwards';
+    
+    setTimeout(() => { overlay.style.display = 'none'; }, 2000);
+};
+
+window.openMedalList = function() {
+    document.getElementById('view-profile-modal').style.display = 'none';
+    let medals = window.GameLogic.myProfile.medals || [];
+    let grid = document.getElementById('medal-grid');
+    if (medals.length === 0) {
+        grid.innerHTML = '<div style="grid-column: span 3; text-align:center; color:#888;">尚未獲得任何戰績勳章</div>';
+    } else {
+        let html = '';
+        medals.reverse().forEach((m, idx) => {
+            html += `<div class="medal-item" onclick="window.showMedalDetail(${idx})">
+                <img src="${m.icon}" style="width:50px; height:50px; object-fit:contain; filter:drop-shadow(0 0 5px var(--mucha-gold));">
+                <span style="font-size:10px; color:var(--mucha-brown); font-weight:bold; margin-top:5px;">${m.date}</span>
+            </div>`;
+        });
+        grid.innerHTML = html;
+    }
+    document.getElementById('medal-list-modal').style.display = 'block';
+};
+
+window.showMedalDetail = function(idx) {
+    let m = [...(window.GameLogic.myProfile.medals || [])].reverse()[idx];
+    if (!m) return;
+    window.currentShowOffMedal = m;
+    document.getElementById('md-event-name').innerText = m.eventName + ' - ' + m.name;
+    document.getElementById('md-icon').src = m.icon;
+    document.getElementById('md-date').innerText = `系統派發日期：${m.date}`;
+    document.getElementById('medal-detail-modal').style.display = 'block';
+};
+
+window.triggerShowOff = function() {
+    let m = window.currentShowOffMedal;
+    if (!m) return;
+    window.clearAllModals();
+    if (window.GameLogic.phaserGame) {
+        let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
+        if (ms && ms.startShowOff) ms.startShowOff(m.icon, m.date);
+    }
+};
+// ====== 新增邏輯結束 ======
