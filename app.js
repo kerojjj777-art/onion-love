@@ -1917,11 +1917,12 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
 
                         let p = window.GameLogic.myProfile; let amt = Math.min(Phaser.Math.Between(20, 100), p.coins || 0); p.coins -= amt;
                         let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins;
-                        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-                            module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins });
-                            module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { stolenPool: (data.stolenPool || 0) + amt });
-                            module.update(module.ref(window.GameLogic.db, `cafeMimi/stolenUids`), { [window.GameLogic.currentUser.uid]: true });
-                        });
+                        
+                        let updates = {};
+                        updates[`users/${window.GameLogic.currentUser.uid}/coins`] = p.coins;
+                        updates[`cafeMimi/stolenPool`] = (data.stolenPool || 0) + amt;
+                        updates[`cafeMimi/stolenUids/${window.GameLogic.currentUser.uid}`] = true;
+                        update(ref(window.GameLogic.db), updates);
                         
                         // 修正：調整玩家被打劫後的懲罰時間，僵直無法行動與受傷動畫維持3秒，閃爍無敵狀態縮短為2秒
                         sendBubble(`被老鼠偷走了 ${amt} 元！`); 
@@ -3230,17 +3231,15 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
             if (isHost) {
                 if (!this.mimiCheckTime || time - this.mimiCheckTime > 3000) {
                     this.mimiCheckTime = time;
-                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-                        module.get(module.ref(window.GameLogic.db, 'serverEvents/mimiNextSpawn')).then(snap => {
-                            let nextSpawn = snap.val(); let now = Date.now();
-                            if (!nextSpawn || now > nextSpawn) {
-                                let mimiData = window.GameLogic.cafeMimiData;
-                                if (!mimiData || (!mimiData.active && mimiData.state !== 'down')) {
-                                    let requiredHp = Math.min(6, 2 + pUids.length);
-                                    module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { active: true, x: -50, y: Phaser.Math.Between(200, 1800), state: 'walk', hp: requiredHp, playersInvolved: pUids.length, stolenPool: 0, flipX: false, stolenUids: null });
-                                }
+                    get(ref(window.GameLogic.db, 'serverEvents/mimiNextSpawn')).then(snap => {
+                        let nextSpawn = snap.val(); let now = Date.now();
+                        if (!nextSpawn || now > nextSpawn) {
+                            let mimiData = window.GameLogic.cafeMimiData;
+                            if (!mimiData || (!mimiData.active && mimiData.state !== 'down')) {
+                                let requiredHp = Math.min(6, 2 + pUids.length);
+                                update(ref(window.GameLogic.db, 'cafeMimi'), { active: true, x: -50, y: Phaser.Math.Between(200, 1800), state: 'walk', hp: requiredHp, playersInvolved: pUids.length, stolenPool: 0, flipX: false, stolenUids: null });
                             }
-                        });
+                        }
                     });
                 }
                 
@@ -3343,7 +3342,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
             } else {
                 // 如果房間內已無人，清除米米
                 if (pUids.length === 0 && window.GameLogic.cafeMimiData && window.GameLogic.cafeMimiData.active) {
-                    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => module.update(module.ref(window.GameLogic.db, 'cafeMimi'), { active: false }));
+                    update(ref(window.GameLogic.db, 'cafeMimi'), { active: false });
                 }
             }
         }
