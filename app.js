@@ -1254,9 +1254,29 @@ function checkShrineVotingTrigger() {
     } 
 }
 
+// 新增：全域 UI 大掃除函式，防止場景切換時的 DOM 殘留與 Memory Leak
+window.clearAllModals = function() {
+    // 1. 關閉所有共用 Modal 類別
+    document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+    
+    // 2. 關閉特定獨立或脫離文件流的 UI
+    const standaloneUIs = [
+        'spam-ui', 'party-red-flash', 'rps-modal', 'party-waiting-modal', 
+        'action-menu', 'quick-select-menu', 'magic-menu-blocker', 
+        'ingame-confirm', 'purchase-success-msg', 'fullscreen-viewer'
+    ];
+    standaloneUIs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+};
+
 function switchScene(sceneName, extraData = null) {
     if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if (scene) window.playSFX(scene, 'jump04'); }
     
+    // 切換場景時，強制清空所有浮動視窗與特效 UI
+    window.clearAllModals();
+
     if (sceneName !== 'doghouse') {
     if (window.GameLogic.myProfile && window.GameLogic.myProfile.sleepStartTime > 0) {
         window.GameLogic.myProfile.sleepStartTime = 0; 
