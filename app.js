@@ -3534,7 +3534,9 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                     this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
                 }
                 let absX = Math.abs(vx); let absY = Math.abs(vy); if (absX < 1) vx = 0; if (absY < 1) vy = 0;
-                if (vx === 0 && vy === 0) { this.localPlayer.sprite.play('idle', true); } else if (absX >= absY) { this.localPlayer.sprite.setFlipX(vx < 0); this.localPlayer.sprite.play('walk', true); } else { if (vy < 0) { this.localPlayer.sprite.play('walk-up', true); } else { this.localPlayer.sprite.play('walk-down', true); } }
+                if (!this.localPlayer.isShowingOff) {
+                    if (vx === 0 && vy === 0) { this.localPlayer.sprite.play('idle', true); } else if (absX >= absY) { this.localPlayer.sprite.setFlipX(vx < 0); this.localPlayer.sprite.play('walk', true); } else { if (vy < 0) { this.localPlayer.sprite.play('walk-up', true); } else { this.localPlayer.sprite.play('walk-down', true); } }
+                }
                 if ((this.isCafe || this.sceneName === 'shrine' || this.sceneName === 'playroom' || this.sceneName === 'partyroom') && (vx !== 0 || vy !== 0)) { 
                     if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) { 
                         let path = this.isCafe ? `cafePlayers/${window.GameLogic.currentUser.uid}` : (this.sceneName === 'shrine' ? `shrinePlayers/${window.GameLogic.currentUser.uid}` : (this.sceneName === 'playroom' ? `playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}` : `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`)); 
