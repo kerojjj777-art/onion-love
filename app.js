@@ -914,24 +914,22 @@ window.openMagicModal = function() {
 
 // 【新增】開發者一鍵測試：在交誼廳中央直接生成米米
 window.devSummonMimi = function() {
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        let pUids = Object.keys(window.GameLogic.cafePlayers || {}).filter(uid => window.GameLogic.onlinePlayers && window.GameLogic.onlinePlayers[uid]);
-        let requiredHp = Math.min(6, 2 + pUids.length);
-        
-        // 繞過冷卻計時器，改為從地圖左側外緣隨機高度生成
-        module.set(module.ref(window.GameLogic.db, 'cafeMimi'), {
-            active: true,
-            x: -50,
-            y: Phaser.Math.Between(200, 1800),
-            state: 'walk',
-            hp: requiredHp,
-            playersInvolved: pUids.length,
-            stolenPool: 0,
-            flipX: false,
-            stolenUids: null
-        }).then(() => {
-            document.getElementById('dev-modal').style.display = 'none';
-        });
+    let pUids = Object.keys(window.GameLogic.cafePlayers || {}).filter(uid => window.GameLogic.onlinePlayers && window.GameLogic.onlinePlayers[uid]);
+    let requiredHp = Math.min(6, 2 + pUids.length);
+    
+    // 繞過冷卻計時器，改為從地圖左側外緣隨機高度生成
+    set(ref(window.GameLogic.db, 'cafeMimi'), {
+        active: true,
+        x: -50,
+        y: Phaser.Math.Between(200, 1800),
+        state: 'walk',
+        hp: requiredHp,
+        playersInvolved: pUids.length,
+        stolenPool: 0,
+        flipX: false,
+        stolenUids: null
+    }).then(() => {
+        document.getElementById('dev-modal').style.display = 'none';
     });
 };
 
@@ -940,10 +938,9 @@ window.devFillMagic = function() {
     inv['水球'] = 100;
     inv['煙火'] = 100;
     inv['蔥友機'] = 100;
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        module.update(module.ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv }).then(() => {
-            document.getElementById('dev-modal').style.display = 'none';
-        });
+    
+    update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv }).then(() => {
+        document.getElementById('dev-modal').style.display = 'none';
     });
 };
 
@@ -1296,7 +1293,7 @@ function switchScene(sceneName, extraData = null) {
             
             // 只有一般場景需要記錄位置，副本不覆蓋最後重生點
             if (sceneName !== 'playroom') {
-                import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => module.update(module.ref(db, `users/${window.GameLogic.currentUser.uid}`), { lastScene: sceneName, lastX: entranceX, lastY: entranceY }));
+                update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { lastScene: sceneName, lastX: entranceX, lastY: entranceY });
                 window.GameLogic.myProfile.lastScene = sceneName; window.GameLogic.myProfile.lastX = entranceX; window.GameLogic.myProfile.lastY = entranceY;
             }
             
@@ -1364,12 +1361,10 @@ function gainRewards(coins, exp) {
     update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins, exp: p.exp, level: p.level, sweeps: p.sweeps });
     
     let weekId = window.getWeekId(0);
-    import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(module => {
-        let sweepRef = module.ref(window.GameLogic.db, `weeklySweeps/${weekId}/${window.GameLogic.currentUser.uid}`);
-        module.get(sweepRef).then(snap => {
-            let currentCount = snap.exists() ? snap.val().count : 0;
-            module.update(sweepRef, { name: p.name, count: currentCount + 1 });
-        });
+    let sweepRef = ref(window.GameLogic.db, `weeklySweeps/${weekId}/${window.GameLogic.currentUser.uid}`);
+    get(sweepRef).then(snap => {
+        let currentCount = snap.exists() ? snap.val().count : 0;
+        update(sweepRef, { name: p.name, count: currentCount + 1 });
     });
 
     if (exp > 0 && window.GameLogic.phaserGame) {
