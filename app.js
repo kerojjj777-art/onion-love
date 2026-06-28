@@ -1032,6 +1032,10 @@ window.addEventListener('pointerdown', (e) => {
         // 修正2：點擊背景時，不要關閉投票介面與強制召喚介面
         document.querySelectorAll('.modal:not(#voting-modal):not(#forced-summon-modal)').forEach(m => m.style.display = 'none'); 
         window.GameLogic.isShopping = false; 
+        // 【修正】確保點擊背景關閉介面時，同步觸發大粉蔥的完整清理與狀態復原
+        if (typeof window.closeRewardModal === 'function' && window.GameLogic.activeGiftBox) {
+            window.closeRewardModal();
+        }
     } 
 });
 document.getElementById('chat-toggle-btn').addEventListener('click', function() { chatSection.classList.toggle('chat-collapsed'); this.innerText = chatSection.classList.contains('chat-collapsed') ? '展開對話 ▼' : '收起對話 ▲'; if (!chatSection.classList.contains('chat-collapsed')) { const chatBox = document.getElementById("chat-box"); chatBox.scrollTop = 0; } });
@@ -5131,10 +5135,39 @@ const rewardStyles = `
 `;
 document.getElementById('app-container').insertAdjacentHTML('beforeend', rewardStyles);
 
-window.openRewardModal = function(furnitureObj) {
-    window.GameLogic.activeGiftBox = furnitureObj;
-    document.getElementById('reward-main-modal').style.display = 'block';
+// 【新增】實時監聽全服是否有玩家正在與大粉蔥(派獎箱)互動
+onValue(ref(db, 'serverEvents/giftBoxInteracting'), snap => {
+    let interactingUsers = snap.val() || {};
+    let isAnyoneInteracting = Object.keys(interactingUsers).length > 0;
+    if (window.GameLogic && window.GameLogic.phaserGame) {
+        let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
+        if (ms && ms.furnitureSprites) {
+            Object.values(ms.furnitureSprites).forEach(furn => {
+                if (furn.sprite && (furn.sprite.texture.key === 'gift-box-stay' || furn.sprite.texture.key === 'gift-box-open')) {
+                    if (isAnyoneInteracting) {
+                        furn.sprite.setTexture('gift-box-open');
+                        if (furn.glow) furn.glow.setVisible(true);
+                    } else if (!window.GameLogic.activeGiftBox) {
+                        furn.sprite.setTexture('gift-box-stay');
+                        if (furn.glow) furn.glow.setVisible(false);
+                    }
+                }
+            });
+        }
+    }
+});
+
+window.openRewardModal = function(furnitureObj) { 
+    window.GameLogic.activeGiftBox = furnitureObj; 
+    document.getElementById('reward-main-modal').style.display = 'block'; 
     
+    // 【新增】寫入 Firebase 廣播互動狀態
+    if (window.GameLogic.currentUser) {
+        const interactRef = ref(db, `serverEvents/giftBoxInteracting/${window.GameLogic.currentUser.uid}`);
+        set(interactRef, true);
+        onDisconnect(interactRef).remove();
+    }
+
     ['reward-effects-container1', 'reward-effects-container2'].forEach(id => {
         let container = document.getElementById(id);
         if(!container) return;
@@ -5152,14 +5185,20 @@ window.openRewardModal = function(furnitureObj) {
     });
 };
 
-window.closeRewardModal = function() {
-    document.getElementById('reward-main-modal').style.display = 'none';
-    document.getElementById('reward-detail-modal').style.display = 'none';
-    if (window.GameLogic.activeGiftBox) {
-        window.GameLogic.activeGiftBox.sprite.setTexture('gift-box-stay');
-        if (window.GameLogic.activeGiftBox.glow) window.GameLogic.activeGiftBox.glow.setVisible(false);
-        window.GameLogic.activeGiftBox = null;
+window.closeRewardModal = function() { 
+    document.getElementById('reward-main-modal').style.display = 'none'; 
+    document.getElementById('reward-detail-modal').style.display = 'none'; 
+    
+    // 【新增】移除 Firebase 互動狀態
+    if (window.GameLogic && window.GameLogic.currentUser) {
+        remove(ref(db, `serverEvents/giftBoxInteracting/${window.GameLogic.currentUser.uid}`));
     }
+
+    if (window.GameLogic.activeGiftBox) { 
+        window.GameLogic.activeGiftBox.sprite.setTexture('gift-box-stay'); 
+        if (window.GameLogic.activeGiftBox.glow) window.GameLogic.activeGiftBox.glow.setVisible(false); 
+        window.GameLogic.activeGiftBox = null; 
+    } 
 };
 
 window.openWeeklyRewardDetail = async function() {
@@ -5196,12 +5235,12 @@ window.openWeeklyRewardDetail = async function() {
             myRewards.push({ id: 'sweep_coins', type: 'coin', coins: mult * 5000, name: `滿500次倍數獎金 x${mult}`, claimed: false });
             myRewards.push({ id: 'sweep_500', type: 'medal', medal: 'ranking-medal-cleanking-500ps.png', name: '猛掃五百片蔥皮勳章', claimed: false });
         }
-        if (mySweeps >= 1000) {
-            myRewards.push({ id: 'sweep_1000', type: 'medal', medal: 'ranking-medal-cleanking-1000ps.png', name: '猛掃一千片蔥皮勳章', claimed: false });
-        }
-        await update(ref(window.GameLogic.db, `users/${uid}/weeklyRewards/${lastWeekId}`), myRewards);
-    }
-    
+        if (mySweeps >= 1000) { 
+            myRewards.push({ id: 'sweep_1000', type: 'medal', medal: 'ranking-medal-cleanking-1000ps.png', name: '猛掃一千片蔥皮勳章', claimed: false }); 
+        } 
+        // 【修正】陣列資料必須使用 set 寫入，使用 update 會引發 Firebase 報錯導致中斷，卡在「結算中...」
+        await set(ref(window.GameLogic.db, `users/${uid}/weeklyRewards/${lastWeekId}`), myRewards); 
+    } 
     window.currentViewingRewards = myRewards;
     window.currentViewingWeekId = lastWeekId;
     
