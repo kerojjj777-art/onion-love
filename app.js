@@ -1236,7 +1236,7 @@ function leaveShrine() {
                 let coins = snap.val() || {};
                 let updates = {};
                 Object.keys(coins).forEach(k => {
-                    if (k.startsWith('shrine_coin_')) updates[`droppedCoins/${k}`] = null;
+                if (k.startsWith('shrine_coin_') || coins[k]?.scene === 'shrine') updates[`droppedCoins/${k}`] = null;
                 });
                 if (Object.keys(updates).length > 0) update(ref(window.GameLogic.db), updates);
             });
@@ -1910,22 +1910,30 @@ class MainScene extends Phaser.Scene {
 
         this.otherPlayers = {}; this.furnitureSprites = {}; this.dummySprites = {}; this.coinSprites = {};
         
-        if (this.isCafe || this.sceneName === "7eonion" || this.sceneName === "shrine") { 
+                if (this.isCafe || this.sceneName === "shrine") { 
             this.coinsListener = onValue(ref(window.GameLogic.db, 'droppedCoins'), (snap) => { 
                 let data = snap.val() || {}; 
                 for (let key in data) { 
-                    // 修正2：如果金幣是神龕發出的，且當前不在神龕場景，則直接過濾不渲染，解決商店殘留問題
-                    if (key.startsWith('shrine_coin_') && this.sceneName !== 'shrine') continue;
+                    let cData = data[key] || {};
+                    let coinScene = cData.scene || (key.startsWith('shrine_coin_') ? 'shrine' : 'cafe');
+                    if (coinScene !== this.sceneName) continue;
                     
                     if (!this.coinSprites[key]) { 
-                        let cData = data[key]; 
-                        let coinSprite = this.physics.add.sprite(cData.x, cData.y, 'made-coin').setDepth(8); 
+                        let coinSprite = this.physics.add.sprite(cData.x, cData.y - 24, 'made-coin').setDepth(8).setAlpha(0.75); 
                         coinSprite.play('coin-anim', true); 
                         coinSprite.amount = cData.amount || 5; 
                         this.coinSprites[key] = coinSprite; 
+                        this.tweens.add({ targets: coinSprite, y: cData.y, alpha: 1, duration: 450, ease: 'Bounce.easeOut' });
                     } 
                 } 
-                for (let key in this.coinSprites) { if (!data[key]) { this.coinSprites[key].destroy(); delete this.coinSprites[key]; } } 
+                for (let key in this.coinSprites) {
+                    let cData = data[key] || {};
+                    let coinScene = cData.scene || (key.startsWith('shrine_coin_') ? 'shrine' : 'cafe');
+                    if (!data[key] || coinScene !== this.sceneName) {
+                        this.coinSprites[key].destroy();
+                        delete this.coinSprites[key];
+                    }
+                } 
             });
             this.dummiesListener = onValue(ref(window.GameLogic.db, 'cafeDummies'), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.dummySprites[key]) { let dData = data[key]; let dummySprite = this.physics.add.sprite(dData.x, dData.y, 'dummy').setDepth(8); this.dummySprites[key] = dummySprite; } } for (let key in this.dummySprites) { if (!data[key]) { this.dummySprites[key].destroy(); delete this.dummySprites[key]; } } });
           this.mimiListener = onValue(ref(window.GameLogic.db, 'cafeMimi'), (snap) => {
@@ -2272,7 +2280,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                                 update(ref(window.GameLogic.db, `serverEvents/fireworksDummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                                 for (let i = 0; i < 3; i++) {
                                     let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
-                                    push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: 15 });
+                                    push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: 15, scene: this.sceneName });
                                 }
                             } else if (targetType === 'mimi') {
                                 this.handleMimiHit(targetSprite.x, targetSprite.y);
@@ -2347,7 +2355,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                                     update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                                     for (let i = 0; i < 3; i++) {
                                         let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
-                                        push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: 5 });
+                                        push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: 5, scene: this.sceneName });
                                     }
                                 } else if (targetType === 'mimi') {
                                     this.handleMimiHit(targetSprite.x, targetSprite.y);
@@ -2584,7 +2592,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
             }
         });
 
-        this.hitListener = onValue(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 2000)) { if (this.localPlayer.isInvincible) return; this.localPlayer.isInvincible = true; this.localPlayer.isStunned = true; this.localPlayer.sprite.play('wet', true); let p = window.GameLogic.myProfile; let loss = Math.min(p.coins || 0, 15); p.coins -= loss; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins; let amounts = [12, 12, 11]; for (let i = 0; i < 3; i++) { let cx = this.localPlayer.sprite.x + Phaser.Math.Between(-40, 40); let cy = this.localPlayer.sprite.y + Phaser.Math.Between(-40, 40) + 20; push(ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: amounts[i] }); } this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); remove(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`)); } });
+        this.hitListener = onValue(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 2000)) { if (this.localPlayer.isInvincible) return; this.localPlayer.isInvincible = true; this.localPlayer.isStunned = true; this.localPlayer.sprite.play('wet', true); let p = window.GameLogic.myProfile; let loss = Math.min(p.coins || 0, 15); p.coins -= loss; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins; let amounts = [12, 12, 11]; for (let i = 0; i < 3; i++) { let angle = (Math.PI * 2 / 3) * i + Phaser.Math.FloatBetween(-0.25, 0.25); let dist = Phaser.Math.Between(85, 135); let cx = Phaser.Math.Clamp(this.localPlayer.sprite.x + Math.cos(angle) * dist, 80, this.physics.world.bounds.width - 80); let cy = Phaser.Math.Clamp(this.localPlayer.sprite.y + Math.sin(angle) * dist + 20, 80, this.physics.world.bounds.height - 80); push(ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: amounts[i], scene: this.sceneName }); } this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); remove(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`)); } });
       
       this.partyHitListener = onValue(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic?.roomId}/hits/${window.GameLogic.currentUser.uid}`), (snap) => {
             let data = snap.val();
@@ -2606,7 +2614,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                 this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; });
             }
       });
-        this.fwHitListener = onValue(ref(window.GameLogic.db, `serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 2000)) { if (this.localPlayer.isInvincible) return; window.playSFX(this, 'bomb'); this.localPlayer.isInvincible = true; this.localPlayer.isStunned = true; this.localPlayer.sprite.play('fw-hit', true); let p = window.GameLogic.myProfile; let loss = Math.min(p.coins || 0, 100); p.coins -= loss; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }).catch(err => console.warn('Firebase 被擊中扣款失敗:', err)); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins; if (loss > 0) { let amounts = [Math.floor(loss * 0.4), Math.floor(loss * 0.3), loss - Math.floor(loss * 0.4) - Math.floor(loss * 0.3)]; for (let i = 0; i < 3; i++) { if(amounts[i] <= 0) continue; let cx = this.localPlayer.sprite.x + Phaser.Math.Between(-50, 50); let cy = this.localPlayer.sprite.y + Phaser.Math.Between(-50, 50) + 20; push(ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: amounts[i] }); } } this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); remove(ref(window.GameLogic.db, `serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`)); } });
+        this.fwHitListener = onValue(ref(window.GameLogic.db, `serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 2000)) { if (this.localPlayer.isInvincible) return; window.playSFX(this, 'bomb'); this.localPlayer.isInvincible = true; this.localPlayer.isStunned = true; this.localPlayer.sprite.play('fw-hit', true); let p = window.GameLogic.myProfile; let loss = Math.min(p.coins || 0, 100); p.coins -= loss; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }).catch(err => console.warn('Firebase 被擊中扣款失敗:', err)); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins; if (loss > 0) { let amounts = [Math.floor(loss * 0.4), Math.floor(loss * 0.3), loss - Math.floor(loss * 0.4) - Math.floor(loss * 0.3)]; for (let i = 0; i < 3; i++) { if(amounts[i] <= 0) continue; let angle = (Math.PI * 2 / 3) * i + Phaser.Math.FloatBetween(-0.25, 0.25); let dist = Phaser.Math.Between(100, 160); let cx = Phaser.Math.Clamp(this.localPlayer.sprite.x + Math.cos(angle) * dist, 80, this.physics.world.bounds.width - 80); let cy = Phaser.Math.Clamp(this.localPlayer.sprite.y + Math.sin(angle) * dist + 20, 80, this.physics.world.bounds.height - 80); push(ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: amounts[i], scene: this.sceneName }); } } this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); remove(ref(window.GameLogic.db, `serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`)); } });
         this.fwPlayersHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworksHits'), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { window.playSFX(this, 'bomb'); opSprite.isStunned = true; opSprite.play('fw-hit', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
         this.fwDummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworksDummyHits'), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { window.playSFX(this, 'bomb'); dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
         this.globalFwListener = onValue(ref(window.GameLogic.db, 'serverEvents/globalFireworks'), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 3000) && data.scene === this.sceneName) { if (this.lastGlobalFwTime !== data.time) { this.lastGlobalFwTime = data.time; this.playGlobalFireworks(); } } });
@@ -2790,28 +2798,69 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
         let particles = this.add.particles(x, y, 'fw-particle', { speed: { min: 100, max: 250 }, angle: { min: 0, max: 360 }, scale: { start: 1.5, end: 0 }, blendMode: 'ADD', tint: mixColors, lifespan: { min: 1000, max: 2000 }, gravityY: 100, quantity: 60 });
         particles.setDepth(200); particles.explode(); this.time.delayedCall(2000, () => particles.destroy());
     }
-    startShowOff(medalIcon, dateStr) {
-        this.localPlayer.isShowingOff = true;
-        this.localPlayer.sprite.setVelocity(0, 0);
-        this.localPlayer.sprite.play('show-off', true);
-        window.playSFX(this, 'onion-show-off-reward');
-        
-        if (this.showOffContainer) this.showOffContainer.destroy();
-        this.showOffContainer = this.add.container(this.localPlayer.sprite.x + 80, this.localPlayer.sprite.y - 40).setDepth(200);
-        
+        getCurrentPlayerPathForAction() {
+        if (!window.GameLogic.currentUser) return null;
+        const uid = window.GameLogic.currentUser.uid;
+        if (this.isCafe) return `cafePlayers/${uid}`;
+        if (this.sceneName === 'shrine') return `shrinePlayers/${uid}`;
+        if (this.sceneName === 'playroom' && window.GameLogic.currentRoomId) return `playroomPlayers/${window.GameLogic.currentRoomId}/${uid}`;
+        if (this.sceneName === 'partyroom' && window.PartyLogic?.roomId) return `partyRooms/${window.PartyLogic.roomId}/players/${uid}`;
+        return null;
+    }
+
+    clearShowOffFx(entity) {
+        if (!entity) return;
+        if (entity.showOffFloatTween) { entity.showOffFloatTween.stop(); entity.showOffFloatTween = null; }
+        if (entity.showOffContainer) { entity.showOffContainer.destroy(true); entity.showOffContainer = null; }
+        if (entity.showOffEmitter) { entity.showOffEmitter.destroy(); entity.showOffEmitter = null; }
+        if (entity === this.localPlayer) {
+            this.showOffContainer = null;
+            this.showOffEmitter = null;
+        }
+    }
+
+    renderShowOffFx(entity, medalIcon, dateStr) {
+        if (!entity || !entity.sprite) return;
+        this.clearShowOffFx(entity);
+
+        entity.showOffContainer = this.add.container(entity.sprite.x + 80, entity.sprite.y - 40).setDepth(200);
+
         let medal = this.add.image(0, 0, medalIcon).setDisplaySize(120, 120);
-        let dateText = this.add.text(0, 70, dateStr, { fontSize: '14px', color: '#ffd700', fontStyle: 'bold', stroke: '#000', strokeThickness: 4 }).setOrigin(0.5);
-        this.showOffContainer.add([medal, dateText]);
-        
-        this.tweens.add({ targets: this.showOffContainer, y: this.showOffContainer.y - 15, yoyo: true, repeat: -1, duration: 1000, ease: 'Sine.easeInOut' });
-        
-        if (this.showOffEmitter) this.showOffEmitter.destroy();
-        this.showOffEmitter = this.add.particles(0, 0, 'fw-particle', {
+        let dateText = this.add.text(0, 70, dateStr || '', { fontSize: '14px', color: '#ffd700', fontStyle: 'bold', stroke: '#000', strokeThickness: 4 }).setOrigin(0.5);
+        entity.showOffContainer.add([medal, dateText]);
+
+        entity.showOffFloatTween = this.tweens.add({ targets: entity.showOffContainer, y: entity.showOffContainer.y - 15, yoyo: true, repeat: -1, duration: 1000, ease: 'Sine.easeInOut' });
+
+        entity.showOffEmitter = this.add.particles(0, 0, 'fw-particle', {
             x: { min: -60, max: 60 }, y: { min: -60, max: 60 },
             speed: { min: 10, max: 30 }, scale: { start: 1, end: 0 },
             tint: [0xffd700, 0xffffff], blendMode: 'ADD', lifespan: 800, frequency: 150
         }).setDepth(199);
-        this.showOffEmitter.startFollow(this.showOffContainer);
+        entity.showOffEmitter.startFollow(entity.showOffContainer);
+    }
+
+    startShowOff(medalIcon, dateStr) {
+        if (!this.localPlayer || !this.localPlayer.sprite) return;
+
+        const actionTime = Date.now();
+        this.localPlayer.isShowingOff = true;
+        this.localPlayer.sprite.setVelocity(0, 0);
+        this.localPlayer.sprite.play('show-off', true);
+        window.playSFX(this, 'onion-show-off-reward');
+
+        this.renderShowOffFx(this.localPlayer, medalIcon, dateStr);
+        this.showOffContainer = this.localPlayer.showOffContainer;
+        this.showOffEmitter = this.localPlayer.showOffEmitter;
+
+        const playerPath = this.getCurrentPlayerPathForAction();
+        if (playerPath) {
+            update(ref(window.GameLogic.db, playerPath), {
+                action: 'showOff',
+                actionTime: actionTime,
+                medalIcon: medalIcon,
+                medalDate: dateStr || ''
+            });
+        }
     }
     playGlobalFireworks() {
         window.playSFX(this, 'fireworks-in-the-sky'); let cam = this.cameras.main; let colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff, 0xff8800];
@@ -2945,6 +2994,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
 
         if (success && this.closestTrash) { 
             let px = this.localPlayer.sprite.x; let py = this.localPlayer.sprite.y - 40; 
+            let dropBaseX = this.closestTrash.x; let dropBaseY = this.closestTrash.y;
             let trashKey = this.closestTrash.key; let isOld = this.closestTrash.type === 'onion-skin-old'; 
             
             // 修正9：體力滿電啟動時，扣除 2% 體力，經驗 x2，金錢 x3
@@ -2965,9 +3015,11 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
             let coinAmounts = [Math.floor(totalCoins/3), Math.floor(totalCoins/3), totalCoins - 2*Math.floor(totalCoins/3)];
             // 修正：移除高耗能的動態 import，直接使用已在頂部引入的 push 與 ref，大幅提升遊戲幀數平順度
             for (let i = 0; i < 3; i++) { 
-                let cx = px + Phaser.Math.Between(-40, 40); 
-                let cy = py + Phaser.Math.Between(-40, 40) + 20; 
-                push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: coinAmounts[i] }); 
+                let angle = (Math.PI * 2 / 3) * i + Phaser.Math.FloatBetween(-0.25, 0.25);
+                let dist = Phaser.Math.Between(70, 110);
+                let cx = Phaser.Math.Clamp(dropBaseX + Math.cos(angle) * dist, 80, this.physics.world.bounds.width - 80); 
+                let cy = Phaser.Math.Clamp(dropBaseY + Math.sin(angle) * dist, 80, this.physics.world.bounds.height - 80); 
+                push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: coinAmounts[i], scene: this.sceneName }); 
             } 
         } 
     }
@@ -3230,7 +3282,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                                     let rx = Phaser.Math.Clamp(altar.x + Phaser.Math.Between(-250, 250), 100, mapW - 100);
                                     let ry = Phaser.Math.Clamp(altar.y + Phaser.Math.Between(-150, 150), 120, mapH - 120);
                                     let key = 'shrine_coin_' + Date.now() + '_' + i;
-                                    dropUpdates[`droppedCoins/${key}`] = { x: rx, y: ry, amount: coinValue };
+                                    dropUpdates[`droppedCoins/${key}`] = { x: rx, y: ry, amount: coinValue, scene: 'shrine' };
                                 }
                                 update(ref(window.GameLogic.db), dropUpdates);
                             }
@@ -3277,7 +3329,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                     for(let i=0; i<10; i++) { 
                         let cx = Phaser.Math.Clamp(x + Phaser.Math.Between(-80, 80), 100, 1948);
                         let cy = Phaser.Math.Clamp(y + Phaser.Math.Between(-80, 80) + 20, 100, 1948);
-                        dropUpdates[`droppedCoins/mimi_coin_${Date.now()}_${i}`] = { x: cx, y: cy, amount: coinValue }; 
+                        dropUpdates[`droppedCoins/mimi_coin_${Date.now()}_${i}`] = { x: cx, y: cy, amount: coinValue, scene: this.sceneName }; 
                     }
                     dropUpdates['serverEvents/mimiNextSpawn'] = Date.now() + Phaser.Math.Between(600000, 900000);
                     update(ref(db), dropUpdates);
@@ -3456,8 +3508,9 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
         if (this.localPlayer.isShowingOff) {
             if (document.activeElement.tagName !== 'INPUT' && (this.cursors.left.isDown || this.cursors.right.isDown || this.cursors.up.isDown || this.cursors.down.isDown || (uiScene && uiScene.joyStick && uiScene.joyStick.force > 0))) {
                 this.localPlayer.isShowingOff = false;
-                if (this.showOffContainer) { this.showOffContainer.destroy(); this.showOffContainer = null; }
-                if (this.showOffEmitter) { this.showOffEmitter.destroy(); this.showOffEmitter = null; }
+                this.clearShowOffFx(this.localPlayer);
+                const playerPath = this.getCurrentPlayerPathForAction();
+                if (playerPath) update(ref(window.GameLogic.db, playerPath), { action: null, actionTime: null, medalIcon: null, medalDate: null });
             } else {
                 this.localPlayer.sprite.setVelocity(0, 0); this.localPlayer.sprite.play('show-off', true);
                 this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
@@ -3718,9 +3771,20 @@ if (dist < 30) {
                 if (uid === window.GameLogic.currentUser.uid) continue; if (!globalOnline[uid]) continue; 
                 let pd = playersData[uid]; pd.uid = uid; if (!this.otherPlayers[uid]) this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
                 let op = this.otherPlayers[uid]; let oldX = op.sprite.x; let oldY = op.sprite.y; op.sprite.x = Phaser.Math.Linear(op.sprite.x, pd.x, 0.2); op.sprite.y = Phaser.Math.Linear(op.sprite.y, pd.y, 0.2); let diffX = op.sprite.x - oldX; let diffY = op.sprite.y - oldY; let absX = Math.abs(diffX); let absY = Math.abs(diffY);
-                if (pd.action && pd.actionTime && Date.now() - pd.actionTime < 1200) {
+                                const actionWindow = pd.action === 'showOff' ? 4500 : 1200;
+                if (pd.action && pd.actionTime && Date.now() - pd.actionTime < actionWindow) {
                     if (op.lastActionTime !== pd.actionTime) {
                         op.lastActionTime = pd.actionTime;
+
+                        if (pd.action === 'showOff') {
+                            op.sprite.isShowingOff = true;
+                            op.sprite.play('show-off', true);
+                            this.renderShowOffFx(op, pd.medalIcon, pd.medalDate || '');
+                            this.time.delayedCall(4200, () => {
+                                if (op.sprite && op.sprite.active) op.sprite.isShowingOff = false;
+                                this.clearShowOffFx(op);
+                            });
+                        }
 
                         if (pd.action === 'throwWater') {
                             op.sprite.isThrowing = true;
@@ -3738,7 +3802,7 @@ if (dist < 30) {
                             });
                         }
                     }
-                } else if (op.sprite.isStunned || op.sprite.isThrowing) { 
+                } else if (op.sprite.isStunned || op.sprite.isThrowing || op.sprite.isShowingOff) { 
                 } else if (pd.isSweeping) { 
                     op.sprite.play('clean', true); 
                 } else if (pd.isSeated) {
