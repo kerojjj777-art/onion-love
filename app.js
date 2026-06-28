@@ -3265,8 +3265,8 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                 
                 let mData = window.GameLogic.cafeMimiData;
                 let dtMs = time - (this.lastMimiLogicTime || time);
-                // 🌟 降頻計算：米米索敵與寫入 Firebase 每 200ms 執行一次
-                if (mData && mData.active && (dtMs > 200 || !this.lastMimiLogicTime)) {
+                // 🌟 折衷降頻：米米移動與 Firebase 同步改為每 35ms (約 30 FPS) 執行一次
+                if (mData && mData.active && (dtMs > 35 || !this.lastMimiLogicTime)) {
                     let calcDelta = this.lastMimiLogicTime ? dtMs : 16;
                     this.lastMimiLogicTime = time;
                     let targetX = mData.x, targetY = mData.y;
