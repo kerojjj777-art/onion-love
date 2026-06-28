@@ -1270,12 +1270,10 @@ function switchScene(sceneName, extraData = null) {
     }
 
     const doSwitch = () => {
-        const previousScene = window.GameLogic.currentScene;
         window.GameLogic.currentScene = sceneName; window.GameLogic.placingFurnitureKey = null; 
         
-        // 離開原本的房間；只有真的從派對房離開時才呼叫 leavePartyroom，避免進入新派對時誤清狀態
-        leaveCafe(); leaveShrine(); leavePlayroom();
-        if (previousScene === 'partyroom' && sceneName !== 'partyroom') window.leavePartyroom();
+        // 離開原本的房間
+        leaveCafe(); leaveShrine(); leavePlayroom(); window.leavePartyroom();
 
         if (sceneName === "cafe") joinCafe(); 
         else if (sceneName === "shrine") joinShrine(); 
@@ -1592,8 +1590,9 @@ class UIScene extends Phaser.Scene {
             if (!this.partyDash) {
                 this.partyDash = this.add.container(20, this.cameras.main.height - 100).setDepth(200).setScrollFactor(0);
                 let dashBg = this.add.graphics().fillStyle(0x000, 0.6).lineStyle(2, 0x00ffff).fillRoundedRect(0, 0, 160, 60, 8).strokeRoundedRect(0, 0, 160, 60, 8);
-                this.partyDashText = this.add.text(80, 30, '', { fontSize: '18px', color: '#00ffff', fontStyle: 'bold' }).setOrigin(0.5);
-                this.partyDash.add([dashBg, this.partyDashText]);
+                let dashIcon = this.add.sprite(25, 30, 'onion-skin'); // 防護：使用通用水球圖或任意可用圖取代
+                this.partyDashText = this.add.text(90, 30, '', { fontSize: '18px', color: '#00ffff', fontStyle: 'bold' }).setOrigin(0.5);
+                this.partyDash.add([dashBg, dashIcon, this.partyDashText]);
             }
             this.partyDash.setVisible(true);
             
@@ -2594,7 +2593,6 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
             for (let uid in throws) {
                 if (uid === window.GameLogic.currentUser.uid) continue;
                 let data = throws[uid];
-                if (this.sceneName === 'partyroom') continue;
                 if (data && data.time && (Date.now() - data.time < 3000) && data.scene === this.sceneName) {
                     if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite && (!this.otherPlayers[uid].lastWaterTime || this.otherPlayers[uid].lastWaterTime !== data.time)) {
                         this.otherPlayers[uid].lastWaterTime = data.time;
@@ -3622,25 +3620,9 @@ if (dist < 30) {
                         if (pd.action === 'throwWater') {
                             op.sprite.isThrowing = true;
                             op.sprite.play('throw', true);
-                            window.playSFX(this, 'minimum_laser');
                             this.time.delayedCall(300, () => {
                                 if (op.sprite && op.sprite.active) op.sprite.isThrowing = false;
                             });
-
-                            if (pd.targetUid && pd.targetUid !== 'none') {
-                                let targetX = op.sprite.x + (op.sprite.flipX ? -200 : 200);
-                                let targetY = op.sprite.y;
-                                if (this.otherPlayers[pd.targetUid]) {
-                                    targetX = this.otherPlayers[pd.targetUid].sprite.x;
-                                    targetY = this.otherPlayers[pd.targetUid].sprite.y;
-                                } else if (pd.targetUid === window.GameLogic.currentUser.uid) {
-                                    targetX = this.localPlayer.sprite.x;
-                                    targetY = this.localPlayer.sprite.y;
-                                }
-                                let wb = this.physics.add.sprite(op.sprite.x, op.sprite.y, 'water-ball-blast').setDepth(15);
-                                wb.play('wb-blast', true);
-                                this.tweens.add({ targets: wb, x: targetX, y: targetY, duration: 300, onComplete: () => wb.destroy() });
-                            }
                         }
 
                         if (pd.action === 'hitWater') {
@@ -4687,27 +4669,12 @@ window.createPartyRoom = function() {
 };
 
 window.joinPartyroom = function(roomId) {
-    // 每次進入派對房都先清乾淨上一局的本機殘留狀態，避免 FINISH / 倒數 / 結算沿用上一局
-    window.PartyLogic.roomId = roomId;
-    window.PartyLogic.ammo = 666;
-    window.PartyLogic.state = 'waiting';
-    window.PartyLogic.scores = {};
-    window.PartyLogic.players = {};
-    window.PartyLogic.gameData = null;
-    window.PartyLogic.rewardClaimed = false;
-    window.PartyLogic.speedBoost = false;
-    window.PartyLogic.playPhase = -1;
+    // 將 playPhase 初始化為 -1 解決 0 秒階段 START 音效被跳過的問題
+    window.PartyLogic.roomId = roomId; window.PartyLogic.ammo = 666; window.PartyLogic.speedBoost = false; window.PartyLogic.playPhase = -1;
     
     // 自動裝備水球並隱藏聊天室
     window.GameLogic.armedItemState = 'ready'; window.GameLogic.armedItemName = '水球';
     document.getElementById('chat-section').style.display = 'none';
-
-    let resultModal = document.getElementById('party-result-modal');
-    if (resultModal) resultModal.style.display = 'none';
-    let resultList = document.getElementById('party-result-list');
-    if (resultList) resultList.innerHTML = '';
-    let announceFlash = document.getElementById('party-red-flash');
-    if (announceFlash) { announceFlash.style.display = 'none'; announceFlash.style.opacity = 0; }
     
     let pModal = document.getElementById('party-waiting-modal');
     pModal.style.display = 'flex';
