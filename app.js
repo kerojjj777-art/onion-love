@@ -1592,6 +1592,7 @@ class UIScene extends Phaser.Scene {
                 let dashBg = this.add.graphics().fillStyle(0x000, 0.6).lineStyle(2, 0x00ffff).fillRoundedRect(0, 0, 140, 60, 8).strokeRoundedRect(0, 0, 140, 60, 8);
                 this.partyDashText = this.add.text(70, 30, '', { fontSize: '18px', color: '#00ffff', fontStyle: 'bold' }).setOrigin(0.5);
                 this.partyDash.add([dashBg, this.partyDashText]);
+                this.resizeUI(this.scale.gameSize); // 強制在建立儀表板的瞬間刷新佈局，對齊搖桿上方
             }
             this.partyDash.setVisible(true);
             
@@ -4817,9 +4818,10 @@ window.processPartyEventLogic = function(scene) {
             // 修正8：使用相機絕對座標並置中
             let cx = scene.cameras.main.width / 2;
             let cy = scene.cameras.main.height / 2;
+            let targetScale = scene.cameras.main.width < 768 ? 1 : 2;
             scene.partyAnnounceText.setText(texts[phase]).setPosition(cx, cy).setVisible(true);
             scene.partyAnnounceText.setScale(0).setAlpha(1);
-            scene.tweens.add({ targets: scene.partyAnnounceText, scale: 2, alpha: 0, duration: 900 });
+            scene.tweens.add({ targets: scene.partyAnnounceText, scale: targetScale, alpha: 0, duration: 900 });
             if (phase === 0) window.playSFX(scene, 'party-start');
         } else if (phase >= 3 && window.PartyLogic.playPhase < 3) {
             window.PartyLogic.playPhase = 3;
@@ -4858,7 +4860,8 @@ window.processPartyEventLogic = function(scene) {
                 window.PartyLogic.playPhase = 4;
                 let cx = scene.cameras.main.width / 2;
                 let cy = scene.cameras.main.height / 2;
-                scene.partyAnnounceText.setText("強制結束").setPosition(cx, cy).setVisible(true).setScale(1).setAlpha(1);
+                let targetScale = scene.cameras.main.width < 768 ? 0.6 : 1;
+                scene.partyAnnounceText.setText("強制結束").setPosition(cx, cy).setVisible(true).setScale(targetScale).setAlpha(1);
                 setTimeout(() => { 
                     scene.partyAnnounceText.setVisible(false); 
                     document.getElementById('party-result-modal').style.display = 'block'; 
@@ -4873,8 +4876,9 @@ window.processPartyEventLogic = function(scene) {
             // 修正8：使用相機絕對座標並置中
             let cx = scene.cameras.main.width / 2;
             let cy = scene.cameras.main.height / 2;
+            let targetScale = scene.cameras.main.width < 768 ? 1 : 2;
             scene.partyAnnounceText.setText("FINISH").setPosition(cx, cy).setVisible(true).setScale(0).setAlpha(1);
-            scene.tweens.add({ targets: scene.partyAnnounceText, scale: 2, duration: 500 });
+            scene.tweens.add({ targets: scene.partyAnnounceText, scale: targetScale, duration: 500 });
             window.playSFX(scene, 'party-finish');
             
             // Upload final ammo before scoring
