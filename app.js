@@ -3771,20 +3771,17 @@ if (dist < 30) {
                 if (uid === window.GameLogic.currentUser.uid) continue; if (!globalOnline[uid]) continue; 
                 let pd = playersData[uid]; pd.uid = uid; if (!this.otherPlayers[uid]) this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
                 let op = this.otherPlayers[uid]; let oldX = op.sprite.x; let oldY = op.sprite.y; op.sprite.x = Phaser.Math.Linear(op.sprite.x, pd.x, 0.2); op.sprite.y = Phaser.Math.Linear(op.sprite.y, pd.y, 0.2); let diffX = op.sprite.x - oldX; let diffY = op.sprite.y - oldY; let absX = Math.abs(diffX); let absY = Math.abs(diffY);
-                                const actionWindow = pd.action === 'showOff' ? 4500 : 1200;
+                const actionWindow = pd.action === 'showOff' ? Number.POSITIVE_INFINITY : 1200;
                 if (pd.action && pd.actionTime && Date.now() - pd.actionTime < actionWindow) {
-                    if (op.lastActionTime !== pd.actionTime) {
-                        op.lastActionTime = pd.actionTime;
-
-                        if (pd.action === 'showOff') {
+                    if (pd.action === 'showOff') {
+                        if (op.lastActionTime !== pd.actionTime) {
+                            op.lastActionTime = pd.actionTime;
                             op.sprite.isShowingOff = true;
-                            op.sprite.play('show-off', true);
                             this.renderShowOffFx(op, pd.medalIcon, pd.medalDate || '');
-                            this.time.delayedCall(4200, () => {
-                                if (op.sprite && op.sprite.active) op.sprite.isShowingOff = false;
-                                this.clearShowOffFx(op);
-                            });
                         }
+                        op.sprite.play('show-off', true);
+                    } else if (op.lastActionTime !== pd.actionTime) {
+                        op.lastActionTime = pd.actionTime;
 
                         if (pd.action === 'throwWater') {
                             op.sprite.isThrowing = true;
@@ -3802,7 +3799,10 @@ if (dist < 30) {
                             });
                         }
                     }
-                } else if (op.sprite.isStunned || op.sprite.isThrowing || op.sprite.isShowingOff) { 
+                } else if (op.sprite.isShowingOff) {
+                    op.sprite.isShowingOff = false;
+                    this.clearShowOffFx(op);
+                } else if (op.sprite.isStunned || op.sprite.isThrowing) { 
                 } else if (pd.isSweeping) { 
                     op.sprite.play('clean', true); 
                 } else if (pd.isSeated) {
