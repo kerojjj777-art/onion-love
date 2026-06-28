@@ -3264,27 +3264,30 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                 }
                 
                 let mData = window.GameLogic.cafeMimiData;
-                if (mData && mData.active) {
+                let dtMs = time - (this.lastMimiLogicTime || time);
+                // 🌟 降頻計算：米米索敵與寫入 Firebase 每 200ms 執行一次
+                if (mData && mData.active && (dtMs > 200 || !this.lastMimiLogicTime)) {
+                    let calcDelta = this.lastMimiLogicTime ? dtMs : 16;
+                    this.lastMimiLogicTime = time;
                     let targetX = mData.x, targetY = mData.y;
                     
                     if (mData.state === 'walk' && mData.hp > 0) {
                         let targetUid = null; let minDist = 9999; let stolenUids = mData.stolenUids || {};
                         let stolenCount = Object.keys(stolenUids).length;
                         
-                        let walkSpeed = (stolenCount === 0) ? 200 : 350; // 修正3：整體降速
+                        let walkSpeed = (stolenCount === 0) ? 200 : 350; 
                         
                         pUids.forEach(uid => { if (!stolenUids[uid]) { let op = this.otherPlayers[uid] ? this.otherPlayers[uid].sprite : (uid === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null); if (op) { let d = Phaser.Math.Distance.Between(mData.x, mData.y, op.x, op.y); if (d < minDist) { minDist = d; targetUid = uid; targetX = op.x; targetY = op.y; } } } });
                         if (targetUid) {
                             if (minDist > 35) { 
                                 let angle = Phaser.Math.Angle.Between(mData.x, mData.y, targetX, targetY); 
-                                targetX = mData.x + Math.cos(angle) * (delta / 1000) * walkSpeed; 
-                                targetY = mData.y + Math.sin(angle) * (delta / 1000) * walkSpeed; 
+                                targetX = mData.x + Math.cos(angle) * (calcDelta / 1000) * walkSpeed; 
+                                targetY = mData.y + Math.sin(angle) * (calcDelta / 1000) * walkSpeed; 
                                 update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX > mData.x) }); 
                             } else {
                                 update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'stealing', stealingFrom: targetUid }); 
                             }
                         } else {
-                            // 當逃避時，讓米米傾向於往中央跑
                             let sumX = 0, sumY = 0; pUids.forEach(u => { let op = this.otherPlayers[u] ? this.otherPlayers[u].sprite : (u === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null); if (op) { sumX += op.x; sumY += op.y; } });
                             let cX = sumX / pUids.length; let cY = sumY / pUids.length;
                             
@@ -3294,13 +3297,12 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                             let safeX = Phaser.Math.Clamp(cX + Math.cos(angleAway) * 200, 100, 1948); let safeY = Phaser.Math.Clamp(cY + Math.sin(angleAway) * 200, 100, 1948);
                             let distToSafe = Phaser.Math.Distance.Between(mData.x, mData.y, safeX, safeY);
                             if (distToSafe > 20) { 
-                                // 修正3：取靠近中心與遠離玩家的折衷角度，讓牠不要一直卡在邊緣
                                 let angle = Phaser.Math.Angle.Between(mData.x, mData.y, safeX, safeY); 
                                 let centerWeight = Phaser.Math.Distance.Between(mData.x, mData.y, 1024, 1024) / 1000;
                                 angle = Phaser.Math.Angle.RotateTo(angle, angleToCenter, centerWeight * 0.5);
                                 
-                                targetX = mData.x + Math.cos(angle) * (delta / 1000) * 150; 
-                                targetY = mData.y + Math.sin(angle) * (delta / 1000) * 150; 
+                                targetX = mData.x + Math.cos(angle) * (calcDelta / 1000) * 150; 
+                                targetY = mData.y + Math.sin(angle) * (calcDelta / 1000) * 150; 
                                 update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX > mData.x) }); 
                             } else { 
                                 update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'laughing', laughTime: Date.now() }); 
@@ -3328,27 +3330,25 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                             });
                             
                             let angle = mData.randomAngle || 0;
-                            let boostSpeed = mData.speedBoost || 200; // 降低衝刺基礎速度
+                            let boostSpeed = mData.speedBoost || 200; 
                             
                             if (nearestP && minDistToPlayer < 400) {
                                 angle = Phaser.Math.Angle.Between(nearestP.x, nearestP.y, mData.x, mData.y);
                                 angle += Phaser.Math.FloatBetween(-0.3, 0.3); 
                             } else {
-                                // 如果附近沒有人，引導牠往地圖中央跑
                                 let angleToCenter = Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024);
                                 angle = Phaser.Math.Angle.RotateTo(angle, angleToCenter, 0.1);
                                 if (Math.random() < 0.05) angle += Phaser.Math.FloatBetween(-0.5, 0.5); 
                             }
                             
-                            targetX = mData.x + Math.cos(angle) * (delta / 1000) * boostSpeed; 
-                            targetY = mData.y + Math.sin(angle) * (delta / 1000) * boostSpeed;
+                            targetX = mData.x + Math.cos(angle) * (calcDelta / 1000) * boostSpeed; 
+                            targetY = mData.y + Math.sin(angle) * (calcDelta / 1000) * boostSpeed;
                             
                             if (targetX < 50 || targetX > 1998 || targetY < 50 || targetY > 1998) { 
                                 targetX = Phaser.Math.Clamp(targetX, 50, 1998); 
                                 targetY = Phaser.Math.Clamp(targetY, 50, 1998); 
-                                // 反彈時也給一個向中心的傾向
                                 angle = Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024) + Phaser.Math.FloatBetween(-0.5, 0.5);
-                                boostSpeed = 500; // 降低邊緣大反彈極限速度
+                                boostSpeed = 500; 
                             } else {
                                 boostSpeed = 200;
                             }
@@ -3476,22 +3476,44 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                 }
             }
 
-            let minDist = 90; let promptTarget = null; let promptMsg = ""; this.closestTrash = null;
-            for (let key in this.furnitureSprites) {
-                let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let d = Phaser.Math.Distance.Between(px, py, f.sprite.x, f.sprite.y);
-                if (this.sceneName === 'shrine') {
-                    if (key === 'altar' && d < 150) { minDist = d; promptTarget = f.sprite; promptMsg = "按A召喚教友"; }
-                    if (key.startsWith('seat_') && d < 150) { minDist = d; promptTarget = f.sprite; promptMsg = "按B入席"; }
-                } else {
-                    if (d < minDist) { minDist = d; promptTarget = f.sprite; if (key.includes('fridge')) promptMsg = "按A打開冰箱"; else if (key.includes('shrine')) promptMsg = "按A參拜神龕"; else if (key.includes('dummy')) promptMsg = "假人洋蔥 (裝飾中)"; else if (key.includes('bed')) promptMsg = "按A歐歐睏"; else if (key.includes('scoreboard')) promptMsg = "按A查看洋蔥王排行榜"; else promptMsg = "按A打開回憶錄"; }
+            // 🌟 降頻計算：鎖定與互動判定每 200ms 執行一次
+            if (!this.lastTargetCalcTime || time - this.lastTargetCalcTime > 200) {
+                this.lastTargetCalcTime = time;
+                
+                this._cachedMinDist = 90; this._cachedPromptTarget = null; this._cachedPromptMsg = ""; this.closestTrash = null;
+                for (let key in this.furnitureSprites) {
+                    let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let d = Phaser.Math.Distance.Between(px, py, f.sprite.x, f.sprite.y);
+                    if (this.sceneName === 'shrine') {
+                        if (key === 'altar' && d < 150) { this._cachedMinDist = d; this._cachedPromptTarget = f.sprite; this._cachedPromptMsg = "按A召喚教友"; }
+                        if (key.startsWith('seat_') && d < 150) { this._cachedMinDist = d; this._cachedPromptTarget = f.sprite; this._cachedPromptMsg = "按B入席"; }
+                    } else {
+                        if (d < this._cachedMinDist) { this._cachedMinDist = d; this._cachedPromptTarget = f.sprite; if (key.includes('fridge')) this._cachedPromptMsg = "按A打開冰箱"; else if (key.includes('shrine')) this._cachedPromptMsg = "按A參拜神龕"; else if (key.includes('dummy')) this._cachedPromptMsg = "假人洋蔥 (裝飾中)"; else if (key.includes('bed')) this._cachedPromptMsg = "按A歐歐睏"; else if (key.includes('scoreboard')) this._cachedPromptMsg = "按A查看洋蔥王排行榜"; else this._cachedPromptMsg = "按A打開回憶錄"; }
+                    }
+                }
+                for (let t of this.trashes) { if (!t.active) continue; let d = Phaser.Math.Distance.Between(px, py, t.x, t.y); if (d < this._cachedMinDist) { this._cachedMinDist = d; this._cachedPromptTarget = t; this._cachedPromptMsg = "按B使出掃地"; this.closestTrash = t; } }
+                if (this.sceneName === '7eonion' && this.storeManager && !window.GameLogic.isShopping) { let d = Phaser.Math.Distance.Between(px, py, this.storeManager.x, this.storeManager.y); if (d < 150) { this._cachedMinDist = d; this._cachedPromptTarget = this.storeManager; this._cachedPromptMsg = "按A對話購物"; } }
+                if (this.sceneName === 'playroom' && this.rpsMachine) { 
+                    let d = Phaser.Math.Distance.Between(px, py, this.rpsMachine.x, this.rpsMachine.y); 
+                    if (d < 150) { this._cachedMinDist = d; this._cachedPromptTarget = this.rpsMachine; this._cachedPromptMsg = "按A進行拳頭PK"; } 
+                }
+
+                if (window.GameLogic.armedItemState) {
+                    let itemName = window.GameLogic.armedItemName || '水球'; this._cachedLockOnMsg = "按A施放" + itemName; 
+                    let lockOnDist = (window.GameLogic.energyActive && (window.GameLogic.myProfile.energy || 0) > 0) ? 350 : 150; 
+                    this._cachedLockTargetUid = null; this._cachedLockTargetSprite = null; this._cachedIsDummy = false; this._cachedIsMimi = false;
+                    for (let uid in this.otherPlayers) { let op = this.otherPlayers[uid].sprite; let d = Phaser.Math.Distance.Between(px, py, op.x, op.y); if (d < lockOnDist) { lockOnDist = d; this._cachedLockTargetUid = uid; this._cachedLockTargetSprite = op; this._cachedIsDummy = false; this._cachedIsMimi = false; } }
+                    for (let key in this.furnitureSprites) { if (key.includes('dummy')) { let fDummy = this.furnitureSprites[key].sprite; let d = Phaser.Math.Distance.Between(px, py, fDummy.x, fDummy.y); if (d < lockOnDist) { lockOnDist = d; this._cachedLockTargetUid = key; this._cachedLockTargetSprite = fDummy; this._cachedIsDummy = true; this._cachedIsMimi = false; } } }
+                    if (this.mimiSprite && window.GameLogic.cafeMimiData && window.GameLogic.cafeMimiData.hp > 0) {
+                        let d = Phaser.Math.Distance.Between(px, py, this.mimiSprite.x, this.mimiSprite.y);
+                        if (d < lockOnDist) { lockOnDist = d; this._cachedLockTargetUid = 'mimi'; this._cachedLockTargetSprite = this.mimiSprite; this._cachedIsDummy = false; this._cachedIsMimi = true; }
+                    }
+                    if (itemName === '煙火' && window.GameLogic.armedItemState === 'ready' && !this._cachedLockTargetSprite) { this._cachedLockOnMsg = "按A施放全頻煙火"; }
                 }
             }
-            for (let t of this.trashes) { if (!t.active) continue; let d = Phaser.Math.Distance.Between(px, py, t.x, t.y); if (d < minDist) { minDist = d; promptTarget = t; promptMsg = "按B使出掃地"; this.closestTrash = t; } }
-            if (this.sceneName === '7eonion' && this.storeManager && !window.GameLogic.isShopping) { let d = Phaser.Math.Distance.Between(px, py, this.storeManager.x, this.storeManager.y); if (d < 150) { minDist = d; promptTarget = this.storeManager; promptMsg = "按A對話購物"; } }
-            if (this.sceneName === 'playroom' && this.rpsMachine) { 
-                let d = Phaser.Math.Distance.Between(px, py, this.rpsMachine.x, this.rpsMachine.y); 
-                if (d < 150) { minDist = d; promptTarget = this.rpsMachine; promptMsg = "按A進行拳頭PK"; } 
-            }
+
+            let promptTarget = this._cachedPromptTarget;
+            let promptMsg = this._cachedPromptMsg;
+
             if (promptTarget && !isPlacing) {
                 if (this.lastPromptMsg !== promptMsg) { this.lastPromptMsg = promptMsg; this.smartPromptText.setText(promptMsg); const pBounds = this.smartPromptText.getBounds(); this.smartPromptW = pBounds.width + 16; this.smartPromptH = pBounds.height + 8; }
                 const ptX = promptTarget.x, ptY = promptTarget.y - 60; 
@@ -3500,27 +3522,24 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
             } else { this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false); this.lastPromptDrawMsg = null; }
 
             if (window.GameLogic.armedItemState) {
-                let itemName = window.GameLogic.armedItemName || '水球'; let msg = "按A施放" + itemName; let lockOnDist = (window.GameLogic.energyActive && (window.GameLogic.myProfile.energy || 0) > 0) ? 350 : 150; let lockTargetUid = null; let lockTargetSprite = null; let isDummy = false;
-                let isMimi = false;
-                for (let uid in this.otherPlayers) { let op = this.otherPlayers[uid].sprite; let d = Phaser.Math.Distance.Between(px, py, op.x, op.y); if (d < lockOnDist) { lockOnDist = d; lockTargetUid = uid; lockTargetSprite = op; isDummy = false; isMimi = false; } }
-                for (let key in this.furnitureSprites) { if (key.includes('dummy')) { let fDummy = this.furnitureSprites[key].sprite; let d = Phaser.Math.Distance.Between(px, py, fDummy.x, fDummy.y); if (d < lockOnDist) { lockOnDist = d; lockTargetUid = key; lockTargetSprite = fDummy; isDummy = true; isMimi = false; } } }
+                // 【獨立】時不時發出竄逃或等待的怪笑聲 (每 5 ~ 9 秒隨機觸發一次)，不再受限於鎖定距離的高頻計算
                 if (this.mimiSprite && window.GameLogic.cafeMimiData && window.GameLogic.cafeMimiData.hp > 0) {
-                  // 【新增】時不時發出竄逃或等待的怪笑聲 (每 5 ~ 9 秒隨機觸發一次)
                     if (!this.nextMimiRandomSfxTime || time > this.nextMimiRandomSfxTime) {
                         this.nextMimiRandomSfxTime = time + Phaser.Math.Between(5000, 9000);
                         let currentState = window.GameLogic.cafeMimiData.state;
-                        // 改為只有逃亡與原地竊笑時，會發出反覆的笑聲
-                        if (currentState === 'chase' || currentState === 'laughing') {
-                            window.playSFX(this, 'mimi-laugh');
-                        }
+                        if (currentState === 'chase' || currentState === 'laughing') window.playSFX(this, 'mimi-laugh');
                     }
-                    let d = Phaser.Math.Distance.Between(px, py, this.mimiSprite.x, this.mimiSprite.y);
-                    if (d < lockOnDist) { lockOnDist = d; lockTargetUid = 'mimi'; lockTargetSprite = this.mimiSprite; isDummy = false; isMimi = true; }
                 }
-                if (itemName === '煙火' && window.GameLogic.armedItemState === 'ready' && !lockTargetSprite) { msg = "按A施放全頻煙火"; }
+
+                let msg = this._cachedLockOnMsg;
+                let lockTargetSprite = this._cachedLockTargetSprite;
+                let lockTargetUid = this._cachedLockTargetUid;
+                let isDummy = this._cachedIsDummy;
+                let isMimi = this._cachedIsMimi;
+
                 if (this.lastWaterPromptMsg !== msg) { this.lastWaterPromptMsg = msg; this.waterPromptText.setText(msg); const wpBounds = this.waterPromptText.getBounds(); this.waterPromptW = wpBounds.width + 20; this.waterPromptH = wpBounds.height + 10; }
                 const wptX = px, wptY = py + 45; 
-                if (this.lastWaterDrawX !== wptX || this.lastWaterDrawY !== wptY || this.lastWaterDrawMsg !== msg) { this.waterPromptBg.clear().fillStyle(0x0077cc, 0.8).lineStyle(2, 0xffffff, 1).fillRoundedRect(wptX - this.waterPromptW/2, wptY - this.waterPromptH/2, this.waterPromptW, this.waterPromptH, 6).strokeRoundedRect(wptX - this.waterPromptW/2, wptY - this.waterPromptH/2, this.waterPromptW, this.waterPromptH, 6); this.lastWaterDrawX = wptX; this.lastWaterDrawY = wptY; this.lastWaterDrawMsg = msg; } // 修正3：避免每幀 getBounds 造成嚴重 Lag
+                if (this.lastWaterDrawX !== wptX || this.lastWaterDrawY !== wptY || this.lastWaterDrawMsg !== msg) { this.waterPromptBg.clear().fillStyle(0x0077cc, 0.8).lineStyle(2, 0xffffff, 1).fillRoundedRect(wptX - this.waterPromptW/2, wptY - this.waterPromptH/2, this.waterPromptW, this.waterPromptH, 6).strokeRoundedRect(wptX - this.waterPromptW/2, wptY - this.waterPromptH/2, this.waterPromptW, this.waterPromptH, 6); this.lastWaterDrawX = wptX; this.lastWaterDrawY = wptY; this.lastWaterDrawMsg = msg; }
                 this.waterPromptBg.setVisible(true); this.waterPromptText.setPosition(wptX, wptY).setVisible(true);
                 if (lockTargetSprite) { this.lockOnTarget.setPosition(lockTargetSprite.x, lockTargetSprite.y - 40).setVisible(true); window.GameLogic.currentTargetSprite = lockTargetSprite; window.GameLogic.currentTargetUid = lockTargetUid; window.GameLogic.currentTargetType = isMimi ? 'mimi' : (isDummy ? 'dummy' : 'player'); } else { this.lockOnTarget.setVisible(false); window.GameLogic.currentTargetSprite = null; window.GameLogic.currentTargetUid = null; }
             } else { if (this.waterPromptBg) { this.waterPromptBg.setVisible(false); this.waterPromptText.setVisible(false); this.lockOnTarget.setVisible(false); this.lastWaterDrawMsg = null; } }
