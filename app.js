@@ -1589,10 +1589,9 @@ class UIScene extends Phaser.Scene {
             
             if (!this.partyDash) {
                 this.partyDash = this.add.container(20, this.cameras.main.height - 100).setDepth(200).setScrollFactor(0);
-                let dashBg = this.add.graphics().fillStyle(0x000, 0.6).lineStyle(2, 0x00ffff).fillRoundedRect(0, 0, 160, 60, 8).strokeRoundedRect(0, 0, 160, 60, 8);
-                let dashIcon = this.add.sprite(25, 30, 'onion-skin'); // 防護：使用通用水球圖或任意可用圖取代
-                this.partyDashText = this.add.text(90, 30, '', { fontSize: '18px', color: '#00ffff', fontStyle: 'bold' }).setOrigin(0.5);
-                this.partyDash.add([dashBg, dashIcon, this.partyDashText]);
+                let dashBg = this.add.graphics().fillStyle(0x000, 0.6).lineStyle(2, 0x00ffff).fillRoundedRect(0, 0, 140, 60, 8).strokeRoundedRect(0, 0, 140, 60, 8);
+                this.partyDashText = this.add.text(70, 30, '', { fontSize: '18px', color: '#00ffff', fontStyle: 'bold' }).setOrigin(0.5);
+                this.partyDash.add([dashBg, this.partyDashText]);
             }
             this.partyDash.setVisible(true);
             
@@ -2169,6 +2168,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                     window.playSFX(this, 'launcher1');
                     this.localPlayer.sprite.play('throw', true);
                     this.localPlayer.isThrowing = true;
+                    this.localPlayer.isStunned = false; // 解除受傷硬直，強制完成反擊動作
                     this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
                     
                     // 新增11：向全服發送投擲動畫訊號 (修正 targetUid 為空會報錯的問題)
@@ -2209,6 +2209,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                     window.playSFX(this, 'launcher1');
                     this.localPlayer.sprite.play('fw-throw', true);
                     this.localPlayer.isThrowing = true;
+                    this.localPlayer.isStunned = false; // 解除受傷硬直，強制完成反擊動作
                     this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
                     update(ref(window.GameLogic.db, `serverEvents/fireworkThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), targetUid: targetUid || 'none', scene: this.sceneName });
                     
@@ -2241,6 +2242,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                     window.playSFX(this, 'minimum_laser');
                     this.localPlayer.sprite.play('throw', true);
                     this.localPlayer.isThrowing = true;
+                    this.localPlayer.isStunned = false; // 解除受傷硬直，強制完成反擊動作
                     this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
                     const waterActionTime = Date.now();
 
@@ -4671,6 +4673,7 @@ window.createPartyRoom = function() {
 window.joinPartyroom = function(roomId) {
     // 將 playPhase 初始化為 -1 解決 0 秒階段 START 音效被跳過的問題
     window.PartyLogic.roomId = roomId; window.PartyLogic.ammo = 666; window.PartyLogic.speedBoost = false; window.PartyLogic.playPhase = -1;
+    window.PartyLogic.gameData = null; window.PartyLogic.rewardClaimed = false; // 徹底清空舊局資料防干擾
     
     // 自動裝備水球並隱藏聊天室
     window.GameLogic.armedItemState = 'ready'; window.GameLogic.armedItemName = '水球';
@@ -4732,6 +4735,7 @@ window.joinPartyroom = function(roomId) {
 
 window.leavePartyroom = function() {
     if (partyUnsubscribe) { partyUnsubscribe(); partyUnsubscribe = null; }
+    window.PartyLogic.gameData = null; // 離開時清空快取
     document.getElementById('party-waiting-modal').style.display = 'none';
     document.getElementById('party-result-modal').style.display = 'none';
     let rFlash = document.getElementById('party-red-flash'); if (rFlash) { rFlash.style.display = 'none'; rFlash.style.opacity = 0; }
