@@ -1676,7 +1676,7 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('prince-cat-sleep-sheet', 'pet-cat-wzm-sleep.png', { frameWidth: 100, frameHeight: 100 });
         this.load.spritesheet('prince-cat-touched-sheet', 'pet-cat-wzm-touched.png', { frameWidth: 100, frameHeight: 100 });
         this.load.spritesheet('onion-petting-sheet', 'onion-petting.png', { frameWidth: 75, frameHeight: 75 });
-        this.load.image('prince-cat-love', 'pet-cat-wzm-love.png');
+        this.load.image('prince-cat-love', 'pet-cat-wzm-love.png'); // 王子麵摸摸愛心特效，showPrinceCatLoveEffect() 使用此 key
         this.load.image('ranking-medal-cat-wzm-no0.png', 'ranking-medal-cat-wzm-no0.png');
         this.load.audio('prince-cat-normal-meow', 'pet-cat-wzm-normal-meow.mp3');
         this.load.audio('prince-cat-feel-good', 'pet-cat-wzm-feel-good.mp3');
@@ -3594,11 +3594,14 @@ entity.showOffRainbowTween = this.tweens.add({
         const data = window.GameLogic.princeCatData;
         if (!data) return;
 
-        if (Math.abs(this.princeCatSprite.x - data.x) > 120 || Math.abs(this.princeCatSprite.y - data.y) > 120) {
-            this.princeCatSprite.setPosition(data.x, data.y);
+        const dataX = Number.isFinite(Number(data.x)) ? Number(data.x) : this.princeCatSprite.x;
+        const dataY = Number.isFinite(Number(data.y)) ? Number(data.y) : this.princeCatSprite.y;
+
+        if (Math.abs(this.princeCatSprite.x - dataX) > 120 || Math.abs(this.princeCatSprite.y - dataY) > 120) {
+            this.princeCatSprite.setPosition(dataX, dataY);
         } else {
-            this.princeCatSprite.x = Phaser.Math.Linear(this.princeCatSprite.x, data.x, 0.25);
-            this.princeCatSprite.y = Phaser.Math.Linear(this.princeCatSprite.y, data.y, 0.25);
+            this.princeCatSprite.x = Phaser.Math.Linear(this.princeCatSprite.x, dataX, 0.25);
+            this.princeCatSprite.y = Phaser.Math.Linear(this.princeCatSprite.y, dataY, 0.25);
         }
 
         let animKey = 'prince-cat-stand';
@@ -3607,30 +3610,57 @@ entity.showOffRainbowTween = this.tweens.add({
         else if (data.state === 'sleep') animKey = 'prince-cat-sleep';
         else if (data.state === 'petting') animKey = 'prince-cat-touched';
 
-        this.princeCatSprite.play(animKey, true);
+        if (!this.anims.exists(animKey)) {
+            console.warn(`王子麵動畫不存在：${animKey}，fallback 到 prince-cat-stand`);
+            animKey = 'prince-cat-stand';
+        }
+
+        if (this.anims.exists(animKey) && (this.princeCatSprite.anims.currentAnim?.key !== animKey || !this.princeCatSprite.anims.isPlaying)) {
+            this.princeCatSprite.play(animKey, true);
+        }
 
         const nameY = this.princeCatSprite.y - 72;
         this.princeCatNameText.setPosition(this.princeCatSprite.x, nameY);
         this.princeCatNameBg.clear().fillStyle(0x000000, 0.6).fillRoundedRect(this.princeCatSprite.x - 34, nameY - 12, 68, 24, 6);
 
-        if (data.state === 'petting' && this.princeCatLastPetStart !== data.stateStartTime) {
-            this.princeCatLastPetStart = data.stateStartTime;
-            this.showPrinceCatLoveEffect();
-            window.playSFX(this, 'prince-cat-got-touched');
-            this.time.delayedCall(250, () => window.playSFX(this, 'prince-cat-feel-good'));
+        if (data.state === 'petting') {
+            const pettingEffectKey = `${data.interactingUid || 'unknown'}_${data.stateStartTime || 0}`;
+            if (this.lastPrinceCatPettingEffectKey !== pettingEffectKey) {
+                this.lastPrinceCatPettingEffectKey = pettingEffectKey;
+                this.showPrinceCatLoveEffect();
+                window.playSFX(this, 'prince-cat-got-touched');
+                this.time.delayedCall(250, () => window.playSFX(this, 'prince-cat-feel-good'));
+            }
         }
     }
 
     showPrinceCatLoveEffect() {
         if (!this.princeCatSprite) return;
 
-        const hasLoveTexture = this.textures && this.textures.exists('prince-cat-love');
+        const loveTextureKey = 'prince-cat-love';
+        let useLoveTexture = false;
+
+        if (this.textures && this.textures.exists(loveTextureKey)) {
+            const loveTexture = this.textures.get(loveTextureKey);
+            const sourceImage = loveTexture && loveTexture.getSourceImage ? loveTexture.getSourceImage() : null;
+            const sourceWidth = sourceImage && sourceImage.width ? sourceImage.width : 0;
+            const sourceHeight = sourceImage && sourceImage.height ? sourceImage.height : 0;
+            const looksLikeSpriteSheet = sourceWidth >= 300 && sourceWidth > sourceHeight * 2;
+
+            useLoveTexture = sourceWidth > 0 && sourceHeight > 0 && !looksLikeSpriteSheet;
+
+            if (!useLoveTexture) {
+                console.warn('prince-cat-love 疑似不是單張愛心圖，改用 💗 fallback。', { sourceWidth, sourceHeight });
+            }
+        } else {
+            console.warn('找不到 prince-cat-love / pet-cat-wzm-love.png，改用 💗 fallback。');
+        }
 
         for (let i = 0; i < 4; i++) {
             const heartX = this.princeCatSprite.x + Phaser.Math.Between(-35, 35);
             const heartY = this.princeCatSprite.y - 55 + Phaser.Math.Between(-12, 12);
-            const heart = hasLoveTexture
-                ? this.add.image(heartX, heartY, 'prince-cat-love').setScale(0.75)
+            const heart = useLoveTexture
+                ? this.add.image(heartX, heartY, loveTextureKey).setScale(0.55).setOrigin(0.5)
                 : this.add.text(heartX, heartY, '💗', {
                     fontSize: '26px',
                     fontFamily: 'Arial, sans-serif',
@@ -3638,14 +3668,14 @@ entity.showOffRainbowTween = this.tweens.add({
                     strokeThickness: 3
                 }).setOrigin(0.5);
 
-            heart.setDepth(40);
+            heart.setDepth(80);
 
             this.tweens.add({
                 targets: heart,
                 y: heart.y - Phaser.Math.Between(45, 85),
                 x: heart.x + Phaser.Math.Between(-24, 24),
                 alpha: 0,
-                scale: hasLoveTexture ? 1.1 : 1.35,
+                scale: useLoveTexture ? 0.95 : 1.35,
                 duration: 1200,
                 ease: 'Cubic.easeOut',
                 onComplete: () => heart.destroy()
@@ -3662,7 +3692,7 @@ entity.showOffRainbowTween = this.tweens.add({
         const data = snap.val() || {};
 
         if (data.interactingUid && data.interactingUid !== uid && data.lockedUntil && now < data.lockedUntil) {
-            sendBubble("王子麵正在理別人");
+            sendPrinceCatBubble("王子麵正在理別人");
             return;
         }
 
@@ -3725,16 +3755,18 @@ entity.showOffRainbowTween = this.tweens.add({
         const uid = window.GameLogic.currentUser.uid;
         const now = Date.now();
         const lockUntil = now + 3500;
+        const pettingEffectKey = `${uid}_${now}`;
         const catRef = ref(window.GameLogic.db, 'cafePrinceCat');
         const snap = await get(catRef);
         const data = snap.val() || {};
 
         if (data.interactingUid && data.interactingUid !== uid && data.lockedUntil && now < data.lockedUntil) {
-            sendBubble("王子麵正在理別人");
+            sendPrinceCatBubble("王子麵正在理別人");
             return;
         }
 
         this.princePettingLockUntil = lockUntil;
+        this.lastPrinceCatPettingEffectKey = pettingEffectKey;
         this.localPlayer.sprite.isPettingPrinceCat = true;
         this.localPlayer.sprite.setVelocity(0, 0);
         this.localPlayer.sprite.play('onion-petting', true);
@@ -3810,9 +3842,9 @@ entity.showOffRainbowTween = this.tweens.add({
                 princeLastPetDate: p.princeLastPetDate
             }).catch(err => console.warn('Firebase 更新王子麵羈絆失敗:', err));
 
-            sendBubble(`與王子麵的羈絆增加了！\n今日摸摸：${p.princePetCountToday} / 3`);
+            sendPrinceCatBubble(`與王子麵的羈絆增加了！\n今日摸摸：${p.princePetCountToday} / 3`);
         } else {
-            sendBubble("王子麵把頭轉開了。\n今日摸摸已達上限。");
+            sendPrinceCatBubble("王子麵把頭轉開了。\n今日摸摸已達上限。");
         }
     }
   
@@ -3854,6 +3886,8 @@ entity.showOffRainbowTween = this.tweens.add({
         }
         let forcedBubbleMsg = (pData.action === 'showOff' || (entity === this.localPlayer && entity.isShowingOff)) ? '這個洋蔥正在炫耀' : '';
 let activeBubbleMsg = forcedBubbleMsg || ((pData.bubbleMsg && (Date.now() - (pData.bubbleTime || 0) < 10000)) ? pData.bubbleMsg : '');
+let activeBubbleAnchor = activeBubbleMsg ? (pData.bubbleAnchor || '') : '';
+let activeBubbleYOffset = Number(pData.bubbleYOffset);
 
 if (activeBubbleMsg) { 
     entity.bubbleContainer.setVisible(true);
@@ -3869,7 +3903,12 @@ if (activeBubbleMsg) {
             .strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 8); 
         entity.bubbleOffsetY = 65 + boxHeight / 2; 
     }
-    entity.bubbleContainer.setPosition(sx, sy - (entity.bubbleOffsetY || 80));
+
+    if (activeBubbleAnchor === 'below') {
+        entity.bubbleContainer.setPosition(sx, sy + (Number.isFinite(activeBubbleYOffset) ? activeBubbleYOffset : 74));
+    } else {
+        entity.bubbleContainer.setPosition(sx, sy - (entity.bubbleOffsetY || 80));
+    }
 } else { 
     entity.bubbleContainer.setVisible(false); 
 } 
@@ -4582,10 +4621,6 @@ if (activeBubbleMsg) {
                 }
             }
 
-            if (this.isCafe && this.princeCatSprite) {
-                this.updatePrinceCatAutonomy(time, delta);
-                this.updatePrinceCatVisual();
-            }
             // 🌟 降頻計算：鎖定與互動判定每 200ms 執行一次
             if (!this.lastTargetCalcTime || time - this.lastTargetCalcTime > 200) {
                 this.lastTargetCalcTime = time;
@@ -4665,6 +4700,11 @@ if (activeBubbleMsg) {
                 this.waterPromptBg.setVisible(true); this.waterPromptText.setPosition(wptX, wptY).setVisible(true);
                 if (lockTargetSprite) { this.lockOnTarget.setPosition(lockTargetSprite.x, lockTargetSprite.y - 40).setVisible(true); window.GameLogic.currentTargetSprite = lockTargetSprite; window.GameLogic.currentTargetUid = lockTargetUid; window.GameLogic.currentTargetType = isMimi ? 'mimi' : (isDummy ? 'dummy' : 'player'); } else { this.lockOnTarget.setVisible(false); window.GameLogic.currentTargetSprite = null; window.GameLogic.currentTargetUid = null; }
             } else { if (this.waterPromptBg) { this.waterPromptBg.setVisible(false); this.waterPromptText.setVisible(false); this.lockOnTarget.setVisible(false); this.lastWaterDrawMsg = null; } }
+        }
+
+        if (this.isCafe && this.princeCatSprite) {
+            this.updatePrinceCatAutonomy(time, delta);
+            this.updatePrinceCatVisual();
         }
         
         if (this.localPlayer.isInvincible) { this.localPlayer.sprite.setAlpha((Math.floor(time / 100) % 2 === 0) ? 0.5 : 1); } else { 
@@ -4956,17 +4996,36 @@ document.getElementById("save-edit-btn").addEventListener("click", () => { let n
 
 document.getElementById("send-btn").addEventListener("click", sendChat);
 window.addEventListener("keydown", (e) => { if (e.key === "Enter") { if (document.activeElement === chatInput) sendChat(); else if (document.activeElement === document.getElementById("pm-input")) window.sendPM(); } });
-function sendBubble(msg) { 
+function sendBubble(msg, options = {}) { 
     if (window.GameLogic.currentUser) { 
+        const bubbleTime = Date.now();
+        const bubbleAnchor = options.bubbleAnchor || null;
+        const parsedYOffset = Number(options.yOffset);
+        const bubbleYOffset = Number.isFinite(parsedYOffset) ? parsedYOffset : null;
+
         window.GameLogic.myProfile.bubbleMsg = msg; 
-        window.GameLogic.myProfile.bubbleTime = Date.now(); 
+        window.GameLogic.myProfile.bubbleTime = bubbleTime; 
+        window.GameLogic.myProfile.bubbleAnchor = bubbleAnchor;
+        window.GameLogic.myProfile.bubbleYOffset = bubbleYOffset;
+
         let path = "";
         if (window.GameLogic.currentScene === "cafe") path = `cafePlayers/${window.GameLogic.currentUser.uid}`;
         else if (window.GameLogic.currentScene === "shrine") path = `shrinePlayers/${window.GameLogic.currentUser.uid}`;
         else if (window.GameLogic.currentScene === "playroom" && window.GameLogic.currentRoomId) path = `playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`;
         
-        if (path !== "") update(ref(db, path), { bubbleMsg: msg, bubbleTime: window.GameLogic.myProfile.bubbleTime }); 
+        if (path !== "") {
+            update(ref(db, path), { 
+                bubbleMsg: msg, 
+                bubbleTime: bubbleTime,
+                bubbleAnchor: bubbleAnchor,
+                bubbleYOffset: bubbleYOffset
+            }); 
+        }
     } 
+}
+
+function sendPrinceCatBubble(msg) {
+    sendBubble(msg, { bubbleAnchor: 'below', yOffset: 74 });
 }
 function sendChat() { const msg = chatInput.value.trim(); if (msg !== "" && window.GameLogic.currentUser) { const now = new Date(); push(ref(db, 'chats'), { name: window.GameLogic.myProfile.name, msg: msg, date: now.toLocaleDateString('zh-TW', {month: '2-digit', day: '2-digit'}), time: now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute:'2-digit' }) }); sendBubble(msg); chatInput.value = ""; } }
 function listenToChat() { onValue(ref(db, 'chats'), (snapshot) => { const chatBox = document.getElementById("chat-box"); chatBox.innerHTML = ""; const chats = snapshot.val(); if (chats) { let lastMsg = ""; let html = ""; let chatArray = Object.values(chats); if (chatArray.length > 0) { let latest = chatArray[chatArray.length - 1]; lastMsg = `${latest.name}：${latest.msg}`; } chatArray.reverse().forEach(c => { html += `<div style="margin-bottom: 4px;"><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg} <span style="font-size:10px; color:#bbb; margin-left:8px;">${c.date||''} ${c.time||''}</span></div>`; }); chatBox.innerHTML = html; const topBar = document.getElementById("top-notification-bar"); if (topBar && lastMsg) { topBar.innerText = `💬 最新發言｜ ${lastMsg}`; } requestAnimationFrame(() => { setTimeout(() => { chatBox.scrollTop = 0; }, 10); }); } }); }
