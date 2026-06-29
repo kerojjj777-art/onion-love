@@ -190,7 +190,8 @@ function createSystemUI() {
             .magic-slot:hover { background: rgba(197, 160, 89, 0.3); }
             .magic-qty { position: absolute; bottom: 2px; right: 5px; font-size: 12px; font-weight: bold; color: var(--mucha-brown); }
             #quick-select-menu { display: none; position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); width: 300px; background: rgba(0, 15, 30, 0.4); border: 1px solid rgba(135,206,235,0.3); border-radius: 20px; padding: 15px 5px; z-index: 300; flex-direction: column; align-items: center; box-shadow: 0 0 20px rgba(0, 191, 255, 0.3); pointer-events: auto; touch-action: pan-x; }
-            #quick-items-container { display: flex; flex-direction: row; overflow-x: auto; scroll-snap-type: x mandatory; gap: 15px; width: 100%; padding: 15px 10px; box-sizing: border-box; scrollbar-width: none; align-items: center; }
+            #quick-items-container { display: flex; flex-direction: row; overflow-x: auto; scroll-snap-type: x mandatory; gap: 15px; width: 100%; padding: 15px 10px; box-sizing: border-box; scrollbar-width: none; align-items: center; cursor: grab; -webkit-overflow-scrolling: touch; }
+#quick-items-container.dragging { cursor: grabbing; scroll-snap-type: none; }
             #quick-items-container::-webkit-scrollbar { display: none; }
             .quick-item { flex: 0 0 60px; height: 60px; border: none; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; background: rgba(255,255,255,0.8); position: relative; transition: 0.3s; scroll-snap-align: center; box-shadow: 0 0 10px rgba(135,206,235,0.5); }
             .quick-item.staged { transform: scale(1.35); box-shadow: 0 0 20px rgba(255,255,255,1), 0 0 15px rgba(0,191,255,0.8); background: #fff; z-index: 10; }
@@ -539,7 +540,7 @@ function createSystemUI() {
                     /* 手機版面位置拉高調整與大小修正 */
                     @media (max-width: 768px) {
                         /* 選項按鈕改為中央偏上 */
-                        #rps-choices { top: 35% !important; bottom: auto !important; left: 50% !important; transform: translateX(-50%) !important; gap: 15px !important; z-index: 50 !important; }
+                        #rps-choices { top: 52% !important; bottom: auto !important; left: 50% !important; transform: translateX(-50%) !important; gap: 15px !important; z-index: 50 !important; }
                         #rps-choices img { width: 70px !important; }
                         
                         /* 修正1：統一雙方圖片大小，確保在手機上絕對對稱 */
@@ -948,6 +949,7 @@ window.devFillMagic = function() {
     inv['水球'] = 100;
     inv['煙火'] = 100;
     inv['蔥友機'] = 100;
+    inv['派對喇叭'] = 100;
     
     update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv }).then(() => {
         document.getElementById('dev-modal').style.display = 'none';
@@ -1070,6 +1072,10 @@ onAuthStateChanged(auth, async (user) => {
             let coverEl = document.getElementById('music-cover'), titleEl = document.getElementById('music-title');
             if (coverEl) coverEl.src = track.cover; if (titleEl) titleEl.innerText = track.title;
         } else { set(ref(db, `users/${user.uid}`), window.GameLogic.myProfile); }
+
+        setTimeout(() => {
+        if (window.checkPendingWeeklyRewardNotice) window.checkPendingWeeklyRewardNotice();
+        }, 0);
 
         onValue(ref(db, '.info/connected'), (snap) => {
             if (snap.val() === true && window.GameLogic.currentUser) {
@@ -1693,7 +1699,15 @@ class UIScene extends Phaser.Scene {
         this.itemBtn.setPosition(clusterX, clusterY - d); this.itemText.setPosition(this.itemBtn.x, this.itemBtn.y);
         this.furnBtn.setPosition(clusterX - d, clusterY); this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
         
-        if (this.magicMenuEmitter) this.magicMenuEmitter.setPosition(gameSize.width / 2, gameSize.height - 185);
+        if (this.magicMenuEmitter) {
+    const quickMenu = document.getElementById('quick-select-menu');
+    if (quickMenu && quickMenu.style.display === 'flex') {
+        const rect = quickMenu.getBoundingClientRect();
+        this.magicMenuEmitter.setPosition(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    } else {
+        this.magicMenuEmitter.setPosition(gameSize.width / 2, gameSize.height - 185);
+    }
+}
         // 修正4：派對儀表板再往上移，設定為搖桿 Y 軸上方 220px 避免重疊
         if (this.partyDash) this.partyDash.setPosition(20, joystickY - 220);
     }
@@ -2445,24 +2459,86 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
             window.GameLogic.stagedMagicItem = 'none';
             
             container.onscroll = () => {
-                let centerPoint = container.scrollLeft + container.offsetWidth / 2;
-                let items = container.querySelectorAll('.quick-item');
-                let closest = null; let minDiff = Infinity;
-                items.forEach(el => {
-                    let elCenter = el.offsetLeft + el.offsetWidth / 2;
-                    let diff = Math.abs(elCenter - centerPoint);
-                    if (diff < minDiff) { minDiff = diff; closest = el; }
-                    el.classList.remove('staged');
-                });
-                if (closest) {
-                    closest.classList.add('staged');
-                    window.GameLogic.stagedMagicItem = closest.getAttribute('data-magic');
-                }
-            };
-            
-            menu.style.display = 'flex';
-            if (blocker) blocker.style.display = 'block';
-            if (uiScene && uiScene.magicMenuEmitter) uiScene.magicMenuEmitter.start();
+    let centerPoint = container.scrollLeft + container.offsetWidth / 2;
+    let items = container.querySelectorAll('.quick-item');
+    let closest = null; let minDiff = Infinity;
+    items.forEach(el => {
+        let elCenter = el.offsetLeft + el.offsetWidth / 2;
+        let diff = Math.abs(elCenter - centerPoint);
+        if (diff < minDiff) { minDiff = diff; closest = el; }
+        el.classList.remove('staged');
+    });
+    if (closest) {
+        closest.classList.add('staged');
+        window.GameLogic.stagedMagicItem = closest.getAttribute('data-magic');
+    }
+};
+
+// 桌機支援滑鼠滾輪左右捲動
+container.onwheel = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    container.scrollLeft += (Math.abs(e.deltaX) > Math.abs(e.deltaY)) ? e.deltaX : e.deltaY;
+};
+
+// 桌機支援滑鼠按住左右拖曳
+if (!container._quickDragClickGuard) {
+    container._quickDragClickGuard = (e) => {
+        if (container._quickDragMoved) {
+            e.preventDefault();
+            e.stopPropagation();
+            container._quickDragMoved = false;
+        }
+    };
+    container.addEventListener('click', container._quickDragClickGuard, true);
+}
+
+let quickDragActive = false;
+let quickDragStartX = 0;
+let quickDragStartScroll = 0;
+
+container.onpointerdown = (e) => {
+    if (e.pointerType !== 'mouse') return;
+    quickDragActive = true;
+    container._quickDragMoved = false;
+    quickDragStartX = e.clientX;
+    quickDragStartScroll = container.scrollLeft;
+    container.classList.add('dragging');
+    container.setPointerCapture(e.pointerId);
+    e.stopPropagation();
+};
+
+container.onpointermove = (e) => {
+    if (!quickDragActive) return;
+    let dx = e.clientX - quickDragStartX;
+    if (Math.abs(dx) > 5) container._quickDragMoved = true;
+    container.scrollLeft = quickDragStartScroll - dx;
+    e.preventDefault();
+    e.stopPropagation();
+};
+
+container.onpointerup = (e) => {
+    quickDragActive = false;
+    container.classList.remove('dragging');
+    try { container.releasePointerCapture(e.pointerId); } catch (_) {}
+    setTimeout(() => { container._quickDragMoved = false; }, 0);
+};
+
+container.onpointerleave = () => {
+    quickDragActive = false;
+    container.classList.remove('dragging');
+};
+
+menu.style.display = 'flex';
+if (blocker) blocker.style.display = 'block';
+
+if (uiScene && uiScene.magicMenuEmitter) {
+    requestAnimationFrame(() => {
+        const rect = menu.getBoundingClientRect();
+        uiScene.magicMenuEmitter.setPosition(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        uiScene.magicMenuEmitter.start();
+    });
+}
             
             setTimeout(() => { 
                 let sel = window.GameLogic.armedItemName || 'none';
@@ -2819,49 +2895,90 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
         }
     }
 
-    renderShowOffFx(entity, medalIcon, dateStr) {
-        if (!entity || !entity.sprite) return;
-        this.clearShowOffFx(entity);
+    renderShowOffFx(entity, medalIcon, titleText = '', recordText = '') {
+    if (!entity || !entity.sprite) return;
+    this.clearShowOffFx(entity);
 
-        entity.showOffContainer = this.add.container(entity.sprite.x + 80, entity.sprite.y - 40).setDepth(200);
+    entity.showOffContainer = this.add.container(entity.sprite.x + 80, entity.sprite.y - 40).setDepth(200);
 
-        let medal = this.add.image(0, 0, medalIcon).setDisplaySize(120, 120);
-        let dateText = this.add.text(0, 70, dateStr || '', { fontSize: '14px', color: '#ffd700', fontStyle: 'bold', stroke: '#000', strokeThickness: 4 }).setOrigin(0.5);
-        entity.showOffContainer.add([medal, dateText]);
+    let medal = this.add.image(0, 0, medalIcon).setDisplaySize(120, 120);
+    let titleLabel = this.add.text(0, 72, titleText || '', {
+        fontSize: '13px',
+        color: '#ffd700',
+        fontStyle: 'bold',
+        stroke: '#000',
+        strokeThickness: 4,
+        align: 'center',
+        wordWrap: { width: 180, useAdvancedWrap: true }
+    }).setOrigin(0.5);
 
-        entity.showOffFloatTween = this.tweens.add({ targets: entity.showOffContainer, y: entity.showOffContainer.y - 15, yoyo: true, repeat: -1, duration: 1000, ease: 'Sine.easeInOut' });
+    let showItems = [medal, titleLabel];
 
-        entity.showOffEmitter = this.add.particles(0, 0, 'fw-particle', {
-            x: { min: -60, max: 60 }, y: { min: -60, max: 60 },
-            speed: { min: 10, max: 30 }, scale: { start: 1, end: 0 },
-            tint: [0xffd700, 0xffffff], blendMode: 'ADD', lifespan: 800, frequency: 150
-        }).setDepth(199);
-        entity.showOffEmitter.startFollow(entity.showOffContainer);
+    if (recordText) {
+        let recordLabel = this.add.text(0, 102, recordText, {
+            fontSize: '12px',
+            color: '#00ffcc',
+            fontStyle: 'bold',
+            stroke: '#000',
+            strokeThickness: 3,
+            align: 'center',
+            wordWrap: { width: 180, useAdvancedWrap: true }
+        }).setOrigin(0.5);
+        showItems.push(recordLabel);
     }
 
-    startShowOff(medalIcon, dateStr) {
-        if (!this.localPlayer || !this.localPlayer.sprite) return;
+    entity.showOffContainer.add(showItems);
 
-        const actionTime = Date.now();
-        this.localPlayer.isShowingOff = true;
-        this.localPlayer.sprite.setVelocity(0, 0);
-        this.localPlayer.sprite.play('show-off', true);
-        window.playSFX(this, 'onion-show-off-reward');
+    entity.showOffFloatTween = this.tweens.add({
+        targets: entity.showOffContainer,
+        y: entity.showOffContainer.y - 15,
+        yoyo: true,
+        repeat: -1,
+        duration: 1000,
+        ease: 'Sine.easeInOut'
+    });
 
-        this.renderShowOffFx(this.localPlayer, medalIcon, dateStr);
-        this.showOffContainer = this.localPlayer.showOffContainer;
-        this.showOffEmitter = this.localPlayer.showOffEmitter;
+    entity.showOffEmitter = this.add.particles(0, 0, 'fw-particle', {
+        x: { min: -80, max: 80 },
+        y: { min: -80, max: 80 },
+        speed: { min: 15, max: 45 },
+        scale: { start: 1.3, end: 0 },
+        tint: [0xff0033, 0xff9900, 0xffff00, 0x33ff00, 0x00ccff, 0x3366ff, 0xcc33ff],
+        blendMode: 'ADD',
+        lifespan: 900,
+        frequency: 80
+    }).setDepth(199);
 
-        const playerPath = this.getCurrentPlayerPathForAction();
-        if (playerPath) {
-            update(ref(window.GameLogic.db, playerPath), {
-                action: 'showOff',
-                actionTime: actionTime,
-                medalIcon: medalIcon,
-                medalDate: dateStr || ''
-            });
-        }
+    entity.showOffEmitter.startFollow(entity.showOffContainer);
+}
+
+    startShowOff(medalIcon, dateStr, medalTitle = '', recordText = '') {
+    if (!this.localPlayer || !this.localPlayer.sprite) return;
+
+    const actionTime = Date.now();
+    const titleText = medalTitle || dateStr || '';
+
+    this.localPlayer.isShowingOff = true;
+    this.localPlayer.sprite.setVelocity(0, 0);
+    this.localPlayer.sprite.play('show-off', true);
+    window.playSFX(this, 'onion-show-off-reward');
+
+    this.renderShowOffFx(this.localPlayer, medalIcon, titleText, recordText);
+    this.showOffContainer = this.localPlayer.showOffContainer;
+    this.showOffEmitter = this.localPlayer.showOffEmitter;
+
+    const playerPath = this.getCurrentPlayerPathForAction();
+    if (playerPath) {
+        update(ref(window.GameLogic.db, playerPath), {
+            action: 'showOff',
+            actionTime: actionTime,
+            medalIcon: medalIcon,
+            medalDate: dateStr || '',
+            medalTitle: titleText,
+            medalRecord: recordText || ''
+        });
     }
+}
     playGlobalFireworks() {
         window.playSFX(this, 'fireworks-in-the-sky'); let cam = this.cameras.main; let colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff, 0xff8800];
         for (let i = 0; i < 7; i++) { this.time.delayedCall(i * 500, () => { let x = cam.scrollX + Phaser.Math.Between(100, cam.width - 100); let y = cam.scrollY + Phaser.Math.Between(100, cam.height - 100); let mixColors = [Phaser.Utils.Array.GetRandom(colors), Phaser.Utils.Array.GetRandom(colors), Phaser.Utils.Array.GetRandom(colors)]; let emitter = this.add.particles(x, y, 'fw-particle', { speed: { min: 200, max: 450 }, angle: { min: 0, max: 360 }, scale: { start: 2, end: 0 }, blendMode: 'ADD', tint: mixColors, lifespan: { min: 1500, max: 3000 }, gravityY: 150, quantity: 100 }); emitter.setDepth(200); emitter.explode(); let flash = this.add.circle(x, y, 150, mixColors[0], 0.5).setDepth(199).setBlendMode('ADD'); this.tweens.add({ targets: flash, alpha: 0, scale: 2.5, duration: 600, onComplete: () => flash.destroy() }); this.time.delayedCall(3000, () => emitter.destroy()); }); }
@@ -2916,16 +3033,57 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
             entity.partyScoreContainer.setVisible(false); 
             if (entity.localAura) { entity.localAura.setVisible(false); }
         }
-        if (pData.bubbleMsg && (Date.now() - pData.bubbleTime < 10000)) { entity.bubbleContainer.setVisible(true);
-            if (entity.lastBubbleData !== pData.bubbleMsg) { entity.lastBubbleData = pData.bubbleMsg; entity.bubbleText.setText(pData.bubbleMsg); const bounds = entity.bubbleText.getBounds(); const boxWidth = bounds.width + 20, boxHeight = bounds.height + 16; entity.bubbleBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 8).strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 8); entity.bubbleOffsetY = 65 + boxHeight / 2; }
-            entity.bubbleContainer.setPosition(sx, sy - (entity.bubbleOffsetY || 80)); // 修正3：避免每幀調用 getBounds 造成嚴重 Lag
-        } else { entity.bubbleContainer.setVisible(false); } 
+        let forcedBubbleMsg = (pData.action === 'showOff' || (entity === this.localPlayer && entity.isShowingOff)) ? '這個洋蔥正在炫耀' : '';
+let activeBubbleMsg = forcedBubbleMsg || ((pData.bubbleMsg && (Date.now() - (pData.bubbleTime || 0) < 10000)) ? pData.bubbleMsg : '');
+
+if (activeBubbleMsg) { 
+    entity.bubbleContainer.setVisible(true);
+    if (entity.lastBubbleData !== activeBubbleMsg) { 
+        entity.lastBubbleData = activeBubbleMsg; 
+        entity.bubbleText.setText(activeBubbleMsg); 
+        const bounds = entity.bubbleText.getBounds(); 
+        const boxWidth = bounds.width + 20, boxHeight = bounds.height + 16; 
+        entity.bubbleBg.clear()
+            .fillStyle(0xf4ecd8, 0.95)
+            .lineStyle(2, 0xc5a059, 1)
+            .fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 8)
+            .strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 8); 
+        entity.bubbleOffsetY = 65 + boxHeight / 2; 
+    }
+    entity.bubbleContainer.setPosition(sx, sy - (entity.bubbleOffsetY || 80));
+} else { 
+    entity.bubbleContainer.setVisible(false); 
+} 
     }
     createFurniture(key, data) { 
-        let imgKey = key.includes('giftbox') ? 'gift-box-stay' : (key.includes('scoreboard') ? 'hall-screen' : (key.includes('fridge') ? 'fridge' : (key.includes('shrine') ? 'shrine' : (key.includes('dummy') ? 'dummy' : (key.includes('bed') ? 'doghouse-bed' : (key === 'altar' ? 'shrine-altar' : (key.startsWith('seat_') ? 'shrine-seat' : 'memory'))))))); 
-        let f = { sprite: this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true) }; 
-        if (key.includes('giftbox')) f.sprite.setDisplaySize(120, 120);
-        f.sprite.isLocked = data.locked; 
+    const isGiftBox = key.includes('giftbox');
+    let imgKey = isGiftBox ? 'gift-box-stay' : (key.includes('scoreboard') ? 'hall-screen' : (key.includes('fridge') ? 'fridge' : (key.includes('shrine') ? 'shrine' : (key.includes('dummy') ? 'dummy' : (key.includes('bed') ? 'doghouse-bed' : (key === 'altar' ? 'shrine-altar' : (key.startsWith('seat_') ? 'shrine-seat' : 'memory'))))))); 
+    let f = { sprite: this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true) }; 
+    f.isGiftBox = isGiftBox;
+
+    if (isGiftBox) {
+        f.sprite.setDisplaySize(120, 120);
+
+        f.rewardNoticeText = this.add.text(data.x, data.y - 85, '‼️', {
+            fontSize: '34px',
+            fontFamily: 'Arial, sans-serif',
+            color: '#ffeb3b',
+            stroke: '#8b0000',
+            strokeThickness: 5
+        }).setOrigin(0.5).setDepth(25).setVisible(!!window.GameLogic.hasPendingWeeklyReward);
+
+        f.rewardNoticeTween = this.tweens.add({
+            targets: f.rewardNoticeText,
+            x: data.x + 3,
+            y: data.y - 92,
+            yoyo: true,
+            repeat: -1,
+            duration: 120,
+            ease: 'Sine.easeInOut'
+        });
+    }
+
+    f.sprite.isLocked = data.locked;  
         if (imgKey === 'hall-screen') {
             f.sprite.setOrigin(0.5, 0.5); // 靜態圖不需播放動畫
 
@@ -3510,7 +3668,7 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                 this.localPlayer.isShowingOff = false;
                 this.clearShowOffFx(this.localPlayer);
                 const playerPath = this.getCurrentPlayerPathForAction();
-                if (playerPath) update(ref(window.GameLogic.db, playerPath), { action: null, actionTime: null, medalIcon: null, medalDate: null });
+                if (playerPath) update(ref(window.GameLogic.db, playerPath), { action: null, actionTime: null, medalIcon: null, medalDate: null, medalTitle: null, medalRecord: null });
             } else {
                 this.localPlayer.sprite.setVelocity(0, 0); this.localPlayer.sprite.play('show-off', true);
                 this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
@@ -3758,6 +3916,8 @@ if (dist < 30) {
                 if (window.GameLogic.placingFurnitureKey === key) { window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); }
                 if (this.furnitureSprites[key].particleEmitter) this.furnitureSprites[key].particleEmitter.destroy(); // [新增] 銷毀粒子
                 if (this.furnitureSprites[key].textContainer) this.furnitureSprites[key].textContainer.destroy();
+                if (this.furnitureSprites[key].rewardNoticeTween) this.furnitureSprites[key].rewardNoticeTween.stop();
+                if (this.furnitureSprites[key].rewardNoticeText) this.furnitureSprites[key].rewardNoticeText.destroy();
                 // 移除已失效的假人氣泡銷毀死碼
                 this.furnitureSprites[key].sprite.destroy();
                 delete this.furnitureSprites[key];
@@ -3777,7 +3937,7 @@ if (dist < 30) {
                         if (op.lastActionTime !== pd.actionTime) {
                             op.lastActionTime = pd.actionTime;
                             op.sprite.isShowingOff = true;
-                            this.renderShowOffFx(op, pd.medalIcon, pd.medalDate || '');
+                            this.renderShowOffFx(op, pd.medalIcon, pd.medalTitle || pd.medalDate || '', pd.medalRecord || '');
                         }
                         op.sprite.play('show-off', true);
                     } else if (op.lastActionTime !== pd.actionTime) {
@@ -5206,7 +5366,8 @@ const rewardStyles = `
 <div id="medal-detail-modal" class="modal" style="z-index: 290; text-align:center; background:#111; color:#fff; border: 3px solid var(--mucha-gold);">
     <h3 id="md-event-name" style="color:#ffd700; margin-top:0;"></h3>
     <img id="md-icon" src="" style="width:150px; height:150px; object-fit:contain; filter:drop-shadow(0 0 10px #ffd700); margin: 15px 0;">
-    <div id="md-date" style="color:#aaa; font-size:14px; margin-bottom:15px;"></div>
+    <div id="md-date" style="color:#aaa; font-size:14px; margin-bottom:8px;"></div>
+    <div id="md-record" style="color:#00ffcc; font-size:15px; font-weight:bold; margin-bottom:15px; text-shadow:0 0 5px #000;"></div>
     <div style="display:flex; gap:10px;">
         <button class="btn-primary" style="flex:1; background:#d9534f; font-weight:bold; border:2px solid #ffcc00;" onclick="window.triggerShowOff()">炫耀</button>
         <button class="btn-secondary" style="flex:1;" onclick="document.getElementById('medal-detail-modal').style.display='none'">關閉</button>
@@ -5214,6 +5375,61 @@ const rewardStyles = `
 </div>
 `;
 document.getElementById('app-container').insertAdjacentHTML('beforeend', rewardStyles);
+
+window.updateGiftBoxRewardNoticeVisual = function() {
+    const hasPending = !!window.GameLogic.hasPendingWeeklyReward;
+    const ms = window.GameLogic.phaserGame ? window.GameLogic.phaserGame.scene.getScene('MainScene') : null;
+    if (!ms || !ms.furnitureSprites) return;
+
+    Object.values(ms.furnitureSprites).forEach(furn => {
+        if (!furn || !furn.sprite || !furn.isGiftBox) return;
+
+        if (furn.rewardNoticeText) {
+            furn.rewardNoticeText.setPosition(furn.sprite.x, furn.sprite.y - 85);
+            furn.rewardNoticeText.setVisible(hasPending);
+        }
+
+        if (hasPending && !window.GameLogic.activeGiftBox) {
+            furn.sprite.setTexture('gift-box-stay');
+            if (furn.glow) furn.glow.setVisible(false);
+        }
+    });
+};
+
+window.checkPendingWeeklyRewardNotice = async function() {
+    if (!window.GameLogic.currentUser) return false;
+
+    const uid = window.GameLogic.currentUser.uid;
+    const lastWeekId = window.getWeekId(-1);
+
+    try {
+        const [rewardSnap, sweepSnap] = await Promise.all([
+            get(ref(window.GameLogic.db, `users/${uid}/weeklyRewards/${lastWeekId}`)),
+            get(ref(window.GameLogic.db, `weeklySweeps/${lastWeekId}`))
+        ]);
+
+        let hasPending = false;
+
+        if (rewardSnap.exists()) {
+            const rewardVal = rewardSnap.val();
+            const rewardList = Array.isArray(rewardVal) ? rewardVal : Object.values(rewardVal || {});
+            hasPending = rewardList.some(r => r && !r.claimed);
+        } else {
+            const sweepsData = sweepSnap.val() || {};
+            const sorted = Object.entries(sweepsData)
+                .map(([k, v]) => ({ uid: k, ...v }))
+                .sort((a, b) => (b.count || 0) - (a.count || 0));
+            hasPending = sorted.findIndex(p => p.uid === uid) >= 0;
+        }
+
+        window.GameLogic.hasPendingWeeklyReward = hasPending;
+        window.updateGiftBoxRewardNoticeVisual();
+        return hasPending;
+    } catch (err) {
+        console.warn('檢查大粉蔥待領獎勵失敗:', err);
+        return false;
+    }
+};
 
 // 【新增】實時監聽全服是否有玩家正在與大粉蔥(派獎箱)互動
 onValue(ref(db, 'serverEvents/giftBoxInteracting'), snap => {
@@ -5223,15 +5439,23 @@ onValue(ref(db, 'serverEvents/giftBoxInteracting'), snap => {
         let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
         if (ms && ms.furnitureSprites) {
             Object.values(ms.furnitureSprites).forEach(furn => {
-                if (furn.sprite && (furn.sprite.texture.key === 'gift-box-stay' || furn.sprite.texture.key === 'gift-box-open')) {
-                    if (isAnyoneInteracting) {
-                        furn.sprite.setTexture('gift-box-open');
-                        if (furn.glow) furn.glow.setVisible(true);
-                    } else if (!window.GameLogic.activeGiftBox) {
-                        furn.sprite.setTexture('gift-box-stay');
-                        if (furn.glow) furn.glow.setVisible(false);
-                    }
-                }
+                if (furn.sprite && (furn.isGiftBox || furn.sprite.texture.key === 'gift-box-stay' || furn.sprite.texture.key === 'gift-box-open')) {
+    if (furn.rewardNoticeText) furn.rewardNoticeText.setVisible(!!window.GameLogic.hasPendingWeeklyReward);
+
+    if (window.GameLogic.hasPendingWeeklyReward && !window.GameLogic.activeGiftBox) {
+        furn.sprite.setTexture('gift-box-stay');
+        if (furn.glow) furn.glow.setVisible(false);
+        return;
+    }
+
+    if (isAnyoneInteracting) {
+        furn.sprite.setTexture('gift-box-open');
+        if (furn.glow) furn.glow.setVisible(true);
+    } else if (!window.GameLogic.activeGiftBox) {
+        furn.sprite.setTexture('gift-box-stay');
+        if (furn.glow) furn.glow.setVisible(false);
+    }
+}
             });
         }
     }
@@ -5239,6 +5463,13 @@ onValue(ref(db, 'serverEvents/giftBoxInteracting'), snap => {
 
 window.openRewardModal = function(furnitureObj) { 
     window.GameLogic.activeGiftBox = furnitureObj; 
+
+    if (window.GameLogic.hasPendingWeeklyReward && furnitureObj && furnitureObj.sprite) {
+        furnitureObj.sprite.setTexture('gift-box-stay');
+        if (furnitureObj.glow) furnitureObj.glow.setVisible(false);
+        if (window.updateGiftBoxRewardNoticeVisual) window.updateGiftBoxRewardNoticeVisual();
+    }
+
     document.getElementById('reward-main-modal').style.display = 'block'; 
     
     // 【新增】寫入 Firebase 廣播互動狀態
@@ -5278,6 +5509,7 @@ window.closeRewardModal = function() {
         window.GameLogic.activeGiftBox.sprite.setTexture('gift-box-stay'); 
         if (window.GameLogic.activeGiftBox.glow) window.GameLogic.activeGiftBox.glow.setVisible(false); 
         window.GameLogic.activeGiftBox = null; 
+        if (window.updateGiftBoxRewardNoticeVisual) window.updateGiftBoxRewardNoticeVisual();
     } 
 };
 
@@ -5300,6 +5532,8 @@ window.openWeeklyRewardDetail = async function() {
     
     let rankText = myRankIndex === 0 ? '🏆 第 1 名' : (myRankIndex === 1 ? '🥈 第 2 名' : (myRankIndex === 2 ? '🥉 第 3 名' : (myRankIndex === -1 ? '未參賽' : `第 ${myRankIndex + 1} 名`)));
     document.getElementById('reward-my-rank').innerText = `${rankText} (掃了 ${mySweeps} 次)`;
+    window.currentViewingRewardRecordText = `${rankText}，掃了 ${mySweeps} 次`;
+    window.currentViewingRewardSweepCount = mySweeps;
     
     let myRewards = rewardSnap.exists() ? rewardSnap.val() : [];
     
@@ -5363,7 +5597,15 @@ window.claimWeeklyReward = async function(idx) {
     }
     
     if (r.medal) {
-        let newMedal = { id: r.id + '_' + Date.now(), date: new Date().toLocaleDateString('zh-TW'), eventName: '本週掃地王', name: r.name, icon: r.medal };
+        let newMedal = {
+    id: r.id + '_' + Date.now(),
+    date: new Date().toLocaleDateString('zh-TW'),
+    eventName: '本週掃地王',
+    name: r.name,
+    icon: r.medal,
+    recordText: window.currentViewingRewardRecordText || '',
+    sweepCount: window.currentViewingRewardSweepCount || 0
+};
         let currentMedals = window.GameLogic.myProfile.medals || [];
         currentMedals.push(newMedal);
         window.GameLogic.myProfile.medals = currentMedals;
@@ -5371,8 +5613,9 @@ window.claimWeeklyReward = async function(idx) {
     }
     
     await update(ref(window.GameLogic.db), updates);
-    
-    document.getElementById(`rew-item-${idx}`).classList.add('claimed');
+if (window.checkPendingWeeklyRewardNotice) window.checkPendingWeeklyRewardNotice();
+
+document.getElementById(`rew-item-${idx}`).classList.add('claimed');
     
     if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) {
         let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
@@ -5397,38 +5640,51 @@ window.openMedalList = function() {
     document.getElementById('view-profile-modal').style.display = 'none';
     let medals = window.GameLogic.myProfile.medals || [];
     let grid = document.getElementById('medal-grid');
+
     if (medals.length === 0) {
+        window.currentRenderedMedals = [];
         grid.innerHTML = '<div style="grid-column: span 3; text-align:center; color:#888;">尚未獲得任何戰績勳章</div>';
     } else {
         let html = '';
-        medals.reverse().forEach((m, idx) => {
+        window.currentRenderedMedals = [...medals].reverse();
+
+        window.currentRenderedMedals.forEach((m, idx) => {
             html += `<div class="medal-item" onclick="window.showMedalDetail(${idx})">
                 <img src="${m.icon}" style="width:50px; height:50px; object-fit:contain; filter:drop-shadow(0 0 5px var(--mucha-gold));">
                 <span style="font-size:10px; color:var(--mucha-brown); font-weight:bold; margin-top:5px;">${m.date}</span>
+                ${m.recordText ? `<span style="font-size:10px; color:var(--mucha-green); margin-top:3px;">${m.recordText}</span>` : ''}
             </div>`;
         });
         grid.innerHTML = html;
     }
+
     document.getElementById('medal-list-modal').style.display = 'block';
 };
 
 window.showMedalDetail = function(idx) {
-    let m = [...(window.GameLogic.myProfile.medals || [])].reverse()[idx];
+    let rendered = window.currentRenderedMedals || [...(window.GameLogic.myProfile.medals || [])].reverse();
+    let m = rendered[idx];
     if (!m) return;
+
     window.currentShowOffMedal = m;
-    document.getElementById('md-event-name').innerText = m.eventName + ' - ' + m.name;
+
+    document.getElementById('md-event-name').innerText = `${m.eventName || '戰績'} - ${m.name || ''}`;
     document.getElementById('md-icon').src = m.icon;
-    document.getElementById('md-date').innerText = `系統派發日期：${m.date}`;
+    document.getElementById('md-date').innerText = `系統派發日期：${m.date || ''}`;
+    document.getElementById('md-record').innerText = m.recordText || '';
     document.getElementById('medal-detail-modal').style.display = 'block';
 };
 
 window.triggerShowOff = function() {
     let m = window.currentShowOffMedal;
     if (!m) return;
+
+    const medalTitle = [m.eventName, m.name].filter(Boolean).join(' - ');
+
     window.clearAllModals();
     if (window.GameLogic.phaserGame) {
         let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
-        if (ms && ms.startShowOff) ms.startShowOff(m.icon, m.date);
+        if (ms && ms.startShowOff) ms.startShowOff(m.icon, m.date, medalTitle, m.recordText || '');
     }
 };
 // ====== 新增邏輯結束 ======
