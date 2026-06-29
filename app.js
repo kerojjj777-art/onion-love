@@ -1679,8 +1679,8 @@ class BootScene extends Phaser.Scene {
         this.load.image('prince-cat-love', 'pet-cat-wzm-love.png'); // 王子麵摸摸愛心特效，showPrinceCatLoveEffect() 使用此 key
         this.load.image('ranking-medal-cat-wzm-no0.png', 'ranking-medal-cat-wzm-no0.png');
         this.load.audio('prince-cat-normal-meow', 'pet-cat-wzm-normal-meow.mp3');
-        this.load.audio('prince-cat-feel-good', 'pet-cat-wzm-feel-good.mp3');
         this.load.audio('prince-cat-got-touched', 'pet-cat-wzm-got-touched.mp3');
+        this.load.audio('prince-cat-feel-good', 'pet-cat-wzm-feel-good.mp3');
         this.load.image('bg7Eonion', '7eonion-bg.jpg'); this.load.image('storeManager', 'store-manager.png'); this.load.spritesheet('onion-throw', 'onion-throw.png', { frameWidth: 90, frameHeight: 75 }); this.load.spritesheet('water-ball-blast', 'water-ball-blast.png', { frameWidth: 50, frameHeight: 50 }); this.load.spritesheet('onion-wet', 'onion-wet.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('made-coin', 'made-coin.png', { frameWidth: 50, frameHeight: 50 }); this.load.image('dummy', 'dummy.png'); this.load.spritesheet('dummy-got-shot', 'dummy-got-shot.png', { frameWidth: 75, frameHeight: 75 });
         this.load.image('fireworks', 'shop-fireworks.png'); this.load.spritesheet('onion-fireworks', 'onion-fireworks.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-got-shot', 'onion-got-shot.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('mimi-thief-walk', 'mimi-thief-walk.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('fireworks-shoot', 'fireworks-shoot.png', { frameWidth: 50, frameHeight: 50 });
@@ -1981,6 +1981,12 @@ class MainScene extends Phaser.Scene {
     create() {
         this.sceneName = window.GameLogic.currentScene;
         this.isCafe = this.sceneName === "cafe";
+        this.mimiWalkSFX = null;
+        this.handleVisibilityMimiWalk = null;
+        this.lastPrinceCatState = null;
+        this.lastPrinceCatStateStartTime = null;
+        this.lastPrinceCatWalkStopMeowKey = null;
+        this.lastPrinceCatPettingEffectKey = null;
         
         // 修正：徹底重構音樂切換邏輯，神龕擁有絕對獨立的背景音樂，不再與儀式狀態綁定
         let allBgms = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire'];
@@ -2170,8 +2176,14 @@ class MainScene extends Phaser.Scene {
                 window.GameLogic.cafeMimiData = data;
 
                 if (data && data.active) {
-                    if (this.sceneName !== 'cafe') return;
-                    if (!this.localPlayer || !this.localPlayer.sprite) return;
+                    if (this.sceneName !== 'cafe') {
+                        this.stopMimiWalkSFX(false);
+                        return;
+                    }
+                    if (!this.localPlayer || !this.localPlayer.sprite) {
+                        this.stopMimiWalkSFX(false);
+                        return;
+                    }
 
                     if (!this.mimiSprite) {
                         this.mimiSprite = this.physics.add.sprite(data.x, data.y, 'mimi-thief-walk').setDepth(11);
@@ -2181,11 +2193,10 @@ class MainScene extends Phaser.Scene {
                         window.playSFX(this, 'mimi-laugh');
                     }
 
-                    let mVol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100;
-                    if (this.sound.get('mimi-walk')) {
-                        if (!this.sound.get('mimi-walk').isPlaying && data.state !== 'down') this.sound.play('mimi-walk', {loop: true, volume: mVol});
-                    } else if (data.state !== 'down') {
-                        this.sound.add('mimi-walk', {loop: true, volume: mVol}).play();
+                    if (data.state !== 'down') {
+                        this.startMimiWalkSFX();
+                    } else {
+                        this.stopMimiWalkSFX(false);
                     }
 
                     if (!this.localPlayer.isThrowing) {
@@ -2241,7 +2252,7 @@ class MainScene extends Phaser.Scene {
                             this.mimiSprite.isBlinking = true;
                             this.tweens.add({ targets: this.mimiSprite, alpha: 0.2, yoyo: true, repeat: -1, duration: 150 });
                         }
-                        if (this.sound.get('mimi-walk')) this.sound.stopByKey('mimi-walk'); 
+                        this.stopMimiWalkSFX(false);
                     }
                     else this.mimiSprite.play('mimi-walk', true);
 
@@ -2256,7 +2267,7 @@ class MainScene extends Phaser.Scene {
                         this.mimiNameBg.destroy();
                         this.mimiHpText.destroy();
                         this.mimiSprite = null; 
-                        if (this.sound.get('mimi-walk')) this.sound.stopByKey('mimi-walk');
+                        this.stopMimiWalkSFX(false);
                     }
                 }
             });
@@ -3184,6 +3195,19 @@ if (uiScene && uiScene.magicMenuEmitter) {
         this.playerEnergyEmitter.stop();
         this.playerEnergyEmitter.isEnergyEmitting = false; // 自製旗標防呆，避免頻繁呼叫 start 導致卡頓
 
+        this.handleVisibilityMimiWalk = () => {
+            if (document.hidden) {
+                this.stopMimiWalkSFX(false);
+                return;
+            }
+
+            const data = window.GameLogic.cafeMimiData;
+            if (this.sceneName === 'cafe' && data && data.active && data.state !== 'down') {
+                this.startMimiWalkSFX();
+            }
+        };
+        document.addEventListener('visibilitychange', this.handleVisibilityMimiWalk);
+
         this.events.on('shutdown', () => {
             this.scale.off('resize', this.updateCameraBounds, this); // 確保離開場景時註銷視窗尺寸監聽，防止記憶體溢出卡頓
             if (this.leaderboardListener) this.leaderboardListener(); 
@@ -3198,9 +3222,13 @@ if (uiScene && uiScene.magicMenuEmitter) {
             if (this.doghouseFurnListener) this.doghouseFurnListener();
             if (this.shrineFurnListener) this.shrineFurnListener();
             
-            // 【修正1 & 2】：離開場景時，徹底註銷米米監聽器並強制切斷走路音效
+            // 【v1.3 修正】：離開場景時，徹底註銷米米監聽器並強制切斷走路音效
             if (this.mimiListener) this.mimiListener();
-            if (this.sound && this.sound.get('mimi-walk')) this.sound.stopByKey('mimi-walk');
+            if (this.handleVisibilityMimiWalk) {
+                document.removeEventListener('visibilitychange', this.handleVisibilityMimiWalk);
+                this.handleVisibilityMimiWalk = null;
+            }
+            this.stopMimiWalkSFX(true);
             
             if (this.trumpetListener) this.trumpetListener();
             if (this.partyAllHitsListener) this.partyAllHitsListener();
@@ -3222,6 +3250,14 @@ if (uiScene && uiScene.magicMenuEmitter) {
                 clearTimeout(window.GameLogic.princeCatMenuTimeout);
                 window.GameLogic.princeCatMenuTimeout = null;
             }
+        });
+
+        this.events.on('destroy', () => {
+            if (this.handleVisibilityMimiWalk) {
+                document.removeEventListener('visibilitychange', this.handleVisibilityMimiWalk);
+                this.handleVisibilityMimiWalk = null;
+            }
+            this.stopMimiWalkSFX(true);
         });
     }
 
@@ -3386,6 +3422,70 @@ entity.showOffRainbowTween = this.tweens.add({
 }
     }
     updateQTEBar(progress) { this.qteBar.clear(); let width = Math.min(100, (progress / 100) * 100); this.qteBar.fillStyle(0xd9534f, 1); this.qteBar.fillRoundedRect(-50, -8, width, 16, 8); }
+
+    startMimiWalkSFX() {
+        if (!this.sound || !this.cache || !this.cache.audio.exists('mimi-walk')) {
+            console.warn('找不到 mimi-walk 音效，已跳過播放。');
+            return;
+        }
+
+        if (window.GameLogic.muteSFX) {
+            this.stopMimiWalkSFX(false);
+            return;
+        }
+
+        const vol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100;
+
+        if (vol <= 0) {
+            this.stopMimiWalkSFX(false);
+            return;
+        }
+
+        const allMimiWalkSounds = this.sound.getAll('mimi-walk') || [];
+
+        if (!this.mimiWalkSFX) {
+            this.mimiWalkSFX = allMimiWalkSounds.find(snd => snd && !snd.isPlaying) || allMimiWalkSounds[0] || null;
+        }
+
+        if (!this.mimiWalkSFX) {
+            this.mimiWalkSFX = this.sound.add('mimi-walk', { loop: true, volume: vol });
+        }
+
+        allMimiWalkSounds.forEach(snd => {
+            if (snd && snd !== this.mimiWalkSFX) {
+                snd.stop();
+                if (snd.destroy) snd.destroy();
+            }
+        });
+
+        this.mimiWalkSFX.setLoop(true);
+        this.mimiWalkSFX.setVolume(vol);
+
+        if (!this.mimiWalkSFX.isPlaying) {
+            this.mimiWalkSFX.play();
+        }
+    }
+
+    stopMimiWalkSFX(destroyInstance = false) {
+        if (this.mimiWalkSFX) {
+            this.mimiWalkSFX.stop();
+            if (destroyInstance && this.mimiWalkSFX.destroy) {
+                this.mimiWalkSFX.destroy();
+            }
+            if (destroyInstance) this.mimiWalkSFX = null;
+        }
+
+        if (this.sound) {
+            const allMimiWalkSounds = this.sound.getAll('mimi-walk') || [];
+            allMimiWalkSounds.forEach(snd => {
+                if (snd && snd !== this.mimiWalkSFX) {
+                    snd.stop();
+                    if (destroyInstance && snd.destroy) snd.destroy();
+                }
+            });
+        }
+    }
+
     initPrinceCatSync() {
         if (!this.isCafe || this.princeCatListener) return;
 
@@ -3623,15 +3723,53 @@ entity.showOffRainbowTween = this.tweens.add({
         this.princeCatNameText.setPosition(this.princeCatSprite.x, nameY);
         this.princeCatNameBg.clear().fillStyle(0x000000, 0.6).fillRoundedRect(this.princeCatSprite.x - 34, nameY - 12, 68, 24, 6);
 
+        const currentPrinceCatState = data.state || 'idle';
+        const currentPrinceCatStateStartTime = data.stateStartTime || 0;
+        const walkStopMeowKey = `${currentPrinceCatState}_${currentPrinceCatStateStartTime}`;
+
+        if (
+            this.lastPrinceCatState === 'walk' &&
+            currentPrinceCatState !== 'walk' &&
+            this.lastPrinceCatWalkStopMeowKey !== walkStopMeowKey
+        ) {
+            this.lastPrinceCatWalkStopMeowKey = walkStopMeowKey;
+            this.playPrinceCatSFX('prince-cat-normal-meow');
+        }
+
+        this.lastPrinceCatState = currentPrinceCatState;
+        this.lastPrinceCatStateStartTime = currentPrinceCatStateStartTime;
+
         if (data.state === 'petting') {
             const pettingEffectKey = `${data.interactingUid || 'unknown'}_${data.stateStartTime || 0}`;
-            if (this.lastPrinceCatPettingEffectKey !== pettingEffectKey) {
-                this.lastPrinceCatPettingEffectKey = pettingEffectKey;
-                this.showPrinceCatLoveEffect();
-                window.playSFX(this, 'prince-cat-got-touched');
-                this.time.delayedCall(250, () => window.playSFX(this, 'prince-cat-feel-good'));
-            }
+            this.playPrinceCatPettingSFXOnce(pettingEffectKey);
         }
+    }
+
+    playPrinceCatSFX(key) {
+        if (!this.cache || !this.cache.audio.exists(key)) {
+            console.warn(`找不到王子麵音效：${key}，已跳過播放。`);
+            return;
+        }
+
+        try {
+            window.playSFX(this, key);
+        } catch (err) {
+            console.warn(`播放王子麵音效失敗：${key}`, err);
+        }
+    }
+
+    playPrinceCatPettingSFXOnce(pettingEffectKey) {
+        if (!pettingEffectKey) return;
+        if (this.lastPrinceCatPettingEffectKey === pettingEffectKey) return;
+
+        this.lastPrinceCatPettingEffectKey = pettingEffectKey;
+        this.showPrinceCatLoveEffect();
+
+        [
+            'prince-cat-normal-meow',
+            'prince-cat-got-touched',
+            'prince-cat-feel-good'
+        ].forEach(key => this.playPrinceCatSFX(key));
     }
 
     showPrinceCatLoveEffect() {
@@ -3732,11 +3870,13 @@ entity.showOffRainbowTween = this.tweens.add({
         const data = snap.val() || {};
 
         if (data.interactingUid === uid && data.state !== 'petting') {
+            const closeNow = Date.now();
             update(catRef, {
                 interactingUid: null,
                 lockedUntil: 0,
                 state: 'idle',
-                stateUntil: Date.now() + 1000
+                stateStartTime: closeNow,
+                stateUntil: closeNow + 1000
             }).catch(err => console.warn('Firebase 關閉王子麵選單失敗:', err));
         }
     }
@@ -3766,7 +3906,6 @@ entity.showOffRainbowTween = this.tweens.add({
         }
 
         this.princePettingLockUntil = lockUntil;
-        this.lastPrinceCatPettingEffectKey = pettingEffectKey;
         this.localPlayer.sprite.isPettingPrinceCat = true;
         this.localPlayer.sprite.setVelocity(0, 0);
         this.localPlayer.sprite.play('onion-petting', true);
@@ -3791,7 +3930,7 @@ entity.showOffRainbowTween = this.tweens.add({
             y: this.localPlayer.sprite.y
         });
 
-        this.showPrinceCatLoveEffect();
+        this.playPrinceCatPettingSFXOnce(pettingEffectKey);
         this.applyPrinceBondGain();
 
         this.time.delayedCall(3500, () => {
@@ -3810,13 +3949,15 @@ entity.showOffRainbowTween = this.tweens.add({
             get(catRef).then(latestSnap => {
                 const latest = latestSnap.val() || {};
                 if (latest.interactingUid === uid) {
+                    const restoreNow = Date.now();
                     update(catRef, {
                         interactingUid: null,
                         lockedUntil: 0,
                         state: 'idle',
                         targetX: latest.x || this.princeCatSprite.x,
                         targetY: latest.y || this.princeCatSprite.y,
-                        stateUntil: Date.now() + Phaser.Math.Between(2000, 5000)
+                        stateStartTime: restoreNow,
+                        stateUntil: restoreNow + Phaser.Math.Between(2000, 5000)
                     });
                 }
             });
