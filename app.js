@@ -2509,7 +2509,7 @@ class MainScene extends Phaser.Scene {
             let html = `<div style="flex: 0 0 calc(50% - 30px);"></div>`;
             magics.forEach((m) => {
                 let qtyHtml = m.name !== 'none' ? `<div style="position:absolute; bottom:-5px; right:0px; font-size:13px; font-weight:bold; color:#005599; text-shadow:0 0 4px #fff, 0 0 4px #fff;">x${m.qty}</div>` : '';
-                html += `<div class="quick-item" data-magic="${m.name}" onclick="window.selectQuickMagic('${m.name}')">
+                html += `<div class="quick-item" data-magic="${m.name}">
                             ${m.icon}${qtyHtml}
                          </div>`;
             });
@@ -2541,13 +2541,12 @@ container.onwheel = (e) => {
     container.scrollLeft += (Math.abs(e.deltaX) > Math.abs(e.deltaY)) ? e.deltaX : e.deltaY;
 };
 
-// 桌機支援滑鼠按住左右拖曳，並允許滾輪後點擊目前選中的法寶
+// 桌機支援滑鼠按住左右拖曳；單純點擊任一可見法寶時，直接等同按B裝填
 if (!container._quickDragClickGuard) {
     container._quickDragClickGuard = (e) => {
-        if (container._quickDragMoved) {
+        if (container._quickDragMoved || container._quickDirectSelected) {
             e.preventDefault();
             e.stopPropagation();
-            container._quickDragMoved = false;
         }
     };
     container.addEventListener('click', container._quickDragClickGuard, true);
@@ -2561,6 +2560,7 @@ container.onpointerdown = (e) => {
     if (e.pointerType !== 'mouse') return;
     quickDragActive = true;
     container._quickDragMoved = false;
+    container._quickDirectSelected = false;
     quickDragStartX = e.clientX;
     quickDragStartScroll = container.scrollLeft;
     container.classList.add('dragging');
@@ -2579,30 +2579,45 @@ container.onpointermove = (e) => {
 
 container.onpointerup = (e) => {
     const wasDragging = container._quickDragMoved;
-    const clickedItem = e.target.closest ? e.target.closest('.quick-item') : null;
+    const hitEl = document.elementFromPoint(e.clientX, e.clientY);
+    const clickedItem = hitEl && hitEl.closest ? hitEl.closest('.quick-item') : null;
 
     quickDragActive = false;
     container.classList.remove('dragging');
     try { container.releasePointerCapture(e.pointerId); } catch (_) {}
 
-    if (!wasDragging && clickedItem) {
+    if (!wasDragging && clickedItem && container.contains(clickedItem)) {
         e.preventDefault();
         e.stopPropagation();
+        container._quickDirectSelected = true;
         window.selectQuickMagic(clickedItem.getAttribute('data-magic'));
         container._quickDragMoved = false;
+        setTimeout(() => { container._quickDirectSelected = false; }, 0);
         return;
     }
 
-    setTimeout(() => { container._quickDragMoved = false; }, 0);
+    setTimeout(() => { 
+        container._quickDragMoved = false;
+        container._quickDirectSelected = false;
+    }, 0);
 };
 
 container.onpointerleave = () => {
     quickDragActive = false;
     container.classList.remove('dragging');
-    setTimeout(() => { container._quickDragMoved = false; }, 0);
+    setTimeout(() => { 
+        container._quickDragMoved = false;
+        container._quickDirectSelected = false;
+    }, 0);
 };
 
 menu.onclick = (e) => {
+    if (container._quickDirectSelected) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+    }
+
     const clickedItem = e.target.closest ? e.target.closest('.quick-item') : null;
     if (clickedItem) return;
     e.preventDefault();
@@ -2636,7 +2651,7 @@ if (uiScene && uiScene.magicMenuEmitter) {
         this.events.on('action_B', () => {
             let menu = document.getElementById('quick-select-menu');
             if (menu && menu.style.display === 'flex') {
-                window.selectQuickMagic(window.GameLogic.stagedMagicItem);
+                window.selectQuickMagic(window.GameLogic.stagedMagicItem || 'none');
                 return; 
             }
             
