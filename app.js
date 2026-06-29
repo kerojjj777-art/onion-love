@@ -700,22 +700,43 @@ window.updateOnlinePlayersUI = function() {
     containerEl.style.display = 'flex';
     
     let html = '';
-    // 修正6：如果全域召喚計時大於 0，就在「誰在線上」上方顯示全服倒數通知
     if (window.GameLogic.globalSummonCountdown > 0) {
         html += `<div style="background: rgba(217, 83, 79, 0.9); color: white; font-weight: bold; padding: 6px; border-radius: 4px; margin-bottom: 8px; text-align: center; font-size: 12px; animation: purpleFire 1s infinite alternate;">🚨 儀式即將開始: ${window.GameLogic.globalSummonCountdown}秒</div>`;
     }
     
     html += '<div style="color:var(--mucha-gold); font-weight:bold; margin-bottom:5px; text-align:center; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 3px;">誰在線上</div>';
-    let players = window.GameLogic.onlinePlayers || {};
+
     let now = Date.now();
-    
+    let players = { ...(window.GameLogic.onlinePlayers || {}) };
+
+    let roomPlayers = {};
+    if (window.GameLogic.currentScene === 'cafe') roomPlayers = window.GameLogic.cafePlayers || {};
+    else if (window.GameLogic.currentScene === 'shrine') roomPlayers = window.GameLogic.shrinePlayers || {};
+    else if (window.GameLogic.currentScene === 'playroom') roomPlayers = window.GameLogic.playroomPlayers || {};
+    else if (window.GameLogic.currentScene === 'partyroom' && window.PartyLogic) roomPlayers = window.PartyLogic.players || {};
+
+    for (let uid in roomPlayers) {
+        let rp = roomPlayers[uid];
+        if (!players[uid]) {
+            players[uid] = {
+                name: rp.name || '匿名',
+                color: rp.color || '#fff',
+                lastActive: now,
+                roomFallback: true
+            };
+        } else {
+            players[uid].name = players[uid].name || rp.name || '匿名';
+            players[uid].color = players[uid].color || rp.color || '#fff';
+        }
+    }
+
     for (let uid in players) {
         let p = players[uid];
-        // 修正4：過濾掉沒有發送心跳，或心跳超過 20 秒未更新的幽靈人口
-        if (p.lastActive && (now - p.lastActive > 30000)) continue;
-        if (!p.lastActive && uid !== window.GameLogic.currentUser?.uid) continue;
+        if (!p.roomFallback && p.lastActive && (now - p.lastActive > 30000)) continue;
+        if (!p.lastActive && uid !== window.GameLogic.currentUser?.uid && !roomPlayers[uid]) continue;
         html += `<div style="margin-top:5px; display:flex; align-items:center;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${p.color || '#fff'}; margin-right:8px; border:1px solid #000;"></span>${p.name || '匿名'}</div>`;
     }
+
     listEl.innerHTML = html;
 };
 
@@ -1395,7 +1416,23 @@ function leavePlayroom() {
     window.GameLogic.playroomPlayers = {};
     if (window.rpsUnsubscribe) { window.rpsUnsubscribe(); window.rpsUnsubscribe = null; }
 }
-function joinCafe() { const playerRef = ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`); set(playerRef, { x: window.GameLogic.myProfile.lastX || 1024, y: window.GameLogic.myProfile.lastY || 1024, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1, bubbleMsg: window.GameLogic.myProfile.bubbleMsg, bubbleTime: window.GameLogic.myProfile.bubbleTime }); onDisconnect(playerRef).remove(); cafeUnsubscribe = onValue(ref(db, 'cafePlayers'), (snapshot) => { window.GameLogic.cafePlayers = snapshot.val() || {}; }); }
+function joinCafe() {
+    const playerRef = ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`);
+    set(playerRef, {
+        x: window.GameLogic.myProfile.lastX || 1024,
+        y: window.GameLogic.myProfile.lastY || 1024,
+        name: window.GameLogic.myProfile.name,
+        color: window.GameLogic.myProfile.color,
+        level: window.GameLogic.myProfile.level || 1,
+        bubbleMsg: window.GameLogic.myProfile.bubbleMsg,
+        bubbleTime: window.GameLogic.myProfile.bubbleTime
+    });
+    onDisconnect(playerRef).remove();
+    cafeUnsubscribe = onValue(ref(db, 'cafePlayers'), (snapshot) => {
+        window.GameLogic.cafePlayers = snapshot.val() || {};
+        window.updateOnlinePlayersUI();
+    });
+}
 function leaveCafe() { if (window.GameLogic.currentUser) set(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), null); if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; } }
 
 function gainRewards(coins, exp) {
@@ -1956,44 +1993,45 @@ class MainScene extends Phaser.Scene {
             });
             this.dummiesListener = onValue(ref(window.GameLogic.db, 'cafeDummies'), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.dummySprites[key]) { let dData = data[key]; let dummySprite = this.physics.add.sprite(dData.x, dData.y, 'dummy').setDepth(8); this.dummySprites[key] = dummySprite; } } for (let key in this.dummySprites) { if (!data[key]) { this.dummySprites[key].destroy(); delete this.dummySprites[key]; } } });
           this.mimiListener = onValue(ref(window.GameLogic.db, 'cafeMimi'), (snap) => {
-                let data = snap.val(); window.GameLogic.cafeMimiData = data;
-                    if (data && data.active) {
+                let data = snap.val();
+                window.GameLogic.cafeMimiData = data;
+
+                if (data && data.active) {
                     if (this.sceneName !== 'cafe') return;
                     if (!this.localPlayer || !this.localPlayer.sprite) return;
+
                     if (!this.mimiSprite) {
                         this.mimiSprite = this.physics.add.sprite(data.x, data.y, 'mimi-thief-walk').setDepth(11);
                         this.mimiNameBg = this.add.graphics().setDepth(12);
                         this.mimiNameText = this.add.text(0, 0, '鼠偷米米', { fontSize: '12px', color: '#ffcc00', fontStyle: 'bold' }).setOrigin(0.5).setDepth(12);
                         this.mimiHpText = this.add.text(0, 0, '', { fontSize: '14px', color: '#ff0000', fontStyle: 'bold', stroke: '#fff', strokeThickness: 2 }).setOrigin(0.5).setDepth(12);
                         window.playSFX(this, 'mimi-laugh');
-                        
-                        // ...原有邏輯保持不變...
-// 【新增】只要他還在場上，就自動無限循環走路音效
-let mVol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100;
-// 修正：檢查音樂實體是否存在，避免重複 add 導致報錯
-if (this.sound.get('mimi-walk')) {
-    if (!this.sound.get('mimi-walk').isPlaying) this.sound.play('mimi-walk', {loop: true, volume: mVol});
-} else {
-    this.sound.add('mimi-walk', {loop: true, volume: mVol}).play();
-}
-// 修正：增加對「派對喇叭」的處理，若玩家處於喇叭動作，禁止米米邏輯干擾
-if (this.localPlayer.isThrowing) return; 
+                    }
 
-if (Math.abs(this.mimiSprite.x - data.x) > 50) { 
-    this.mimiSprite.x = data.x; 
-    this.mimiSprite.y = data.y;
-} else { 
-    this.mimiSprite.x = Phaser.Math.Linear(this.mimiSprite.x, data.x, 0.3); 
-    this.mimiSprite.y = Phaser.Math.Linear(this.mimiSprite.y, data.y, 0.3); 
-     }
-     this.mimiSprite.setFlipX(data.flipX);
- }
+                    let mVol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100;
+                    if (this.sound.get('mimi-walk')) {
+                        if (!this.sound.get('mimi-walk').isPlaying && data.state !== 'down') this.sound.play('mimi-walk', {loop: true, volume: mVol});
+                    } else if (data.state !== 'down') {
+                        this.sound.add('mimi-walk', {loop: true, volume: mVol}).play();
+                    }
+
+                    if (!this.localPlayer.isThrowing) {
+                        if (Math.abs(this.mimiSprite.x - data.x) > 50 || Math.abs(this.mimiSprite.y - data.y) > 50) {
+                            this.mimiSprite.x = data.x;
+                            this.mimiSprite.y = data.y;
+                        } else {
+                            this.mimiSprite.x = Phaser.Math.Linear(this.mimiSprite.x, data.x, 0.3);
+                            this.mimiSprite.y = Phaser.Math.Linear(this.mimiSprite.y, data.y, 0.3);
+                        }
+                    }
+
+                    this.mimiSprite.setFlipX(data.flipX);
 
                     if (data.state === 'stealing' && data.stealingFrom === window.GameLogic.currentUser.uid && !this.localPlayer.isMimiRobbed) {
                         this.localPlayer.isMimiRobbed = true; this.localPlayer.isStunned = true; this.localPlayer.isInvincible = true; this.localPlayer.sprite.play('fw-hit', true);
                         
                         window.playSFX(this, 'mimi-thief-stealing');
-                        window.playSFX(this, 'mimi-jab-onion-hurt'); // 角色被痛扁的音效
+                        window.playSFX(this, 'mimi-jab-onion-hurt');
 
                         let p = window.GameLogic.myProfile; let amt = Math.min(Phaser.Math.Between(20, 100), p.coins || 0); p.coins -= amt;
                         let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins;
@@ -2004,11 +2042,11 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) {
                         updates[`cafeMimi/stolenUids/${window.GameLogic.currentUser.uid}`] = true;
                         update(ref(window.GameLogic.db), updates);
                         
-                        // 修正：調整玩家被打劫後的懲罰時間，僵直無法行動與受傷動畫維持3秒，閃爍無敵狀態縮短為2秒
                         sendBubble(`被老鼠偷走了 ${amt} 元！`); 
                         this.time.delayedCall(2000, () => { this.localPlayer.isInvincible = false; });
                         this.time.delayedCall(3000, () => { this.localPlayer.isStunned = false; });
                     }
+
                     if (data.state !== 'stealing' && this.localPlayer.isMimiRobbed) this.localPlayer.isMimiRobbed = false;
 
                     if (data.state === 'laughing' && !this.mimiLaughed) { this.mimiLaughed = true; window.playSFX(this, 'mimi-laugh'); }
@@ -2028,20 +2066,23 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) {
                         }
                         if (!this.mimiSprite.isBlinking) {
                             this.mimiSprite.isBlinking = true;
-                            // 閃爍維持三秒後才會因為 active 變 false 被清除
                             this.tweens.add({ targets: this.mimiSprite, alpha: 0.2, yoyo: true, repeat: -1, duration: 150 });
                         }
                         if (this.sound.get('mimi-walk')) this.sound.stopByKey('mimi-walk'); 
                     }
                     else this.mimiSprite.play('mimi-walk', true);
 
-                    let nmY = this.mimiSprite.y - 40; this.mimiNameText.setPosition(this.mimiSprite.x, nmY);
+                    let nmY = this.mimiSprite.y - 40;
+                    this.mimiNameText.setPosition(this.mimiSprite.x, nmY);
                     this.mimiNameBg.clear().fillStyle(0x000, 0.6).fillRoundedRect(this.mimiSprite.x - 30, nmY - 10, 60, 20, 4);
                     this.mimiHpText.setPosition(this.mimiSprite.x, nmY - 20).setText(data.hp > 0 ? `HP: ${data.hp}` : '');
                 } else {
                     if (this.mimiSprite) { 
-                        this.mimiSprite.destroy(); this.mimiNameText.destroy(); this.mimiNameBg.destroy(); this.mimiHpText.destroy(); this.mimiSprite = null; 
-                        // 徹底斷開走路音效
+                        this.mimiSprite.destroy();
+                        this.mimiNameText.destroy();
+                        this.mimiNameBg.destroy();
+                        this.mimiHpText.destroy();
+                        this.mimiSprite = null; 
                         if (this.sound.get('mimi-walk')) this.sound.stopByKey('mimi-walk');
                     }
                 }
@@ -2335,6 +2376,12 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) {
                             actionTime: waterActionTime,
                             targetUid: targetUid || 'none'
                         });
+                    } else if (this.sceneName === 'cafe') {
+                        update(ref(window.GameLogic.db, `cafePlayers/${window.GameLogic.currentUser.uid}`), {
+                            action: 'throwWater',
+                            actionTime: waterActionTime,
+                            targetUid: targetUid || 'none'
+                        });
                     }
                     
                     if (targetUid && targetSprite) {
@@ -2372,13 +2419,11 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) {
                                             targetUid: window.GameLogic.currentUser.uid
                                         });
                                     } else {
-                                     update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
-
-                                    for (let i = 0; i < 3; i++) {
-                                         let cx = targetSprite.x + Phaser.Math.Between(-40, 40);
-                                         let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
-                                         push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: 5, scene: this.sceneName });
-                                    }
+                                        update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), {
+                                            time: Date.now(),
+                                            attacker: window.GameLogic.currentUser.uid,
+                                            scene: this.sceneName
+                                        });
                                     }
                                 } else if (targetType === 'dummy') {
                                     update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
@@ -2496,7 +2541,7 @@ container.onwheel = (e) => {
     container.scrollLeft += (Math.abs(e.deltaX) > Math.abs(e.deltaY)) ? e.deltaX : e.deltaY;
 };
 
-// 桌機支援滑鼠按住左右拖曳
+// 桌機支援滑鼠按住左右拖曳，並允許滾輪後點擊目前選中的法寶
 if (!container._quickDragClickGuard) {
     container._quickDragClickGuard = (e) => {
         if (container._quickDragMoved) {
@@ -2519,7 +2564,7 @@ container.onpointerdown = (e) => {
     quickDragStartX = e.clientX;
     quickDragStartScroll = container.scrollLeft;
     container.classList.add('dragging');
-    container.setPointerCapture(e.pointerId);
+    try { container.setPointerCapture(e.pointerId); } catch (_) {}
     e.stopPropagation();
 };
 
@@ -2550,9 +2595,19 @@ container.onpointerup = (e) => {
 
     setTimeout(() => { container._quickDragMoved = false; }, 0);
 };
+
 container.onpointerleave = () => {
     quickDragActive = false;
     container.classList.remove('dragging');
+    setTimeout(() => { container._quickDragMoved = false; }, 0);
+};
+
+menu.onclick = (e) => {
+    const clickedItem = e.target.closest ? e.target.closest('.quick-item') : null;
+    if (clickedItem) return;
+    e.preventDefault();
+    e.stopPropagation();
+    window.selectQuickMagic(window.GameLogic.stagedMagicItem || 'none');
 };
 
 menu.style.display = 'flex';
@@ -2694,7 +2749,50 @@ if (uiScene && uiScene.magicMenuEmitter) {
             }
         });
 
-        this.hitListener = onValue(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 2000)) { if (this.localPlayer.isInvincible) return; this.localPlayer.isInvincible = true; this.localPlayer.isStunned = true; this.localPlayer.sprite.play('wet', true); let p = window.GameLogic.myProfile; let loss = Math.min(p.coins || 0, 15); p.coins -= loss; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins; let amounts = [12, 12, 11]; for (let i = 0; i < 3; i++) { let angle = (Math.PI * 2 / 3) * i + Phaser.Math.FloatBetween(-0.25, 0.25); let dist = Phaser.Math.Between(85, 135); let cx = Phaser.Math.Clamp(this.localPlayer.sprite.x + Math.cos(angle) * dist, 80, this.physics.world.bounds.width - 80); let cy = Phaser.Math.Clamp(this.localPlayer.sprite.y + Math.sin(angle) * dist + 20, 80, this.physics.world.bounds.height - 80); push(ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: amounts[i], scene: this.sceneName }); } this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); remove(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`)); } });
+        this.hitListener = onValue(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`), (snap) => {
+            let data = snap.val();
+            if (data && data.time && (Date.now() - data.time < 2000)) {
+                if (data.scene && data.scene !== this.sceneName) {
+                    remove(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`));
+                    return;
+                }
+
+                if (this.localPlayer.isInvincible) {
+                    remove(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`));
+                    return;
+                }
+
+                this.localPlayer.isInvincible = true;
+                this.localPlayer.isStunned = true;
+                this.localPlayer.sprite.play('wet', true);
+
+                let p = window.GameLogic.myProfile;
+                let loss = Math.min(p.coins || 0, 15);
+                p.coins -= loss;
+
+                update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins });
+                let coinsEl = document.getElementById("vp-coins");
+                if (coinsEl) coinsEl.innerText = p.coins;
+
+                if (loss > 0) {
+                    let baseAmount = Math.floor(loss / 3);
+                    let amounts = [baseAmount, baseAmount, loss - baseAmount * 2];
+
+                    for (let i = 0; i < amounts.length; i++) {
+                        if (amounts[i] <= 0) continue;
+                        let angle = (Math.PI * 2 / amounts.length) * i + Phaser.Math.FloatBetween(-0.25, 0.25);
+                        let dist = Phaser.Math.Between(85, 135);
+                        let cx = Phaser.Math.Clamp(this.localPlayer.sprite.x + Math.cos(angle) * dist, 80, this.physics.world.bounds.width - 80);
+                        let cy = Phaser.Math.Clamp(this.localPlayer.sprite.y + Math.sin(angle) * dist + 20, 80, this.physics.world.bounds.height - 80);
+                        push(ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: amounts[i], scene: this.sceneName });
+                    }
+                }
+
+                this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; });
+                this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; });
+                remove(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`));
+            }
+        });
       
       this.partyHitListener = onValue(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic?.roomId}/hits/${window.GameLogic.currentUser.uid}`), (snap) => {
             let data = snap.val();
@@ -2748,28 +2846,57 @@ if (uiScene && uiScene.magicMenuEmitter) {
         
         this.waterThrowsListener = onValue(ref(window.GameLogic.db, 'serverEvents/waterThrows'), (snap) => {
             let throws = snap.val() || {};
+
+            const playRemoteWaterThrow = (uid, data, retry = 0) => {
+                if (!data || !data.time || Date.now() - data.time >= 3000 || data.scene !== this.sceneName) return;
+
+                let op = this.otherPlayers[uid];
+                if (!op || !op.sprite) {
+                    if (retry < 5) {
+                        this.time.delayedCall(120, () => playRemoteWaterThrow(uid, data, retry + 1));
+                    }
+                    return;
+                }
+
+                if (op.lastWaterTime === data.time) return;
+                op.lastWaterTime = data.time;
+
+                let opSprite = op.sprite;
+                opSprite.play('throw', true);
+                opSprite.isThrowing = true;
+                window.playSFX(this, 'minimum_laser');
+
+                this.time.delayedCall(300, () => {
+                    if (opSprite && opSprite.active) opSprite.isThrowing = false;
+                });
+
+                if (data.targetUid && data.targetUid !== 'none') {
+                    let targetX = opSprite.x + (opSprite.flipX ? -200 : 200);
+                    let targetY = opSprite.y;
+
+                    if (this.otherPlayers[data.targetUid]) {
+                        targetX = this.otherPlayers[data.targetUid].sprite.x;
+                        targetY = this.otherPlayers[data.targetUid].sprite.y;
+                    } else if (data.targetUid === window.GameLogic.currentUser.uid) {
+                        targetX = this.localPlayer.sprite.x;
+                        targetY = this.localPlayer.sprite.y;
+                    }
+
+                    let wb = this.physics.add.sprite(opSprite.x, opSprite.y, 'water-ball-blast').setDepth(15).setDisplaySize(30, 30);
+                    wb.play('wb-blast', true);
+                    this.tweens.add({
+                        targets: wb,
+                        x: targetX,
+                        y: targetY,
+                        duration: 300,
+                        onComplete: () => wb.destroy()
+                    });
+                }
+            };
+
             for (let uid in throws) {
                 if (uid === window.GameLogic.currentUser.uid) continue;
-                let data = throws[uid];
-                if (data && data.time && (Date.now() - data.time < 3000) && data.scene === this.sceneName) {
-                    if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite && (!this.otherPlayers[uid].lastWaterTime || this.otherPlayers[uid].lastWaterTime !== data.time)) {
-                        this.otherPlayers[uid].lastWaterTime = data.time;
-                        let opSprite = this.otherPlayers[uid].sprite;
-                        opSprite.play('throw', true);
-                        opSprite.isThrowing = true;
-                        window.playSFX(this, 'minimum_laser'); // 全域播放水球投擲音效
-                        this.time.delayedCall(300, () => { if (opSprite && opSprite.active) opSprite.isThrowing = false; });
-                        
-                        if (data.targetUid && data.targetUid !== 'none') {
-                            let targetX = opSprite.x + (opSprite.flipX ? -200 : 200); let targetY = opSprite.y;
-                            if (this.otherPlayers[data.targetUid]) { targetX = this.otherPlayers[data.targetUid].sprite.x; targetY = this.otherPlayers[data.targetUid].sprite.y; } 
-                            else if (data.targetUid === window.GameLogic.currentUser.uid) { targetX = this.localPlayer.sprite.x; targetY = this.localPlayer.sprite.y; }
-                            let wb = this.physics.add.sprite(opSprite.x, opSprite.y, 'water-ball-blast').setDepth(15).setDisplaySize(30, 30);
-                            wb.play('wb-blast', true);
-                            this.tweens.add({ targets: wb, x: targetX, y: targetY, duration: 300, onComplete: () => wb.destroy() });
-                        }
-                    }
-                }
+                playRemoteWaterThrow(uid, throws[uid]);
             }
         });
 
@@ -3987,8 +4114,11 @@ if (dist < 30) {
             const playersData = this.isCafe ? window.GameLogic.cafePlayers : (this.sceneName === 'shrine' ? window.GameLogic.shrinePlayers : (this.sceneName === 'playroom' ? window.GameLogic.playroomPlayers : (window.PartyLogic ? window.PartyLogic.players : {})));
             const globalOnline = window.GameLogic.onlinePlayers || {};
             for (let uid in playersData) {
-                if (uid === window.GameLogic.currentUser.uid) continue; if (!globalOnline[uid]) continue; 
-                let pd = playersData[uid]; pd.uid = uid; if (!this.otherPlayers[uid]) this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
+                if (uid === window.GameLogic.currentUser.uid) continue;
+                let pd = playersData[uid];
+                if (!pd || typeof pd.x !== 'number' || typeof pd.y !== 'number') continue;
+                pd.uid = uid;
+                if (!this.otherPlayers[uid]) this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
                 let op = this.otherPlayers[uid]; let oldX = op.sprite.x; let oldY = op.sprite.y; op.sprite.x = Phaser.Math.Linear(op.sprite.x, pd.x, 0.2); op.sprite.y = Phaser.Math.Linear(op.sprite.y, pd.y, 0.2); let diffX = op.sprite.x - oldX; let diffY = op.sprite.y - oldY; let absX = Math.abs(diffX); let absY = Math.abs(diffY);
                 const actionWindow = pd.action === 'showOff' ? Number.POSITIVE_INFINITY : 1200;
                 if (pd.action && pd.actionTime && Date.now() - pd.actionTime < actionWindow) {
