@@ -1930,7 +1930,68 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'prince-cat-touched', frames: this.anims.generateFrameNumbers('prince-cat-touched-sheet', { start: 0, end: 5 }), frameRate: 5, repeat: -1 });
         this.anims.create({ key: 'prince-cat-eating', frames: this.anims.generateFrameNumbers('prince-cat-eating-sheet', { start: 0, end: 5 }), frameRate: 6, repeat: -1 });
         this.anims.create({ key: 'prince-cat-yummy', frames: this.anims.generateFrameNumbers('prince-cat-yummy-sheet', { start: 0, end: 5 }), frameRate: 5, repeat: -1 });
-        this.createSafeCatCanOpenAnim();
+        // 王子麵第二版餵食補丁緊急修正：
+        // BootScene 不呼叫 MainScene method，改用 inline 防呆建立開罐動畫，避免啟動黑屏。
+        try {
+            const sourceKey = 'pet-cat-can-open-source';
+            const sheetKey = 'pet-cat-can-open-sheet';
+            const animKey = 'pet-cat-can-open';
+
+            if (!this.textures.exists(sourceKey)) {
+                console.warn('[王子麵餵食] 找不到 tools-pet-cat-can-open.png，略過開罐動畫建立。');
+            } else {
+                const sourceTexture = this.textures.get(sourceKey);
+                const sourceImage =
+                    sourceTexture?.getSourceImage
+                        ? sourceTexture.getSourceImage()
+                        : sourceTexture?.source?.[0]?.image;
+
+                const sourceWidth =
+                    sourceImage?.width ||
+                    sourceTexture?.source?.[0]?.width ||
+                    0;
+
+                const sourceHeight =
+                    sourceImage?.height ||
+                    sourceTexture?.source?.[0]?.height ||
+                    0;
+
+                if (sourceWidth < 600 || sourceHeight < 100) {
+                    console.warn(`[王子麵餵食] tools-pet-cat-can-open.png 尺寸不正確：${sourceWidth}×${sourceHeight}。需要至少 600×100，6 格橫排，每格 100×100。已略過開罐動畫，不中斷 BootScene。`);
+                } else {
+                    if (!this.textures.exists(sheetKey)) {
+                        this.textures.addSpriteSheet(sheetKey, sourceImage, {
+                            frameWidth: 100,
+                            frameHeight: 100,
+                            startFrame: 0,
+                            endFrame: 5
+                        });
+                    }
+
+                    const sheetTexture = this.textures.get(sheetKey);
+                    const hasFrame0 = !!(
+                        sheetTexture &&
+                        (
+                            (sheetTexture.has && (sheetTexture.has(0) || sheetTexture.has('0'))) ||
+                            (sheetTexture.frames && (sheetTexture.frames[0] || sheetTexture.frames['0']))
+                        )
+                    );
+
+                    if (!hasFrame0) {
+                        console.warn('[王子麵餵食] pet-cat-can-open-sheet 沒有 frame 0，略過開罐動畫建立，不中斷 BootScene。');
+                    } else if (!this.anims.exists(animKey)) {
+                        this.anims.create({
+                            key: animKey,
+                            frames: this.anims.generateFrameNumbers(sheetKey, { start: 0, end: 5 }),
+                            frameRate: 8,
+                            repeat: 0
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn('[王子麵餵食] 建立開罐動畫失敗，已略過，不中斷 BootScene：', err);
+        }
         this.anims.create({ key: 'onion-petting', frames: this.anims.generateFrameNumbers('onion-petting-sheet', { start: 0, end: 5 }), frameRate: 8, repeat: -1 });
 
         this.scene.launch('UIScene'); this.scene.bringToTop('UIScene'); 
