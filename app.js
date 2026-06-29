@@ -712,7 +712,8 @@ window.updateOnlinePlayersUI = function() {
     for (let uid in players) {
         let p = players[uid];
         // 修正4：過濾掉沒有發送心跳，或心跳超過 20 秒未更新的幽靈人口
-        if (!p.lastActive || (now - p.lastActive > 20000)) continue;
+        if (p.lastActive && (now - p.lastActive > 30000)) continue;
+        if (!p.lastActive && uid !== window.GameLogic.currentUser?.uid) continue;
         html += `<div style="margin-top:5px; display:flex; align-items:center;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${p.color || '#fff'}; margin-right:8px; border:1px solid #000;"></span>${p.name || '匿名'}</div>`;
     }
     listEl.innerHTML = html;
@@ -1080,8 +1081,12 @@ onAuthStateChanged(auth, async (user) => {
         onValue(ref(db, '.info/connected'), (snap) => {
             if (snap.val() === true && window.GameLogic.currentUser) {
                 const globalPlayerRef = ref(db, `onlinePlayers/${window.GameLogic.currentUser.uid}`);
-                set(globalPlayerRef, { name: window.GameLogic.myProfile.name || '匿名', color: window.GameLogic.myProfile.color || '#fff' });
-                onDisconnect(globalPlayerRef).remove();
+                set(globalPlayerRef, {
+                     name: window.GameLogic.myProfile.name || '匿名',
+                     color: window.GameLogic.myProfile.color || '#fff',
+                     lastActive: Date.now()
+                 });
+         onDisconnect(globalPlayerRef).remove();
                 if (window.GameLogic.currentScene === 'cafe') {
                     const cafeRef = ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`);
                     set(cafeRef, { x: window.GameLogic.myProfile.lastX || 1024, y: window.GameLogic.myProfile.lastY || 1024, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1, bubbleMsg: window.GameLogic.myProfile.bubbleMsg || "", bubbleTime: window.GameLogic.myProfile.bubbleTime || 0 });
@@ -2363,7 +2368,12 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; thi
                                             targetUid: window.GameLogic.currentUser.uid
                                         });
                                     } else {
-                                        update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                     update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+
+                                     for (let i = 0; i < 3; i++) {
+                                         let cx = targetSprite.x + Phaser.Math.Between(-40, 40);
+                                         let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
+                                         push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: 5, scene: this.sceneName });
                                     }
                                 } else if (targetType === 'dummy') {
                                     update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
@@ -2518,12 +2528,23 @@ container.onpointermove = (e) => {
 };
 
 container.onpointerup = (e) => {
+    const wasDragging = container._quickDragMoved;
+    const clickedItem = e.target.closest ? e.target.closest('.quick-item') : null;
+
     quickDragActive = false;
     container.classList.remove('dragging');
     try { container.releasePointerCapture(e.pointerId); } catch (_) {}
+
+    if (!wasDragging && clickedItem) {
+        e.preventDefault();
+        e.stopPropagation();
+        window.selectQuickMagic(clickedItem.getAttribute('data-magic'));
+        container._quickDragMoved = false;
+        return;
+    }
+
     setTimeout(() => { container._quickDragMoved = false; }, 0);
 };
-
 container.onpointerleave = () => {
     quickDragActive = false;
     container.classList.remove('dragging');
@@ -2885,24 +2906,33 @@ if (uiScene && uiScene.magicMenuEmitter) {
     }
 
     clearShowOffFx(entity) {
-        if (!entity) return;
-        if (entity.showOffFloatTween) { entity.showOffFloatTween.stop(); entity.showOffFloatTween = null; }
-        if (entity.showOffContainer) { entity.showOffContainer.destroy(true); entity.showOffContainer = null; }
-        if (entity.showOffEmitter) { entity.showOffEmitter.destroy(); entity.showOffEmitter = null; }
-        if (entity === this.localPlayer) {
-            this.showOffContainer = null;
-            this.showOffEmitter = null;
-        }
+    if (!entity) return;
+    if (entity.showOffFloatTween) { entity.showOffFloatTween.stop(); entity.showOffFloatTween = null; }
+    if (entity.showOffRainbowTween) { entity.showOffRainbowTween.stop(); entity.showOffRainbowTween = null; }
+    if (entity.showOffContainer) { entity.showOffContainer.destroy(true); entity.showOffContainer = null; }
+    if (entity.showOffEmitter) { entity.showOffEmitter.destroy(); entity.showOffEmitter = null; }
+    if (entity === this.localPlayer) {
+        this.showOffContainer = null;
+        this.showOffEmitter = null;
     }
+}
 
-    renderShowOffFx(entity, medalIcon, titleText = '', recordText = '') {
-    if (!entity || !entity.sprite) return;
-    this.clearShowOffFx(entity);
+    renderShowOffFx(entity, medalIcon, titleText = '', recordText = '', dateText = '') {
+if (!entity || !entity.sprite) return;
+this.clearShowOffFx(entity);
 
-    entity.showOffContainer = this.add.container(entity.sprite.x + 80, entity.sprite.y - 40).setDepth(200);
+entity.showOffContainer = this.add.container(entity.sprite.x + 80, entity.sprite.y - 40).setDepth(200);
 
-    let medal = this.add.image(0, 0, medalIcon).setDisplaySize(120, 120);
-    let titleLabel = this.add.text(0, 72, titleText || '', {
+let rainbowRing = this.add.graphics();
+const rainbowColors = [0xff0033, 0xff9900, 0xffff00, 0x33ff00, 0x00ccff, 0x3366ff, 0xcc33ff];
+rainbowColors.forEach((c, i) => {
+    rainbowRing.lineStyle(5, c, 0.45);
+    rainbowRing.strokeCircle(0, 0, 62 + i * 3);
+});
+rainbowRing.setBlendMode('ADD');
+
+let medal = this.add.image(0, 0, medalIcon).setDisplaySize(120, 120);
+let titleLabel = this.add.text(0, 72, titleText || '', {
         fontSize: '13px',
         color: '#ffd700',
         fontStyle: 'bold',
@@ -2912,10 +2942,23 @@ if (uiScene && uiScene.magicMenuEmitter) {
         wordWrap: { width: 180, useAdvancedWrap: true }
     }).setOrigin(0.5);
 
-    let showItems = [medal, titleLabel];
+    let showItems = [rainbowRing, medal, titleLabel];
 
-    if (recordText) {
-        let recordLabel = this.add.text(0, 102, recordText, {
+if (dateText) {
+    let dateLabel = this.add.text(0, 94, `派發日期：${dateText}`, {
+        fontSize: '11px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#000',
+        strokeThickness: 3,
+        align: 'center',
+        wordWrap: { width: 180, useAdvancedWrap: true }
+    }).setOrigin(0.5);
+    showItems.push(dateLabel);
+}
+
+if (recordText) {
+    let recordLabel = this.add.text(0, dateText ? 118 : 102, recordText, {
             fontSize: '12px',
             color: '#00ffcc',
             fontStyle: 'bold',
@@ -2930,13 +2973,24 @@ if (uiScene && uiScene.magicMenuEmitter) {
     entity.showOffContainer.add(showItems);
 
     entity.showOffFloatTween = this.tweens.add({
-        targets: entity.showOffContainer,
-        y: entity.showOffContainer.y - 15,
-        yoyo: true,
-        repeat: -1,
-        duration: 1000,
-        ease: 'Sine.easeInOut'
-    });
+    targets: entity.showOffContainer,
+    y: entity.showOffContainer.y - 15,
+    yoyo: true,
+    repeat: -1,
+    duration: 1000,
+    ease: 'Sine.easeInOut'
+});
+
+entity.showOffRainbowTween = this.tweens.add({
+    targets: rainbowRing,
+    rotation: Math.PI * 2,
+    alpha: { from: 0.65, to: 1 },
+    scale: { from: 0.92, to: 1.08 },
+    yoyo: true,
+    repeat: -1,
+    duration: 1200,
+    ease: 'Sine.easeInOut'
+});
 
     entity.showOffEmitter = this.add.particles(0, 0, 'fw-particle', {
         x: { min: -80, max: 80 },
@@ -2963,7 +3017,7 @@ if (uiScene && uiScene.magicMenuEmitter) {
     this.localPlayer.sprite.play('show-off', true);
     window.playSFX(this, 'onion-show-off-reward');
 
-    this.renderShowOffFx(this.localPlayer, medalIcon, titleText, recordText);
+    this.renderShowOffFx(this.localPlayer, medalIcon, titleText, recordText, dateStr || '');
     this.showOffContainer = this.localPlayer.showOffContainer;
     this.showOffEmitter = this.localPlayer.showOffEmitter;
 
@@ -3937,7 +3991,7 @@ if (dist < 30) {
                         if (op.lastActionTime !== pd.actionTime) {
                             op.lastActionTime = pd.actionTime;
                             op.sprite.isShowingOff = true;
-                            this.renderShowOffFx(op, pd.medalIcon, pd.medalTitle || pd.medalDate || '', pd.medalRecord || '');
+                            this.renderShowOffFx(op, pd.medalIcon, pd.medalTitle || '', pd.medalRecord || '', pd.medalDate || '');
                         }
                         op.sprite.play('show-off', true);
                     } else if (op.lastActionTime !== pd.actionTime) {
@@ -5597,15 +5651,18 @@ window.claimWeeklyReward = async function(idx) {
     }
     
     if (r.medal) {
-        let newMedal = {
-    id: r.id + '_' + Date.now(),
-    date: new Date().toLocaleDateString('zh-TW'),
-    eventName: '本週掃地王',
-    name: r.name,
-    icon: r.medal,
-    recordText: window.currentViewingRewardRecordText || '',
-    sweepCount: window.currentViewingRewardSweepCount || 0
-};
+    const safeSweepCount = Number(window.currentViewingRewardSweepCount || r.sweepCount || 0);
+    const safeRecordText = r.recordText || window.currentViewingRewardRecordText || (safeSweepCount > 0 ? `掃了 ${safeSweepCount} 次` : '');
+
+    let newMedal = {
+        id: r.id + '_' + Date.now(),
+        date: new Date().toLocaleDateString('zh-TW'),
+        eventName: '本週掃地王',
+        name: r.name,
+        icon: r.medal,
+        recordText: safeRecordText,
+        sweepCount: safeSweepCount
+    };
         let currentMedals = window.GameLogic.myProfile.medals || [];
         currentMedals.push(newMedal);
         window.GameLogic.myProfile.medals = currentMedals;
