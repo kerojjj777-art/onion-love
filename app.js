@@ -3223,7 +3223,7 @@ if (uiScene && uiScene.magicMenuEmitter) {
             if (this.shrineFurnListener) this.shrineFurnListener();
             
             // 【v1.3 修正】：離開場景時，徹底註銷米米監聽器並強制切斷走路音效
-            if (this.mimiListener) this.mimiListener();
+            if (this.mimiListener) { this.mimiListener(); this.mimiListener = null; }
             if (this.handleVisibilityMimiWalk) {
                 document.removeEventListener('visibilitychange', this.handleVisibilityMimiWalk);
                 this.handleVisibilityMimiWalk = null;
@@ -3241,10 +3241,14 @@ if (uiScene && uiScene.magicMenuEmitter) {
             if (this.globalFwListener) this.globalFwListener(); 
             if (this.playersHitListener) this.playersHitListener(); 
             if (this.dummyHitListener) this.dummyHitListener(); 
-            if (this.fwThrowsListener) this.fwThrowsListener(); 
-            if (this.waterThrowsListener) this.waterThrowsListener(); 
-            if (this.princeCatListener) this.princeCatListener();
-            const princeMenu = document.getElementById('prince-cat-menu');
+            if (this.fwThrowsListener) this.fwThrowsListener();
+            if (this.waterThrowsListener) this.waterThrowsListener();
+            if (this.princeCatListener) { this.princeCatListener(); this.princeCatListener = null; }
+            // 修正：徹底清除精靈與實體指標，防止 Phaser 重新啟動場景時讀取到已銷毀的舊物件導致 Crash
+            this.mimiSprite = null;
+            this.princeCatSprite = null;
+
+            const princeMenu = document.getElementById('prince-cat-menu');            
             if (princeMenu) princeMenu.style.display = 'none';
             if (window.GameLogic.princeCatMenuTimeout) {
                 clearTimeout(window.GameLogic.princeCatMenuTimeout);
