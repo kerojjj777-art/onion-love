@@ -2374,10 +2374,11 @@ if (Math.abs(this.mimiSprite.x - data.x) > 50) {
                                     } else {
                                      update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
 
-                                     for (let i = 0; i < 3; i++) {
+                                    for (let i = 0; i < 3; i++) {
                                          let cx = targetSprite.x + Phaser.Math.Between(-40, 40);
                                          let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
                                          push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: 5, scene: this.sceneName });
+                                    }
                                     }
                                 } else if (targetType === 'dummy') {
                                     update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
