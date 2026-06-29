@@ -1838,7 +1838,8 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('prince-cat-touched-sheet', 'pet-cat-wzm-touched.png', { frameWidth: 100, frameHeight: 100 });
         this.load.spritesheet('prince-cat-eating-sheet', 'pet-cat-wzm-eatting.png', { frameWidth: 100, frameHeight: 100 });
         this.load.spritesheet('prince-cat-yummy-sheet', 'pet-cat-wzm-yummy.png', { frameWidth: 100, frameHeight: 100 });
-        this.load.spritesheet('pet-cat-can-open-sheet', 'tools-pet-cat-can-open.png', { frameWidth: 100, frameHeight: 100 });
+        // 第二版餵食卡死修復：開罐素材先以 image 載入，create() 再檢查尺寸後安全切 sprite sheet
+        this.load.image('pet-cat-can-open-source', 'tools-pet-cat-can-open.png');
         this.load.image('onion-feeding', 'onion-feeding.png');
         this.load.image('prince-cat-walk-made-coin', 'pet-cat-wzm-walk-with-made-coin.png');
         this.load.image('prince-cat-support-10coin', 'pet-cat-wzm-support-10coin.png');
@@ -1929,7 +1930,7 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'prince-cat-touched', frames: this.anims.generateFrameNumbers('prince-cat-touched-sheet', { start: 0, end: 5 }), frameRate: 5, repeat: -1 });
         this.anims.create({ key: 'prince-cat-eating', frames: this.anims.generateFrameNumbers('prince-cat-eating-sheet', { start: 0, end: 5 }), frameRate: 6, repeat: -1 });
         this.anims.create({ key: 'prince-cat-yummy', frames: this.anims.generateFrameNumbers('prince-cat-yummy-sheet', { start: 0, end: 5 }), frameRate: 5, repeat: -1 });
-        this.anims.create({ key: 'pet-cat-can-open', frames: this.anims.generateFrameNumbers('pet-cat-can-open-sheet', { start: 0, end: 5 }), frameRate: 8, repeat: 0 });
+        this.createSafeCatCanOpenAnim();
         this.anims.create({ key: 'onion-petting', frames: this.anims.generateFrameNumbers('onion-petting-sheet', { start: 0, end: 5 }), frameRate: 8, repeat: -1 });
 
         this.scene.launch('UIScene'); this.scene.bringToTop('UIScene'); 
@@ -4110,25 +4111,158 @@ playPrinceCatFriendshipUpIfNeeded(oldBond, newBond) {
     }
 }
 
-showCatCanOpenEffect(x, y) {
-    if (!this.textures.exists('pet-cat-can-open-sheet')) return;
+createSafeCatCanOpenAnim() {
+    const sourceKey = 'pet-cat-can-open-source';
+    const sheetKey = 'pet-cat-can-open-sheet';
+    const animKey = 'pet-cat-can-open';
 
-    const can = this.add.sprite(x, y, 'pet-cat-can-open-sheet').setDepth(90).setScale(1);
-    if (this.anims.exists('pet-cat-can-open')) {
-        can.play('pet-cat-can-open');
+    if (!this.textures.exists(sourceKey)) {
+        console.warn('[王子麵餵食] 找不到 tools-pet-cat-can-open.png，略過開罐動畫。');
+        return;
     }
 
-    this.tweens.add({
-        targets: can,
-        y: y - 18,
-        alpha: 0,
-        duration: 900,
-        delay: 600,
-        ease: 'Cubic.easeOut',
-        onComplete: () => can.destroy()
-    });
+    const sourceTexture = this.textures.get(sourceKey);
+    const sourceImage = sourceTexture?.getSourceImage ? sourceTexture.getSourceImage() : sourceTexture?.source?.[0]?.image;
+    const sourceWidth = sourceImage?.width || sourceTexture?.source?.[0]?.width || 0;
+    const sourceHeight = sourceImage?.height || sourceTexture?.source?.[0]?.height || 0;
+
+    if (sourceWidth < 600 || sourceHeight < 100) {
+        console.warn(`[王子麵餵食] tools-pet-cat-can-open.png 尺寸不正確：${sourceWidth}×${sourceHeight}。需要 600×100，6 格橫排，每格 100×100。已略過開罐動畫。`);
+        return;
+    }
+
+    try {
+        if (!this.textures.exists(sheetKey)) {
+            this.textures.addSpriteSheet(sheetKey, sourceImage, {
+                frameWidth: 100,
+                frameHeight: 100,
+                startFrame: 0,
+                endFrame: 5
+            });
+        }
+
+        const sheetTexture = this.textures.get(sheetKey);
+        const hasFrame0 = !!(sheetTexture?.frames && sheetTexture.frames['0']);
+
+        if (!hasFrame0) {
+            console.warn('[王子麵餵食] pet-cat-can-open-sheet 沒有 frame 0，略過開罐動畫建立。');
+            return;
+        }
+
+        if (!this.anims.exists(animKey)) {
+            this.anims.create({
+                key: animKey,
+                frames: this.anims.generateFrameNumbers(sheetKey, { start: 0, end: 5 }),
+                frameRate: 8,
+                repeat: 0
+            });
+        }
+    } catch (err) {
+        console.warn('[王子麵餵食] 建立開罐動畫失敗，已略過，不影響餵食流程：', err);
+    }
+}
+  
+showCatCanOpenEffect(x, y) {
+    try {
+        const sheetKey = 'pet-cat-can-open-sheet';
+        const animKey = 'pet-cat-can-open';
+        const sheetTexture = this.textures.exists(sheetKey) ? this.textures.get(sheetKey) : null;
+        const hasFrame0 = !!(sheetTexture?.frames && sheetTexture.frames['0']);
+
+        if (!hasFrame0 || !this.anims.exists(animKey)) {
+            const popText = this.add.text(x, y, '啪！', {
+                fontSize: '22px',
+                color: '#ffcc00',
+                stroke: '#5d4037',
+                strokeThickness: 4,
+                fontFamily: 'serif'
+            }).setOrigin(0.5).setDepth(95);
+
+            this.tweens.add({
+                targets: popText,
+                y: y - 24,
+                alpha: 0,
+                scale: 1.25,
+                duration: 650,
+                ease: 'Cubic.easeOut',
+                onComplete: () => popText.destroy()
+            });
+
+            return;
+        }
+
+        const can = this.add.sprite(x, y, sheetKey, 0).setDepth(90).setScale(1);
+        can.play(animKey);
+
+        this.tweens.add({
+            targets: can,
+            y: y - 18,
+            alpha: 0,
+            duration: 900,
+            delay: 600,
+            ease: 'Cubic.easeOut',
+            onComplete: () => can.destroy()
+        });
+    } catch (err) {
+        console.warn('[王子麵餵食] 開罐特效失敗，已略過，不中斷餵食流程：', err);
+    }
 }
 
+finishPrinceCatFeeding(uid, catRef, feedingToken = null) {
+    uid = uid || window.GameLogic.currentUser?.uid;
+    if (!uid) return;
+
+    const sprite = this.localPlayer?.sprite;
+
+    if (sprite) {
+        const sameToken = !feedingToken || !sprite.princeCatFeedingToken || sprite.princeCatFeedingToken === feedingToken;
+
+        if (sameToken) {
+            sprite.isFeedingPrinceCat = false;
+            sprite.princeCatFeedingToken = null;
+            sprite.princeCatFeedingRestoreAt = 0;
+            sprite.setVelocity(0, 0);
+
+            if (this.textures.exists('onion')) {
+                sprite.setTexture('onion');
+            }
+
+            if (this.anims.exists('idle')) {
+                sprite.play('idle', true);
+            }
+        }
+    }
+
+    update(ref(window.GameLogic.db, `cafePlayers/${uid}`), {
+        action: null,
+        actionTime: null
+    }).catch(err => console.warn('[王子麵餵食] 清除玩家餵食 action 失敗：', err));
+
+    const safeCatRef = catRef || ref(window.GameLogic.db, 'cafePrinceCat');
+
+    get(safeCatRef).then(latestSnap => {
+        const latest = latestSnap.val() || {};
+
+        if (latest.interactingUid && latest.interactingUid !== uid) {
+            return;
+        }
+
+        const restoreNow = Date.now();
+        const catX = Number.isFinite(latest.x) ? latest.x : (this.princeCatSprite?.x || 1024);
+        const catY = Number.isFinite(latest.y) ? latest.y : (this.princeCatSprite?.y || 1024);
+
+        update(safeCatRef, {
+            interactingUid: null,
+            lockedUntil: 0,
+            state: 'idle',
+            targetX: catX,
+            targetY: catY,
+            stateStartTime: restoreNow,
+            stateUntil: restoreNow + Phaser.Math.Between(2000, 5000)
+        }).catch(err => console.warn('[王子麵餵食] 恢復王子麵 idle 失敗：', err));
+    }).catch(err => console.warn('[王子麵餵食] 讀取王子麵狀態失敗：', err));
+}
+  
 async startPrinceCatFeeding() {
     if (!this.isCafe || !this.princeCatSprite || !window.GameLogic.currentUser) {
         sendBubble("王子麵不在這裡。");
@@ -4137,130 +4271,134 @@ async startPrinceCatFeeding() {
 
     const uid = window.GameLogic.currentUser.uid;
     const inv = window.GameLogic.myProfile.inventory || {};
+    let catRef = null;
+    let feedingToken = null;
+    let feedingStarted = false;
 
-    if ((inv['喵罐頭'] || 0) <= 0) {
-        sendBubble("沒有喵罐頭可以餵食。");
-        window.GameLogic.armedItemState = null;
-        window.GameLogic.armedItemName = null;
-        return;
-    }
+    try {
+        if ((inv['喵罐頭'] || 0) <= 0) {
+            sendBubble("沒有喵罐頭可以餵食。");
+            window.GameLogic.armedItemState = null;
+            window.GameLogic.armedItemName = null;
+            return;
+        }
 
-    const dist = Phaser.Math.Distance.Between(
-        this.localPlayer.sprite.x,
-        this.localPlayer.sprite.y,
-        this.princeCatSprite.x,
-        this.princeCatSprite.y
-    );
+        const dist = Phaser.Math.Distance.Between(
+            this.localPlayer.sprite.x,
+            this.localPlayer.sprite.y,
+            this.princeCatSprite.x,
+            this.princeCatSprite.y
+        );
 
-    if (dist >= 170) {
-        sendBubble("要靠近王子麵才能餵食喵罐頭。");
-        return;
-    }
+        if (dist >= 170) {
+            sendBubble("要靠近王子麵才能餵食喵罐頭。");
+            return;
+        }
 
-    const p = window.normalizePrinceCatProfileFields();
-    if ((p.princeFeedCountToday || 0) >= 3) {
-        sendPrinceCatBubble("王子麵舔舔嘴，似乎已經吃飽了。\n今日餵食已達上限。");
-        return;
-    }
+        const p = window.normalizePrinceCatProfileFields();
+        if ((p.princeFeedCountToday || 0) >= 3) {
+            sendPrinceCatBubble("王子麵舔舔嘴，似乎已經吃飽了。\n今日餵食已達上限。");
+            return;
+        }
 
-    const now = Date.now();
-    const lockUntil = now + 4200;
-    const catRef = ref(window.GameLogic.db, 'cafePrinceCat');
-    const snap = await get(catRef);
-    const data = snap.val() || {};
+        const now = Date.now();
+        const feedRestoreMs = 4300;
+        const lockUntil = now + feedRestoreMs;
+        feedingToken = `feed-${uid}-${now}`;
+        catRef = ref(window.GameLogic.db, 'cafePrinceCat');
 
-    if (data.interactingUid && data.interactingUid !== uid && data.lockedUntil && now < data.lockedUntil) {
-        sendPrinceCatBubble("王子麵正在理別人");
-        return;
-    }
+        const snap = await get(catRef);
+        const data = snap.val() || {};
 
-    await update(catRef, {
-        x: data.x || this.princeCatSprite.x,
-        y: data.y || this.princeCatSprite.y,
-        targetX: data.x || this.princeCatSprite.x,
-        targetY: data.y || this.princeCatSprite.y,
-        state: 'feeding',
-        interactingUid: uid,
-        direction: data.direction || 'right',
-        stateStartTime: now,
-        stateUntil: lockUntil,
-        lockedUntil: lockUntil
-    });
+        if (data.interactingUid && data.interactingUid !== uid && data.lockedUntil && now < data.lockedUntil) {
+            sendPrinceCatBubble("王子麵正在理別人");
+            return;
+        }
 
-    this.localPlayer.sprite.isFeedingPrinceCat = true;
-    this.localPlayer.sprite.setVelocity(0, 0);
-    if (this.textures.exists('onion-feeding')) {
-        this.localPlayer.sprite.setTexture('onion-feeding');
-    }
-
-    update(ref(window.GameLogic.db, `cafePlayers/${uid}`), {
-        action: 'feedPrinceCat',
-        actionTime: now,
-        x: this.localPlayer.sprite.x,
-        y: this.localPlayer.sprite.y
-    });
-
-    const oldQty = inv['喵罐頭'] || 0;
-    inv['喵罐頭'] = Math.max(0, oldQty - 1);
-    window.GameLogic.myProfile.inventory = inv;
-
-    update(ref(window.GameLogic.db, `users/${uid}`), {
-        inventory: inv
-    }).catch(err => console.warn('Firebase 扣除喵罐頭失敗:', err));
-
-    window.GameLogic.armedItemState = null;
-    window.GameLogic.armedItemName = null;
-
-    this.applyPrinceFeedBondGain();
-
-    const canX = (this.localPlayer.sprite.x + this.princeCatSprite.x) / 2;
-    const canY = (this.localPlayer.sprite.y + this.princeCatSprite.y) / 2 - 20;
-    this.showCatCanOpenEffect(canX, canY);
-
-    this.time.delayedCall(2800, () => {
-        get(catRef).then(latestSnap => {
-            const latest = latestSnap.val() || {};
-            if (latest.interactingUid === uid) {
-                const yummyNow = Date.now();
-                update(catRef, {
-                    state: 'yummy',
-                    stateStartTime: yummyNow,
-                    stateUntil: lockUntil,
-                    lockedUntil: lockUntil
-                });
-            }
+        await update(catRef, {
+            x: data.x || this.princeCatSprite.x,
+            y: data.y || this.princeCatSprite.y,
+            targetX: data.x || this.princeCatSprite.x,
+            targetY: data.y || this.princeCatSprite.y,
+            state: 'feeding',
+            interactingUid: uid,
+            direction: data.direction || 'right',
+            stateStartTime: now,
+            stateUntil: lockUntil,
+            lockedUntil: lockUntil
         });
-    });
 
-    this.time.delayedCall(4200, () => {
-        if (this.localPlayer && this.localPlayer.sprite) {
-            this.localPlayer.sprite.isFeedingPrinceCat = false;
-            this.localPlayer.sprite.setVelocity(0, 0);
-            this.localPlayer.sprite.setTexture('onion');
-            this.localPlayer.sprite.play('idle', true);
+        feedingStarted = true;
+
+        this.localPlayer.sprite.isFeedingPrinceCat = true;
+        this.localPlayer.sprite.princeCatFeedingToken = feedingToken;
+        this.localPlayer.sprite.princeCatFeedingRestoreAt = now + feedRestoreMs + 700;
+        this.localPlayer.sprite.setVelocity(0, 0);
+
+        if (this.textures.exists('onion-feeding')) {
+            this.localPlayer.sprite.setTexture('onion-feeding');
         }
 
         update(ref(window.GameLogic.db, `cafePlayers/${uid}`), {
-            action: null,
-            actionTime: null
+            action: 'feedPrinceCat',
+            actionTime: now,
+            x: this.localPlayer.sprite.x,
+            y: this.localPlayer.sprite.y
+        }).catch(err => console.warn('[王子麵餵食] 同步玩家餵食 action 失敗：', err));
+
+        // 重要：保底恢復必須在任何特效、音效、動畫播放之前先註冊，避免特效錯誤導致角色永久蹲住。
+        this.time.delayedCall(feedRestoreMs, () => {
+            this.finishPrinceCatFeeding(uid, catRef, feedingToken);
         });
 
-        get(catRef).then(latestSnap => {
-            const latest = latestSnap.val() || {};
-            if (latest.interactingUid === uid) {
-                const restoreNow = Date.now();
-                update(catRef, {
-                    interactingUid: null,
-                    lockedUntil: 0,
-                    state: 'idle',
-                    targetX: latest.x || this.princeCatSprite.x,
-                    targetY: latest.y || this.princeCatSprite.y,
-                    stateStartTime: restoreNow,
-                    stateUntil: restoreNow + Phaser.Math.Between(2000, 5000)
-                });
-            }
+        const oldQty = inv['喵罐頭'] || 0;
+        inv['喵罐頭'] = Math.max(0, oldQty - 1);
+        window.GameLogic.myProfile.inventory = inv;
+
+        update(ref(window.GameLogic.db, `users/${uid}`), {
+            inventory: inv
+        }).catch(err => console.warn('Firebase 扣除喵罐頭失敗:', err));
+
+        window.GameLogic.armedItemState = null;
+        window.GameLogic.armedItemName = null;
+
+        try {
+            this.applyPrinceFeedBondGain();
+        } catch (err) {
+            console.warn('[王子麵餵食] 羈絆增加流程失敗，但不影響保底恢復：', err);
+        }
+
+        const canX = (this.localPlayer.sprite.x + this.princeCatSprite.x) / 2;
+        const canY = (this.localPlayer.sprite.y + this.princeCatSprite.y) / 2 - 20;
+
+        try {
+            this.showCatCanOpenEffect(canX, canY);
+        } catch (err) {
+            console.warn('[王子麵餵食] 開罐特效失敗，已略過：', err);
+        }
+
+        this.time.delayedCall(2800, () => {
+            get(catRef).then(latestSnap => {
+                const latest = latestSnap.val() || {};
+                if (latest.interactingUid === uid) {
+                    const yummyNow = Date.now();
+                    update(catRef, {
+                        state: 'yummy',
+                        stateStartTime: yummyNow,
+                        stateUntil: lockUntil,
+                        lockedUntil: lockUntil
+                    }).catch(err => console.warn('[王子麵餵食] 切換 yummy 狀態失敗：', err));
+                }
+            }).catch(err => console.warn('[王子麵餵食] 讀取 yummy 前狀態失敗：', err));
         });
-    });
+
+    } catch (err) {
+        console.warn('[王子麵餵食] 餵食流程發生錯誤，執行保底恢復：', err);
+
+        if (feedingStarted) {
+            this.finishPrinceCatFeeding(uid, catRef, feedingToken);
+        }
+    }
 }
 
 applyPrinceFeedBondGain() {
@@ -5153,9 +5291,21 @@ if (activeBubbleMsg) {
             }
         }
         
-        const isPrinceCatPettingLocked = this.localPlayer.sprite.isPettingPrinceCat || (this.princePettingLockUntil && Date.now() < this.princePettingLockUntil);
-        const isPrinceCatFeedingLocked = this.localPlayer.sprite.isFeedingPrinceCat;
-        const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeedingLocked;
+        if (
+    this.localPlayer.sprite.isFeedingPrinceCat &&
+    this.localPlayer.sprite.princeCatFeedingRestoreAt &&
+    Date.now() > this.localPlayer.sprite.princeCatFeedingRestoreAt
+) {
+    this.finishPrinceCatFeeding(
+        window.GameLogic.currentUser.uid,
+        ref(window.GameLogic.db, 'cafePrinceCat'),
+        this.localPlayer.sprite.princeCatFeedingToken
+    );
+}
+
+const isPrinceCatPettingLocked = this.localPlayer.sprite.isPettingPrinceCat || (this.princePettingLockUntil && Date.now() < this.princePettingLockUntil);
+const isPrinceCatFeedingLocked = !!this.localPlayer.sprite.isFeedingPrinceCat;
+const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeedingLocked;
 
         if (isPrinceCatInteractionLocked) {
             vx = 0; vy = 0;
@@ -5480,23 +5630,33 @@ if (dist < 30) {
                             });
                         }
                          if (pd.action === 'feedPrinceCat') {
-                            op.sprite.isFeedingPrinceCat = true;
-                         if (this.textures.exists('onion-feeding')) {
-                            op.sprite.setTexture('onion-feeding');
-                        }
-                             this.time.delayedCall(4200, () => {
-                         if (op.sprite && op.sprite.active) {
-                            op.sprite.isFeedingPrinceCat = false;
-                            op.sprite.setTexture('onion');
-                            op.sprite.play('idle', true);
-                        }
-                       });
-                      }                
+                             op.sprite.isFeedingPrinceCat = true;
+                             op.sprite.feedPrinceCatUntil = Date.now() + 4500;
+
+                                if (this.textures.exists('onion-feeding')) {
+                             op.sprite.setTexture('onion-feeding');
+                         }
+
+                            this.time.delayedCall(4300, () => {
+                                if (op.sprite && op.sprite.active) {
+                             op.sprite.isFeedingPrinceCat = false;
+                             op.sprite.feedPrinceCatUntil = 0;
+                             op.sprite.setTexture('onion');
+                             op.sprite.play('idle', true);
+                          }
+                      });
+                    }
                     }
                 } else if (op.sprite.isShowingOff) {
                     op.sprite.isShowingOff = false;
                     this.clearShowOffFx(op);
-                } else if (op.sprite.isStunned || op.sprite.isThrowing || op.sprite.isPettingPrinceCat || op.sprite.isFeedingPrinceCat) {
+} else if (op.sprite.isStunned || op.sprite.isThrowing || op.sprite.isPettingPrinceCat || op.sprite.isFeedingPrinceCat) {
+    if (op.sprite.isFeedingPrinceCat && op.sprite.feedPrinceCatUntil && Date.now() > op.sprite.feedPrinceCatUntil) {
+        op.sprite.isFeedingPrinceCat = false;
+        op.sprite.feedPrinceCatUntil = 0;
+        op.sprite.setTexture('onion');
+        op.sprite.play('idle', true);
+    }
                 } else if (pd.isSweeping) { 
                     op.sprite.play('clean', true); 
                 } else if (pd.isSeated) {
