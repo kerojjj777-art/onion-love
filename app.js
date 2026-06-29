@@ -1745,12 +1745,12 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'trumpet-play', frames: this.anims.generateFrameNumbers('onion-trumpet'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'seat-idle', frames: this.anims.generateFrameNumbers('onion-seat-shrine'), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'purify-target', frames: this.anims.generateFrameNumbers('onion-got-purify'), frameRate: 8, repeat: -1 }); this.anims.create({ key: 'purify-magic', frames: this.anims.generateFrameNumbers('onion-doing-purify'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'charger-anim', frames: this.anims.generateFrameNumbers('sleep-charger'), frameRate: 8, repeat: -1 });
-        this.anims.create({ key: 'prince-cat-walk-right', frames: this.anims.generateFrameNumbers('prince-cat-walk-right-sheet', { start: 0, end: 5 }), frameRate: 8, repeat: -1 });
-        this.anims.create({ key: 'prince-cat-walk-left', frames: this.anims.generateFrameNumbers('prince-cat-walk-left-sheet', { start: 0, end: 5 }), frameRate: 8, repeat: -1 });
-        this.anims.create({ key: 'prince-cat-stand', frames: this.anims.generateFrameNumbers('prince-cat-stand-sheet', { start: 0, end: 5 }), frameRate: 6, repeat: -1 });
-        this.anims.create({ key: 'prince-cat-lick', frames: this.anims.generateFrameNumbers('prince-cat-lick-sheet', { start: 0, end: 5 }), frameRate: 7, repeat: -1 });
-        this.anims.create({ key: 'prince-cat-sleep', frames: this.anims.generateFrameNumbers('prince-cat-sleep-sheet', { start: 0, end: 5 }), frameRate: 5, repeat: -1 });
-        this.anims.create({ key: 'prince-cat-touched', frames: this.anims.generateFrameNumbers('prince-cat-touched-sheet', { start: 0, end: 5 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'prince-cat-walk-right', frames: this.anims.generateFrameNumbers('prince-cat-walk-right-sheet', { start: 0, end: 5 }), frameRate: 5, repeat: -1 });
+        this.anims.create({ key: 'prince-cat-walk-left', frames: this.anims.generateFrameNumbers('prince-cat-walk-left-sheet', { start: 0, end: 5 }), frameRate: 5, repeat: -1 });
+        this.anims.create({ key: 'prince-cat-stand', frames: this.anims.generateFrameNumbers('prince-cat-stand-sheet', { start: 0, end: 5 }), frameRate: 4, repeat: -1 });
+        this.anims.create({ key: 'prince-cat-lick', frames: this.anims.generateFrameNumbers('prince-cat-lick-sheet', { start: 0, end: 5 }), frameRate: 4, repeat: -1 });
+        this.anims.create({ key: 'prince-cat-sleep', frames: this.anims.generateFrameNumbers('prince-cat-sleep-sheet', { start: 0, end: 5 }), frameRate: 3, repeat: -1 });
+        this.anims.create({ key: 'prince-cat-touched', frames: this.anims.generateFrameNumbers('prince-cat-touched-sheet', { start: 0, end: 5 }), frameRate: 5, repeat: -1 });
         this.anims.create({ key: 'onion-petting', frames: this.anims.generateFrameNumbers('onion-petting-sheet', { start: 0, end: 5 }), frameRate: 8, repeat: -1 });
 
         this.scene.launch('UIScene'); this.scene.bringToTop('UIScene'); 
@@ -3437,15 +3437,60 @@ entity.showOffRainbowTween = this.tweens.add({
         return validUids.length > 0 && validUids[0] === window.GameLogic.currentUser.uid;
     }
 
-    choosePrinceCatNextState(now) {
+    choosePrinceCatNextState(now, forceState = null) {
         const data = window.GameLogic.princeCatData || {};
-        const x = Phaser.Math.Clamp(data.x || this.princeCatSprite.x || 1024, 160, 1888);
-        const y = Phaser.Math.Clamp(data.y || this.princeCatSprite.y || 1024, 160, 1888);
+        const rawX = Number(data.x);
+        const rawY = Number(data.y);
+        const x = Phaser.Math.Clamp(Number.isFinite(rawX) ? rawX : (this.princeCatSprite.x || 1024), 160, 1888);
+        const y = Phaser.Math.Clamp(Number.isFinite(rawY) ? rawY : (this.princeCatSprite.y || 1024), 160, 1888);
+        const direction = data.direction || 'right';
+
+        const makeIdle = (minMs = 3000, maxMs = 7000) => ({
+            x, y,
+            targetX: x,
+            targetY: y,
+            state: 'idle',
+            direction,
+            stateStartTime: now,
+            stateUntil: now + Phaser.Math.Between(minMs, maxMs),
+            interactingUid: null,
+            lockedUntil: 0
+        });
+
+        if (forceState === 'idle') return makeIdle(2000, 5000);
+
         const roll = Math.random();
 
-        if (roll < 0.58) {
-            const targetX = Phaser.Math.Between(180, 1868);
-            const targetY = Phaser.Math.Between(180, 1868);
+        if (roll < 0.50) {
+            let targetX = x;
+            let targetY = y;
+            let walkDist = 0;
+
+            for (let i = 0; i < 12; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Phaser.Math.Between(220, 520);
+                const candidateX = Phaser.Math.Clamp(x + Math.cos(angle) * dist, 180, 1868);
+                const candidateY = Phaser.Math.Clamp(y + Math.sin(angle) * dist, 180, 1868);
+                const candidateDist = Phaser.Math.Distance.Between(x, y, candidateX, candidateY);
+
+                if (candidateDist >= 180) {
+                    targetX = candidateX;
+                    targetY = candidateY;
+                    walkDist = candidateDist;
+                    break;
+                }
+            }
+
+            if (walkDist < 180) {
+                const centerAngle = Phaser.Math.Angle.Between(x, y, 1024, 1024);
+                targetX = Phaser.Math.Clamp(x + Math.cos(centerAngle) * 260, 180, 1868);
+                targetY = Phaser.Math.Clamp(y + Math.sin(centerAngle) * 260, 180, 1868);
+                walkDist = Phaser.Math.Distance.Between(x, y, targetX, targetY);
+            }
+
+            const walkSpeed = 24;
+            const walkDuration = Phaser.Math.Clamp(Math.ceil((walkDist / walkSpeed) * 1000) + Phaser.Math.Between(1500, 3500), 9000, 26000);
+
             return {
                 x, y,
                 targetX,
@@ -3453,35 +3498,23 @@ entity.showOffRainbowTween = this.tweens.add({
                 state: 'walk',
                 direction: targetX < x ? 'left' : 'right',
                 stateStartTime: now,
-                stateUntil: now + Phaser.Math.Between(8000, 15000),
+                stateUntil: now + walkDuration,
                 interactingUid: null,
                 lockedUntil: 0
             };
         }
 
-        if (roll < 0.82) {
-            return {
-                x, y,
-                targetX: x,
-                targetY: y,
-                state: 'idle',
-                direction: data.direction || 'right',
-                stateStartTime: now,
-                stateUntil: now + Phaser.Math.Between(3000, 7000),
-                interactingUid: null,
-                lockedUntil: 0
-            };
-        }
+        if (roll < 0.80) return makeIdle(3000, 7000);
 
-        if (roll < 0.94) {
+        if (roll < 0.92) {
             return {
                 x, y,
                 targetX: x,
                 targetY: y,
                 state: 'lick',
-                direction: data.direction || 'right',
+                direction,
                 stateStartTime: now,
-                stateUntil: now + Phaser.Math.Between(5000, 9000),
+                stateUntil: now + Phaser.Math.Between(5000, 10000),
                 interactingUid: null,
                 lockedUntil: 0
             };
@@ -3492,7 +3525,7 @@ entity.showOffRainbowTween = this.tweens.add({
             targetX: x,
             targetY: y,
             state: 'sleep',
-            direction: data.direction || 'right',
+            direction,
             stateStartTime: now,
             stateUntil: now + Phaser.Math.Between(10000, 60000),
             interactingUid: null,
@@ -3512,14 +3545,33 @@ entity.showOffRainbowTween = this.tweens.add({
 
         let nextData = { ...data };
 
-        const reachedTarget = Phaser.Math.Distance.Between(nextData.x || 1024, nextData.y || 1024, nextData.targetX || 1024, nextData.targetY || 1024) < 12;
+        const currentX = Number.isFinite(Number(nextData.x)) ? Number(nextData.x) : 1024;
+        const currentY = Number.isFinite(Number(nextData.y)) ? Number(nextData.y) : 1024;
+        const targetX = Number.isFinite(Number(nextData.targetX)) ? Number(nextData.targetX) : currentX;
+        const targetY = Number.isFinite(Number(nextData.targetY)) ? Number(nextData.targetY) : currentY;
+        const isWalking = nextData.state === 'walk';
+        const reachedTarget = isWalking && Phaser.Math.Distance.Between(currentX, currentY, targetX, targetY) < 12;
+        const stateExpired = !nextData.stateUntil || now > nextData.stateUntil;
 
-        if (!nextData.stateUntil || now > nextData.stateUntil || reachedTarget) {
+        if (isWalking && reachedTarget) {
+            nextData = {
+                ...nextData,
+                x: targetX,
+                y: targetY,
+                targetX,
+                targetY,
+                state: 'idle',
+                stateStartTime: now,
+                stateUntil: now + Phaser.Math.Between(2000, 5000),
+                interactingUid: null,
+                lockedUntil: 0
+            };
+        } else if (stateExpired) {
             nextData = this.choosePrinceCatNextState(now);
         }
 
         if (nextData.state === 'walk') {
-            const speed = 32;
+            const speed = 24;
             const dx = (nextData.targetX || nextData.x) - nextData.x;
             const dy = (nextData.targetY || nextData.y) - nextData.y;
             const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
@@ -3572,26 +3624,34 @@ entity.showOffRainbowTween = this.tweens.add({
     showPrinceCatLoveEffect() {
         if (!this.princeCatSprite) return;
 
+        const hasLoveTexture = this.textures && this.textures.exists('prince-cat-love');
+
         for (let i = 0; i < 4; i++) {
-            const heart = this.add.image(
-                this.princeCatSprite.x + Phaser.Math.Between(-35, 35),
-                this.princeCatSprite.y - 50 + Phaser.Math.Between(-15, 15),
-                'prince-cat-love'
-            ).setDepth(30).setScale(0.65);
+            const heartX = this.princeCatSprite.x + Phaser.Math.Between(-35, 35);
+            const heartY = this.princeCatSprite.y - 55 + Phaser.Math.Between(-12, 12);
+            const heart = hasLoveTexture
+                ? this.add.image(heartX, heartY, 'prince-cat-love').setScale(0.75)
+                : this.add.text(heartX, heartY, '💗', {
+                    fontSize: '26px',
+                    fontFamily: 'Arial, sans-serif',
+                    stroke: '#ffffff',
+                    strokeThickness: 3
+                }).setOrigin(0.5);
+
+            heart.setDepth(40);
 
             this.tweens.add({
                 targets: heart,
-                y: heart.y - Phaser.Math.Between(35, 70),
-                x: heart.x + Phaser.Math.Between(-20, 20),
+                y: heart.y - Phaser.Math.Between(45, 85),
+                x: heart.x + Phaser.Math.Between(-24, 24),
                 alpha: 0,
-                scale: 1,
-                duration: 1000,
+                scale: hasLoveTexture ? 1.1 : 1.35,
+                duration: 1200,
                 ease: 'Cubic.easeOut',
                 onComplete: () => heart.destroy()
             });
         }
     }
-
     async openPrinceCatMenu() {
         if (!this.isCafe || !this.princeCatSprite || !window.GameLogic.currentUser) return;
 
@@ -3664,6 +3724,7 @@ entity.showOffRainbowTween = this.tweens.add({
 
         const uid = window.GameLogic.currentUser.uid;
         const now = Date.now();
+        const lockUntil = now + 3500;
         const catRef = ref(window.GameLogic.db, 'cafePrinceCat');
         const snap = await get(catRef);
         const data = snap.val() || {};
@@ -3673,20 +3734,23 @@ entity.showOffRainbowTween = this.tweens.add({
             return;
         }
 
+        this.princePettingLockUntil = lockUntil;
+        this.localPlayer.sprite.isPettingPrinceCat = true;
+        this.localPlayer.sprite.setVelocity(0, 0);
+        this.localPlayer.sprite.play('onion-petting', true);
+
         await update(catRef, {
             x: data.x || this.princeCatSprite.x,
             y: data.y || this.princeCatSprite.y,
+            targetX: data.x || this.princeCatSprite.x,
+            targetY: data.y || this.princeCatSprite.y,
             state: 'petting',
             interactingUid: uid,
             direction: data.direction || 'right',
             stateStartTime: now,
-            stateUntil: now + 3500,
-            lockedUntil: now + 3500
+            stateUntil: lockUntil,
+            lockedUntil: lockUntil
         });
-
-        this.localPlayer.sprite.isPettingPrinceCat = true;
-        this.localPlayer.sprite.setVelocity(0, 0);
-        this.localPlayer.sprite.play('onion-petting', true);
 
         update(ref(window.GameLogic.db, `cafePlayers/${uid}`), {
             action: 'petPrinceCat',
@@ -3701,8 +3765,10 @@ entity.showOffRainbowTween = this.tweens.add({
         this.time.delayedCall(3500, () => {
             if (this.localPlayer && this.localPlayer.sprite) {
                 this.localPlayer.sprite.isPettingPrinceCat = false;
+                this.localPlayer.sprite.setVelocity(0, 0);
                 this.localPlayer.sprite.play('idle', true);
             }
+            this.princePettingLockUntil = 0;
 
             update(ref(window.GameLogic.db, `cafePlayers/${uid}`), {
                 action: null,
@@ -3716,7 +3782,9 @@ entity.showOffRainbowTween = this.tweens.add({
                         interactingUid: null,
                         lockedUntil: 0,
                         state: 'idle',
-                        stateUntil: Date.now() + 1000
+                        targetX: latest.x || this.princeCatSprite.x,
+                        targetY: latest.y || this.princeCatSprite.y,
+                        stateUntil: Date.now() + Phaser.Math.Between(2000, 5000)
                     });
                 }
             });
@@ -4427,7 +4495,14 @@ if (activeBubbleMsg) {
             }
         }
         
-        if (this.localPlayer.isSweeping) {
+        const isPrinceCatPettingLocked = this.localPlayer.sprite.isPettingPrinceCat || (this.princePettingLockUntil && Date.now() < this.princePettingLockUntil);
+
+        if (isPrinceCatPettingLocked) {
+            vx = 0; vy = 0;
+            this.localPlayer.sprite.setVelocity(0, 0);
+            this.localPlayer.sprite.play('onion-petting', true);
+            this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
+        } else if (this.localPlayer.isSweeping) {
             this.localPlayer.sprite.setVelocity(0, 0); this.localPlayer.sprite.play('clean', true); 
             this.qteProgress -= (delta * 0.02); if (this.qteProgress < 0) this.qteProgress = 0; this.updateQTEBar(this.qteProgress);
             if (this.closestTrash) this.qteContainer.setPosition(this.closestTrash.x, this.closestTrash.y + 40);
@@ -4561,7 +4636,9 @@ if (activeBubbleMsg) {
 
             if (promptTarget && !isPlacing) {
                 if (this.lastPromptMsg !== promptMsg) { this.lastPromptMsg = promptMsg; this.smartPromptText.setText(promptMsg); const pBounds = this.smartPromptText.getBounds(); this.smartPromptW = pBounds.width + 16; this.smartPromptH = pBounds.height + 8; }
-                const ptX = promptTarget.x, ptY = promptTarget.y - 60; 
+                const isPrinceCatPrompt = this.isCafe && this.princeCatSprite && promptTarget === this.princeCatSprite;
+                const ptX = promptTarget.x;
+                const ptY = isPrinceCatPrompt ? promptTarget.y + 78 : promptTarget.y - 60;
                 if (this.lastPromptDrawX !== ptX || this.lastPromptDrawY !== ptY || this.lastPromptDrawMsg !== promptMsg) { this.smartPromptBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(ptX - this.smartPromptW/2, ptY - this.smartPromptH/2, this.smartPromptW, this.smartPromptH, 6).strokeRoundedRect(ptX - this.smartPromptW/2, ptY - this.smartPromptH/2, this.smartPromptW, this.smartPromptH, 6); this.lastPromptDrawX = ptX; this.lastPromptDrawY = ptY; this.lastPromptDrawMsg = promptMsg; }
                 this.smartPromptBg.setVisible(true); this.smartPromptText.setPosition(ptX, ptY).setVisible(true);
             } else { this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false); this.lastPromptDrawMsg = null; }
