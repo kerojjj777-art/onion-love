@@ -15,7 +15,7 @@ const db = getDatabase(app);
 
 window.GameLogic = {
     currentUser: null, currentScene: "doghouse",
-    myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0, inventoryOrder: [] },
+    myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0, inventoryOrder: [], princeBond: 0, princePetCountToday: 0, princeLastPetDate: "", princeRewardsClaimed: {} },
     cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, placingFurnitureKey: null, 
     phaserGame: null, phaserLoaded: false, pendingScene: null, db: db,
     armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false
@@ -137,6 +137,10 @@ function createSystemUI() {
             .modal-btns button, .close-modal-btn { padding: 10px 15px; border-radius: 4px; border: none; cursor: pointer; font-family: inherit; font-size: 15px; margin: 5px;}
             .btn-primary { background: var(--mucha-gold); color: white; } .btn-secondary { background: #ccc; color: #333; } .btn-edit { background: var(--mucha-green); color: white; } .btn-danger { background: #d9534f; color: white; }
             .profile-line { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; border-bottom: 1px dashed #ccc; padding-bottom: 5px;}
+            .prince-bond-card { margin: 12px 0; padding: 10px; border-radius: 12px; background: rgba(255, 182, 193, 0.35); border: 2px solid rgba(255, 128, 171, 0.85); box-shadow: 0 0 10px rgba(255, 128, 171, 0.45); display: flex; align-items: center; gap: 10px; text-align: left; }
+            .prince-heart-icon { position: relative; font-size: 24px; filter: drop-shadow(0 0 6px rgba(255, 105, 180, 0.9)); }
+            .prince-heart-icon::after { content: "💗"; position: absolute; left: 0; top: 0; opacity: 0.45; animation: prince-heart-wave 1.4s infinite ease-out; }
+            @keyframes prince-heart-wave { 0% { transform: scale(1); opacity: 0.45; } 100% { transform: scale(1.9); opacity: 0; } }
             .profile-line input { width: 60%; padding: 5px; border: 1px solid var(--mucha-gold); border-radius: 4px; font-family: inherit;}
             .stats-container { display: flex; justify-content: space-between; background: rgba(197, 160, 89, 0.1); padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 14px;}
             #memory-feed { display: flex; flex-direction: column; gap: 15px; margin-top: 15px; text-align: left; }
@@ -303,6 +307,14 @@ function createSystemUI() {
             <div class="profile-line"><span>🎂 生日:</span> <strong id="vp-birth"></strong><input type="text" id="edit-birth" style="display:none;"></div>
             <div class="profile-line"><span>🍛 最愛:</span> <strong id="vp-food"></strong><input type="text" id="edit-food" style="display:none;"></div>
             <div class="profile-line" style="flex-direction: column; align-items: flex-start;"><span>📜 座右銘:</span><i style="color:var(--mucha-green); font-size: 14px; margin-top:5px; width: 100%; text-align: center;">"<span id="vp-motto"></span>"</i><input type="text" id="edit-motto" style="display:none; width: 95%; margin-top:5px;"></div>
+              <div id="vp-prince-bond-card" class="prince-bond-card">
+                <div class="prince-heart-icon">💗</div>
+                <div>
+                    <div style="font-size:13px; font-weight:bold; color:#ad1457;">王子麵羈絆</div>
+                    <div id="vp-prince-bond-desc" style="font-size:14px; color:#5d4037; font-weight:bold; margin-top:3px;">王子麵把你當空氣</div>
+                    <div id="vp-prince-bond-score" style="font-size:11px; color:#8d6e63; margin-top:2px;">0 分</div>
+                </div>
+            </div>
             <div class="modal-btns"><button id="start-edit-btn" class="btn-edit" style="display:none;">編輯</button><button id="save-edit-btn" class="btn-primary" style="display:none;">儲存</button><button class="close-modal-btn btn-secondary" onclick="window.closeProfileModal()">收起證件</button></div>
         </div>
 
@@ -437,6 +449,11 @@ function createSystemUI() {
         <div id="quick-select-menu" onpointerdown="event.stopPropagation()" ontouchmove="event.stopPropagation()" onwheel="event.stopPropagation()">
             <div style="font-weight: bold; color: #87ceeb; margin-bottom: 0px; font-size: 13px; text-shadow: 0 0 3px #000, 0 0 5px #000; letter-spacing: 1px;">左右滑動或點擊法寶選定</div>
             <div id="quick-items-container"></div>
+        </div>
+        <div id="prince-cat-menu" onpointerdown="event.stopPropagation()" ontouchmove="event.stopPropagation()" onwheel="event.stopPropagation()" style="display:none; position:absolute; bottom:145px; left:50%; transform:translateX(-50%); z-index:305; pointer-events:auto; align-items:center; justify-content:center;">
+            <div onclick="window.selectPrinceCatInteraction && window.selectPrinceCatInteraction('pet')" style="width:82px; height:82px; border-radius:50%; background:rgba(255,240,245,0.96); border:3px solid #ff80ab; box-shadow:0 0 18px rgba(255,128,171,0.9); color:#ad1457; font-weight:bold; display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none;">
+                摸摸
+            </div>
         </div>
 
         <div id="inventory-modal" class="modal"><div id="inventory-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--mucha-gold); padding-bottom: 5px; margin-bottom: 15px;"><h3 style="margin:0; border:none; color: var(--mucha-brown);">🎒 我的給西</h3><button id="inventory-edit-btn" class="btn-edit" onclick="window.toggleInventoryEdit()" style="padding:4px 8px; font-size:12px;">編輯排序</button></div><div id="inventory-list" class="catalog-grid" style="max-height: 50vh; overflow-y: auto; padding-right: 5px;"></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('inventory-modal').style.display='none'">關閉</button></div>
@@ -608,7 +625,7 @@ function createSystemUI() {
         </div>
     `;
     setTimeout(() => { 
-        document.querySelectorAll('.modal, .action-menu, #chat-section, #spam-ui, #quick-select-menu').forEach(el => { ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'wheel', 'mousedown', 'mouseup', 'click'].forEach(evt => { el.addEventListener(evt, (e) => e.stopPropagation(), { passive: false }); }); }); 
+        document.querySelectorAll('.modal, .action-menu, #chat-section, #spam-ui, #quick-select-menu, #prince-cat-menu').forEach(el => { ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'wheel', 'mousedown', 'mouseup', 'click'].forEach(evt => { el.addEventListener(evt, (e) => e.stopPropagation(), { passive: false }); }); }); 
         
         let onlineToggleBtn = document.getElementById('online-toggle-btn');
         let onlineContainer = document.getElementById('online-players-container');
@@ -623,6 +640,135 @@ function createSystemUI() {
     }, 500);
 }
 createSystemUI();
+
+window.getPrinceLocalDateKey = function() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+};
+
+window.getPrinceBondDesc = function(bond) {
+    const val = Number(bond || 0);
+    if (val >= 150) return "王子麵覺得你很好笑";
+    if (val >= 100) return "王子麵承認你是可疑洋蔥";
+    if (val >= 60) return "王子麵開始記得你的毛味";
+    if (val >= 30) return "王子麵偶爾聞到你的臭味";
+    return "王子麵把你當空氣";
+};
+
+window.normalizePrinceCatProfileFields = function() {
+    const p = window.GameLogic.myProfile || {};
+    const today = window.getPrinceLocalDateKey();
+
+    p.princeBond = Number(p.princeBond || 0);
+    p.princeRewardsClaimed = p.princeRewardsClaimed || {};
+
+    if (p.princeLastPetDate !== today) {
+        p.princePetCountToday = 0;
+        p.princeLastPetDate = today;
+    } else {
+        p.princePetCountToday = Number(p.princePetCountToday || 0);
+    }
+
+    window.GameLogic.myProfile = p;
+    return p;
+};
+
+window.openPrinceCatRewardDetail = function() {
+    document.getElementById('reward-detail-modal').style.display = 'block';
+
+    const title = document.querySelector('#reward-detail-modal h3');
+    if (title) title.innerText = "王子麵與你";
+
+    const ruleBox = document.querySelector('#reward-detail-modal h3 + div');
+    if (ruleBox) {
+        ruleBox.innerHTML = `<strong>【派獎規則】</strong><br>第一次成功摸摸王子麵後，可領取「我愛上了王子麵」勳章。<br>每位玩家只能領取一次，沒有領取期限。`;
+    }
+
+    const rankEl = document.getElementById('reward-my-rank');
+    if (rankEl) rankEl.innerText = "鎮廳神貓觀察中";
+
+    window.renderPrinceCatRewardDetail();
+};
+
+window.renderPrinceCatRewardDetail = function() {
+    const grid = document.getElementById('reward-items-grid');
+    if (!grid) return;
+
+    const p = window.GameLogic.myProfile || {};
+    const claimed = p.princeRewardsClaimed || {};
+    const canClaim = Number(p.princeBond || 0) > 0;
+    const isClaimed = !!claimed.firstPet;
+
+    if (!canClaim) {
+        grid.innerHTML = `<div style="color:#fff; text-align:center; line-height:1.6;">尚未與王子麵建立第一次互動</div>`;
+        return;
+    }
+
+    grid.innerHTML = `
+        <div class="reward-item ${isClaimed ? 'claimed' : ''}" id="rew-item-prince-first">
+            <div style="display:flex; align-items:center;">
+                <img src="ranking-medal-cat-wzm-no0.png" style="width:40px; height:40px; margin-right:5px; object-fit:contain;">
+            </div>
+            <div style="flex:1; margin-left:10px; color:#333; font-weight:bold; font-size:13px; text-align:left;">我愛上了王子麵勳章</div>
+            <button class="btn-primary reward-neon-btn" style="padding:6px 12px; font-size:14px;" onclick="window.claimPrinceCatFirstReward()">領取</button>
+            <div class="reward-claimed-text">已領取</div>
+        </div>
+    `;
+};
+
+window.claimPrinceCatFirstReward = async function() {
+    if (!window.GameLogic.currentUser) return;
+
+    const uid = window.GameLogic.currentUser.uid;
+    const p = window.GameLogic.myProfile || {};
+    p.princeRewardsClaimed = p.princeRewardsClaimed || {};
+
+    if (Number(p.princeBond || 0) <= 0) {
+        alert("尚未與王子麵建立第一次互動");
+        return;
+    }
+
+    if (p.princeRewardsClaimed.firstPet) return;
+
+    p.princeRewardsClaimed.firstPet = true;
+
+    const medals = Array.isArray(p.medals) ? p.medals : [];
+    medals.push({
+        id: 'prince_cat_first_' + Date.now(),
+        date: new Date().toLocaleDateString('zh-TW'),
+        eventName: '王子麵與你',
+        name: '我愛上了王子麵',
+        icon: 'ranking-medal-cat-wzm-no0.png',
+        recordText: '第一次摸摸王子麵'
+    });
+
+    p.medals = medals;
+    window.GameLogic.myProfile = p;
+
+    const updates = {};
+    updates[`users/${uid}/princeRewardsClaimed/firstPet`] = true;
+    updates[`users/${uid}/medals`] = medals;
+
+    await update(ref(window.GameLogic.db), updates);
+
+    const item = document.getElementById('rew-item-prince-first');
+    if (item) item.classList.add('claimed');
+
+    if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) {
+        const ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
+        if (ms) window.playSFX(ms, 'reward-get-sounds');
+    }
+
+    const overlay = document.getElementById('reward-congrats-overlay');
+    if (overlay) {
+        document.getElementById('congrats-text').innerText = '恭喜獲得 我愛上了王子麵！';
+        overlay.style.display = 'block';
+        setTimeout(() => { overlay.style.display = 'none'; }, 2000);
+    }
+};
 
 window.openEnergyModal = function() {
     document.getElementById('inventory-modal').style.display = 'none'; let p = window.GameLogic.myProfile;
@@ -1081,6 +1227,14 @@ onAuthStateChanged(auth, async (user) => {
         const profileSnap = await get(ref(db, `users/${user.uid}`));
         if (profileSnap.exists()) {
             window.GameLogic.myProfile = { ...window.GameLogic.myProfile, ...profileSnap.val() };
+
+        window.normalizePrinceCatProfileFields();
+            update(ref(db, `users/${user.uid}`), {
+                princeBond: window.GameLogic.myProfile.princeBond || 0,
+                princePetCountToday: window.GameLogic.myProfile.princePetCountToday || 0,
+                princeLastPetDate: window.GameLogic.myProfile.princeLastPetDate || window.getPrinceLocalDateKey(),
+                princeRewardsClaimed: window.GameLogic.myProfile.princeRewardsClaimed || {}
+            }).catch(err => console.warn('Firebase 補齊王子麵欄位失敗:', err));
             
             let localSleep = localStorage.getItem('onion_sleepStartTime');
             if (localSleep && parseInt(localSleep) > 0) {
@@ -1308,7 +1462,7 @@ window.clearAllModals = function() {
     // 2. 關閉特定獨立或脫離文件流的 UI
     const standaloneUIs = [
         'spam-ui', 'party-red-flash', 'rps-modal', 'party-waiting-modal', 
-        'action-menu', 'quick-select-menu', 'magic-menu-blocker', 
+        'action-menu', 'quick-select-menu', 'prince-cat-menu', 'magic-menu-blocker', 
         'ingame-confirm', 'purchase-success-msg', 'fullscreen-viewer'
     ];
     standaloneUIs.forEach(id => {
@@ -1515,6 +1669,18 @@ class BootScene extends Phaser.Scene {
         this.load.spritesheet('onion-clean', 'onion-clean.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-sleep', 'onion-sleeping.png', { frameWidth: 75, frameHeight: 75 });
         // 新增：載入蔥電飽充電器精靈圖
         this.load.spritesheet('sleep-charger', 'sleep_onion_bao_charger.png', { frameWidth: 90, frameHeight: 90 });
+        this.load.spritesheet('prince-cat-walk-right-sheet', 'pet-cat-wzm-walk-right.png', { frameWidth: 100, frameHeight: 100 });
+        this.load.spritesheet('prince-cat-walk-left-sheet', 'pet-cat-wzm-walk-left.png', { frameWidth: 100, frameHeight: 100 });
+        this.load.spritesheet('prince-cat-stand-sheet', 'pet-cat-wzm-stand.png', { frameWidth: 100, frameHeight: 100 });
+        this.load.spritesheet('prince-cat-lick-sheet', 'pet-cat-wzm-lick.png', { frameWidth: 100, frameHeight: 100 });
+        this.load.spritesheet('prince-cat-sleep-sheet', 'pet-cat-wzm-sleep.png', { frameWidth: 100, frameHeight: 100 });
+        this.load.spritesheet('prince-cat-touched-sheet', 'pet-cat-wzm-touched.png', { frameWidth: 100, frameHeight: 100 });
+        this.load.spritesheet('onion-petting-sheet', 'onion-petting.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.image('prince-cat-love', 'pet-cat-wzm-love.png');
+        this.load.image('ranking-medal-cat-wzm-no0.png', 'ranking-medal-cat-wzm-no0.png');
+        this.load.audio('prince-cat-normal-meow', 'pet-cat-wzm-normal-meow.mp3');
+        this.load.audio('prince-cat-feel-good', 'pet-cat-wzm-feel-good.mp3');
+        this.load.audio('prince-cat-got-touched', 'pet-cat-wzm-got-touched.mp3');
         this.load.image('bg7Eonion', '7eonion-bg.jpg'); this.load.image('storeManager', 'store-manager.png'); this.load.spritesheet('onion-throw', 'onion-throw.png', { frameWidth: 90, frameHeight: 75 }); this.load.spritesheet('water-ball-blast', 'water-ball-blast.png', { frameWidth: 50, frameHeight: 50 }); this.load.spritesheet('onion-wet', 'onion-wet.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('made-coin', 'made-coin.png', { frameWidth: 50, frameHeight: 50 }); this.load.image('dummy', 'dummy.png'); this.load.spritesheet('dummy-got-shot', 'dummy-got-shot.png', { frameWidth: 75, frameHeight: 75 });
         this.load.image('fireworks', 'shop-fireworks.png'); this.load.spritesheet('onion-fireworks', 'onion-fireworks.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-got-shot', 'onion-got-shot.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('mimi-thief-walk', 'mimi-thief-walk.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('fireworks-shoot', 'fireworks-shoot.png', { frameWidth: 50, frameHeight: 50 });
@@ -1579,6 +1745,13 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'trumpet-play', frames: this.anims.generateFrameNumbers('onion-trumpet'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'seat-idle', frames: this.anims.generateFrameNumbers('onion-seat-shrine'), frameRate: 5, repeat: -1 }); this.anims.create({ key: 'purify-target', frames: this.anims.generateFrameNumbers('onion-got-purify'), frameRate: 8, repeat: -1 }); this.anims.create({ key: 'purify-magic', frames: this.anims.generateFrameNumbers('onion-doing-purify'), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'charger-anim', frames: this.anims.generateFrameNumbers('sleep-charger'), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'prince-cat-walk-right', frames: this.anims.generateFrameNumbers('prince-cat-walk-right-sheet', { start: 0, end: 5 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'prince-cat-walk-left', frames: this.anims.generateFrameNumbers('prince-cat-walk-left-sheet', { start: 0, end: 5 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'prince-cat-stand', frames: this.anims.generateFrameNumbers('prince-cat-stand-sheet', { start: 0, end: 5 }), frameRate: 6, repeat: -1 });
+        this.anims.create({ key: 'prince-cat-lick', frames: this.anims.generateFrameNumbers('prince-cat-lick-sheet', { start: 0, end: 5 }), frameRate: 7, repeat: -1 });
+        this.anims.create({ key: 'prince-cat-sleep', frames: this.anims.generateFrameNumbers('prince-cat-sleep-sheet', { start: 0, end: 5 }), frameRate: 5, repeat: -1 });
+        this.anims.create({ key: 'prince-cat-touched', frames: this.anims.generateFrameNumbers('prince-cat-touched-sheet', { start: 0, end: 5 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'onion-petting', frames: this.anims.generateFrameNumbers('onion-petting-sheet', { start: 0, end: 5 }), frameRate: 8, repeat: -1 });
 
         this.scene.launch('UIScene'); this.scene.bringToTop('UIScene'); 
         window.GameLogic.phaserLoaded = true;
@@ -2114,6 +2287,7 @@ class MainScene extends Phaser.Scene {
         this.waterPromptBg = this.add.graphics().setDepth(100).setVisible(false); this.waterPromptText = this.add.text(0, 0, '', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#fff' }).setOrigin(0.5).setDepth(101).setVisible(false);
         this.lockOnTarget = this.add.text(0, 0, '🎯', { fontSize: '28px' }).setOrigin(0.5).setDepth(150).setVisible(false); this.tweens.add({ targets: this.lockOnTarget, scaleX: 1.2, scaleY: 1.2, yoyo: true, repeat: -1, duration: 400 });
         if (this.minimap) this.minimap.ignore([this.smartPromptBg, this.smartPromptText, this.waterPromptBg, this.waterPromptText, this.lockOnTarget]);
+        this.initPrinceCatSync();
 
         this.cursors = this.input.keyboard.createCursorKeys(); this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE); this.shiftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
         this.spaceKey.on('down', (e) => { if (!e.repeat && document.activeElement.tagName !== 'INPUT') this.spacePressTime = Date.now(); });
@@ -2456,6 +2630,13 @@ class MainScene extends Phaser.Scene {
                     window.openRpsBetting(window.GameLogic.currentRoomId);
                     return; 
                 } 
+            }
+            if (this.isCafe && this.princeCatSprite) {
+                let catDist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.princeCatSprite.x, this.princeCatSprite.y);
+                if (catDist < 170) {
+                    this.openPrinceCatMenu();
+                    return;
+                }
             }
             if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!"); let interacted = false; for (const key in this.furnitureSprites) { let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y); if (dist < 120) { if (key.includes('giftbox')) { window.GameLogic.activeGiftBox = f; f.sprite.setTexture('gift-box-open'); window.playSFX(this, 'reward-open-box'); if (!f.glow) { f.glow = this.add.pointlight(f.sprite.x, f.sprite.y, 0xffd700, 180, 0.6).setDepth(4); this.tweens.add({ targets: f.glow, radius: 220, yoyo: true, repeat: -1, duration: 800 }); } f.glow.setVisible(true); window.openRewardModal(f); interacted = true; break; } if (key === 'fridge') { document.getElementById('fridge-modal').style.display = 'block'; interacted = true; break; } if (key.startsWith('memory')) { document.getElementById('memory-modal').style.display = 'block'; interacted = true; break; } if (key.includes('scoreboard')) { window.openLeaderboardModal(); interacted = true; break; } if (key === 'shrine') { window.attemptJoinShrine(); interacted = true; break; } } } if(!interacted) sendBubble("使用了 A 技能!");
         });
@@ -3034,6 +3215,13 @@ if (uiScene && uiScene.magicMenuEmitter) {
             if (this.dummyHitListener) this.dummyHitListener(); 
             if (this.fwThrowsListener) this.fwThrowsListener(); 
             if (this.waterThrowsListener) this.waterThrowsListener(); 
+            if (this.princeCatListener) this.princeCatListener();
+            const princeMenu = document.getElementById('prince-cat-menu');
+            if (princeMenu) princeMenu.style.display = 'none';
+            if (window.GameLogic.princeCatMenuTimeout) {
+                clearTimeout(window.GameLogic.princeCatMenuTimeout);
+                window.GameLogic.princeCatMenuTimeout = null;
+            }
         });
     }
 
@@ -3198,6 +3386,368 @@ entity.showOffRainbowTween = this.tweens.add({
 }
     }
     updateQTEBar(progress) { this.qteBar.clear(); let width = Math.min(100, (progress / 100) * 100); this.qteBar.fillStyle(0xd9534f, 1); this.qteBar.fillRoundedRect(-50, -8, width, 16, 8); }
+    initPrinceCatSync() {
+        if (!this.isCafe || this.princeCatListener) return;
+
+        this.princeCatSprite = this.physics.add.sprite(1024, 1024, 'prince-cat-stand-sheet').setDepth(9).setScale(1.35);
+        this.princeCatSprite.setCollideWorldBounds(true);
+        if (this.princeCatSprite.body) this.princeCatSprite.body.setAllowGravity(false);
+
+        this.princeCatNameBg = this.add.graphics().setDepth(12);
+        this.princeCatNameText = this.add.text(0, 0, '王子麵', { fontSize: '14px', color: '#ffcc00', fontStyle: 'bold', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5).setDepth(13);
+
+        if (this.minimap) this.minimap.ignore([this.princeCatNameBg, this.princeCatNameText]);
+
+        window.selectPrinceCatInteraction = (type) => {
+            if (type === 'pet') this.startPrinceCatPetting();
+        };
+
+        this.princeCatListener = onValue(ref(window.GameLogic.db, 'cafePrinceCat'), (snap) => {
+            const data = snap.val();
+
+            if (!data) {
+                window.GameLogic.princeCatData = null;
+
+                if (this.isPrinceCatHost()) {
+                    set(ref(window.GameLogic.db, 'cafePrinceCat'), {
+                        x: 1024,
+                        y: 1024,
+                        targetX: 1200,
+                        targetY: 1024,
+                        state: 'idle',
+                        direction: 'right',
+                        stateStartTime: Date.now(),
+                        stateUntil: Date.now() + 3000,
+                        interactingUid: null,
+                        lockedUntil: 0
+                    });
+                }
+                return;
+            }
+
+            window.GameLogic.princeCatData = data;
+        });
+    }
+
+    isPrinceCatHost() {
+        if (!this.isCafe || !window.GameLogic.currentUser) return false;
+        const players = window.GameLogic.cafePlayers || {};
+        const online = window.GameLogic.onlinePlayers || {};
+        const validUids = Object.keys(players).filter(uid => online[uid]).sort();
+        return validUids.length > 0 && validUids[0] === window.GameLogic.currentUser.uid;
+    }
+
+    choosePrinceCatNextState(now) {
+        const data = window.GameLogic.princeCatData || {};
+        const x = Phaser.Math.Clamp(data.x || this.princeCatSprite.x || 1024, 160, 1888);
+        const y = Phaser.Math.Clamp(data.y || this.princeCatSprite.y || 1024, 160, 1888);
+        const roll = Math.random();
+
+        if (roll < 0.58) {
+            const targetX = Phaser.Math.Between(180, 1868);
+            const targetY = Phaser.Math.Between(180, 1868);
+            return {
+                x, y,
+                targetX,
+                targetY,
+                state: 'walk',
+                direction: targetX < x ? 'left' : 'right',
+                stateStartTime: now,
+                stateUntil: now + Phaser.Math.Between(8000, 15000),
+                interactingUid: null,
+                lockedUntil: 0
+            };
+        }
+
+        if (roll < 0.82) {
+            return {
+                x, y,
+                targetX: x,
+                targetY: y,
+                state: 'idle',
+                direction: data.direction || 'right',
+                stateStartTime: now,
+                stateUntil: now + Phaser.Math.Between(3000, 7000),
+                interactingUid: null,
+                lockedUntil: 0
+            };
+        }
+
+        if (roll < 0.94) {
+            return {
+                x, y,
+                targetX: x,
+                targetY: y,
+                state: 'lick',
+                direction: data.direction || 'right',
+                stateStartTime: now,
+                stateUntil: now + Phaser.Math.Between(5000, 9000),
+                interactingUid: null,
+                lockedUntil: 0
+            };
+        }
+
+        return {
+            x, y,
+            targetX: x,
+            targetY: y,
+            state: 'sleep',
+            direction: data.direction || 'right',
+            stateStartTime: now,
+            stateUntil: now + Phaser.Math.Between(10000, 60000),
+            interactingUid: null,
+            lockedUntil: 0
+        };
+    }
+
+    updatePrinceCatAutonomy(time, delta) {
+        if (!this.isCafe || !this.princeCatSprite || !this.isPrinceCatHost()) return;
+
+        const now = Date.now();
+        let data = window.GameLogic.princeCatData;
+
+        if (!data) return;
+        if (data.interactingUid && data.lockedUntil && now < data.lockedUntil) return;
+        if (data.state === 'petting' && data.lockedUntil && now < data.lockedUntil) return;
+
+        let nextData = { ...data };
+
+        const reachedTarget = Phaser.Math.Distance.Between(nextData.x || 1024, nextData.y || 1024, nextData.targetX || 1024, nextData.targetY || 1024) < 12;
+
+        if (!nextData.stateUntil || now > nextData.stateUntil || reachedTarget) {
+            nextData = this.choosePrinceCatNextState(now);
+        }
+
+        if (nextData.state === 'walk') {
+            const speed = 32;
+            const dx = (nextData.targetX || nextData.x) - nextData.x;
+            const dy = (nextData.targetY || nextData.y) - nextData.y;
+            const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+            nextData.x = Phaser.Math.Clamp(nextData.x + (dx / dist) * speed * (delta / 1000), 150, 1898);
+            nextData.y = Phaser.Math.Clamp(nextData.y + (dy / dist) * speed * (delta / 1000), 150, 1898);
+            nextData.direction = dx < 0 ? 'left' : 'right';
+        }
+
+        window.GameLogic.princeCatData = nextData;
+
+        if (!this.princeCatLastSync || time - this.princeCatLastSync > 500) {
+            this.princeCatLastSync = time;
+            update(ref(window.GameLogic.db, 'cafePrinceCat'), nextData).catch(err => console.warn('Firebase 同步王子麵狀態失敗:', err));
+        }
+    }
+
+    updatePrinceCatVisual() {
+        if (!this.isCafe || !this.princeCatSprite) return;
+
+        const data = window.GameLogic.princeCatData;
+        if (!data) return;
+
+        if (Math.abs(this.princeCatSprite.x - data.x) > 120 || Math.abs(this.princeCatSprite.y - data.y) > 120) {
+            this.princeCatSprite.setPosition(data.x, data.y);
+        } else {
+            this.princeCatSprite.x = Phaser.Math.Linear(this.princeCatSprite.x, data.x, 0.25);
+            this.princeCatSprite.y = Phaser.Math.Linear(this.princeCatSprite.y, data.y, 0.25);
+        }
+
+        let animKey = 'prince-cat-stand';
+        if (data.state === 'walk') animKey = data.direction === 'left' ? 'prince-cat-walk-left' : 'prince-cat-walk-right';
+        else if (data.state === 'lick') animKey = 'prince-cat-lick';
+        else if (data.state === 'sleep') animKey = 'prince-cat-sleep';
+        else if (data.state === 'petting') animKey = 'prince-cat-touched';
+
+        this.princeCatSprite.play(animKey, true);
+
+        const nameY = this.princeCatSprite.y - 72;
+        this.princeCatNameText.setPosition(this.princeCatSprite.x, nameY);
+        this.princeCatNameBg.clear().fillStyle(0x000000, 0.6).fillRoundedRect(this.princeCatSprite.x - 34, nameY - 12, 68, 24, 6);
+
+        if (data.state === 'petting' && this.princeCatLastPetStart !== data.stateStartTime) {
+            this.princeCatLastPetStart = data.stateStartTime;
+            this.showPrinceCatLoveEffect();
+            window.playSFX(this, 'prince-cat-got-touched');
+            this.time.delayedCall(250, () => window.playSFX(this, 'prince-cat-feel-good'));
+        }
+    }
+
+    showPrinceCatLoveEffect() {
+        if (!this.princeCatSprite) return;
+
+        for (let i = 0; i < 4; i++) {
+            const heart = this.add.image(
+                this.princeCatSprite.x + Phaser.Math.Between(-35, 35),
+                this.princeCatSprite.y - 50 + Phaser.Math.Between(-15, 15),
+                'prince-cat-love'
+            ).setDepth(30).setScale(0.65);
+
+            this.tweens.add({
+                targets: heart,
+                y: heart.y - Phaser.Math.Between(35, 70),
+                x: heart.x + Phaser.Math.Between(-20, 20),
+                alpha: 0,
+                scale: 1,
+                duration: 1000,
+                ease: 'Cubic.easeOut',
+                onComplete: () => heart.destroy()
+            });
+        }
+    }
+
+    async openPrinceCatMenu() {
+        if (!this.isCafe || !this.princeCatSprite || !window.GameLogic.currentUser) return;
+
+        const uid = window.GameLogic.currentUser.uid;
+        const now = Date.now();
+        const catRef = ref(window.GameLogic.db, 'cafePrinceCat');
+        const snap = await get(catRef);
+        const data = snap.val() || {};
+
+        if (data.interactingUid && data.interactingUid !== uid && data.lockedUntil && now < data.lockedUntil) {
+            sendBubble("王子麵正在理別人");
+            return;
+        }
+
+        await update(catRef, {
+            x: data.x || this.princeCatSprite.x,
+            y: data.y || this.princeCatSprite.y,
+            state: 'idle',
+            interactingUid: uid,
+            stateStartTime: now,
+            stateUntil: now + 60000,
+            lockedUntil: now + 60000
+        });
+
+        const menu = document.getElementById('prince-cat-menu');
+        if (menu) menu.style.display = 'flex';
+
+        if (window.GameLogic.princeCatMenuTimeout) clearTimeout(window.GameLogic.princeCatMenuTimeout);
+        window.GameLogic.princeCatMenuTimeout = setTimeout(() => {
+            this.closePrinceCatMenu(true);
+        }, 60000);
+    }
+
+    async closePrinceCatMenu(restoreCat = true) {
+        const menu = document.getElementById('prince-cat-menu');
+        if (menu) menu.style.display = 'none';
+
+        if (window.GameLogic.princeCatMenuTimeout) {
+            clearTimeout(window.GameLogic.princeCatMenuTimeout);
+            window.GameLogic.princeCatMenuTimeout = null;
+        }
+
+        if (!restoreCat || !window.GameLogic.currentUser) return;
+
+        const uid = window.GameLogic.currentUser.uid;
+        const catRef = ref(window.GameLogic.db, 'cafePrinceCat');
+        const snap = await get(catRef);
+        const data = snap.val() || {};
+
+        if (data.interactingUid === uid && data.state !== 'petting') {
+            update(catRef, {
+                interactingUid: null,
+                lockedUntil: 0,
+                state: 'idle',
+                stateUntil: Date.now() + 1000
+            }).catch(err => console.warn('Firebase 關閉王子麵選單失敗:', err));
+        }
+    }
+
+    async startPrinceCatPetting() {
+        if (!this.isCafe || !this.princeCatSprite || !window.GameLogic.currentUser) return;
+
+        const menu = document.getElementById('prince-cat-menu');
+        if (menu) menu.style.display = 'none';
+
+        if (window.GameLogic.princeCatMenuTimeout) {
+            clearTimeout(window.GameLogic.princeCatMenuTimeout);
+            window.GameLogic.princeCatMenuTimeout = null;
+        }
+
+        const uid = window.GameLogic.currentUser.uid;
+        const now = Date.now();
+        const catRef = ref(window.GameLogic.db, 'cafePrinceCat');
+        const snap = await get(catRef);
+        const data = snap.val() || {};
+
+        if (data.interactingUid && data.interactingUid !== uid && data.lockedUntil && now < data.lockedUntil) {
+            sendBubble("王子麵正在理別人");
+            return;
+        }
+
+        await update(catRef, {
+            x: data.x || this.princeCatSprite.x,
+            y: data.y || this.princeCatSprite.y,
+            state: 'petting',
+            interactingUid: uid,
+            direction: data.direction || 'right',
+            stateStartTime: now,
+            stateUntil: now + 3500,
+            lockedUntil: now + 3500
+        });
+
+        this.localPlayer.sprite.isPettingPrinceCat = true;
+        this.localPlayer.sprite.setVelocity(0, 0);
+        this.localPlayer.sprite.play('onion-petting', true);
+
+        update(ref(window.GameLogic.db, `cafePlayers/${uid}`), {
+            action: 'petPrinceCat',
+            actionTime: now,
+            x: this.localPlayer.sprite.x,
+            y: this.localPlayer.sprite.y
+        });
+
+        this.showPrinceCatLoveEffect();
+        this.applyPrinceBondGain();
+
+        this.time.delayedCall(3500, () => {
+            if (this.localPlayer && this.localPlayer.sprite) {
+                this.localPlayer.sprite.isPettingPrinceCat = false;
+                this.localPlayer.sprite.play('idle', true);
+            }
+
+            update(ref(window.GameLogic.db, `cafePlayers/${uid}`), {
+                action: null,
+                actionTime: null
+            });
+
+            get(catRef).then(latestSnap => {
+                const latest = latestSnap.val() || {};
+                if (latest.interactingUid === uid) {
+                    update(catRef, {
+                        interactingUid: null,
+                        lockedUntil: 0,
+                        state: 'idle',
+                        stateUntil: Date.now() + 1000
+                    });
+                }
+            });
+        });
+    }
+
+    applyPrinceBondGain() {
+        const p = window.normalizePrinceCatProfileFields();
+        const today = window.getPrinceLocalDateKey();
+
+        if (p.princeLastPetDate !== today) {
+            p.princeLastPetDate = today;
+            p.princePetCountToday = 0;
+        }
+
+        if ((p.princePetCountToday || 0) < 3) {
+            p.princePetCountToday = (p.princePetCountToday || 0) + 1;
+            p.princeBond = Math.round(((Number(p.princeBond || 0) + 0.1) * 10)) / 10;
+
+            update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), {
+                princeBond: p.princeBond,
+                princePetCountToday: p.princePetCountToday,
+                princeLastPetDate: p.princeLastPetDate
+            }).catch(err => console.warn('Firebase 更新王子麵羈絆失敗:', err));
+
+            sendBubble(`與王子麵的羈絆增加了！\n今日摸摸：${p.princePetCountToday} / 3`);
+        } else {
+            sendBubble("王子麵把頭轉開了。\n今日摸摸已達上限。");
+        }
+    }
+  
     createPlayerEntity(x, y, pData, isLocal = false) { let entity = { sprite: this.physics.add.sprite(x, y, 'onion').setCollideWorldBounds(true).setDepth(10) }; if (!isLocal) { entity.sprite.setInteractive(); entity.sprite.on('pointerdown', (pointer) => { const actionMenu = document.getElementById("action-menu"); actionMenu.style.display = "flex"; actionMenu.style.left = pointer.event.pageX + "px"; actionMenu.style.top = pointer.event.pageY + "px"; actionMenu.dataset.uid = pData.uid; }); } 
         // 修正1：使用 Container 取代直接繪製，解決每幀重繪造成的掉幀問題
         entity.nameContainer = this.add.container(x, y).setDepth(12); entity.nameBg = this.add.graphics(); entity.nameText = this.add.text(0, 0, pData.name || '匿名', { fontSize: '13px', fontFamily: 'Georgia', color: pData.color || '#fff', fontStyle: 'bold' }).setOrigin(0.5); entity.nameContainer.add([entity.nameBg, entity.nameText]);
@@ -3946,7 +4496,7 @@ if (activeBubbleMsg) {
                     this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
                 }
                 let absX = Math.abs(vx); let absY = Math.abs(vy); if (absX < 1) vx = 0; if (absY < 1) vy = 0;
-                if (!this.localPlayer.isShowingOff) {
+                if (!this.localPlayer.isShowingOff && !this.localPlayer.sprite.isPettingPrinceCat) {
                     if (vx === 0 && vy === 0) { this.localPlayer.sprite.play('idle', true); } else if (absX >= absY) { this.localPlayer.sprite.setFlipX(vx < 0); this.localPlayer.sprite.play('walk', true); } else { if (vy < 0) { this.localPlayer.sprite.play('walk-up', true); } else { this.localPlayer.sprite.play('walk-down', true); } }
                 }
                 if ((this.isCafe || this.sceneName === 'shrine' || this.sceneName === 'playroom' || this.sceneName === 'partyroom') && (vx !== 0 || vy !== 0)) { 
@@ -3957,6 +4507,10 @@ if (activeBubbleMsg) {
                 }
             }
 
+            if (this.isCafe && this.princeCatSprite) {
+                this.updatePrinceCatAutonomy(time, delta);
+                this.updatePrinceCatVisual();
+            }
             // 🌟 降頻計算：鎖定與互動判定每 200ms 執行一次
             if (!this.lastTargetCalcTime || time - this.lastTargetCalcTime > 200) {
                 this.lastTargetCalcTime = time;
@@ -3976,6 +4530,16 @@ if (activeBubbleMsg) {
                 if (this.sceneName === 'playroom' && this.rpsMachine) { 
                     let d = Phaser.Math.Distance.Between(px, py, this.rpsMachine.x, this.rpsMachine.y); 
                     if (d < 150) { this._cachedMinDist = d; this._cachedPromptTarget = this.rpsMachine; this._cachedPromptMsg = "按A進行拳頭PK"; } 
+                }
+                 if (this.isCafe && this.princeCatSprite) {
+                    let d = Phaser.Math.Distance.Between(px, py, this.princeCatSprite.x, this.princeCatSprite.y);
+                    if (d < 170) {
+                        const catData = window.GameLogic.princeCatData || {};
+                        const occupied = catData.interactingUid && catData.interactingUid !== window.GameLogic.currentUser.uid && catData.lockedUntil && Date.now() < catData.lockedUntil;
+                        this._cachedMinDist = d;
+                        this._cachedPromptTarget = this.princeCatSprite;
+                        this._cachedPromptMsg = occupied ? "王子麵正在理別人" : "按A選擇互動";
+                    }
                 }
 
                 if (window.GameLogic.armedItemState) {
@@ -4135,7 +4699,7 @@ if (dist < 30) {
                 pd.uid = uid;
                 if (!this.otherPlayers[uid]) this.otherPlayers[uid] = this.createPlayerEntity(pd.x, pd.y, pd, false);
                 let op = this.otherPlayers[uid]; let oldX = op.sprite.x; let oldY = op.sprite.y; op.sprite.x = Phaser.Math.Linear(op.sprite.x, pd.x, 0.2); op.sprite.y = Phaser.Math.Linear(op.sprite.y, pd.y, 0.2); let diffX = op.sprite.x - oldX; let diffY = op.sprite.y - oldY; let absX = Math.abs(diffX); let absY = Math.abs(diffY);
-                const actionWindow = pd.action === 'showOff' ? Number.POSITIVE_INFINITY : 1200;
+                const actionWindow = pd.action === 'showOff' ? Number.POSITIVE_INFINITY : (pd.action === 'petPrinceCat' ? 3600 : 1200);
                 if (pd.action && pd.actionTime && Date.now() - pd.actionTime < actionWindow) {
                     if (pd.action === 'showOff') {
                         if (op.lastActionTime !== pd.actionTime) {
@@ -4162,11 +4726,18 @@ if (dist < 30) {
                                 if (op.sprite && op.sprite.active) op.sprite.isStunned = false;
                             });
                         }
+                                if (pd.action === 'petPrinceCat') {
+                            op.sprite.isPettingPrinceCat = true;
+                            op.sprite.play('onion-petting', true);
+                            this.time.delayedCall(3500, () => {
+                                if (op.sprite && op.sprite.active) op.sprite.isPettingPrinceCat = false;
+                            });
+                        }
                     }
                 } else if (op.sprite.isShowingOff) {
                     op.sprite.isShowingOff = false;
                     this.clearShowOffFx(op);
-                } else if (op.sprite.isStunned || op.sprite.isThrowing) { 
+                } else if (op.sprite.isStunned || op.sprite.isThrowing || op.sprite.isPettingPrinceCat) { 
                 } else if (pd.isSweeping) { 
                     op.sprite.play('clean', true); 
                 } else if (pd.isSeated) {
@@ -4262,7 +4833,47 @@ function openFurnitureCatalog() {
 }
 
 document.getElementById("view-profile-btn").addEventListener("click", async () => { actionMenu.style.display = "none"; const targetUid = actionMenu.dataset.uid; if (targetUid === window.GameLogic.currentUser.uid) showProfileModal(window.GameLogic.myProfile, targetUid); else { const snap = await get(ref(db, `users/${targetUid}`)); if (snap.exists()) showProfileModal(snap.val(), targetUid); } });
-function showProfileModal(p, uid) { profileViewingUid = uid; document.getElementById("vp-level").innerText = p.level || 1; document.getElementById("vp-exp").innerText = p.exp || 0; document.getElementById("vp-coins").innerText = p.coins || 0; document.getElementById("vp-sweeps").innerText = p.sweeps || 0; document.getElementById("vp-name").innerText = p.name || '匿名'; document.getElementById("vp-color").style.backgroundColor = p.color || '#c5a059'; document.getElementById("vp-birth").innerText = p.birth || '未知'; document.getElementById("vp-food").innerText = p.food || '無'; document.getElementById("vp-motto").innerText = p.motto || '無'; ['name', 'color', 'birth', 'food', 'motto'].forEach(k => { document.getElementById(`vp-${k}`).style.display = k === 'color' ? 'inline-block' : 'inline'; document.getElementById(`edit-${k}`).style.display = 'none'; }); const isMe = uid === window.GameLogic.currentUser.uid; document.getElementById("start-edit-btn").style.display = isMe ? "inline-block" : "none"; document.getElementById("save-edit-btn").style.display = "none"; let viewMedalsBtn = document.getElementById("view-medals-btn"); if(!viewMedalsBtn) { viewMedalsBtn = document.createElement("button"); viewMedalsBtn.id = "view-medals-btn"; viewMedalsBtn.className = "btn-primary"; viewMedalsBtn.innerText = "我的戰績"; viewMedalsBtn.onclick = window.openMedalList; document.querySelector("#view-profile-modal .modal-btns").insertBefore(viewMedalsBtn, document.getElementById("start-edit-btn")); } viewMedalsBtn.style.display = isMe ? "inline-block" : "none"; viewProfileModal.style.display = "block"; }
+function showProfileModal(p, uid) { 
+    profileViewingUid = uid; 
+
+    document.getElementById("vp-level").innerText = p.level || 1; 
+    document.getElementById("vp-exp").innerText = p.exp || 0; 
+    document.getElementById("vp-coins").innerText = p.coins || 0; 
+    document.getElementById("vp-sweeps").innerText = p.sweeps || 0; 
+    document.getElementById("vp-name").innerText = p.name || '匿名'; 
+    document.getElementById("vp-color").style.backgroundColor = p.color || '#c5a059'; 
+    document.getElementById("vp-birth").innerText = p.birth || '未知'; 
+    document.getElementById("vp-food").innerText = p.food || '無'; 
+    document.getElementById("vp-motto").innerText = p.motto || '無'; 
+
+    const bondVal = Number(p.princeBond || 0);
+    const bondDescEl = document.getElementById("vp-prince-bond-desc");
+    const bondScoreEl = document.getElementById("vp-prince-bond-score");
+    if (bondDescEl) bondDescEl.innerText = window.getPrinceBondDesc ? window.getPrinceBondDesc(bondVal) : "王子麵把你當空氣";
+    if (bondScoreEl) bondScoreEl.innerText = `${bondVal.toFixed(1)} 分`;
+
+    ['name', 'color', 'birth', 'food', 'motto'].forEach(k => { 
+        document.getElementById(`vp-${k}`).style.display = k === 'color' ? 'inline-block' : 'inline'; 
+        document.getElementById(`edit-${k}`).style.display = 'none'; 
+    }); 
+
+    const isMe = uid === window.GameLogic.currentUser.uid; 
+    document.getElementById("start-edit-btn").style.display = isMe ? "inline-block" : "none"; 
+    document.getElementById("save-edit-btn").style.display = "none"; 
+
+    let viewMedalsBtn = document.getElementById("view-medals-btn"); 
+    if(!viewMedalsBtn) { 
+        viewMedalsBtn = document.createElement("button"); 
+        viewMedalsBtn.id = "view-medals-btn"; 
+        viewMedalsBtn.className = "btn-primary"; 
+        viewMedalsBtn.innerText = "我的戰績"; 
+        viewMedalsBtn.onclick = window.openMedalList; 
+        document.querySelector("#view-profile-modal .modal-btns").insertBefore(viewMedalsBtn, document.getElementById("start-edit-btn")); 
+    } 
+
+    viewMedalsBtn.style.display = isMe ? "inline-block" : "none"; 
+    viewProfileModal.style.display = "block"; 
+}
 document.getElementById("start-edit-btn").addEventListener("click", () => { document.getElementById("start-edit-btn").style.display = "none"; document.getElementById("save-edit-btn").style.display = "inline-block"; ['name', 'color', 'birth', 'food', 'motto'].forEach(k => { let t = document.getElementById(`vp-${k}`); let i = document.getElementById(`edit-${k}`); if (k === 'color') { i.value = window.GameLogic.myProfile.color || '#c5a059'; } else if (k === 'name') { i.value = window.GameLogic.myProfile.name || '匿名'; } else { i.value = t.innerText === '未知' || t.innerText === '無' ? '' : t.innerText; } t.style.display = 'none'; i.style.display = 'inline-block'; }); });
 document.getElementById("save-edit-btn").addEventListener("click", () => { let newData = { name: document.getElementById("edit-name").value.trim() || '匿名', color: document.getElementById("edit-color").value || '#c5a059', birth: document.getElementById("edit-birth").value.trim() || '未知', food: document.getElementById("edit-food").value.trim() || '無', motto: document.getElementById("edit-motto").value.trim() || '無' }; update(ref(db, `users/${window.GameLogic.currentUser.uid}`), newData).then(() => { window.GameLogic.myProfile = { ...window.GameLogic.myProfile, ...newData }; if (window.GameLogic.currentScene === "cafe") { update(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { name: newData.name, color: newData.color }); } update(ref(db, `onlinePlayers/${window.GameLogic.currentUser.uid}`), { name: newData.name, color: newData.color }); showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); }); });
 
@@ -5541,6 +6152,7 @@ const rewardStyles = `
     <h2 style="color:#ffd700; text-shadow: 0 0 10px #ff0000; position:relative; z-index:1;">🎁 領取派獎</h2>
     <div style="position:relative; z-index:1; display:flex; flex-direction:column; gap:15px; margin-top:20px;">
         <button class="reward-neon-btn" style="padding: 15px;" onclick="window.openWeeklyRewardDetail()">本週掃地王</button>
+        <button class="reward-neon-btn" style="padding: 15px;" onclick="window.openPrinceCatRewardDetail()">王子麵與你</button>
         <button class="btn-secondary" style="padding: 10px;" onclick="window.closeRewardModal()">關閉</button>
     </div>
 </div>
@@ -5719,6 +6331,14 @@ window.closeRewardModal = function() {
 
 window.openWeeklyRewardDetail = async function() {
     document.getElementById('reward-detail-modal').style.display = 'block';
+
+    const title = document.querySelector('#reward-detail-modal h3');
+    if (title) title.innerText = "本週掃地王";
+
+    const ruleBox = document.querySelector('#reward-detail-modal h3 + div');
+    if (ruleBox) {
+        ruleBox.innerHTML = `<strong>【派獎規則】</strong><br>結算至每週一 00:00。<br>第1名: 10000幣+金勳章 / 第2名: 5000幣+銀勳章 / 第3名: 3000幣+銅勳章 / 參加獎: 500幣。<br>滿500次加贈5000幣及專屬勳章(滿1000次另有高階勳章)。<br>未領取將於一週後消失。`;
+    }
     let lastWeekId = window.getWeekId(-1);
     let uid = window.GameLogic.currentUser.uid;
     let grid = document.getElementById('reward-items-grid');
