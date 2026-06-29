@@ -1976,14 +1976,18 @@ if (this.sound.get('mimi-walk')) {
 } else {
     this.sound.add('mimi-walk', {loop: true, volume: mVol}).play();
 }
-}
 // 修正：增加對「派對喇叭」的處理，若玩家處於喇叭動作，禁止米米邏輯干擾
 if (this.localPlayer.isThrowing) return; 
 
-if (Math.abs(this.mimiSprite.x - data.x) > 50) { this.mimiSprite.x = data.x; this.mimiSprite.y = data.y; }
-// ...原有邏輯保持不變...
-                    else { this.mimiSprite.x = Phaser.Math.Linear(this.mimiSprite.x, data.x, 0.3); this.mimiSprite.y = Phaser.Math.Linear(this.mimiSprite.y, data.y, 0.3); }
-                    this.mimiSprite.setFlipX(data.flipX);
+if (Math.abs(this.mimiSprite.x - data.x) > 50) { 
+    this.mimiSprite.x = data.x; 
+    this.mimiSprite.y = data.y;
+} else { 
+    this.mimiSprite.x = Phaser.Math.Linear(this.mimiSprite.x, data.x, 0.3); 
+    this.mimiSprite.y = Phaser.Math.Linear(this.mimiSprite.y, data.y, 0.3); 
+     }
+     this.mimiSprite.setFlipX(data.flipX);
+ }
 
                     if (data.state === 'stealing' && data.stealingFrom === window.GameLogic.currentUser.uid && !this.localPlayer.isMimiRobbed) {
                         this.localPlayer.isMimiRobbed = true; this.localPlayer.isStunned = true; this.localPlayer.isInvincible = true; this.localPlayer.sprite.play('fw-hit', true);
