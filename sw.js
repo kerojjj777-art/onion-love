@@ -1,9 +1,9 @@
-const CACHE_NAME = 'onion-store-v0.2.7.1';
+const CACHE_NAME = 'onion-store-v0.2.7.2';
 
 const ASSETS = [
     './',
-    './index.html?v=0.2.7.1,
-    './app.js?v=0.2.7.1',
+    './index.html?v=0.2.7.2,
+    './app.js?v=0.2.7.2',
     './manifest.json',
     './icon-192.png',
     './icon-512.png',
