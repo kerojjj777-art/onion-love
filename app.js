@@ -6836,6 +6836,22 @@ window.joinPartyroom = function(roomId) {
     // 將 playPhase 初始化為 -1 解決 0 秒階段 START 音效被跳過的問題
     window.PartyLogic.roomId = roomId; window.PartyLogic.ammo = 666; window.PartyLogic.speedBoost = false; window.PartyLogic.playPhase = -1;
     window.PartyLogic.gameData = null; window.PartyLogic.rewardClaimed = false; // 徹底清空舊局資料防干擾
+    window.PartyLogic.state = 'waiting';
+    window.PartyLogic.players = {};
+    window.PartyLogic.scores = {};
+    window.PartyLogic.host = null;
+    window.PartyLogic.mySlotIndex = 0;
+
+    // 新增：每次進入新的派對等候室，都強制重設本機準備按鈕，避免上一場殘留「取消準備」
+    let readyBtn = document.getElementById('party-ready-btn');
+    if (readyBtn) {
+        readyBtn.innerText = '準備好了';
+        readyBtn.style.background = 'var(--mucha-gold)';
+    }
+    let startBtn = document.getElementById('party-start-btn');
+    if (startBtn) startBtn.style.display = 'none';
+    let waitGrid = document.getElementById('party-wait-grid');
+    if (waitGrid) waitGrid.innerHTML = '';
     
     // 自動裝備水球並隱藏聊天室
     window.GameLogic.armedItemState = 'ready'; window.GameLogic.armedItemName = '水球';
@@ -6898,9 +6914,14 @@ window.joinPartyroom = function(roomId) {
 window.leavePartyroom = function(skipSceneSwitch = false) {
     if (partyUnsubscribe) { partyUnsubscribe(); partyUnsubscribe = null; }
     const leavingRoomId = window.PartyLogic.roomId;
+    const leavingUid = window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : null;
     window.PartyLogic.gameData = null; // 離開時清空快取
     window.PartyLogic.state = 'none';
     window.PartyLogic.players = {};
+    window.PartyLogic.scores = {};
+    window.PartyLogic.host = null;
+    window.PartyLogic.speedBoost = false;
+    window.PartyLogic.playPhase = -1;
     document.getElementById('party-waiting-modal').style.display = 'none';
     document.getElementById('party-result-modal').style.display = 'none';
     let rFlash = document.getElementById('party-red-flash'); if (rFlash) { rFlash.style.display = 'none'; rFlash.style.opacity = 0; }
@@ -6908,11 +6929,44 @@ window.leavePartyroom = function(skipSceneSwitch = false) {
     // 離開時恢復聊天室與卸下裝備
     document.getElementById('chat-section').style.display = 'flex';
     window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null;
+
+    // 新增：離開時也把本機準備按鈕重設，避免下一場殘留「取消準備」
+    let readyBtn = document.getElementById('party-ready-btn');
+    if (readyBtn) {
+        readyBtn.innerText = '準備好了';
+        readyBtn.style.background = 'var(--mucha-gold)';
+    }
+    let startBtn = document.getElementById('party-start-btn');
+    if (startBtn) startBtn.style.display = 'none';
     
-    if (leavingRoomId && window.GameLogic.currentUser) {
-        set(ref(window.GameLogic.db, `partyRooms/${leavingRoomId}/players/${window.GameLogic.currentUser.uid}`), null)
+    if (leavingRoomId && leavingUid) {
+        const roomRef = ref(window.GameLogic.db, `partyRooms/${leavingRoomId}`);
+        const playerRef = ref(window.GameLogic.db, `partyRooms/${leavingRoomId}/players/${leavingUid}`);
+
+        set(playerRef, null)
+            .then(() => get(roomRef))
+            .then(snap => {
+                let roomData = snap.val();
+                if (!roomData) {
+                    update(ref(window.GameLogic.db, `serverEvents/partyInvites/${leavingRoomId}`), { closed: true }).catch(err => console.warn('Firebase 關閉不存在派對邀請失敗:', err));
+                    return;
+                }
+
+                let remainingPlayers = roomData.players || {};
+                let remainingUids = Object.keys(remainingPlayers).filter(uid => uid !== leavingUid).sort();
+
+                if (remainingUids.length === 0) {
+                    // 所有人都離開等候室或派對房間：關閉右側邀請，並刪除空房間
+                    update(ref(window.GameLogic.db, `serverEvents/partyInvites/${leavingRoomId}`), { closed: true }).catch(err => console.warn('Firebase 關閉空派對邀請失敗:', err));
+                    set(roomRef, null).catch(err => console.warn('Firebase 清除空派對房間失敗:', err));
+                } else if (roomData.host === leavingUid) {
+                    // 房主離開但房內還有人：由 UID 排序第一位接手房主
+                    update(roomRef, { host: remainingUids[0] }).catch(err => console.warn('Firebase 轉移派對房主失敗:', err));
+                }
+            })
             .catch(err => console.warn('Firebase 離開派對房間失敗:', err));
     }
+
     window.PartyLogic.roomId = null;
     if (!skipSceneSwitch && window.GameLogic.currentScene === 'partyroom') window.switchScene('cafe');
 };
@@ -6962,11 +7016,39 @@ window.startPartyGame = function() {
 window.replyPartyInvite = function(reply) {
     document.getElementById('party-invite-modal').style.display = 'none';
     if (reply === 'yes') {
+        let inviteId = window.PartyLogic.pendingInviteId;
+        if (!inviteId) return alert("派對邀請資料遺失，請對方重新發起。");
         if ((window.GameLogic.myProfile.coins || 0) < 50) return alert("馬德幣不足50！無法參加派對。");
-        window.GameLogic.myProfile.coins -= 50;
-        let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
-        update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: window.GameLogic.myProfile.coins }).catch(err => console.warn('Firebase 扣除派對參加費失敗:', err));
-        window.switchScene('partyroom', { roomId: window.PartyLogic.pendingInviteId });
+
+        Promise.all([
+            get(ref(window.GameLogic.db, `serverEvents/partyInvites/${inviteId}`)),
+            get(ref(window.GameLogic.db, `partyRooms/${inviteId}`))
+        ]).then(([inviteSnap, roomSnap]) => {
+            let inviteData = inviteSnap.val();
+            let roomData = roomSnap.val();
+            let roomPlayers = roomData && roomData.players ? roomData.players : {};
+            let playerCount = Object.keys(roomPlayers).length;
+
+            if (!inviteData || inviteData.closed || !inviteData.time || (Date.now() - inviteData.time >= 60000) || !roomData || playerCount === 0) {
+                update(ref(window.GameLogic.db, `serverEvents/partyInvites/${inviteId}`), { closed: true }).catch(err => console.warn('Firebase 關閉失效派對邀請失敗:', err));
+                if (window.GameLogic.partyInvitesData && window.GameLogic.partyInvitesData[inviteId]) {
+                    window.GameLogic.partyInvitesData[inviteId].closed = true;
+                }
+                let minList = document.getElementById('party-active-rooms');
+                let minUI = document.getElementById('party-minimized-list');
+                if (minList) minList.innerHTML = '';
+                if (minUI) minUI.style.display = 'none';
+                return alert("這個派對房間已經結束或沒有人了，請對方重新發起邀請。");
+            }
+
+            window.GameLogic.myProfile.coins -= 50;
+            let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
+            update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: window.GameLogic.myProfile.coins }).catch(err => console.warn('Firebase 扣除派對參加費失敗:', err));
+            window.switchScene('partyroom', { roomId: inviteId });
+        }).catch(err => {
+            console.warn('Firebase 檢查派對邀請失敗:', err);
+            alert("派對邀請確認失敗，請稍後再試。");
+        });
     }
 };
 
