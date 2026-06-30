@@ -1651,7 +1651,12 @@ function switchScene(sceneName, extraData = null) {
         window.GameLogic.currentScene = sceneName; window.GameLogic.placingFurnitureKey = null; 
         
         // 離開原本的房間
-        leaveCafe(); leaveShrine(); leavePlayroom(); window.leavePartyroom();
+        leaveCafe(); leaveShrine(); leavePlayroom();
+        if (sceneName !== "partyroom") {
+            window.leavePartyroom(true);
+        } else if (window.PartyLogic && window.PartyLogic.roomId && extraData && extraData.roomId && window.PartyLogic.roomId !== extraData.roomId) {
+            window.leavePartyroom(true);
+        }
 
         if (sceneName === "cafe") joinCafe(); 
         else if (sceneName === "shrine") joinShrine(); 
@@ -1673,7 +1678,7 @@ function switchScene(sceneName, extraData = null) {
             let entranceX = newMapW / 2 + 100; let entranceY = newMapH / 2;
             
             // 只有一般場景需要記錄位置，副本不覆蓋最後重生點
-            if (sceneName !== 'playroom') {
+            if (sceneName !== 'playroom' && sceneName !== 'partyroom') {
                 update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { lastScene: sceneName, lastX: entranceX, lastY: entranceY });
                 window.GameLogic.myProfile.lastScene = sceneName; window.GameLogic.myProfile.lastX = entranceX; window.GameLogic.myProfile.lastY = entranceY;
             }
@@ -2693,6 +2698,24 @@ class MainScene extends Phaser.Scene {
                     }
                 }
 
+                let targetUid = window.GameLogic.currentTargetUid;
+                let targetSprite = window.GameLogic.currentTargetSprite;
+                let targetType = window.GameLogic.currentTargetType;
+
+                if (isPartyMode) {
+                    if (!window.PartyLogic.roomId || window.PartyLogic.state !== 'gaming') {
+                        sendBubble("派對還沒開始，先不要丟水球！");
+                        return;
+                    }
+                    if (targetUid && !(window.PartyLogic.players || {})[targetUid]) {
+                        sendBubble("目標已離開派對，鎖定解除！");
+                        window.GameLogic.currentTargetUid = null;
+                        window.GameLogic.currentTargetSprite = null;
+                        window.GameLogic.currentTargetType = null;
+                        return;
+                    }
+                }
+
                 if (!isPartyMode) inv[itemName] = Math.max(0, (inv[itemName] || 0) - 1);
                 if (!isPartyMode) update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv }).catch(err => console.warn('Firebase 施放法寶扣除庫存失敗:', err));
                 
@@ -2702,10 +2725,6 @@ class MainScene extends Phaser.Scene {
                 } else {
                     if (inv[itemName] > 0) { window.GameLogic.armedItemState = 'ready'; } else { window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null; sendBubble("法寶已耗盡！"); }
                 }
-                
-                let targetUid = window.GameLogic.currentTargetUid;
-                let targetSprite = window.GameLogic.currentTargetSprite;
-                let targetType = window.GameLogic.currentTargetType;
                 if (itemName === '蔥友機') {
                     if (targetType === 'player' && targetUid) {
                         if (window.GameLogic.activeInvite) { sendBubble("你已經有一個邀請在進行中了！"); return; }
@@ -6876,9 +6895,12 @@ window.joinPartyroom = function(roomId) {
     });
 };
 
-window.leavePartyroom = function() {
+window.leavePartyroom = function(skipSceneSwitch = false) {
     if (partyUnsubscribe) { partyUnsubscribe(); partyUnsubscribe = null; }
+    const leavingRoomId = window.PartyLogic.roomId;
     window.PartyLogic.gameData = null; // 離開時清空快取
+    window.PartyLogic.state = 'none';
+    window.PartyLogic.players = {};
     document.getElementById('party-waiting-modal').style.display = 'none';
     document.getElementById('party-result-modal').style.display = 'none';
     let rFlash = document.getElementById('party-red-flash'); if (rFlash) { rFlash.style.display = 'none'; rFlash.style.opacity = 0; }
@@ -6887,11 +6909,12 @@ window.leavePartyroom = function() {
     document.getElementById('chat-section').style.display = 'flex';
     window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null;
     
-    if (window.PartyLogic.roomId && window.GameLogic.currentUser) {
-        set(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), null);
+    if (leavingRoomId && window.GameLogic.currentUser) {
+        set(ref(window.GameLogic.db, `partyRooms/${leavingRoomId}/players/${window.GameLogic.currentUser.uid}`), null)
+            .catch(err => console.warn('Firebase 離開派對房間失敗:', err));
     }
     window.PartyLogic.roomId = null;
-    if (window.GameLogic.currentScene === 'partyroom') window.switchScene('cafe');
+    if (!skipSceneSwitch && window.GameLogic.currentScene === 'partyroom') window.switchScene('cafe');
 };
 
 window.togglePartyReady = function() {
@@ -6950,8 +6973,16 @@ window.replyPartyInvite = function(reply) {
 window.processPartyEventLogic = function(scene) {
     let data = window.PartyLogic.gameData; if(!data) return;
     let state = data.state;
+    let pUids = Object.keys(window.PartyLogic.players || {}).sort();
+    let coordinatorUid = pUids[0] || data.host;
+    let isCoordinator = coordinatorUid === window.GameLogic.currentUser.uid;
     
     if (state === 'starting') {
+        if (pUids.length <= 1 && isCoordinator) {
+            update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'finished', finishTime: Date.now(), aborted: true });
+            return;
+        }
+
         let elapsed = Date.now() - data.gameStartTime;
         let phase = Math.floor(elapsed / 1000); 
         if (phase !== window.PartyLogic.playPhase && phase < 3) {
@@ -6968,15 +6999,14 @@ window.processPartyEventLogic = function(scene) {
         } else if (phase >= 3 && window.PartyLogic.playPhase < 3) {
             window.PartyLogic.playPhase = 3;
             scene.partyAnnounceText.setVisible(false);
-            if (data.host === window.GameLogic.currentUser.uid) update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'gaming', gamingStartTime: Date.now() });
+            if (isCoordinator) update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'gaming', gamingStartTime: Date.now() });
         }
     } else if (state === 'gaming') {
         let elapsed = Date.now() - data.gamingStartTime;
         let remain = 60 - Math.floor(elapsed / 1000);
         
-        // 修正3：若遊戲途中玩家不足2人，強制結束遊戲
-        let pUids = Object.keys(window.PartyLogic.players || {});
-        if (pUids.length <= 1 && data.host === window.GameLogic.currentUser.uid) {
+        // 若遊戲途中玩家不足2人，改由目前房內排序第一位玩家負責強制結束，避免房主消失時卡在0秒
+        if (pUids.length <= 1 && isCoordinator) {
             update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'finished', finishTime: Date.now(), aborted: true }); 
             return;
         }
@@ -6988,7 +7018,7 @@ window.processPartyEventLogic = function(scene) {
             if (rFlash) { rFlash.style.opacity = (Math.floor(Date.now() / 250) % 2 === 0) ? 0.3 : 0; }
         }
         
-        if (remain <= 0 && data.host === window.GameLogic.currentUser.uid) {
+        if (remain <= 0 && isCoordinator) {
             update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`), { ammo: window.PartyLogic.ammo });
             update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'finished', finishTime: Date.now() }); 
         }
@@ -7082,10 +7112,10 @@ if (window.partyInviteTimer) clearInterval(window.partyInviteTimer);
 window.partyInviteTimer = setInterval(() => {
     let minList = document.getElementById('party-active-rooms');
     let minUI = document.getElementById('party-minimized-list');
-    if (!minUI || !window.GameLogic.partyInvitesData) return;
+    if (!minUI || !window.GameLogic.partyInvitesData || !window.GameLogic.currentUser) return;
     
     let invites = window.GameLogic.partyInvitesData;
-    let activeInvites = Object.keys(invites).filter(k => !invites[k].closed && (Date.now() - invites[k].time < 60000));
+    let activeInvites = Object.keys(invites).filter(k => invites[k] && !invites[k].closed && invites[k].time && (Date.now() - invites[k].time < 60000));
     
     if (activeInvites.length === 0) {
         minUI.style.display = 'none';
@@ -7110,20 +7140,23 @@ window.partyInviteTimer = setInterval(() => {
 
 // Global Listener for Party Invites
 partyInvitesUnsubscribe = onValue(ref(window.GameLogic.db, 'serverEvents/partyInvites'), snap => {
-    if (!window.GameLogic.currentUser) return;
     let invites = snap.val() || {};
-    window.GameLogic.partyInvitesData = invites; // 更新快取供計時器使用
+    window.GameLogic.partyInvitesData = invites; // 更新快取供計時器使用，避免登入狀態剛切換時漏接
+    if (!window.GameLogic.currentUser) return;
     
-    let activeInvites = Object.keys(invites).filter(k => !invites[k].closed && (Date.now() - invites[k].time < 60000));
+    let activeInvites = Object.keys(invites).filter(k => invites[k] && !invites[k].closed && invites[k].time && (Date.now() - invites[k].time < 60000));
     
     activeInvites.forEach(k => {
         let inv = invites[k];
         if (inv.inviterUid !== window.GameLogic.currentUser.uid) {
             if (inv.time > (window.PartyLogic.lastInviteTime || 0)) {
                 window.PartyLogic.lastInviteTime = inv.time;
-                document.getElementById('party-inviter-name').innerText = inv.inviterName;
+                document.getElementById('party-inviter-name').innerText = inv.inviterName || '某位洋蔥';
                 window.PartyLogic.pendingInviteId = k;
-                if (window.GameLogic.currentScene !== 'partyroom') document.getElementById('party-invite-modal').style.display = 'block';
+                if (window.GameLogic.currentScene !== 'partyroom') {
+                    let inviteModal = document.getElementById('party-invite-modal');
+                    if (inviteModal) inviteModal.style.display = 'block';
+                }
             }
         }
     });
