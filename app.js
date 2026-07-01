@@ -4603,7 +4603,6 @@ this.events.on('action_B', () => {
         this.restoreSoloRocketLobbyUi();
         if (!skipMusicResume) this.resumeLobbyBgmAfterSoloRocket();
     }
-    }
   
     getCurrentPlayerPathForAction() {
         if (!window.GameLogic.currentUser) return null;
