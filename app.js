@@ -3653,6 +3653,219 @@ this.events.on('action_B', () => {
         particles.setDepth(200); particles.explode(); this.time.delayedCall(2000, () => particles.destroy());
     }
 
+    openSoloChickenMenu() {
+        if (!this.localPlayer || !this.localPlayer.sprite) return;
+
+        // 避免重複開啟造成疊加
+        if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) {
+            this.closeSoloChickenMenu();
+        }
+
+        const cam = this.cameras.main;
+        const sw = cam.width;
+        const sh = cam.height;
+        const cx = sw / 2;
+        const cy = sh / 2;
+
+        this.soloChickenMenuOpen = true;
+        this.soloChickenMenuTweens = [];
+        this.soloChickenMenuRipples = [];
+        this.soloChickenMenuRippleCount = 0;
+
+        this.localPlayer.sprite.setVelocity(0, 0);
+        this.localPlayer.sprite.play('idle', true);
+
+        const container = this.add.container(0, 0)
+            .setDepth(9500)
+            .setScrollFactor(0);
+
+        this.soloChickenMenuContainer = container;
+
+        // 背景遮罩：點背景可關閉
+        const blocker = this.add.rectangle(cx, cy, sw, sh, 0x000000, 0.72)
+            .setInteractive({ useHandCursor: true });
+
+        blocker.on('pointerdown', (pointer, localX, localY, event) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+            this.closeSoloChickenMenu();
+        });
+
+        this.soloChickenMenuBlocker = blocker;
+
+        const panelW = Math.min(460, sw - 44);
+        const panelH = Math.min(330, sh - 44);
+        const left = cx - panelW / 2;
+        const top = cy - panelH / 2;
+
+        const panel = this.add.graphics();
+
+        panel.fillStyle(0x050008, 0.96);
+        panel.fillRoundedRect(left, top, panelW, panelH, 18);
+
+        panel.lineStyle(6, 0x8a2be2, 1);
+        panel.strokeRoundedRect(left, top, panelW, panelH, 18);
+
+        panel.lineStyle(2, 0xff00ff, 0.95);
+        panel.strokeRoundedRect(left + 8, top + 8, panelW - 16, panelH - 16, 14);
+
+        panel.lineStyle(1, 0xffffff, 0.08);
+        for (let y = top + 22; y < top + panelH - 22; y += 8) {
+            panel.lineBetween(left + 18, y, left + panelW - 18, y);
+        }
+
+        // 擋住面板區域，避免點在面板空白處也被背景遮罩關閉
+        const panelBlocker = this.add.zone(cx, cy, panelW, panelH).setInteractive();
+        panelBlocker.on('pointerdown', (pointer, localX, localY, event) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+        });
+
+        const title = this.add.text(cx, top + 48, '獨樂雞', {
+            fontSize: '32px',
+            fontFamily: 'Georgia, Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#8a2be2',
+            strokeThickness: 5
+        }).setOrigin(0.5);
+
+        const subtitle = this.add.text(cx, top + 86, '單人小遊戲入口', {
+            fontSize: '15px',
+            fontFamily: 'Arial, sans-serif',
+            color: '#e8d7ff',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+
+        const hint = this.add.text(cx, top + panelH - 34, 'A / B / 點背景 / 點右上角都可關閉', {
+            fontSize: '13px',
+            fontFamily: 'Arial, sans-serif',
+            color: '#ffffff',
+            alpha: 0.82
+        }).setOrigin(0.5);
+
+        container.add([blocker, panel, panelBlocker, title, subtitle, hint]);
+
+        const makeButton = (x, y, w, h, label, onClick) => {
+            const g = this.add.graphics();
+
+            const draw = (fillColor = 0xffffff) => {
+                g.clear();
+                g.fillStyle(fillColor, 1);
+                g.fillRoundedRect(x - w / 2, y - h / 2, w, h, 10);
+                g.lineStyle(3, 0xeeeeff, 1);
+                g.strokeRoundedRect(x - w / 2, y - h / 2, w, h, 10);
+            };
+
+            draw();
+
+            const txt = this.add.text(x, y, label, {
+                fontSize: '20px',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold',
+                color: '#000000'
+            }).setOrigin(0.5);
+
+            const zone = this.add.zone(x, y, w, h).setInteractive({ useHandCursor: true });
+
+            zone.on('pointerover', () => draw(0xe9ddff));
+            zone.on('pointerout', () => draw(0xffffff));
+            zone.on('pointerdown', (pointer, localX, localY, event) => {
+                if (event && event.stopPropagation) event.stopPropagation();
+                onClick();
+            });
+
+            container.add([g, txt, zone]);
+            return { g, txt, zone };
+        };
+
+        makeButton(cx, cy + 24, panelW - 120, 54, '火箭巡航', () => {
+            sendBubble('火箭巡航尚未開放，獨樂雞先熱機中！');
+            this.closeSoloChickenMenu();
+        });
+
+        makeButton(cx, cy + 92, panelW - 120, 44, '關閉', () => {
+            this.closeSoloChickenMenu();
+        });
+
+        // 右上角關閉
+        const closeBg = this.add.graphics();
+        const closeX = left + panelW - 34;
+        const closeY = top + 32;
+
+        closeBg.fillStyle(0xffffff, 1);
+        closeBg.fillCircle(closeX, closeY, 16);
+
+        const closeTxt = this.add.text(closeX, closeY - 1, '×', {
+            fontSize: '24px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#000000'
+        }).setOrigin(0.5);
+
+        const closeZone = this.add.zone(closeX, closeY, 42, 42).setInteractive({ useHandCursor: true });
+        closeZone.on('pointerdown', (pointer, localX, localY, event) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+            this.closeSoloChickenMenu();
+        });
+
+        container.add([closeBg, closeTxt, closeZone]);
+
+        // 七彩像素光環漣漪：只在選單底部隨機噴發
+        const rippleColors = [0xff0044, 0xff9900, 0xffff00, 0x33ff00, 0x00ccff, 0x6666ff, 0xff00ff];
+
+        const spawnRipple = () => {
+            if (!this.soloChickenMenuOpen || !this.soloChickenMenuContainer || !this.soloChickenMenuContainer.active) return;
+
+            const rx = left + 46 + Math.random() * (panelW - 92);
+            const ry = top + panelH - Phaser.Math.Between(44, 72);
+            const color = Phaser.Utils.Array.GetRandom(rippleColors);
+
+            const r = this.add.graphics();
+            r.lineStyle(3, color, 0.9);
+            r.strokeCircle(0, 0, 9);
+            r.setPosition(rx, ry);
+            r.setBlendMode('ADD');
+            r.setAlpha(0.9);
+
+            container.add(r);
+            this.soloChickenMenuRipples.push(r);
+
+            const tw = this.tweens.add({
+                targets: r,
+                scaleX: Phaser.Math.FloatBetween(2.2, 4.0),
+                scaleY: Phaser.Math.FloatBetween(1.2, 2.4),
+                y: ry - Phaser.Math.Between(12, 38),
+                alpha: 0,
+                duration: Phaser.Math.Between(650, 1100),
+                ease: 'Sine.easeOut',
+                onComplete: () => {
+                    if (r && r.destroy) r.destroy(true);
+                }
+            });
+
+            r.__soloTween = tw;
+        };
+
+        this.soloChickenMenuTimer = this.time.addEvent({
+            delay: 420,
+            loop: true,
+            callback: spawnRipple
+        });
+
+        for (let i = 0; i < 4; i++) {
+            this.time.delayedCall(i * 120, spawnRipple);
+        }
+
+        const openTween = this.tweens.add({
+            targets: container,
+            alpha: { from: 0, to: 1 },
+            duration: 160,
+            ease: 'Sine.easeOut'
+        });
+
+        this.soloChickenMenuTweens.push(openTween);
+    }
+
     closeSoloChickenMenu() {
         const timer = this.soloChickenMenuTimer;
         const tweens = Array.isArray(this.soloChickenMenuTweens) ? [...this.soloChickenMenuTweens] : [];
