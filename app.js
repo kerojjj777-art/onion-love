@@ -4022,9 +4022,9 @@ this.events.on('action_B', () => {
         });
 
         try {
-            if (blocker && blocker.destroy) blocker.destroy();
+            if (this.closeSoloRocketPaymentConfirm) this.closeSoloRocketPaymentConfirm();
         } catch (err) {
-            console.warn('[獨樂雞選單] 背景遮罩清理失敗，已略過：', err);
+            console.warn('[火箭巡航] 支付確認面板清理失敗，已略過：', err);
         }
 
         try {
@@ -4062,23 +4062,29 @@ this.events.on('action_B', () => {
         const now = Date.now();
         if (this.soloRocketConfirmLockUntil && now < this.soloRocketConfirmLockUntil) return;
         this.soloRocketConfirmLockUntil = now + 500;
-        if (!window.GameLogic.currentUser) {
-            alert('請先登入後再遊玩火箭巡航。');
-            return;
-        }
 
         const cost = 100;
-        const localCoins = Number(window.GameLogic.myProfile?.coins || 0);
-        if (!Number.isFinite(localCoins) || localCoins < cost) {
-            alert('馬德幣不足，無法遊玩。');
-            if (typeof sendBubble === 'function') sendBubble('馬德幣不足，無法遊玩。');
+
+        if (!window.GameLogic.currentUser) {
+            this.openSoloRocketPaymentConfirm(cost, {
+                mode: 'notice',
+                title: '尚未登入',
+                body: '請先登入後再遊玩火箭巡航。'
+            });
             return;
         }
 
-        const ok = window.confirm('是否支付 100 馬德幣遊玩？');
-        if (!ok) return;
+        const localCoins = Number(window.GameLogic.myProfile?.coins || 0);
+        if (!Number.isFinite(localCoins) || localCoins < cost) {
+            this.openSoloRocketPaymentConfirm(cost, {
+                mode: 'notice',
+                title: '馬德幣不足',
+                body: `火箭巡航需要 ${cost} 馬德幣。\n你目前持有 ${Number.isFinite(localCoins) ? localCoins : 0} 馬德幣。`
+            });
+            return;
+        }
 
-        this.requestSoloRocketPayment(cost);
+        this.openSoloRocketPaymentConfirm(cost);
     }
 
     async requestSoloRocketPayment(cost = 100) {
@@ -4088,7 +4094,11 @@ this.events.on('action_B', () => {
         const uid = window.GameLogic.currentUser?.uid;
         if (!uid) {
             this.soloRocketPaymentPending = false;
-            alert('找不到登入資料，無法進入火箭巡航。');
+            this.openSoloRocketPaymentConfirm(cost, {
+                mode: 'notice',
+                title: '登入資料異常',
+                body: '找不到登入資料，無法進入火箭巡航。'
+            });
             return;
         }
 
@@ -4098,16 +4108,23 @@ this.events.on('action_B', () => {
             const latestCoins = Number(latestCoinsRaw || 0);
 
             if (!Number.isFinite(latestCoins)) {
-                alert('馬德幣資料異常，無法遊玩。');
                 console.warn('[火箭巡航] coins 資料異常：', latestCoinsRaw);
+                this.openSoloRocketPaymentConfirm(cost, {
+                    mode: 'notice',
+                    title: '馬德幣資料異常',
+                    body: '目前無法確認你的馬德幣資料，請稍後再試。'
+                });
                 return;
             }
 
             if (latestCoins < cost) {
                 window.GameLogic.myProfile.coins = latestCoins;
                 this.syncSoloRocketCoinUi(latestCoins);
-                alert('馬德幣不足，無法遊玩。');
-                if (typeof sendBubble === 'function') sendBubble('馬德幣不足，無法遊玩。');
+                this.openSoloRocketPaymentConfirm(cost, {
+                    mode: 'notice',
+                    title: '馬德幣不足',
+                    body: `火箭巡航需要 ${cost} 馬德幣。\n你目前持有 ${latestCoins} 馬德幣。`
+                });
                 return;
             }
 
@@ -4122,7 +4139,11 @@ this.events.on('action_B', () => {
             this.startSoloRocketCruise();
         } catch (err) {
             console.warn('[火箭巡航] 扣款失敗，已阻擋進入副本：', err);
-            alert('扣款失敗，請稍後再試。');
+            this.openSoloRocketPaymentConfirm(cost, {
+                mode: 'notice',
+                title: '扣款失敗',
+                body: '扣款失敗，請稍後再試。'
+            });
         } finally {
             this.soloRocketPaymentPending = false;
         }
@@ -4134,6 +4155,145 @@ this.events.on('action_B', () => {
         if (coinsEl) coinsEl.innerText = val;
         const storeCoinsEl = document.getElementById('store-current-coins');
         if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${val}`;
+    }
+
+    closeSoloRocketPaymentConfirm() {
+        const container = this.soloRocketPaymentConfirmContainer;
+        const blocker = this.soloRocketPaymentConfirmBlocker;
+
+        this.soloRocketPaymentConfirmContainer = null;
+        this.soloRocketPaymentConfirmBlocker = null;
+
+        try {
+            if (container && container.destroy) container.destroy(true);
+        } catch (err) {
+            console.warn('[火箭巡航] 支付確認面板清理失敗，已略過：', err);
+        }
+
+        try {
+            if (blocker && blocker.destroy) blocker.destroy();
+        } catch (err) {
+            console.warn('[火箭巡航] 支付確認遮罩清理失敗，已略過：', err);
+        }
+    }
+
+    openSoloRocketPaymentConfirm(cost = 100, options = {}) {
+        this.closeSoloRocketPaymentConfirm();
+
+        const cam = this.cameras.main;
+        const isNotice = options.mode === 'notice';
+        const localCoinsRaw = Number(window.GameLogic.myProfile?.coins || 0);
+        const localCoins = Number.isFinite(localCoinsRaw) ? localCoinsRaw : 0;
+        const afterCoins = Math.max(0, localCoins - cost);
+
+        const cx = cam.width / 2;
+        const cy = cam.height / 2;
+        const panelW = Math.min(360, Math.max(280, cam.width - 40));
+        const panelH = isNotice ? 220 : 270;
+        const px = cx - panelW / 2;
+        const py = cy - panelH / 2;
+
+        // 遮罩獨立放在面板下方，阻擋背後選單點擊，但不蓋住確認按鈕。
+        const blocker = this.add.rectangle(cx, cy, cam.width, cam.height, 0x000000, 0.74)
+            .setDepth(9888)
+            .setScrollFactor(0)
+            .setInteractive();
+
+        blocker.on('pointerdown', (pointer, localX, localY, event) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+        });
+
+        const container = this.add.container(0, 0)
+            .setDepth(9890)
+            .setScrollFactor(0);
+
+        this.soloRocketPaymentConfirmBlocker = blocker;
+        this.soloRocketPaymentConfirmContainer = container;
+
+        const panel = this.add.graphics();
+        panel.fillStyle(0x050008, 0.98);
+        panel.fillRoundedRect(px, py, panelW, panelH, 18);
+        panel.lineStyle(5, 0x8a2be2, 1);
+        panel.strokeRoundedRect(px, py, panelW, panelH, 18);
+        panel.lineStyle(2, 0xff00ff, 0.85);
+        panel.strokeRoundedRect(px + 8, py + 8, panelW - 16, panelH - 16, 14);
+
+        const title = this.add.text(cx, py + 42, options.title || '啟動火箭巡航', {
+            fontSize: '24px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#8a2be2',
+            strokeThickness: 5
+        }).setOrigin(0.5);
+
+        const bodyText = options.body || `是否支付 ${cost} 馬德幣進入火箭巡航？`;
+        const body = this.add.text(cx, py + 92, bodyText, {
+            fontSize: '16px',
+            fontFamily: 'Arial, sans-serif',
+            color: '#ffffff',
+            align: 'center',
+            lineSpacing: 6,
+            wordWrap: { width: panelW - 48 }
+        }).setOrigin(0.5);
+
+        const coinInfo = this.add.text(cx, py + 142, isNotice ? '' : `目前持有：${localCoins}　支付後：${afterCoins}`, {
+            fontSize: '14px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffcc00',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+
+        const makeConfirmBtn = (x, y, w, h, label, fillColor, callback) => {
+            const btnBg = this.add.rectangle(x, y, w, h, fillColor, 1)
+                .setStrokeStyle(3, 0xffffff, 0.9)
+                .setInteractive({ useHandCursor: true });
+
+            const btnText = this.add.text(x, y, label, {
+                fontSize: '17px',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold',
+                color: fillColor === 0xffffff ? '#000000' : '#ffffff',
+                stroke: fillColor === 0xffffff ? '#ffffff' : '#000000',
+                strokeThickness: fillColor === 0xffffff ? 0 : 3
+            }).setOrigin(0.5);
+
+            const hit = this.add.zone(x, y, w + 18, h + 18)
+                .setInteractive({ useHandCursor: true });
+
+            const handler = (pointer, localX, localY, event) => {
+                if (event && event.stopPropagation) event.stopPropagation();
+                callback();
+            };
+
+            btnBg.on('pointerdown', handler);
+            btnText.setInteractive({ useHandCursor: true }).on('pointerdown', handler);
+            hit.on('pointerdown', handler);
+
+            container.add([btnBg, btnText, hit]);
+        };
+
+        if (isNotice) {
+            makeConfirmBtn(cx, py + panelH - 44, 150, 42, '知道了', 0xffffff, () => {
+                this.closeSoloRocketPaymentConfirm();
+            });
+        } else {
+            makeConfirmBtn(cx - 82, py + panelH - 48, 132, 42, '取消', 0x444444, () => {
+                this.closeSoloRocketPaymentConfirm();
+            });
+
+            makeConfirmBtn(cx + 82, py + panelH - 48, 132, 42, '支付啟動', 0xffffff, () => {
+                this.closeSoloRocketPaymentConfirm();
+                this.requestSoloRocketPayment(cost);
+            });
+        }
+
+        container.add([panel, title, body, coinInfo]);
+        container.bringToTop(title);
+        container.bringToTop(body);
+        container.bringToTop(coinInfo);
     }
 
     getSoloRocketSafeRect() {
@@ -4461,14 +4621,14 @@ this.events.on('action_B', () => {
         const ui = this.add.container(0, 0).setDepth(9700).setScrollFactor(0);
         this.soloRocketUiContainer = ui;
 
-        const timerText = this.add.text(rect.centerX, rect.y + 32, '剩餘 2:37', {
-            fontSize: '24px',
+        const timerText = this.add.text(rect.x + rect.w - 14, rect.y + 14, '剩餘 2:37', {
+            fontSize: '18px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#ffffff',
             stroke: '#000000',
             strokeThickness: 5
-        }).setOrigin(0.5);
+        }).setOrigin(1, 0);
         this.soloRocketCountdownText = timerText;
 
         const lifeBg = this.add.graphics();
@@ -4485,7 +4645,7 @@ this.events.on('action_B', () => {
         this.soloRocketLifeText = lifeText;
 
         const makeRocketButton = (x, y, radius, color, label, actionName) => {
-            const btn = this.add.circle(x, y, radius, color, 0.92).setStrokeStyle(3, 0xffffff, 0.95).setInteractive({ useHandCursor: true });
+            const btn = this.add.circle(x, y, radius, color, 0.5).setStrokeStyle(3, 0xffffff, 0.85).setInteractive({ useHandCursor: true });
             const txt = this.add.text(x, y, label, {
                 fontSize: '17px',
                 fontFamily: 'Arial, sans-serif',
@@ -4609,22 +4769,6 @@ this.events.on('action_B', () => {
             this.returnFromSoloRocketCruise();
         };
 
-        const resultBlocker = this.add.zone(this.cameras.main.width / 2, this.cameras.main.height / 2, this.cameras.main.width, this.cameras.main.height)
-            .setInteractive();
-
-        resultBlocker.on('pointerdown', (pointer, localX, localY, event) => {
-            if (event && event.stopPropagation) event.stopPropagation();
-
-            const pxHit = pointer ? pointer.x : -9999;
-            const pyHit = pointer ? pointer.y : -9999;
-            const inReturnBtn = pxHit >= rect.centerX - 100 &&
-                                pxHit <= rect.centerX + 100 &&
-                                pyHit >= py + 154 &&
-                                pyHit <= py + 214;
-
-            if (inReturnBtn) safeReturnFromSoloRocket(pointer, localX, localY, event);
-        });
-
         const bg = this.add.graphics();
         bg.fillStyle(0x050008, 0.96).fillRoundedRect(px, py, panelW, panelH, 18);
         bg.lineStyle(4, 0x8a2be2, 1).strokeRoundedRect(px, py, panelW, panelH, 18);
@@ -4648,7 +4792,10 @@ this.events.on('action_B', () => {
             strokeThickness: 4
         }).setOrigin(0.5);
 
-        const btnBg = this.add.rectangle(rect.centerX, py + 184, 180, 48, 0xffffff, 1).setStrokeStyle(3, 0xeeeeff, 1).setInteractive({ useHandCursor: true });
+        const btnBg = this.add.rectangle(rect.centerX, py + 184, 180, 48, 0xffffff, 1)
+            .setStrokeStyle(3, 0xeeeeff, 1)
+            .setInteractive({ useHandCursor: true });
+
         const btnText = this.add.text(rect.centerX, py + 184, '返回大廳', {
             fontSize: '20px',
             fontFamily: 'Arial, sans-serif',
@@ -4656,13 +4803,20 @@ this.events.on('action_B', () => {
             color: '#000000'
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
+        // 透明 hitbox 放在最上層，只負責接「返回大廳」點擊，避免點擊被其他物件吃掉。
+        const returnHit = this.add.zone(rect.centerX, py + 184, 220, 76)
+            .setInteractive({ useHandCursor: true });
+
         const click = safeReturnFromSoloRocket;
         btnBg.on('pointerdown', click);
         btnText.on('pointerdown', click);
+        returnHit.on('pointerdown', click);
+
         btnBg.on('pointerup', click);
         btnText.on('pointerup', click);
+        returnHit.on('pointerup', click);
 
-        result.add([resultBlocker, bg, title, life, btnBg, btnText]);
+        result.add([bg, title, life, btnBg, btnText, returnHit]);
     }
 
     returnFromSoloRocketCruise() {
