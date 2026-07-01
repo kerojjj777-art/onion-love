@@ -1619,6 +1619,12 @@ function checkShrineVotingTrigger() {
 window.clearAllModals = function() {
     // 1. 關閉所有共用 Modal 類別
     document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+
+    // Phaser overlay 不是 DOM modal，需要另外清理
+    if (window.GameLogic.phaserGame) {
+        const ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
+        if (ms && ms.closeSoloChickenMenu) ms.closeSoloChickenMenu();
+    }
     
     // 2. 關閉特定獨立或脫離文件流的 UI
     const standaloneUIs = [
@@ -2579,9 +2585,12 @@ class MainScene extends Phaser.Scene {
 
         this.events.on('action_A_place', () => { let key = window.GameLogic.placingFurnitureKey; if(key && this.furnitureSprites[key]) { let f = this.furnitureSprites[key]; f.sprite.setVelocity(0, 0); let path = this.isCafe ? `cafeFurniture/${key}` : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}` : `shrineFurniture/${key}`); update(ref(window.GameLogic.db, path), { locked: true, x: f.sprite.x, y: f.sprite.y, ownerUid: window.GameLogic.currentUser.uid }); window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); } });
 
-        this.events.on('action_A_short', () => {
-          
-    if (this.soloChickenMenuOpen) return;
+this.events.on('action_A_short', () => {
+    // 獨樂雞 Phaser 選單開啟時，A 鍵改為關閉選單，避免玩家以為畫面卡死
+    if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) {
+        this.closeSoloChickenMenu();
+        return;
+    }
             // 修正：檢查是否手持派對喇叭，若是，觸發喇叭廣播流程
     if (window.GameLogic.armedItemState === 'ready' && window.GameLogic.armedItemName === '派對喇叭') {
         document.getElementById('party-select-modal').style.display = 'block';
@@ -3021,7 +3030,12 @@ class MainScene extends Phaser.Scene {
         };
 
         this.events.off('action_B_long');
-        this.events.on('action_B_long', () => {
+this.events.on('action_B_long', () => {
+            if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) {
+                this.closeSoloChickenMenu();
+                return;
+            }
+
             if (this.sceneName === 'partyroom') return; // 禁用長按B
             let menu = document.getElementById('quick-select-menu');
             let blocker = document.getElementById('magic-menu-blocker');
@@ -3180,7 +3194,12 @@ if (uiScene && uiScene.magicMenuEmitter) {
             }, 50);
         });
 
-        this.events.on('action_B', () => {
+this.events.on('action_B', () => {
+            if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) {
+                this.closeSoloChickenMenu();
+                return;
+            }
+
             let menu = document.getElementById('quick-select-menu');
             if (menu && menu.style.display === 'flex') {
                 window.selectQuickMagic(window.GameLogic.stagedMagicItem || 'none');
@@ -3640,6 +3659,11 @@ if (uiScene && uiScene.magicMenuEmitter) {
         const blocker = fixed(this.add.rectangle(0, 0, cam.width, cam.height, 0x000000, 0.45)
             .setInteractive({ useHandCursor: false }));
 
+        blocker.on('pointerdown', (pointer, localX, localY, event) => {
+            if (event) event.stopPropagation();
+            this.closeSoloChickenMenu();
+        });
+
         const panel = fixed(this.add.graphics());
         panel.fillStyle(0x06000d, 0.98);
         panel.fillRoundedRect(-menuW / 2, -menuH / 2, menuW, menuH, 18);
@@ -3727,7 +3751,16 @@ if (uiScene && uiScene.magicMenuEmitter) {
         });
 
         const spawnRipple = () => {
-            if (!this.soloChickenMenuOpen || !this.soloChickenMenuContainer) return;
+            if (!this.soloChickenMenuOpen || !this.soloChickenMenuContainer || !this.soloChickenMenuContainer.active) return;
+
+            this.soloChickenMenuRipples = this.soloChickenMenuRipples || [];
+            this.soloChickenMenuTweens = this.soloChickenMenuTweens || [];
+
+            // 防止手機或低效能瀏覽器短時間累積太多 Graphics / Tween
+            if (this.soloChickenMenuRipples.length >= 4) {
+                const oldRipple = this.soloChickenMenuRipples.shift();
+                if (oldRipple && oldRipple.destroy) oldRipple.destroy(true);
+            }
 
             const colors = [0xff004c, 0xffa600, 0xffff00, 0x00ff66, 0x00ccff, 0x7a5cff, 0xff6bff];
             const rx = Phaser.Math.Between(-menuW / 2 + 58, menuW / 2 - 58);
@@ -3739,8 +3772,8 @@ if (uiScene && uiScene.magicMenuEmitter) {
                 g.lineStyle(2, Phaser.Utils.Array.GetRandom(colors), 0.85);
                 g.strokeCircle(0, 0, r);
 
-                for (let i = 0; i < 10; i++) {
-                    const a = (Math.PI * 2 / 10) * i + Phaser.Math.FloatBetween(-0.15, 0.15);
+                for (let i = 0; i < 8; i++) {
+                    const a = (Math.PI * 2 / 8) * i + Phaser.Math.FloatBetween(-0.15, 0.15);
                     const px = Math.cos(a) * r;
                     const py = Math.sin(a) * r;
                     g.fillStyle(Phaser.Utils.Array.GetRandom(colors), 0.95);
@@ -3755,13 +3788,14 @@ if (uiScene && uiScene.magicMenuEmitter) {
             const tw = this.tweens.add({
                 targets: ripple,
                 alpha: 0,
-                scaleX: 1.9,
-                scaleY: 1.9,
-                duration: 900,
+                scaleX: 1.75,
+                scaleY: 1.75,
+                duration: 850,
                 ease: 'Cubic.easeOut',
                 onComplete: () => {
-                    Phaser.Utils.Array.Remove(this.soloChickenMenuRipples, ripple);
-                    ripple.destroy(true);
+                    if (this.soloChickenMenuRipples) Phaser.Utils.Array.Remove(this.soloChickenMenuRipples, ripple);
+                    if (this.soloChickenMenuTweens) Phaser.Utils.Array.Remove(this.soloChickenMenuTweens, tw);
+                    if (ripple && ripple.destroy) ripple.destroy(true);
                 }
             });
 
@@ -5676,6 +5710,16 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
                 this.localPlayer.sprite.play('onion-petting', true);
             }
             this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
+          
+        } else if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) {
+            // Phaser overlay 開啟時，玩家停在原地，避免背景仍在移動或輸入穿透
+            this.localPlayer.sprite.setVelocity(0, 0);
+            this.localPlayer.sprite.play('idle', true);
+            this.smartPromptBg.setVisible(false);
+            this.smartPromptText.setVisible(false);
+            this.waterPromptBg.setVisible(false);
+            this.waterPromptText.setVisible(false);
+        
         } else if (this.localPlayer.isSweeping) {
             this.localPlayer.sprite.setVelocity(0, 0); this.localPlayer.sprite.play('clean', true); 
             this.qteProgress -= (delta * 0.02); if (this.qteProgress < 0) this.qteProgress = 0; this.updateQTEBar(this.qteProgress);
