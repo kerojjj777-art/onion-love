@@ -3736,6 +3736,18 @@ this.events.on('action_B', () => {
         const left = cx - panelW / 2;
         const top = cy - panelH / 2;
 
+        // 獨樂雞選單點擊安全區：避免全螢幕 blocker 吃掉按鈕事件
+        const rocketBtnHit = { x: cx, y: cy + 24, w: panelW - 120, h: 54 };
+        const closeBtnHit = { x: cx, y: cy + 92, w: panelW - 120, h: 44 };
+        const closeIconHit = { x: left + panelW - 34, y: top + 32, w: 48, h: 48 };
+
+        const isPointInHitRect = (px, py, rect) => {
+            return px >= rect.x - rect.w / 2 &&
+                   px <= rect.x + rect.w / 2 &&
+                   py >= rect.y - rect.h / 2 &&
+                   py <= rect.y + rect.h / 2;
+        };
+
         // 背景遮罩獨立放在 container 外，避免全螢幕遮罩壓住面板按鈕。
         const blocker = this.add.rectangle(cx, cy, sw, sh, 0x000000, 0.72)
             .setDepth(9490)
@@ -3744,6 +3756,30 @@ this.events.on('action_B', () => {
 
         blocker.on('pointerdown', (pointer, localX, localY, event) => {
             if (event && event.stopPropagation) event.stopPropagation();
+
+            const px = pointer ? pointer.x : null;
+            const py = pointer ? pointer.y : null;
+
+            if (px !== null && py !== null) {
+                // 若 Phaser 把按鈕點擊誤送到 blocker，這裡直接補救觸發火箭巡航
+                if (isPointInHitRect(px, py, rocketBtnHit)) {
+                    this.confirmStartSoloRocketCruise();
+                    return;
+                }
+
+                // 點到關閉按鈕或右上角 X，才關閉
+                if (isPointInHitRect(px, py, closeBtnHit) || isPointInHitRect(px, py, closeIconHit)) {
+                    this.closeSoloChickenMenu();
+                    return;
+                }
+
+                // 點在面板內其他地方，不關閉、不穿透
+                if (px >= left && px <= left + panelW && py >= top && py <= top + panelH) {
+                    return;
+                }
+            }
+
+            // 只有點到面板外背景才關閉
             this.closeSoloChickenMenu();
         });
 
@@ -3959,8 +3995,9 @@ this.events.on('action_B', () => {
 
         tweens.forEach(tw => {
             try {
-                if (tw && tw.remove) tw.remove();
-                else if (tw && tw.stop) tw.stop();
+                if (!tw) return;
+                // 不手動 remove，避免 Phaser tween manager 已清掉時重複 remove 報錯
+                if (tw.stop) tw.stop();
             } catch (err) {
                 console.warn('[獨樂雞選單] Tween 清理失敗，已略過：', err);
             }
@@ -3968,8 +4005,17 @@ this.events.on('action_B', () => {
 
         ripples.forEach(r => {
             try {
-                if (r && r.__soloTween && r.__soloTween.remove) r.__soloTween.remove();
-                if (r && r.destroy) r.destroy(true);
+                if (!r) return;
+
+                // Ripple 的 tween 只停止，不重複 remove
+                if (r.__soloTween && r.__soloTween.stop) r.__soloTween.stop();
+                r.__soloTween = null;
+
+                // 若 ripple 還掛在 container 上，交給 container.destroy(true) 統一清理
+                // 若 container 已不存在，才嘗試單獨銷毀
+                if (!container && r.scene && r.active && r.destroy) {
+                    r.destroy();
+                }
             } catch (err) {
                 console.warn('[獨樂雞選單] Ripple 清理失敗，已略過：', err);
             }
@@ -4011,6 +4057,11 @@ this.events.on('action_B', () => {
 
     confirmStartSoloRocketCruise() {
         if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished || this.soloRocketPaymentPending) return;
+
+        // 防止 blocker 與按鈕事件同時觸發，造成 confirm / 扣款流程重複
+        const now = Date.now();
+        if (this.soloRocketConfirmLockUntil && now < this.soloRocketConfirmLockUntil) return;
+        this.soloRocketConfirmLockUntil = now + 500;
         if (!window.GameLogic.currentUser) {
             alert('請先登入後再遊玩火箭巡航。');
             return;
