@@ -3657,7 +3657,7 @@ this.events.on('action_B', () => {
         if (!this.localPlayer || !this.localPlayer.sprite) return;
 
         // 防止重複開啟造成疊加
-        if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) {
+        if (this.soloChickenMenuOpen || this.soloChickenMenuContainer || this.soloChickenMenuBlocker) {
             this.closeSoloChickenMenu();
         }
 
@@ -3669,6 +3669,7 @@ this.events.on('action_B', () => {
 
         this.soloChickenMenuOpen = true;
         this.soloChickenMenuTimer = null;
+        this.soloChickenRippleTimer = null;
         this.soloChickenMenuTweens = [];
         this.soloChickenMenuRipples = [];
         this.soloChickenMenuRippleCount = 0;
@@ -3677,19 +3678,15 @@ this.events.on('action_B', () => {
         this.localPlayer.sprite.setVelocity(0, 0);
         this.localPlayer.sprite.play('idle', true);
 
-        const container = this.add.container(0, 0)
-            .setDepth(9500)
-            .setScrollFactor(0);
-
-        this.soloChickenMenuContainer = container;
-
         const panelW = Math.min(460, sw - 44);
         const panelH = Math.min(330, sh - 44);
         const left = cx - panelW / 2;
         const top = cy - panelH / 2;
 
-        // 背景遮罩：點背景可關閉
+        // 背景遮罩獨立放在 container 外，避免全螢幕遮罩壓住面板按鈕。
         const blocker = this.add.rectangle(cx, cy, sw, sh, 0x000000, 0.72)
+            .setDepth(9490)
+            .setScrollFactor(0)
             .setInteractive({ useHandCursor: true });
 
         blocker.on('pointerdown', (pointer, localX, localY, event) => {
@@ -3699,23 +3696,29 @@ this.events.on('action_B', () => {
 
         this.soloChickenMenuBlocker = blocker;
 
+        const container = this.add.container(0, 0)
+            .setDepth(9500)
+            .setScrollFactor(0)
+            .setAlpha(0);
+
+        this.soloChickenMenuContainer = container;
+
         const panel = this.add.graphics();
         panel.fillStyle(0x050008, 0.96);
         panel.fillRoundedRect(left, top, panelW, panelH, 18);
-
         panel.lineStyle(6, 0x8a2be2, 1);
         panel.strokeRoundedRect(left, top, panelW, panelH, 18);
-
         panel.lineStyle(2, 0xff00ff, 0.95);
         panel.strokeRoundedRect(left + 8, top + 8, panelW - 16, panelH - 16, 14);
-
         panel.lineStyle(1, 0xffffff, 0.08);
         for (let y = top + 22; y < top + panelH - 22; y += 10) {
             panel.lineBetween(left + 18, y, left + panelW - 18, y);
         }
 
-        // 面板區域阻擋，避免點到面板空白處被當成背景關閉
-        const panelBlocker = this.add.zone(cx, cy, panelW, panelH).setInteractive();
+        // 面板本體吃掉點擊，避免點面板空白處關閉；按鈕另外處理。
+        const panelBlocker = this.add.zone(cx, cy, panelW, panelH)
+            .setInteractive();
+
         panelBlocker.on('pointerdown', (pointer, localX, localY, event) => {
             if (event && event.stopPropagation) event.stopPropagation();
         });
@@ -3743,20 +3746,12 @@ this.events.on('action_B', () => {
             color: '#ffffff'
         }).setOrigin(0.5).setAlpha(0.82);
 
-        container.add([blocker, panel, panelBlocker, title, subtitle, hint]);
+        container.add([panel, panelBlocker, title, subtitle, hint]);
 
         const makeButton = (x, y, w, h, label, onClick) => {
-            const g = this.add.graphics();
-
-            const draw = (fillColor = 0xffffff) => {
-                g.clear();
-                g.fillStyle(fillColor, 1);
-                g.fillRoundedRect(x - w / 2, y - h / 2, w, h, 10);
-                g.lineStyle(3, 0xeeeeff, 1);
-                g.strokeRoundedRect(x - w / 2, y - h / 2, w, h, 10);
-            };
-
-            draw();
+            const bg = this.add.rectangle(x, y, w, h, 0xffffff, 1)
+                .setStrokeStyle(3, 0xeeeeff, 1)
+                .setInteractive({ useHandCursor: true });
 
             const txt = this.add.text(x, y, label, {
                 fontSize: '20px',
@@ -3765,16 +3760,20 @@ this.events.on('action_B', () => {
                 color: '#000000'
             }).setOrigin(0.5);
 
-            const zone = this.add.zone(x, y, w, h).setInteractive({ useHandCursor: true });
-
-            zone.on('pointerover', () => draw(0xe9ddff));
-            zone.on('pointerout', () => draw(0xffffff));
-            zone.on('pointerdown', (pointer, localX, localY, event) => {
+            const fireClick = (pointer, localX, localY, event) => {
                 if (event && event.stopPropagation) event.stopPropagation();
-                onClick();
-            });
+                if (typeof onClick === 'function') onClick();
+            };
 
-            container.add([g, txt, zone]);
+            bg.on('pointerover', () => bg.setFillStyle(0xe9ddff, 1));
+            bg.on('pointerout', () => bg.setFillStyle(0xffffff, 1));
+            bg.on('pointerdown', fireClick);
+
+            // 文字本身也吃點擊，避免點到字時沒有反應。
+            txt.setInteractive({ useHandCursor: true });
+            txt.on('pointerdown', fireClick);
+
+            container.add([bg, txt]);
         };
 
         makeButton(cx, cy + 24, panelW - 120, 54, '火箭巡航', () => {
@@ -3786,30 +3785,84 @@ this.events.on('action_B', () => {
             this.closeSoloChickenMenu();
         });
 
-        // 右上角關閉鈕
-        const closeBg = this.add.graphics();
         const closeX = left + panelW - 34;
         const closeY = top + 32;
 
-        closeBg.fillStyle(0xffffff, 1);
-        closeBg.fillCircle(closeX, closeY, 16);
+        const closeBg = this.add.circle(closeX, closeY, 16, 0xffffff, 1)
+            .setInteractive({ useHandCursor: true });
 
         const closeTxt = this.add.text(closeX, closeY - 1, '×', {
             fontSize: '24px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#000000'
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-        const closeZone = this.add.zone(closeX, closeY, 42, 42).setInteractive({ useHandCursor: true });
-        closeZone.on('pointerdown', (pointer, localX, localY, event) => {
+        const closeClick = (pointer, localX, localY, event) => {
             if (event && event.stopPropagation) event.stopPropagation();
             this.closeSoloChickenMenu();
+        };
+
+        closeBg.on('pointerdown', closeClick);
+        closeTxt.on('pointerdown', closeClick);
+
+        container.add([closeBg, closeTxt]);
+
+        const spawnRipple = () => {
+            if (!this.soloChickenMenuOpen || !this.soloChickenMenuContainer || !this.soloChickenMenuContainer.active) return;
+            if (!Array.isArray(this.soloChickenMenuRipples)) return;
+
+            const colorList = [0xff00ff, 0x00ffff, 0xffff00, 0x39ff14, 0xff8800, 0x8a2be2, 0xffffff];
+            const color = Phaser.Utils.Array.GetRandom(colorList);
+            const rx = Phaser.Math.Between(left + 64, left + panelW - 64);
+            const ry = Phaser.Math.Between(top + panelH - 112, top + panelH - 64);
+
+            const ripple = this.add.graphics({ x: rx, y: ry });
+            ripple.lineStyle(2, color, 0.9);
+            ripple.strokeCircle(0, 0, 7);
+            ripple.lineStyle(1, 0xffffff, 0.55);
+            ripple.strokeCircle(0, 0, 13);
+
+            for (let i = 0; i < 10; i++) {
+                const a = (Math.PI * 2 / 10) * i;
+                const px = Math.cos(a) * 17;
+                const py = Math.sin(a) * 17;
+                ripple.fillStyle(Phaser.Utils.Array.GetRandom(colorList), 0.85);
+                ripple.fillRect(px - 2, py - 2, 4, 4);
+            }
+
+            if (ripple.setBlendMode) ripple.setBlendMode(Phaser.BlendModes.ADD);
+            ripple.setAlpha(0.95);
+            container.add(ripple);
+            this.soloChickenMenuRipples.push(ripple);
+
+            const tw = this.tweens.add({
+                targets: ripple,
+                scaleX: { from: 0.45, to: 2.4 },
+                scaleY: { from: 0.45, to: 2.4 },
+                alpha: { from: 0.95, to: 0 },
+                duration: 850,
+                ease: 'Sine.easeOut',
+                onComplete: () => {
+                    if (Array.isArray(this.soloChickenMenuRipples)) {
+                        this.soloChickenMenuRipples = this.soloChickenMenuRipples.filter(r => r !== ripple);
+                    }
+                    if (ripple && ripple.destroy) ripple.destroy();
+                }
+            });
+
+            ripple.__soloTween = tw;
+            if (Array.isArray(this.soloChickenMenuTweens)) this.soloChickenMenuTweens.push(tw);
+        };
+
+        spawnRipple();
+
+        this.soloChickenRippleTimer = this.time.addEvent({
+            delay: 520,
+            loop: true,
+            callback: spawnRipple
         });
 
-        container.add([closeBg, closeTxt, closeZone]);
-
-        // 只保留一次性進場淡入，不再建立循環 Ripple Timer，避免卡死
         const openTween = this.tweens.add({
             targets: container,
             alpha: { from: 0, to: 1 },
@@ -3819,22 +3872,26 @@ this.events.on('action_B', () => {
 
         this.soloChickenMenuTweens.push(openTween);
 
-        // 保險：如果玩家真的沒關，30 秒後自動解除，避免永久卡住
+        // 保險：如果玩家真的沒關，30 秒後自動解除，避免永久卡住。
         this.soloChickenMenuTimer = this.time.delayedCall(30000, () => {
-            if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) {
+            if (this.soloChickenMenuOpen || this.soloChickenMenuContainer || this.soloChickenMenuBlocker) {
                 this.closeSoloChickenMenu();
             }
         });
     }
-  closeSoloChickenMenu() {
+
+    closeSoloChickenMenu() {
         const timer = this.soloChickenMenuTimer;
+        const rippleTimer = this.soloChickenRippleTimer;
         const tweens = Array.isArray(this.soloChickenMenuTweens) ? [...this.soloChickenMenuTweens] : [];
         const ripples = Array.isArray(this.soloChickenMenuRipples) ? [...this.soloChickenMenuRipples] : [];
         const container = this.soloChickenMenuContainer;
+        const blocker = this.soloChickenMenuBlocker;
 
-        // 重要：先解除旗標，避免 update() 因殘留物件而永久 return，造成玩家卡死
+        // 重要：先解除旗標，避免 update() 因殘留物件而永久 return，造成玩家卡死。
         this.soloChickenMenuOpen = false;
         this.soloChickenMenuTimer = null;
+        this.soloChickenRippleTimer = null;
         this.soloChickenMenuTweens = null;
         this.soloChickenMenuRipples = null;
         this.soloChickenMenuContainer = null;
@@ -3843,6 +3900,7 @@ this.events.on('action_B', () => {
 
         try {
             if (timer && timer.remove) timer.remove(false);
+            if (rippleTimer && rippleTimer.remove) rippleTimer.remove(false);
         } catch (err) {
             console.warn('[獨樂雞選單] Timer 清理失敗，已略過：', err);
         }
@@ -3864,6 +3922,12 @@ this.events.on('action_B', () => {
                 console.warn('[獨樂雞選單] Ripple 清理失敗，已略過：', err);
             }
         });
+
+        try {
+            if (blocker && blocker.destroy) blocker.destroy();
+        } catch (err) {
+            console.warn('[獨樂雞選單] 背景遮罩清理失敗，已略過：', err);
+        }
 
         try {
             if (container && this.tweens) {
