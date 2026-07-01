@@ -5086,7 +5086,6 @@ this.events.on('action_B', () => {
         } catch (err) {
             console.warn('[火箭巡航] Phaser 物件清理失敗，已略過：', err);
         }
-        }
 
         this.soloRocketContainer = null;
         this.soloRocketUiContainer = null;
