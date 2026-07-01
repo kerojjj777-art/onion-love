@@ -3625,10 +3625,24 @@ this.events.on('action_B', () => {
         });
 
         this.events.once('destroy', () => {
+            try {
+                this.closeSoloChickenMenu();
+            } catch (err) {
+                console.warn('[獨樂雞選單] destroy 階段清理失敗，已略過：', err);
+                this.soloChickenMenuOpen = false;
+                this.soloChickenMenuContainer = null;
+                this.soloChickenMenuTimer = null;
+                this.soloChickenMenuTweens = null;
+                this.soloChickenMenuRipples = null;
+                this.soloChickenMenuBlocker = null;
+                this.soloChickenMenuRippleCount = 0;
+            }
+
             if (this.handleVisibilityMimiWalk) {
                 document.removeEventListener('visibilitychange', this.handleVisibilityMimiWalk);
                 this.handleVisibilityMimiWalk = null;
             }
+
             this.stopMimiWalkSFX(true);
         });
     }
@@ -3639,271 +3653,73 @@ this.events.on('action_B', () => {
         particles.setDepth(200); particles.explode(); this.time.delayedCall(2000, () => particles.destroy());
     }
 
-    openSoloChickenMenu() {
-        // 如果已經開著，再呼叫一次就視為關閉，避免重複疊 overlay
-        if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) {
-            this.closeSoloChickenMenu();
-            return;
-        }
-
-        this.soloChickenMenuOpen = true;
-        this.soloChickenMenuRipples = [];
-        this.soloChickenMenuTweens = [];
-        this.soloChickenMenuRippleCount = 0;
-
-        if (this.soloChickenMenuTimer) {
-            this.soloChickenMenuTimer.remove(false);
-            this.soloChickenMenuTimer = null;
-        }
-
-        if (this.localPlayer && this.localPlayer.sprite) {
-            this.localPlayer.sprite.setVelocity(0, 0);
-            this.localPlayer.sprite.play('idle', true);
-        }
-
-        const cam = this.cameras.main;
-        const menuW = Math.min(cam.width - 32, 460);
-        const menuH = Math.min(cam.height - 48, 330);
-
-        const fixed = (obj) => {
-            if (obj && obj.setScrollFactor) obj.setScrollFactor(0);
-            return obj;
-        };
-
-        const root = this.add.container(cam.width / 2, cam.height / 2)
-            .setDepth(5000)
-            .setScrollFactor(0);
-
-        this.soloChickenMenuContainer = root;
-
-        const stopEvent = (event) => {
-            if (!event) return;
-            if (event.stopPropagation) event.stopPropagation();
-            if (event.preventDefault) event.preventDefault();
-        };
-
-        const blocker = fixed(this.add.rectangle(0, 0, cam.width, cam.height, 0x000000, 0.48)
-            .setInteractive({ useHandCursor: false }));
-
-        this.soloChickenMenuBlocker = blocker;
-
-        blocker.on('pointerdown', (pointer, localX, localY, event) => {
-            stopEvent(event);
-            this.closeSoloChickenMenu();
-        });
-
-        const panel = fixed(this.add.graphics());
-        panel.fillStyle(0x06000d, 0.98);
-        panel.fillRoundedRect(-menuW / 2, -menuH / 2, menuW, menuH, 18);
-        panel.lineStyle(8, 0x3b005f, 0.95);
-        panel.strokeRoundedRect(-menuW / 2, -menuH / 2, menuW, menuH, 18);
-        panel.lineStyle(3, 0xd86bff, 1);
-        panel.strokeRoundedRect(-menuW / 2 + 8, -menuH / 2 + 8, menuW - 16, menuH - 16, 12);
-
-        const glow = fixed(this.add.graphics());
-        glow.lineStyle(4, 0xb100ff, 0.75);
-        glow.strokeRoundedRect(-menuW / 2 - 5, -menuH / 2 - 5, menuW + 10, menuH + 10, 22);
-
-        const glowTween = this.tweens.add({
-            targets: glow,
-            alpha: 0.35,
-            duration: 700,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut'
-        });
-
-        this.soloChickenMenuTweens.push(glowTween);
-
-        const title = fixed(this.add.text(0, -menuH / 2 + 48, '獨樂雞', {
-            fontSize: '30px',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold',
-            color: '#ffffff',
-            stroke: '#7f00ff',
-            strokeThickness: 5
-        }).setOrigin(0.5));
-
-        const subTitle = fixed(this.add.text(0, -menuH / 2 + 86, '復古電視小遊戲選單', {
-            fontSize: '15px',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold',
-            color: '#ffffff',
-            stroke: '#000000',
-            strokeThickness: 3
-        }).setOrigin(0.5));
-
-        const desc = fixed(this.add.text(0, -18, '請選擇要遊玩的單人小遊戲。\n目前僅開放入口測試。', {
-            fontSize: '15px',
-            fontFamily: 'Arial, sans-serif',
-            color: '#ffffff',
-            align: 'center',
-            lineSpacing: 8
-        }).setOrigin(0.5));
-
-        const makeButton = (x, y, label, onClick) => {
-            const btn = this.add.container(x, y).setScrollFactor(0);
-            const btnW = Math.min(menuW - 96, 260);
-            const btnH = 44;
-
-            const bg = fixed(this.add.graphics());
-            bg.fillStyle(0xffffff, 1);
-            bg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10);
-            bg.lineStyle(3, 0xf7eaff, 1);
-            bg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10);
-
-            const txt = fixed(this.add.text(0, 0, label, {
-                fontSize: '17px',
-                fontFamily: 'Arial, sans-serif',
-                fontStyle: 'bold',
-                color: '#000000'
-            }).setOrigin(0.5));
-
-            const hit = fixed(this.add.rectangle(0, 0, btnW, btnH, 0xffffff, 0.001)
-                .setInteractive({ useHandCursor: true }));
-
-            hit.on('pointerover', () => btn.setScale(1.04));
-            hit.on('pointerout', () => btn.setScale(1));
-            hit.on('pointerdown', (pointer, localX, localY, event) => {
-                stopEvent(event);
-                onClick();
-            });
-
-            btn.add([bg, txt, hit]);
-            return btn;
-        };
-
-        const rocketBtn = makeButton(0, 70, '火箭巡航', () => {
-            sendBubble('火箭巡航尚未開放');
-            this.closeSoloChickenMenu();
-        });
-
-        const closeBtn = makeButton(0, 128, '關閉', () => {
-            this.closeSoloChickenMenu();
-        });
-
-        const spawnRipple = () => {
-            if (!this.soloChickenMenuOpen || !this.soloChickenMenuContainer || !this.soloChickenMenuContainer.active) return;
-
-            this.soloChickenMenuRipples = this.soloChickenMenuRipples || [];
-            this.soloChickenMenuTweens = this.soloChickenMenuTweens || [];
-
-            // 每次開啟選單最多播放 18 次漣漪，避免長時間停留造成 Timer 持續生物件
-            if (this.soloChickenMenuRippleCount >= 18) {
-                if (this.soloChickenMenuTimer) {
-                    this.soloChickenMenuTimer.remove(false);
-                    this.soloChickenMenuTimer = null;
-                }
-                return;
-            }
-
-            this.soloChickenMenuRippleCount += 1;
-
-            // 同時存在最多 3 個漣漪；移除舊漣漪時也同步移除它自己的 tween
-            while (this.soloChickenMenuRipples.length >= 3) {
-                const oldRipple = this.soloChickenMenuRipples.shift();
-                if (oldRipple && oldRipple.__soloTween) {
-                    Phaser.Utils.Array.Remove(this.soloChickenMenuTweens, oldRipple.__soloTween);
-                    if (oldRipple.__soloTween.remove) oldRipple.__soloTween.remove();
-                    oldRipple.__soloTween = null;
-                }
-                if (oldRipple && oldRipple.destroy) oldRipple.destroy(true);
-            }
-
-            const colors = [0xff004c, 0xffa600, 0xffff00, 0x00ff66, 0x00ccff, 0x7a5cff, 0xff6bff];
-            const rx = Phaser.Math.Between(-menuW / 2 + 58, menuW / 2 - 58);
-            const ry = Phaser.Math.Between(menuH / 2 - 86, menuH / 2 - 38);
-            const ripple = this.add.container(rx, ry).setScrollFactor(0);
-            const g = fixed(this.add.graphics());
-
-            for (let r = 12; r <= 34; r += 11) {
-                g.lineStyle(2, Phaser.Utils.Array.GetRandom(colors), 0.8);
-                g.strokeCircle(0, 0, r);
-
-                for (let i = 0; i < 8; i++) {
-                    const a = (Math.PI * 2 / 8) * i + Phaser.Math.FloatBetween(-0.15, 0.15);
-                    const px = Math.cos(a) * r;
-                    const py = Math.sin(a) * r;
-                    g.fillStyle(Phaser.Utils.Array.GetRandom(colors), 0.9);
-                    g.fillRect(px - 2, py - 2, 4, 4);
-                }
-            }
-
-            ripple.add(g);
-            root.add(ripple);
-            this.soloChickenMenuRipples.push(ripple);
-
-            const tw = this.tweens.add({
-                targets: ripple,
-                alpha: 0,
-                scaleX: 1.65,
-                scaleY: 1.65,
-                duration: 700,
-                ease: 'Cubic.easeOut',
-                onComplete: () => {
-                    if (this.soloChickenMenuRipples) Phaser.Utils.Array.Remove(this.soloChickenMenuRipples, ripple);
-                    if (this.soloChickenMenuTweens) Phaser.Utils.Array.Remove(this.soloChickenMenuTweens, tw);
-                    if (ripple && ripple.destroy) ripple.destroy(true);
-                }
-            });
-
-            ripple.__soloTween = tw;
-            this.soloChickenMenuTweens.push(tw);
-        };
-
-        root.add([blocker, glow, panel, title, subTitle, desc, rocketBtn, closeBtn]);
-
-        spawnRipple();
-
-        this.soloChickenMenuTimer = this.time.addEvent({
-            delay: 650,
-            callback: spawnRipple,
-            loop: true
-        });
-    }
-
     closeSoloChickenMenu() {
+        const timer = this.soloChickenMenuTimer;
+        const tweens = Array.isArray(this.soloChickenMenuTweens) ? [...this.soloChickenMenuTweens] : [];
+        const ripples = Array.isArray(this.soloChickenMenuRipples) ? [...this.soloChickenMenuRipples] : [];
+        const container = this.soloChickenMenuContainer;
+
+        // 重要：先解除旗標，避免 update() 因殘留物件而永久 return，造成玩家卡死
         this.soloChickenMenuOpen = false;
-
-        if (this.soloChickenMenuTimer) {
-            this.soloChickenMenuTimer.remove(false);
-            this.soloChickenMenuTimer = null;
-        }
-
-        if (this.soloChickenMenuTweens) {
-            this.soloChickenMenuTweens.forEach(tw => {
-                if (tw && tw.remove) tw.remove();
-            });
-            this.soloChickenMenuTweens = null;
-        }
-
-        if (this.soloChickenMenuRipples) {
-            this.soloChickenMenuRipples.forEach(r => {
-                if (r && r.__soloTween && r.__soloTween.remove) r.__soloTween.remove();
-                if (r && r.destroy) r.destroy(true);
-            });
-            this.soloChickenMenuRipples = null;
-        }
-
-        if (this.soloChickenMenuContainer) {
-            if (this.tweens && this.soloChickenMenuContainer.list) {
-                this.soloChickenMenuContainer.list.forEach(child => {
-                    this.tweens.killTweensOf(child);
-                });
-            }
-            this.soloChickenMenuContainer.destroy(true);
-            this.soloChickenMenuContainer = null;
-        }
-
+        this.soloChickenMenuTimer = null;
+        this.soloChickenMenuTweens = null;
+        this.soloChickenMenuRipples = null;
+        this.soloChickenMenuContainer = null;
         this.soloChickenMenuBlocker = null;
         this.soloChickenMenuRippleCount = 0;
 
-        if (this.localPlayer && this.localPlayer.sprite && this.localPlayer.sprite.active) {
-            this.localPlayer.sprite.setVelocity(0, 0);
-            this.localPlayer.sprite.play('idle', true);
+        try {
+            if (timer && timer.remove) timer.remove(false);
+        } catch (err) {
+            console.warn('[獨樂雞選單] Timer 清理失敗，已略過：', err);
+        }
+
+        tweens.forEach(tw => {
+            try {
+                if (tw && tw.remove) tw.remove();
+                else if (tw && tw.stop) tw.stop();
+            } catch (err) {
+                console.warn('[獨樂雞選單] Tween 清理失敗，已略過：', err);
+            }
+        });
+
+        ripples.forEach(r => {
+            try {
+                if (r && r.__soloTween && r.__soloTween.remove) r.__soloTween.remove();
+                if (r && r.destroy) r.destroy(true);
+            } catch (err) {
+                console.warn('[獨樂雞選單] Ripple 清理失敗，已略過：', err);
+            }
+        });
+
+        try {
+            if (container && this.tweens) {
+                this.tweens.killTweensOf(container);
+                if (container.list) {
+                    container.list.forEach(child => {
+                        if (child) this.tweens.killTweensOf(child);
+                    });
+                }
+            }
+
+            if (container && container.destroy) {
+                container.destroy(true);
+            }
+        } catch (err) {
+            console.warn('[獨樂雞選單] Container 清理失敗，已略過：', err);
+        }
+
+        try {
+            const sprite = this.localPlayer && this.localPlayer.sprite;
+            if (sprite && sprite.active) {
+                if (sprite.body) sprite.setVelocity(0, 0);
+                if (this.anims && this.anims.exists('idle')) sprite.play('idle', true);
+            }
+        } catch (err) {
+            console.warn('[獨樂雞選單] 玩家狀態復原失敗，已略過：', err);
         }
     }
-
+  
     getCurrentPlayerPathForAction() {
         if (!window.GameLogic.currentUser) return null;
         const uid = window.GameLogic.currentUser.uid;
@@ -5737,8 +5553,15 @@ if (activeBubbleMsg) {
         }
 
         // 獨樂雞 Phaser overlay 開啟期間：玩家停住、提示隱藏、背景互動不繼續處理
-        // A / B 關閉仍由 action_A_short / action_B / action_B_long 處理，不會被這裡阻斷
-        if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) {
+        // 安全版：只有 Container 真的 active 時才 return；若只是殘留旗標，立刻清掉，避免永久卡死
+        const hasActiveSoloChickenMenu =
+            !!(this.soloChickenMenuOpen && this.soloChickenMenuContainer && this.soloChickenMenuContainer.active);
+
+        if ((this.soloChickenMenuOpen || this.soloChickenMenuContainer) && !hasActiveSoloChickenMenu) {
+            this.closeSoloChickenMenu();
+        }
+
+        if (hasActiveSoloChickenMenu) {
             if (this.localPlayer && this.localPlayer.sprite) {
                 this.localPlayer.sprite.setVelocity(0, 0);
                 this.localPlayer.sprite.play('idle', true);
