@@ -2241,6 +2241,14 @@ class MainScene extends Phaser.Scene {
         this.lastPrinceCatStateStartTime = null;
         this.lastPrinceCatWalkStopMeowKey = null;
         this.lastPrinceCatPettingEffectKey = null;
+        // 獨樂雞 Phaser overlay 狀態初始化
+        this.soloChickenMenuOpen = false;
+        this.soloChickenMenuContainer = null;
+        this.soloChickenMenuTimer = null;
+        this.soloChickenMenuTweens = null;
+        this.soloChickenMenuRipples = null;
+        this.soloChickenMenuRippleCount = 0;
+        this.soloChickenMenuBlocker = null;
         
         // 修正：徹底重構音樂切換邏輯，神龕擁有絕對獨立的背景音樂，不再與儀式狀態綁定
         let allBgms = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire'];
@@ -3567,7 +3575,7 @@ this.events.on('action_B', () => {
         };
         document.addEventListener('visibilitychange', this.handleVisibilityMimiWalk);
 
-        this.events.on('shutdown', () => {
+        this.events.once('shutdown', () => {
             this.closeSoloChickenMenu();
             this.scale.off('resize', this.updateCameraBounds, this); // 確保離開場景時註銷視窗尺寸監聽，防止記憶體溢出卡頓
             if (this.leaderboardListener) this.leaderboardListener(); 
@@ -3616,7 +3624,7 @@ this.events.on('action_B', () => {
             }
         });
 
-        this.events.on('destroy', () => {
+        this.events.once('destroy', () => {
             if (this.handleVisibilityMimiWalk) {
                 document.removeEventListener('visibilitychange', this.handleVisibilityMimiWalk);
                 this.handleVisibilityMimiWalk = null;
@@ -3632,19 +3640,31 @@ this.events.on('action_B', () => {
     }
 
     openSoloChickenMenu() {
-        if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) return;
+        // 如果已經開著，再呼叫一次就視為關閉，避免重複疊 overlay
+        if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) {
+            this.closeSoloChickenMenu();
+            return;
+        }
 
         this.soloChickenMenuOpen = true;
         this.soloChickenMenuRipples = [];
         this.soloChickenMenuTweens = [];
+        this.soloChickenMenuRippleCount = 0;
+
+        if (this.soloChickenMenuTimer) {
+            this.soloChickenMenuTimer.remove(false);
+            this.soloChickenMenuTimer = null;
+        }
 
         if (this.localPlayer && this.localPlayer.sprite) {
             this.localPlayer.sprite.setVelocity(0, 0);
+            this.localPlayer.sprite.play('idle', true);
         }
 
         const cam = this.cameras.main;
         const menuW = Math.min(cam.width - 32, 460);
         const menuH = Math.min(cam.height - 48, 330);
+
         const fixed = (obj) => {
             if (obj && obj.setScrollFactor) obj.setScrollFactor(0);
             return obj;
@@ -3656,11 +3676,19 @@ this.events.on('action_B', () => {
 
         this.soloChickenMenuContainer = root;
 
-        const blocker = fixed(this.add.rectangle(0, 0, cam.width, cam.height, 0x000000, 0.45)
+        const stopEvent = (event) => {
+            if (!event) return;
+            if (event.stopPropagation) event.stopPropagation();
+            if (event.preventDefault) event.preventDefault();
+        };
+
+        const blocker = fixed(this.add.rectangle(0, 0, cam.width, cam.height, 0x000000, 0.48)
             .setInteractive({ useHandCursor: false }));
 
+        this.soloChickenMenuBlocker = blocker;
+
         blocker.on('pointerdown', (pointer, localX, localY, event) => {
-            if (event) event.stopPropagation();
+            stopEvent(event);
             this.closeSoloChickenMenu();
         });
 
@@ -3675,14 +3703,17 @@ this.events.on('action_B', () => {
         const glow = fixed(this.add.graphics());
         glow.lineStyle(4, 0xb100ff, 0.75);
         glow.strokeRoundedRect(-menuW / 2 - 5, -menuH / 2 - 5, menuW + 10, menuH + 10, 22);
-        this.soloChickenMenuTweens.push(this.tweens.add({
+
+        const glowTween = this.tweens.add({
             targets: glow,
             alpha: 0.35,
             duration: 700,
             yoyo: true,
             repeat: -1,
             ease: 'Sine.easeInOut'
-        }));
+        });
+
+        this.soloChickenMenuTweens.push(glowTween);
 
         const title = fixed(this.add.text(0, -menuH / 2 + 48, '獨樂雞', {
             fontSize: '30px',
@@ -3734,7 +3765,7 @@ this.events.on('action_B', () => {
             hit.on('pointerover', () => btn.setScale(1.04));
             hit.on('pointerout', () => btn.setScale(1));
             hit.on('pointerdown', (pointer, localX, localY, event) => {
-                if (event) event.stopPropagation();
+                stopEvent(event);
                 onClick();
             });
 
@@ -3744,6 +3775,7 @@ this.events.on('action_B', () => {
 
         const rocketBtn = makeButton(0, 70, '火箭巡航', () => {
             sendBubble('火箭巡航尚未開放');
+            this.closeSoloChickenMenu();
         });
 
         const closeBtn = makeButton(0, 128, '關閉', () => {
@@ -3756,9 +3788,25 @@ this.events.on('action_B', () => {
             this.soloChickenMenuRipples = this.soloChickenMenuRipples || [];
             this.soloChickenMenuTweens = this.soloChickenMenuTweens || [];
 
-            // 防止手機或低效能瀏覽器短時間累積太多 Graphics / Tween
-            if (this.soloChickenMenuRipples.length >= 4) {
+            // 每次開啟選單最多播放 18 次漣漪，避免長時間停留造成 Timer 持續生物件
+            if (this.soloChickenMenuRippleCount >= 18) {
+                if (this.soloChickenMenuTimer) {
+                    this.soloChickenMenuTimer.remove(false);
+                    this.soloChickenMenuTimer = null;
+                }
+                return;
+            }
+
+            this.soloChickenMenuRippleCount += 1;
+
+            // 同時存在最多 3 個漣漪；移除舊漣漪時也同步移除它自己的 tween
+            while (this.soloChickenMenuRipples.length >= 3) {
                 const oldRipple = this.soloChickenMenuRipples.shift();
+                if (oldRipple && oldRipple.__soloTween) {
+                    Phaser.Utils.Array.Remove(this.soloChickenMenuTweens, oldRipple.__soloTween);
+                    if (oldRipple.__soloTween.remove) oldRipple.__soloTween.remove();
+                    oldRipple.__soloTween = null;
+                }
                 if (oldRipple && oldRipple.destroy) oldRipple.destroy(true);
             }
 
@@ -3769,14 +3817,14 @@ this.events.on('action_B', () => {
             const g = fixed(this.add.graphics());
 
             for (let r = 12; r <= 34; r += 11) {
-                g.lineStyle(2, Phaser.Utils.Array.GetRandom(colors), 0.85);
+                g.lineStyle(2, Phaser.Utils.Array.GetRandom(colors), 0.8);
                 g.strokeCircle(0, 0, r);
 
                 for (let i = 0; i < 8; i++) {
                     const a = (Math.PI * 2 / 8) * i + Phaser.Math.FloatBetween(-0.15, 0.15);
                     const px = Math.cos(a) * r;
                     const py = Math.sin(a) * r;
-                    g.fillStyle(Phaser.Utils.Array.GetRandom(colors), 0.95);
+                    g.fillStyle(Phaser.Utils.Array.GetRandom(colors), 0.9);
                     g.fillRect(px - 2, py - 2, 4, 4);
                 }
             }
@@ -3788,9 +3836,9 @@ this.events.on('action_B', () => {
             const tw = this.tweens.add({
                 targets: ripple,
                 alpha: 0,
-                scaleX: 1.75,
-                scaleY: 1.75,
-                duration: 850,
+                scaleX: 1.65,
+                scaleY: 1.65,
+                duration: 700,
                 ease: 'Cubic.easeOut',
                 onComplete: () => {
                     if (this.soloChickenMenuRipples) Phaser.Utils.Array.Remove(this.soloChickenMenuRipples, ripple);
@@ -3799,14 +3847,16 @@ this.events.on('action_B', () => {
                 }
             });
 
+            ripple.__soloTween = tw;
             this.soloChickenMenuTweens.push(tw);
         };
 
         root.add([blocker, glow, panel, title, subTitle, desc, rocketBtn, closeBtn]);
 
         spawnRipple();
+
         this.soloChickenMenuTimer = this.time.addEvent({
-            delay: 520,
+            delay: 650,
             callback: spawnRipple,
             loop: true
         });
@@ -3824,23 +3874,36 @@ this.events.on('action_B', () => {
             this.soloChickenMenuTweens.forEach(tw => {
                 if (tw && tw.remove) tw.remove();
             });
-            this.soloChickenMenuTweens = [];
+            this.soloChickenMenuTweens = null;
         }
 
         if (this.soloChickenMenuRipples) {
             this.soloChickenMenuRipples.forEach(r => {
+                if (r && r.__soloTween && r.__soloTween.remove) r.__soloTween.remove();
                 if (r && r.destroy) r.destroy(true);
             });
-            this.soloChickenMenuRipples = [];
+            this.soloChickenMenuRipples = null;
         }
 
         if (this.soloChickenMenuContainer) {
+            if (this.tweens && this.soloChickenMenuContainer.list) {
+                this.soloChickenMenuContainer.list.forEach(child => {
+                    this.tweens.killTweensOf(child);
+                });
+            }
             this.soloChickenMenuContainer.destroy(true);
             this.soloChickenMenuContainer = null;
         }
+
+        this.soloChickenMenuBlocker = null;
+        this.soloChickenMenuRippleCount = 0;
+
+        if (this.localPlayer && this.localPlayer.sprite && this.localPlayer.sprite.active) {
+            this.localPlayer.sprite.setVelocity(0, 0);
+            this.localPlayer.sprite.play('idle', true);
+        }
     }
-  
-        getCurrentPlayerPathForAction() {
+
         if (!window.GameLogic.currentUser) return null;
         const uid = window.GameLogic.currentUser.uid;
         if (this.isCafe) return `cafePlayers/${uid}`;
@@ -5670,6 +5733,24 @@ if (activeBubbleMsg) {
                 name: window.GameLogic.myProfile.name || '匿名',
                 color: window.GameLogic.myProfile.color || '#fff'
             });
+        }
+
+        // 獨樂雞 Phaser overlay 開啟期間：玩家停住、提示隱藏、背景互動不繼續處理
+        // A / B 關閉仍由 action_A_short / action_B / action_B_long 處理，不會被這裡阻斷
+        if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) {
+            if (this.localPlayer && this.localPlayer.sprite) {
+                this.localPlayer.sprite.setVelocity(0, 0);
+                this.localPlayer.sprite.play('idle', true);
+            }
+
+            if (this.smartPromptBg) this.smartPromptBg.setVisible(false);
+            if (this.smartPromptText) this.smartPromptText.setVisible(false);
+            if (this.waterPromptBg) this.waterPromptBg.setVisible(false);
+            if (this.waterPromptText) this.waterPromptText.setVisible(false);
+            if (this.lockOnTarget) this.lockOnTarget.setVisible(false);
+            if (this.placePrompt) this.placePrompt.setVisible(false);
+
+            return;
         }
 
         if (this.localPlayer.isShowingOff) {
