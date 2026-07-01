@@ -4116,7 +4116,7 @@ this.events.on('action_B', () => {
 
             window.GameLogic.myProfile.coins = newCoins;
             this.syncSoloRocketCoinUi(newCoins);
-            if (typeof sendBubble === 'function') sendBubble('已支付 100 馬德幣，火箭巡航啟動！');
+            console.log('[火箭巡航] 已支付 100 馬德幣，啟動副本。');
 
             this.closeSoloChickenMenu();
             this.startSoloRocketCruise();
@@ -4150,7 +4150,11 @@ this.events.on('action_B', () => {
         safeH = Math.max(460, Math.min(safeH, cam.height));
 
         const x = (cam.width - safeW) / 2;
-        const y = (cam.height - safeH) / 2;
+
+        // 手機直式畫面不要完全置中，稍微往上貼近，避免整體遊戲框偏下。
+        const isNarrowScreen = cam.width <= 768;
+        const freeY = Math.max(0, cam.height - safeH);
+        const y = isNarrowScreen ? Math.max(8, freeY * 0.18) : freeY / 2;
 
         return {
             x,
@@ -4163,7 +4167,7 @@ this.events.on('action_B', () => {
     }
 
     hideSoloRocketLobbyUi() {
-        if (!this.soloRocketPrevUiState) this.soloRocketPrevUiState = { dom: {}, phaser: {} };
+        if (!this.soloRocketPrevUiState) this.soloRocketPrevUiState = { dom: {}, phaser: {}, cameras: {} };
 
         this.soloRocketDomUiIds.forEach(id => {
             const el = document.getElementById(id);
@@ -4182,6 +4186,17 @@ this.events.on('action_B', () => {
             if (!(key in this.soloRocketPrevUiState.phaser)) this.soloRocketPrevUiState.phaser[key] = obj.visible;
             obj.setVisible(false);
         });
+
+        // 火箭巡航是獨立副本畫面，暫時撤除大廳右上小地圖。
+        if (this.minimap) {
+            if (!this.soloRocketPrevUiState.cameras) this.soloRocketPrevUiState.cameras = {};
+            if (!('minimap' in this.soloRocketPrevUiState.cameras)) {
+                this.soloRocketPrevUiState.cameras.minimap = this.minimap.visible;
+            }
+
+            if (this.minimap.setVisible) this.minimap.setVisible(false);
+            else this.minimap.visible = false;
+        }
 
         if (uiScene.joyStick) {
             if (uiScene.joyStick.base?.setVisible) uiScene.joyStick.base.setVisible(true);
@@ -4212,6 +4227,11 @@ this.events.on('action_B', () => {
             if (uiScene.itemBtn?.setVisible) uiScene.itemBtn.setVisible(true);
             if (uiScene.itemText?.setVisible) uiScene.itemText.setVisible(true);
             if (uiScene.statusContainer?.setVisible) uiScene.statusContainer.setVisible(true);
+        }
+
+        if (this.minimap && prev.cameras && ('minimap' in prev.cameras)) {
+            if (this.minimap.setVisible) this.minimap.setVisible(!!prev.cameras.minimap);
+            else this.minimap.visible = !!prev.cameras.minimap;
         }
 
         this.soloRocketPrevUiState = null;
@@ -4380,28 +4400,48 @@ this.events.on('action_B', () => {
         decor.fillRect(rect.x + rect.w, 0, Math.max(0, cam.width - rect.x - rect.w), cam.height);
         container.add(decor);
 
-        for (let i = 0; i < 36; i++) {
+        for (let i = 0; i < 80; i++) {
             const onLeft = Math.random() < 0.5;
             const sideW = onLeft ? rect.x : (cam.width - rect.x - rect.w);
-            if (sideW <= 4) continue;
-            const sx = onLeft ? Phaser.Math.Between(0, Math.max(1, rect.x - 4)) : Phaser.Math.Between(rect.x + rect.w + 4, cam.width);
-            const sy = Phaser.Math.Between(0, cam.height);
-            const sideStar = this.add.circle(sx, sy, Phaser.Math.FloatBetween(1, 2.5), 0xb99cff, Phaser.Math.FloatBetween(0.15, 0.55));
-            sideStar.__speed = Phaser.Math.Between(15, 60);
+            if (sideW <= 8) continue;
+
+            const sx = onLeft
+                ? Phaser.Math.Between(6, Math.max(8, rect.x - 8))
+                : Phaser.Math.Between(rect.x + rect.w + 8, Math.max(rect.x + rect.w + 12, cam.width - 6));
+
+            const sy = Phaser.Math.Between(-20, cam.height);
+            const sideStar = this.add.image(sx, sy, 'particle_flare')
+                .setTint(0xffffff)
+                .setAlpha(Phaser.Math.FloatBetween(0.25, 0.85))
+                .setScale(Phaser.Math.FloatBetween(0.75, 1.8))
+                .setBlendMode(Phaser.BlendModes.ADD);
+
+            sideStar.__speed = Phaser.Math.Between(30, 95);
+            sideStar.__sideStar = true;
+
+            this.tweens.add({
+                targets: sideStar,
+                alpha: { from: 0.18, to: 1 },
+                scaleX: { from: sideStar.scaleX * 0.75, to: sideStar.scaleX * 1.35 },
+                scaleY: { from: sideStar.scaleY * 0.75, to: sideStar.scaleY * 1.35 },
+                duration: Phaser.Math.Between(450, 1200),
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+
             container.add(sideStar);
             this.soloRocketStars.push(sideStar);
         }
 
         if (this.textures.exists('rocket-onion-player')) {
             const rocket = this.add.image(rect.centerX, rect.y + rect.h * 0.72, 'rocket-onion-player');
-            const src = this.textures.get('rocket-onion-player').getSourceImage();
-            const maxW = Math.min(118, rect.w * 0.28);
-            const scale = maxW / Math.max(1, src?.width || maxW);
-            rocket.setScale(scale);
+            const rocketSize = Math.min(60, rect.w * 0.18);
+            rocket.setDisplaySize(rocketSize, rocketSize);
             rocket.setDepth(9610);
             container.add(rocket);
             this.soloRocketPlayer = rocket;
-            this.soloRocketPlayerRadius = Math.max(24, maxW * 0.42);
+            this.soloRocketPlayerRadius = Math.max(18, rocketSize * 0.36);
         } else {
             console.warn('[火箭巡航] 找不到 rocket-onion-player.png，改用簡易火箭 fallback。');
             const rocketContainer = this.add.container(rect.centerX, rect.y + rect.h * 0.72).setDepth(9610);
@@ -4412,9 +4452,10 @@ this.events.on('action_B', () => {
             rocketG.fillStyle(0x8a2be2, 1).fillTriangle(-20, 12, -44, 44, -14, 34);
             rocketG.fillTriangle(20, 12, 44, 44, 14, 34);
             rocketContainer.add(rocketG);
+            rocketContainer.setScale(0.68);
             container.add(rocketContainer);
             this.soloRocketPlayer = rocketContainer;
-            this.soloRocketPlayerRadius = 44;
+            this.soloRocketPlayerRadius = 28;
         }
 
         const ui = this.add.container(0, 0).setDepth(9700).setScrollFactor(0);
@@ -4431,10 +4472,10 @@ this.events.on('action_B', () => {
         this.soloRocketCountdownText = timerText;
 
         const lifeBg = this.add.graphics();
-        lifeBg.fillStyle(0x000000, 0.65).fillRoundedRect(rect.x + 14, rect.y + rect.h - 72, 150, 42, 12);
-        lifeBg.lineStyle(2, 0x39ff14, 0.9).strokeRoundedRect(rect.x + 14, rect.y + rect.h - 72, 150, 42, 12);
-        const lifeText = this.add.text(rect.x + 89, rect.y + rect.h - 51, '生命 100%', {
-            fontSize: '17px',
+        lifeBg.fillStyle(0x000000, 0.65).fillRoundedRect(rect.x + 12, rect.y + 12, 132, 38, 10);
+        lifeBg.lineStyle(2, 0x39ff14, 0.9).strokeRoundedRect(rect.x + 12, rect.y + 12, 132, 38, 10);
+        const lifeText = this.add.text(rect.x + 78, rect.y + 31, '生命 100%', {
+            fontSize: '15px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#b6ffb6',
@@ -4489,6 +4530,9 @@ this.events.on('action_B', () => {
                 star.y += (star.__speed || 60) * dt;
                 if (star.y > this.cameras.main.height + 10) {
                     star.y = -10;
+                    if (star.__sideStar) {
+                        star.alpha = Phaser.Math.FloatBetween(0.25, 0.9);
+                    }
                 }
             });
         }
@@ -4516,8 +4560,8 @@ this.events.on('action_B', () => {
                 iy /= len;
             }
 
-            const speed = 285;
-            const pad = this.soloRocketPlayerRadius || 42;
+            const speed = 360;
+            const pad = this.soloRocketPlayerRadius || 28;
             this.soloRocketPlayer.x = Phaser.Math.Clamp(this.soloRocketPlayer.x + ix * speed * dt, rect.x + pad, rect.x + rect.w - pad);
             this.soloRocketPlayer.y = Phaser.Math.Clamp(this.soloRocketPlayer.y + iy * speed * dt, rect.y + pad, rect.y + rect.h - pad);
         }
@@ -4557,6 +4601,30 @@ this.events.on('action_B', () => {
         const px = rect.centerX - panelW / 2;
         const py = rect.centerY - panelH / 2;
 
+        let didReturnFromSoloRocket = false;
+        const safeReturnFromSoloRocket = (pointer, localX, localY, event) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+            if (didReturnFromSoloRocket) return;
+            didReturnFromSoloRocket = true;
+            this.returnFromSoloRocketCruise();
+        };
+
+        const resultBlocker = this.add.zone(this.cameras.main.width / 2, this.cameras.main.height / 2, this.cameras.main.width, this.cameras.main.height)
+            .setInteractive();
+
+        resultBlocker.on('pointerdown', (pointer, localX, localY, event) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+
+            const pxHit = pointer ? pointer.x : -9999;
+            const pyHit = pointer ? pointer.y : -9999;
+            const inReturnBtn = pxHit >= rect.centerX - 100 &&
+                                pxHit <= rect.centerX + 100 &&
+                                pyHit >= py + 154 &&
+                                pyHit <= py + 214;
+
+            if (inReturnBtn) safeReturnFromSoloRocket(pointer, localX, localY, event);
+        });
+
         const bg = this.add.graphics();
         bg.fillStyle(0x050008, 0.96).fillRoundedRect(px, py, panelW, panelH, 18);
         bg.lineStyle(4, 0x8a2be2, 1).strokeRoundedRect(px, py, panelW, panelH, 18);
@@ -4588,19 +4656,18 @@ this.events.on('action_B', () => {
             color: '#000000'
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-        const click = (pointer, localX, localY, event) => {
-            if (event && event.stopPropagation) event.stopPropagation();
-            this.returnFromSoloRocketCruise();
-        };
+        const click = safeReturnFromSoloRocket;
         btnBg.on('pointerdown', click);
         btnText.on('pointerdown', click);
+        btnBg.on('pointerup', click);
+        btnText.on('pointerup', click);
 
-        result.add([bg, title, life, btnBg, btnText]);
+        result.add([resultBlocker, bg, title, life, btnBg, btnText]);
     }
 
     returnFromSoloRocketCruise() {
         this.clearSoloRocketCruise(false);
-        if (typeof sendBubble === 'function') sendBubble('回到洋蔥大廳。');
+        console.log('[火箭巡航] 已返回洋蔥大廳。');
     }
 
     clearSoloRocketCruise(skipMusicResume = false) {
