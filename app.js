@@ -3904,6 +3904,7 @@ this.events.on('action_B', () => {
         }
     }
 
+    getCurrentPlayerPathForAction() {
         if (!window.GameLogic.currentUser) return null;
         const uid = window.GameLogic.currentUser.uid;
         if (this.isCafe) return `cafePlayers/${uid}`;
