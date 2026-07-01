@@ -1906,6 +1906,8 @@ class BootScene extends Phaser.Scene {
         this.load.audio('sleep-onion-bao-got-money', 'sleep-onion-bao-got-money.mp3');
         this.load.image('hall-screen-in-list', 'hall-screen-in-list.png');
         this.load.image('hall-screen', 'hall-screen.png'); // 改為靜態圖
+        // 階段1：獨樂雞家具入口素材，只載入家具圖，不載入火箭巡航素材
+        this.load.image('solochicken', 'me_play_cock.png');
 
         // 在記憶體中畫一個簡單的白色發光點紋理給粒子使用
         let grd = this.make.graphics({x: 0, y: 0, add: false});
@@ -2578,6 +2580,8 @@ class MainScene extends Phaser.Scene {
         this.events.on('action_A_place', () => { let key = window.GameLogic.placingFurnitureKey; if(key && this.furnitureSprites[key]) { let f = this.furnitureSprites[key]; f.sprite.setVelocity(0, 0); let path = this.isCafe ? `cafeFurniture/${key}` : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}` : `shrineFurniture/${key}`); update(ref(window.GameLogic.db, path), { locked: true, x: f.sprite.x, y: f.sprite.y, ownerUid: window.GameLogic.currentUser.uid }); window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); } });
 
         this.events.on('action_A_short', () => {
+          
+    if (this.soloChickenMenuOpen) return;
             // 修正：檢查是否手持派對喇叭，若是，觸發喇叭廣播流程
     if (window.GameLogic.armedItemState === 'ready' && window.GameLogic.armedItemName === '派對喇叭') {
         document.getElementById('party-select-modal').style.display = 'block';
@@ -2914,7 +2918,77 @@ class MainScene extends Phaser.Scene {
                     return;
                 }
             }
-            if(!this.isCafe) return sendBubble("對著空氣揮舞了雙手!"); let interacted = false; for (const key in this.furnitureSprites) { let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y); if (dist < 120) { if (key.includes('giftbox')) { window.GameLogic.activeGiftBox = f; f.sprite.setTexture('gift-box-open'); window.playSFX(this, 'reward-open-box'); if (!f.glow) { f.glow = this.add.pointlight(f.sprite.x, f.sprite.y, 0xffd700, 180, 0.6).setDepth(4); this.tweens.add({ targets: f.glow, radius: 220, yoyo: true, repeat: -1, duration: 800 }); } f.glow.setVisible(true); window.openRewardModal(f); interacted = true; break; } if (key === 'fridge') { document.getElementById('fridge-modal').style.display = 'block'; interacted = true; break; } if (key.startsWith('memory')) { document.getElementById('memory-modal').style.display = 'block'; interacted = true; break; } if (key.includes('scoreboard')) { window.openLeaderboardModal(); interacted = true; break; } if (key === 'shrine') { window.attemptJoinShrine(); interacted = true; break; } } } if(!interacted) sendBubble("使用了 A 技能!");
+            if (!this.isCafe) return sendBubble("對著空氣揮舞了雙手!");
+
+            let interacted = false;
+
+            for (const key in this.furnitureSprites) {
+                let f = this.furnitureSprites[key];
+                if (!f.sprite.isLocked) continue;
+
+                let dist = Phaser.Math.Distance.Between(
+                    this.localPlayer.sprite.x,
+                    this.localPlayer.sprite.y,
+                    f.sprite.x,
+                    f.sprite.y
+                );
+
+                if (dist < 120) {
+                    if (key.includes('solochicken')) {
+                        this.openSoloChickenMenu();
+                        interacted = true;
+                        break;
+                    }
+
+                    if (key.includes('giftbox')) {
+                        window.GameLogic.activeGiftBox = f;
+                        f.sprite.setTexture('gift-box-open');
+                        window.playSFX(this, 'reward-open-box');
+
+                        if (!f.glow) {
+                            f.glow = this.add.pointlight(f.sprite.x, f.sprite.y, 0xffd700, 180, 0.6).setDepth(4);
+                            this.tweens.add({
+                                targets: f.glow,
+                                radius: 220,
+                                yoyo: true,
+                                repeat: -1,
+                                duration: 800
+                            });
+                        }
+
+                        f.glow.setVisible(true);
+                        window.openRewardModal(f);
+                        interacted = true;
+                        break;
+                    }
+
+                    if (key === 'fridge') {
+                        document.getElementById('fridge-modal').style.display = 'block';
+                        interacted = true;
+                        break;
+                    }
+
+                    if (key.startsWith('memory')) {
+                        document.getElementById('memory-modal').style.display = 'block';
+                        interacted = true;
+                        break;
+                    }
+
+                    if (key.includes('scoreboard')) {
+                        window.openLeaderboardModal();
+                        interacted = true;
+                        break;
+                    }
+
+                    if (key === 'shrine') {
+                        window.attemptJoinShrine();
+                        interacted = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!interacted) sendBubble("使用了 A 技能!");
         });
 
         window.closeQuickMenu = () => {
@@ -3475,6 +3549,7 @@ if (uiScene && uiScene.magicMenuEmitter) {
         document.addEventListener('visibilitychange', this.handleVisibilityMimiWalk);
 
         this.events.on('shutdown', () => {
+            this.closeSoloChickenMenu();
             this.scale.off('resize', this.updateCameraBounds, this); // 確保離開場景時註銷視窗尺寸監聽，防止記憶體溢出卡頓
             if (this.leaderboardListener) this.leaderboardListener(); 
             if (this.trashListener) this.trashListener();
@@ -3536,6 +3611,201 @@ if (uiScene && uiScene.magicMenuEmitter) {
         let particles = this.add.particles(x, y, 'fw-particle', { speed: { min: 100, max: 250 }, angle: { min: 0, max: 360 }, scale: { start: 1.5, end: 0 }, blendMode: 'ADD', tint: mixColors, lifespan: { min: 1000, max: 2000 }, gravityY: 100, quantity: 60 });
         particles.setDepth(200); particles.explode(); this.time.delayedCall(2000, () => particles.destroy());
     }
+
+    openSoloChickenMenu() {
+        if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) return;
+
+        this.soloChickenMenuOpen = true;
+        this.soloChickenMenuRipples = [];
+        this.soloChickenMenuTweens = [];
+
+        if (this.localPlayer && this.localPlayer.sprite) {
+            this.localPlayer.sprite.setVelocity(0, 0);
+        }
+
+        const cam = this.cameras.main;
+        const menuW = Math.min(cam.width - 32, 460);
+        const menuH = Math.min(cam.height - 48, 330);
+        const fixed = (obj) => {
+            if (obj && obj.setScrollFactor) obj.setScrollFactor(0);
+            return obj;
+        };
+
+        const root = this.add.container(cam.width / 2, cam.height / 2)
+            .setDepth(5000)
+            .setScrollFactor(0);
+
+        this.soloChickenMenuContainer = root;
+
+        const blocker = fixed(this.add.rectangle(0, 0, cam.width, cam.height, 0x000000, 0.45)
+            .setInteractive({ useHandCursor: false }));
+
+        const panel = fixed(this.add.graphics());
+        panel.fillStyle(0x06000d, 0.98);
+        panel.fillRoundedRect(-menuW / 2, -menuH / 2, menuW, menuH, 18);
+        panel.lineStyle(8, 0x3b005f, 0.95);
+        panel.strokeRoundedRect(-menuW / 2, -menuH / 2, menuW, menuH, 18);
+        panel.lineStyle(3, 0xd86bff, 1);
+        panel.strokeRoundedRect(-menuW / 2 + 8, -menuH / 2 + 8, menuW - 16, menuH - 16, 12);
+
+        const glow = fixed(this.add.graphics());
+        glow.lineStyle(4, 0xb100ff, 0.75);
+        glow.strokeRoundedRect(-menuW / 2 - 5, -menuH / 2 - 5, menuW + 10, menuH + 10, 22);
+        this.soloChickenMenuTweens.push(this.tweens.add({
+            targets: glow,
+            alpha: 0.35,
+            duration: 700,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        }));
+
+        const title = fixed(this.add.text(0, -menuH / 2 + 48, '獨樂雞', {
+            fontSize: '30px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#7f00ff',
+            strokeThickness: 5
+        }).setOrigin(0.5));
+
+        const subTitle = fixed(this.add.text(0, -menuH / 2 + 86, '復古電視小遊戲選單', {
+            fontSize: '15px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5));
+
+        const desc = fixed(this.add.text(0, -18, '請選擇要遊玩的單人小遊戲。\n目前僅開放入口測試。', {
+            fontSize: '15px',
+            fontFamily: 'Arial, sans-serif',
+            color: '#ffffff',
+            align: 'center',
+            lineSpacing: 8
+        }).setOrigin(0.5));
+
+        const makeButton = (x, y, label, onClick) => {
+            const btn = this.add.container(x, y).setScrollFactor(0);
+            const btnW = Math.min(menuW - 96, 260);
+            const btnH = 44;
+
+            const bg = fixed(this.add.graphics());
+            bg.fillStyle(0xffffff, 1);
+            bg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10);
+            bg.lineStyle(3, 0xf7eaff, 1);
+            bg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10);
+
+            const txt = fixed(this.add.text(0, 0, label, {
+                fontSize: '17px',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold',
+                color: '#000000'
+            }).setOrigin(0.5));
+
+            const hit = fixed(this.add.rectangle(0, 0, btnW, btnH, 0xffffff, 0.001)
+                .setInteractive({ useHandCursor: true }));
+
+            hit.on('pointerover', () => btn.setScale(1.04));
+            hit.on('pointerout', () => btn.setScale(1));
+            hit.on('pointerdown', (pointer, localX, localY, event) => {
+                if (event) event.stopPropagation();
+                onClick();
+            });
+
+            btn.add([bg, txt, hit]);
+            return btn;
+        };
+
+        const rocketBtn = makeButton(0, 70, '火箭巡航', () => {
+            sendBubble('火箭巡航尚未開放');
+        });
+
+        const closeBtn = makeButton(0, 128, '關閉', () => {
+            this.closeSoloChickenMenu();
+        });
+
+        const spawnRipple = () => {
+            if (!this.soloChickenMenuOpen || !this.soloChickenMenuContainer) return;
+
+            const colors = [0xff004c, 0xffa600, 0xffff00, 0x00ff66, 0x00ccff, 0x7a5cff, 0xff6bff];
+            const rx = Phaser.Math.Between(-menuW / 2 + 58, menuW / 2 - 58);
+            const ry = Phaser.Math.Between(menuH / 2 - 86, menuH / 2 - 38);
+            const ripple = this.add.container(rx, ry).setScrollFactor(0);
+            const g = fixed(this.add.graphics());
+
+            for (let r = 12; r <= 34; r += 11) {
+                g.lineStyle(2, Phaser.Utils.Array.GetRandom(colors), 0.85);
+                g.strokeCircle(0, 0, r);
+
+                for (let i = 0; i < 10; i++) {
+                    const a = (Math.PI * 2 / 10) * i + Phaser.Math.FloatBetween(-0.15, 0.15);
+                    const px = Math.cos(a) * r;
+                    const py = Math.sin(a) * r;
+                    g.fillStyle(Phaser.Utils.Array.GetRandom(colors), 0.95);
+                    g.fillRect(px - 2, py - 2, 4, 4);
+                }
+            }
+
+            ripple.add(g);
+            root.add(ripple);
+            this.soloChickenMenuRipples.push(ripple);
+
+            const tw = this.tweens.add({
+                targets: ripple,
+                alpha: 0,
+                scaleX: 1.9,
+                scaleY: 1.9,
+                duration: 900,
+                ease: 'Cubic.easeOut',
+                onComplete: () => {
+                    Phaser.Utils.Array.Remove(this.soloChickenMenuRipples, ripple);
+                    ripple.destroy(true);
+                }
+            });
+
+            this.soloChickenMenuTweens.push(tw);
+        };
+
+        root.add([blocker, glow, panel, title, subTitle, desc, rocketBtn, closeBtn]);
+
+        spawnRipple();
+        this.soloChickenMenuTimer = this.time.addEvent({
+            delay: 520,
+            callback: spawnRipple,
+            loop: true
+        });
+    }
+
+    closeSoloChickenMenu() {
+        this.soloChickenMenuOpen = false;
+
+        if (this.soloChickenMenuTimer) {
+            this.soloChickenMenuTimer.remove(false);
+            this.soloChickenMenuTimer = null;
+        }
+
+        if (this.soloChickenMenuTweens) {
+            this.soloChickenMenuTweens.forEach(tw => {
+                if (tw && tw.remove) tw.remove();
+            });
+            this.soloChickenMenuTweens = [];
+        }
+
+        if (this.soloChickenMenuRipples) {
+            this.soloChickenMenuRipples.forEach(r => {
+                if (r && r.destroy) r.destroy(true);
+            });
+            this.soloChickenMenuRipples = [];
+        }
+
+        if (this.soloChickenMenuContainer) {
+            this.soloChickenMenuContainer.destroy(true);
+            this.soloChickenMenuContainer = null;
+        }
+    }
+  
         getCurrentPlayerPathForAction() {
         if (!window.GameLogic.currentUser) return null;
         const uid = window.GameLogic.currentUser.uid;
@@ -4750,7 +5020,17 @@ if (activeBubbleMsg) {
     }
     createFurniture(key, data) { 
     const isGiftBox = key.includes('giftbox');
-    let imgKey = isGiftBox ? 'gift-box-stay' : (key.includes('scoreboard') ? 'hall-screen' : (key.includes('fridge') ? 'fridge' : (key.includes('shrine') ? 'shrine' : (key.includes('dummy') ? 'dummy' : (key.includes('bed') ? 'doghouse-bed' : (key === 'altar' ? 'shrine-altar' : (key.startsWith('seat_') ? 'shrine-seat' : 'memory'))))))); 
+
+    let imgKey = 'memory';
+    if (isGiftBox) imgKey = 'gift-box-stay';
+    else if (key.includes('scoreboard')) imgKey = 'hall-screen';
+    else if (key.includes('solochicken')) imgKey = 'solochicken';
+    else if (key.includes('fridge')) imgKey = 'fridge';
+    else if (key.includes('shrine')) imgKey = 'shrine';
+    else if (key.includes('dummy')) imgKey = 'dummy';
+    else if (key.includes('bed')) imgKey = 'doghouse-bed';
+    else if (key === 'altar') imgKey = 'shrine-altar';
+    else if (key.startsWith('seat_')) imgKey = 'shrine-seat';
     let f = { sprite: this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true) }; 
     f.isGiftBox = isGiftBox;
 
@@ -5487,7 +5767,19 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
                         if (key === 'altar' && d < 150) { this._cachedMinDist = d; this._cachedPromptTarget = f.sprite; this._cachedPromptMsg = "按A召喚教友"; }
                         if (key.startsWith('seat_') && d < 150) { this._cachedMinDist = d; this._cachedPromptTarget = f.sprite; this._cachedPromptMsg = "按B入席"; }
                     } else {
-                        if (d < this._cachedMinDist) { this._cachedMinDist = d; this._cachedPromptTarget = f.sprite; if (key.includes('giftbox')) this._cachedPromptMsg = "按A領取週結算獎勵"; else if (key.includes('fridge')) this._cachedPromptMsg = "按A打開冰箱"; else if (key.includes('shrine')) this._cachedPromptMsg = "按A參拜神龕"; else if (key.includes('dummy')) this._cachedPromptMsg = "假人洋蔥 (裝飾中)"; else if (key.includes('bed')) this._cachedPromptMsg = "按A歐歐睏"; else if (key.includes('scoreboard')) this._cachedPromptMsg = "按A查看洋蔥王排行榜"; else this._cachedPromptMsg = "按A打開回憶錄"; }
+                        if (d < this._cachedMinDist) { 
+                            this._cachedMinDist = d; 
+                            this._cachedPromptTarget = f.sprite; 
+
+                            if (key.includes('giftbox')) this._cachedPromptMsg = "按A領取週結算獎勵"; 
+                            else if (key.includes('fridge')) this._cachedPromptMsg = "按A打開冰箱"; 
+                            else if (key.includes('shrine')) this._cachedPromptMsg = "按A參拜神龕"; 
+                            else if (key.includes('dummy')) this._cachedPromptMsg = "假人洋蔥 (裝飾中)"; 
+                            else if (key.includes('bed')) this._cachedPromptMsg = "按A歐歐睏"; 
+                            else if (key.includes('scoreboard')) this._cachedPromptMsg = "按A查看洋蔥王排行榜"; 
+                            else if (key.includes('solochicken')) this._cachedPromptMsg = "按A打開獨樂雞";
+                            else this._cachedPromptMsg = "按A打開回憶錄"; 
+                        }
                     }
                 }
                 for (let t of this.trashes) { if (!t.active) continue; let d = Phaser.Math.Distance.Between(px, py, t.x, t.y); if (d < this._cachedMinDist) { this._cachedMinDist = d; this._cachedPromptTarget = t; this._cachedPromptMsg = "按B使出掃地"; this.closestTrash = t; } }
@@ -5769,7 +6061,18 @@ function initPhaser() { const config = { type: Phaser.AUTO, parent: 'phaser-app'
 function openFurnitureCatalog() {
     const modal = document.getElementById('furniture-catalog-modal'); const list = document.getElementById('catalog-list'); const title = document.getElementById('catalog-title'); list.innerHTML = "";
     let items = [];
-    if (window.GameLogic.currentScene === "cafe") { title.innerText = "📦 大廳家俱目錄"; items = [ { key: 'giftbox', name: '🎁 領獎大粉蔥', img: 'gift-box-stay.png' }, { key: 'scoreboard', name: '🏆 戰況看板', img: 'hall-screen-in-list.png' }, { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' }, { key: 'memory', name: '📖 洋蔥回憶錄', img: 'memory.png' }, { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' }, { key: 'dummy', name: '🧍 假人洋蔥', img: 'dummy.png' } ]; }
+    if (window.GameLogic.currentScene === "cafe") { 
+        title.innerText = "📦 大廳家俱目錄"; 
+        items = [ 
+            { key: 'giftbox', name: '🎁 領獎大粉蔥', img: 'gift-box-stay.png' }, 
+            { key: 'scoreboard', name: '🏆 戰況看板', img: 'hall-screen-in-list.png' }, 
+            { key: 'solochicken', name: '獨樂雞', img: 'me_play_cock.png' },
+            { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' }, 
+            { key: 'memory', name: '📖 洋蔥回憶錄', img: 'memory.png' }, 
+            { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' }, 
+            { key: 'dummy', name: '🧍 假人洋蔥', img: 'dummy.png' } 
+        ]; 
+    }
     else if (window.GameLogic.currentScene === "doghouse") { title.innerText = "🏠 房間家具擺設"; items = [ { key: 'bed', name: '🛏️ 狗窩床鋪', img: 'doghouse-bed.png' } ]; }
     else if (window.GameLogic.currentScene === "shrine") { 
         title.innerText = "☯️ 神龕法器目錄"; 
