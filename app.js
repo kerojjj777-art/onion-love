@@ -2281,6 +2281,10 @@ class MainScene extends Phaser.Scene {
         this.soloRocketTimer = null;
         this.soloRocketCountdownText = null;
         this.soloRocketLifeText = null;
+        this.soloRocketLifeUi = null;
+        this.soloRocketLifeValue = 100;
+        this.soloRocketLifeBreathTween = null;
+        this.soloRocketThrusterFx = null;
         this.soloRocketStartTime = 0;
         this.soloRocketDurationMs = 157000;
         this.soloRocketReturnPosition = null;
@@ -4558,6 +4562,7 @@ this.events.on('action_B', () => {
             window.GameLogic.soloRocketCruiseActive = true;
             this.soloRocketStartTime = Date.now();
             this.soloRocketDurationMs = 157000;
+            this.soloRocketLifeValue = 100;
             this.soloRocketReturnPosition = {
                 x: this.localPlayer.sprite.x,
                 y: this.localPlayer.sprite.y
@@ -4696,6 +4701,29 @@ this.events.on('action_B', () => {
             this.soloRocketPlayerRadius = 28;
         }
 
+        if (this.textures.exists('particle_flare') && this.soloRocketPlayer) {
+            this.soloRocketThrusterFx = this.add.particles(0, 0, 'particle_flare', {
+                lifespan: { min: 260, max: 420 },
+                frequency: 26,
+                quantity: 3,
+                scale: { start: 0.95, end: 0.06 },
+                alpha: { start: 0.95, end: 0 },
+                tint: [0xff3b1f, 0xff7a00, 0xffdd33],
+                blendMode: 'ADD',
+                angle: { min: 84, max: 96 },
+                speedY: { min: 170, max: 260 },
+                speedX: { min: -35, max: 35 },
+                rotate: { min: 0, max: 180 },
+                emitting: true
+            });
+            this.soloRocketThrusterFx.setDepth(9609).setScrollFactor(0);
+            this.soloRocketThrusterFx.startFollow(
+                this.soloRocketPlayer,
+                0,
+                Math.max(18, this.soloRocketPlayerRadius || 28)
+            );
+        }
+
         const ui = this.add.container(0, 0).setDepth(9700).setScrollFactor(0);
         this.soloRocketUiContainer = ui;
 
@@ -4709,18 +4737,101 @@ this.events.on('action_B', () => {
         }).setOrigin(1, 0);
         this.soloRocketCountdownText = timerText;
 
-        const lifeBg = this.add.graphics();
-        lifeBg.fillStyle(0x000000, 0.65).fillRoundedRect(rect.x + 12, rect.y + 12, 132, 38, 10);
-        lifeBg.lineStyle(2, 0x39ff14, 0.9).strokeRoundedRect(rect.x + 12, rect.y + 12, 132, 38, 10);
-        const lifeText = this.add.text(rect.x + 78, rect.y + 31, '生命 100%', {
-            fontSize: '15px',
+        const drawHeart = (graphics, cx, cy, size) => {
+            graphics.beginPath();
+            graphics.moveTo(cx, cy + size * 0.30);
+            graphics.bezierCurveTo(
+                cx - size * 0.52, cy + size * 0.02,
+                cx - size * 0.58, cy - size * 0.46,
+                cx - size * 0.18, cy - size * 0.46
+            );
+            graphics.bezierCurveTo(
+                cx - size * 0.02, cy - size * 0.46,
+                cx, cy - size * 0.28,
+                cx, cy - size * 0.12
+            );
+            graphics.bezierCurveTo(
+                cx, cy - size * 0.28,
+                cx + size * 0.02, cy - size * 0.46,
+                cx + size * 0.18, cy - size * 0.46
+            );
+            graphics.bezierCurveTo(
+                cx + size * 0.58, cy - size * 0.46,
+                cx + size * 0.52, cy + size * 0.02,
+                cx, cy + size * 0.30
+            );
+            graphics.closePath();
+        };
+
+        const heartCx = rect.x + rect.w - 56;
+        const heartCy = rect.y + 98;
+        const heartSize = 58;
+        const lifeUi = this.add.container(0, 0);
+
+        const heartGlow = this.add.graphics();
+        heartGlow.fillStyle(0x39ff14, 0.12);
+        drawHeart(heartGlow, heartCx, heartCy, heartSize + 7);
+        heartGlow.fillPath();
+
+        const heartBg = this.add.graphics();
+        heartBg.fillStyle(0x08220d, 0.78);
+        drawHeart(heartBg, heartCx, heartCy, heartSize);
+        heartBg.fillPath();
+        heartBg.lineStyle(3, 0x39ff14, 0.95);
+        drawHeart(heartBg, heartCx, heartCy, heartSize);
+        heartBg.strokePath();
+
+        const fillBaseY = heartCy + heartSize * 0.48;
+        const fillMaxHeight = heartSize * 1.18;
+        const fillRect = this.add.rectangle(
+            heartCx,
+            fillBaseY,
+            heartSize * 1.10,
+            fillMaxHeight,
+            0x39ff14,
+            0.96
+        ).setOrigin(0.5, 1);
+
+        const heartMaskShape = this.add.graphics();
+        heartMaskShape.fillStyle(0xffffff, 1);
+        drawHeart(heartMaskShape, heartCx, heartCy, heartSize - 3);
+        heartMaskShape.fillPath();
+        heartMaskShape.setVisible(false);
+        fillRect.setMask(heartMaskShape.createGeometryMask());
+
+        const lifeText = this.add.text(heartCx, heartCy + 6, '100%', {
+            fontSize: '17px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
-            color: '#b6ffb6',
-            stroke: '#000000',
-            strokeThickness: 3
+            color: '#ffffff',
+            stroke: '#0b5d22',
+            strokeThickness: 5
         }).setOrigin(0.5);
+
+        lifeUi.add([heartGlow, fillRect, heartMaskShape, heartBg, lifeText]);
+        ui.add([timerText, lifeUi]);
+
         this.soloRocketLifeText = lifeText;
+        this.soloRocketLifeUi = {
+            container: lifeUi,
+            fillRect,
+            text: lifeText,
+            fillBaseY,
+            fillMaxHeight
+        };
+
+        this.soloRocketLifeBreathTween = this.tweens.add({
+            targets: lifeUi,
+            alpha: { from: 0.88, to: 1 },
+            scaleX: { from: 0.98, to: 1.03 },
+            scaleY: { from: 0.98, to: 1.03 },
+            duration: 1100,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
+        this.setSoloRocketLifeValue(this.soloRocketLifeValue ?? 100);
 
         const makeRocketButton = (x, y, radius, color, label, actionName) => {
             const btn = this.add.circle(x, y, radius, color, 0.5).setStrokeStyle(3, 0xffffff, 0.85).setInteractive({ useHandCursor: true });
@@ -4747,7 +4858,20 @@ this.events.on('action_B', () => {
         makeRocketButton(btnX, rect.y + rect.h - 62, 34, 0xd9534f, '發射', 'fire');
         makeRocketButton(btnX, rect.y + rect.h - 142, 34, 0x0077cc, '旋轉', 'spin');
 
-        ui.add([timerText, lifeBg, lifeText]);
+        // life UI 已在上方改為愛心容器，這裡不再加入舊版 lifeBg / lifeText
+    }
+
+    setSoloRocketLifeValue(nextValue = 100) {
+        const raw = Number(nextValue);
+        this.soloRocketLifeValue = Phaser.Math.Clamp(Number.isFinite(raw) ? raw : 0, 0, 100);
+
+        const ui = this.soloRocketLifeUi;
+        if (!ui || !ui.fillRect || !ui.text) return;
+
+        const ratio = Phaser.Math.Clamp(this.soloRocketLifeValue / 100, 0, 1);
+        ui.fillRect.height = ui.fillMaxHeight * ratio;
+        ui.fillRect.y = ui.fillBaseY;
+        ui.text.setText(`${Math.round(this.soloRocketLifeValue)}%`);
     }
 
     updateSoloRocketCruise(time, delta) {
@@ -4903,7 +5027,7 @@ this.events.on('action_B', () => {
             strokeThickness: 5
         }).setOrigin(0.5);
 
-        const life = this.add.text(rect.centerX, py + 116, '剩餘生命：100%', {
+        const life = this.add.text(rect.centerX, py + 116, `剩餘生命：${Math.round(this.soloRocketLifeValue ?? 100)}%`, {
             fontSize: '20px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
@@ -4953,12 +5077,15 @@ this.events.on('action_B', () => {
         this.stopSoloRocketBgm();
 
         try {
+            if (this.soloRocketLifeBreathTween) this.soloRocketLifeBreathTween.remove();
+            if (this.soloRocketThrusterFx) this.soloRocketThrusterFx.destroy();
             if (this.soloRocketContainer) this.soloRocketContainer.destroy(true);
             if (this.soloRocketUiContainer) this.soloRocketUiContainer.destroy(true);
             if (this.soloRocketResultContainer) this.soloRocketResultContainer.destroy(true);
             if (this.soloRocketResultClickCatcher) this.soloRocketResultClickCatcher.destroy();
         } catch (err) {
             console.warn('[火箭巡航] Phaser 物件清理失敗，已略過：', err);
+        }
         }
 
         this.soloRocketContainer = null;
@@ -4970,6 +5097,9 @@ this.events.on('action_B', () => {
         this.soloRocketStars = [];
         this.soloRocketCountdownText = null;
         this.soloRocketLifeText = null;
+        this.soloRocketLifeUi = null;
+        this.soloRocketLifeBreathTween = null;
+        this.soloRocketThrusterFx = null;
         this.soloRocketSafeRect = null;
         this.soloRocketWasd = null;
         this.soloRocketStartTime = 0;
