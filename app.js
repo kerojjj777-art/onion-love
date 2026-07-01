@@ -4007,7 +4007,9 @@ this.events.on('action_B', () => {
         } catch (err) {
             console.warn('[獨樂雞選單] 玩家狀態復原失敗，已略過：', err);
         }
-          confirmStartSoloRocketCruise() {
+    }
+
+    confirmStartSoloRocketCruise() {
         if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished || this.soloRocketPaymentPending) return;
         if (!window.GameLogic.currentUser) {
             alert('請先登入後再遊玩火箭巡航。');
