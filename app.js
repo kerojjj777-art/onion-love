@@ -3656,7 +3656,7 @@ this.events.on('action_B', () => {
     openSoloChickenMenu() {
         if (!this.localPlayer || !this.localPlayer.sprite) return;
 
-        // 避免重複開啟造成疊加
+        // 防止重複開啟造成疊加
         if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) {
             this.closeSoloChickenMenu();
         }
@@ -3668,9 +3668,11 @@ this.events.on('action_B', () => {
         const cy = sh / 2;
 
         this.soloChickenMenuOpen = true;
+        this.soloChickenMenuTimer = null;
         this.soloChickenMenuTweens = [];
         this.soloChickenMenuRipples = [];
         this.soloChickenMenuRippleCount = 0;
+        this.soloChickenMenuBlocker = null;
 
         this.localPlayer.sprite.setVelocity(0, 0);
         this.localPlayer.sprite.play('idle', true);
@@ -3680,6 +3682,11 @@ this.events.on('action_B', () => {
             .setScrollFactor(0);
 
         this.soloChickenMenuContainer = container;
+
+        const panelW = Math.min(460, sw - 44);
+        const panelH = Math.min(330, sh - 44);
+        const left = cx - panelW / 2;
+        const top = cy - panelH / 2;
 
         // 背景遮罩：點背景可關閉
         const blocker = this.add.rectangle(cx, cy, sw, sh, 0x000000, 0.72)
@@ -3692,13 +3699,7 @@ this.events.on('action_B', () => {
 
         this.soloChickenMenuBlocker = blocker;
 
-        const panelW = Math.min(460, sw - 44);
-        const panelH = Math.min(330, sh - 44);
-        const left = cx - panelW / 2;
-        const top = cy - panelH / 2;
-
         const panel = this.add.graphics();
-
         panel.fillStyle(0x050008, 0.96);
         panel.fillRoundedRect(left, top, panelW, panelH, 18);
 
@@ -3709,11 +3710,11 @@ this.events.on('action_B', () => {
         panel.strokeRoundedRect(left + 8, top + 8, panelW - 16, panelH - 16, 14);
 
         panel.lineStyle(1, 0xffffff, 0.08);
-        for (let y = top + 22; y < top + panelH - 22; y += 8) {
+        for (let y = top + 22; y < top + panelH - 22; y += 10) {
             panel.lineBetween(left + 18, y, left + panelW - 18, y);
         }
 
-        // 擋住面板區域，避免點在面板空白處也被背景遮罩關閉
+        // 面板區域阻擋，避免點到面板空白處被當成背景關閉
         const panelBlocker = this.add.zone(cx, cy, panelW, panelH).setInteractive();
         panelBlocker.on('pointerdown', (pointer, localX, localY, event) => {
             if (event && event.stopPropagation) event.stopPropagation();
@@ -3739,9 +3740,8 @@ this.events.on('action_B', () => {
         const hint = this.add.text(cx, top + panelH - 34, 'A / B / 點背景 / 點右上角都可關閉', {
             fontSize: '13px',
             fontFamily: 'Arial, sans-serif',
-            color: '#ffffff',
-            alpha: 0.82
-        }).setOrigin(0.5);
+            color: '#ffffff'
+        }).setOrigin(0.5).setAlpha(0.82);
 
         container.add([blocker, panel, panelBlocker, title, subtitle, hint]);
 
@@ -3775,7 +3775,6 @@ this.events.on('action_B', () => {
             });
 
             container.add([g, txt, zone]);
-            return { g, txt, zone };
         };
 
         makeButton(cx, cy + 24, panelW - 120, 54, '火箭巡航', () => {
@@ -3787,7 +3786,7 @@ this.events.on('action_B', () => {
             this.closeSoloChickenMenu();
         });
 
-        // 右上角關閉
+        // 右上角關閉鈕
         const closeBg = this.add.graphics();
         const closeX = left + panelW - 34;
         const closeY = top + 32;
@@ -3810,63 +3809,24 @@ this.events.on('action_B', () => {
 
         container.add([closeBg, closeTxt, closeZone]);
 
-        // 七彩像素光環漣漪：只在選單底部隨機噴發
-        const rippleColors = [0xff0044, 0xff9900, 0xffff00, 0x33ff00, 0x00ccff, 0x6666ff, 0xff00ff];
-
-        const spawnRipple = () => {
-            if (!this.soloChickenMenuOpen || !this.soloChickenMenuContainer || !this.soloChickenMenuContainer.active) return;
-
-            const rx = left + 46 + Math.random() * (panelW - 92);
-            const ry = top + panelH - Phaser.Math.Between(44, 72);
-            const color = Phaser.Utils.Array.GetRandom(rippleColors);
-
-            const r = this.add.graphics();
-            r.lineStyle(3, color, 0.9);
-            r.strokeCircle(0, 0, 9);
-            r.setPosition(rx, ry);
-            r.setBlendMode('ADD');
-            r.setAlpha(0.9);
-
-            container.add(r);
-            this.soloChickenMenuRipples.push(r);
-
-            const tw = this.tweens.add({
-                targets: r,
-                scaleX: Phaser.Math.FloatBetween(2.2, 4.0),
-                scaleY: Phaser.Math.FloatBetween(1.2, 2.4),
-                y: ry - Phaser.Math.Between(12, 38),
-                alpha: 0,
-                duration: Phaser.Math.Between(650, 1100),
-                ease: 'Sine.easeOut',
-                onComplete: () => {
-                    if (r && r.destroy) r.destroy(true);
-                }
-            });
-
-            r.__soloTween = tw;
-        };
-
-        this.soloChickenMenuTimer = this.time.addEvent({
-            delay: 420,
-            loop: true,
-            callback: spawnRipple
-        });
-
-        for (let i = 0; i < 4; i++) {
-            this.time.delayedCall(i * 120, spawnRipple);
-        }
-
+        // 只保留一次性進場淡入，不再建立循環 Ripple Timer，避免卡死
         const openTween = this.tweens.add({
             targets: container,
             alpha: { from: 0, to: 1 },
-            duration: 160,
+            duration: 120,
             ease: 'Sine.easeOut'
         });
 
         this.soloChickenMenuTweens.push(openTween);
-    }
 
-    closeSoloChickenMenu() {
+        // 保險：如果玩家真的沒關，30 秒後自動解除，避免永久卡住
+        this.soloChickenMenuTimer = this.time.delayedCall(30000, () => {
+            if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) {
+                this.closeSoloChickenMenu();
+            }
+        });
+    }
+  closeSoloChickenMenu() {
         const timer = this.soloChickenMenuTimer;
         const tweens = Array.isArray(this.soloChickenMenuTweens) ? [...this.soloChickenMenuTweens] : [];
         const ripples = Array.isArray(this.soloChickenMenuRipples) ? [...this.soloChickenMenuRipples] : [];
