@@ -4246,6 +4246,9 @@ this.events.on('action_B', () => {
             strokeThickness: 3
         }).setOrigin(0.5);
 
+        // 先把面板與文字放進容器底層；後面建立的按鈕才會顯示在面板上方。
+        container.add([panel, title, body, coinInfo]);
+
         const makeConfirmBtn = (x, y, w, h, label, fillColor, callback) => {
             const btnBg = this.add.rectangle(x, y, w, h, fillColor, 1)
                 .setStrokeStyle(3, 0xffffff, 0.9)
@@ -4290,10 +4293,8 @@ this.events.on('action_B', () => {
             });
         }
 
-        container.add([panel, title, body, coinInfo]);
-        container.bringToTop(title);
-        container.bringToTop(body);
-        container.bringToTop(coinInfo);
+        // 按鈕已在 makeConfirmBtn() 中加入 container，且建立順序在 panel 之後，
+        // 因此會自然顯示在面板上方。這裡不要再把 panel 加回最上層。
     }
 
     getSoloRocketSafeRect() {
