@@ -34,7 +34,7 @@ window.updateBGMVolume = function(val) {
     let volText = document.getElementById('bgm-vol-text');
     if(volText) volText.innerText = val + '%';
     if (window.GameLogic.phaserGame) {
-        let playlist = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire', 'shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'];
+        let playlist = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire', 'shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success', 'solo-rocket-cruise-bgm'];
         playlist.forEach(k => {
             let sndList = window.GameLogic.phaserGame.sound.getAll(k);
             sndList.forEach(snd => snd.setVolume(val / 100));
@@ -1624,6 +1624,9 @@ window.clearAllModals = function() {
     if (window.GameLogic.phaserGame) {
         const ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
         if (ms && ms.closeSoloChickenMenu) ms.closeSoloChickenMenu();
+        if (ms && ms.clearSoloRocketCruise && (ms.soloRocketCruiseActive || ms.soloRocketContainer || ms.soloRocketResultContainer)) {
+            ms.clearSoloRocketCruise(true);
+        }
     }
     
     // 2. 關閉特定獨立或脫離文件流的 UI
@@ -1912,8 +1915,11 @@ class BootScene extends Phaser.Scene {
         this.load.audio('sleep-onion-bao-got-money', 'sleep-onion-bao-got-money.mp3');
         this.load.image('hall-screen-in-list', 'hall-screen-in-list.png');
         this.load.image('hall-screen', 'hall-screen.png'); // 改為靜態圖
-        // 階段1：獨樂雞家具入口素材，只載入家具圖，不載入火箭巡航素材
+        // 獨樂雞與火箭巡航素材。火箭素材若缺失，後續會用 fallback，避免黑屏。
         this.load.image('solochicken', 'me_play_cock.png');
+        this.load.image('solo-rocket-bg', 'solo-rocket-bg.png');
+        this.load.image('rocket-onion-player', 'rocket-onion-player.png');
+        this.load.audio('solo-rocket-cruise-bgm', 'solo-rocket-cruise-bgm.mp3');
 
         // 在記憶體中畫一個簡單的白色發光點紋理給粒子使用
         let grd = this.make.graphics({x: 0, y: 0, add: false});
@@ -2098,6 +2104,18 @@ class UIScene extends Phaser.Scene {
     }
     update() {
         this.expLiquid.tilePositionX -= 0.5;
+
+        if (window.GameLogic.soloRocketCruiseActive) {
+            [this.furnBtn, this.furnText, this.itemBtn, this.itemText, this.btnA, this.txtA, this.btnB, this.txtB, this.statusContainer].forEach(obj => {
+                if (obj && obj.setVisible) obj.setVisible(false);
+            });
+            if (this.partyDash) this.partyDash.setVisible(false);
+            if (this.joyStick) {
+                if (this.joyStick.base?.setVisible) this.joyStick.base.setVisible(true);
+                if (this.joyStick.thumb?.setVisible) this.joyStick.thumb.setVisible(true);
+            }
+            return;
+        }
         
         if (window.GameLogic.currentScene === 'partyroom') {
             this.furnBtn.setVisible(false); this.furnText.setVisible(false);
@@ -2249,6 +2267,29 @@ class MainScene extends Phaser.Scene {
         this.soloChickenMenuRipples = null;
         this.soloChickenMenuRippleCount = 0;
         this.soloChickenMenuBlocker = null;
+
+        // 階段2：獨樂雞火箭巡航最小副本狀態初始化
+        this.soloRocketCruiseActive = false;
+        this.soloRocketCruiseFinished = false;
+        this.soloRocketPaymentPending = false;
+        this.soloRocketContainer = null;
+        this.soloRocketUiContainer = null;
+        this.soloRocketResultContainer = null;
+        this.soloRocketPlayer = null;
+        this.soloRocketBg = null;
+        this.soloRocketStars = [];
+        this.soloRocketTimer = null;
+        this.soloRocketCountdownText = null;
+        this.soloRocketLifeText = null;
+        this.soloRocketStartTime = 0;
+        this.soloRocketDurationMs = 157000;
+        this.soloRocketReturnPosition = null;
+        this.soloRocketPrevUiState = null;
+        this.soloRocketBgm = null;
+        this.soloRocketSafeRect = null;
+        this.soloRocketWasd = null;
+        this.soloRocketDomUiIds = ['chat-section', 'online-players-container', 'top-notification-bar', 'action-menu', 'quick-select-menu', 'prince-cat-menu', 'magic-menu-blocker', 'party-minimized-list'];
+        window.GameLogic.soloRocketCruiseActive = false;
         
         // 修正：徹底重構音樂切換邏輯，神龕擁有絕對獨立的背景音樂，不再與儀式狀態綁定
         let allBgms = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire'];
@@ -2594,6 +2635,8 @@ class MainScene extends Phaser.Scene {
         this.events.on('action_A_place', () => { let key = window.GameLogic.placingFurnitureKey; if(key && this.furnitureSprites[key]) { let f = this.furnitureSprites[key]; f.sprite.setVelocity(0, 0); let path = this.isCafe ? `cafeFurniture/${key}` : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}` : `shrineFurniture/${key}`); update(ref(window.GameLogic.db, path), { locked: true, x: f.sprite.x, y: f.sprite.y, ownerUid: window.GameLogic.currentUser.uid }); window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); } });
 
 this.events.on('action_A_short', () => {
+    if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
+
     // 獨樂雞 Phaser 選單開啟時，A 鍵改為關閉選單，避免玩家以為畫面卡死
     if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) {
         this.closeSoloChickenMenu();
@@ -3039,6 +3082,8 @@ this.events.on('action_A_short', () => {
 
         this.events.off('action_B_long');
 this.events.on('action_B_long', () => {
+            if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
+
             if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) {
                 this.closeSoloChickenMenu();
                 return;
@@ -3203,6 +3248,8 @@ if (uiScene && uiScene.magicMenuEmitter) {
         });
 
 this.events.on('action_B', () => {
+            if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
+
             if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) {
                 this.closeSoloChickenMenu();
                 return;
@@ -3626,6 +3673,12 @@ this.events.on('action_B', () => {
 
         this.events.once('destroy', () => {
             try {
+                if (this.clearSoloRocketCruise) this.clearSoloRocketCruise(true);
+            } catch (err) {
+                console.warn('[火箭巡航] destroy 階段清理失敗，已略過：', err);
+            }
+
+            try {
                 this.closeSoloChickenMenu();
             } catch (err) {
                 console.warn('[獨樂雞選單] destroy 階段清理失敗，已略過：', err);
@@ -3777,8 +3830,7 @@ this.events.on('action_B', () => {
         };
 
         makeButton(cx, cy + 24, panelW - 120, 54, '火箭巡航', () => {
-            sendBubble('火箭巡航尚未開放，獨樂雞先熱機中！');
-            this.closeSoloChickenMenu();
+            this.confirmStartSoloRocketCruise();
         });
 
         makeButton(cx, cy + 92, panelW - 120, 44, '關閉', () => {
@@ -3955,6 +4007,600 @@ this.events.on('action_B', () => {
         } catch (err) {
             console.warn('[獨樂雞選單] 玩家狀態復原失敗，已略過：', err);
         }
+          confirmStartSoloRocketCruise() {
+        if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished || this.soloRocketPaymentPending) return;
+        if (!window.GameLogic.currentUser) {
+            alert('請先登入後再遊玩火箭巡航。');
+            return;
+        }
+
+        const cost = 100;
+        const localCoins = Number(window.GameLogic.myProfile?.coins || 0);
+        if (!Number.isFinite(localCoins) || localCoins < cost) {
+            alert('馬德幣不足，無法遊玩。');
+            if (typeof sendBubble === 'function') sendBubble('馬德幣不足，無法遊玩。');
+            return;
+        }
+
+        const ok = window.confirm('是否支付 100 馬德幣遊玩？');
+        if (!ok) return;
+
+        this.requestSoloRocketPayment(cost);
+    }
+
+    async requestSoloRocketPayment(cost = 100) {
+        if (this.soloRocketPaymentPending) return;
+        this.soloRocketPaymentPending = true;
+
+        const uid = window.GameLogic.currentUser?.uid;
+        if (!uid) {
+            this.soloRocketPaymentPending = false;
+            alert('找不到登入資料，無法進入火箭巡航。');
+            return;
+        }
+
+        try {
+            const coinSnap = await get(ref(window.GameLogic.db, `users/${uid}/coins`));
+            const latestCoinsRaw = coinSnap.val();
+            const latestCoins = Number(latestCoinsRaw || 0);
+
+            if (!Number.isFinite(latestCoins)) {
+                alert('馬德幣資料異常，無法遊玩。');
+                console.warn('[火箭巡航] coins 資料異常：', latestCoinsRaw);
+                return;
+            }
+
+            if (latestCoins < cost) {
+                window.GameLogic.myProfile.coins = latestCoins;
+                this.syncSoloRocketCoinUi(latestCoins);
+                alert('馬德幣不足，無法遊玩。');
+                if (typeof sendBubble === 'function') sendBubble('馬德幣不足，無法遊玩。');
+                return;
+            }
+
+            const newCoins = latestCoins - cost;
+            await update(ref(window.GameLogic.db, `users/${uid}`), { coins: newCoins });
+
+            window.GameLogic.myProfile.coins = newCoins;
+            this.syncSoloRocketCoinUi(newCoins);
+            if (typeof sendBubble === 'function') sendBubble('已支付 100 馬德幣，火箭巡航啟動！');
+
+            this.closeSoloChickenMenu();
+            this.startSoloRocketCruise();
+        } catch (err) {
+            console.warn('[火箭巡航] 扣款失敗，已阻擋進入副本：', err);
+            alert('扣款失敗，請稍後再試。');
+        } finally {
+            this.soloRocketPaymentPending = false;
+        }
+    }
+
+    syncSoloRocketCoinUi(coins) {
+        const val = Number(coins || 0);
+        const coinsEl = document.getElementById('vp-coins');
+        if (coinsEl) coinsEl.innerText = val;
+        const storeCoinsEl = document.getElementById('store-current-coins');
+        if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${val}`;
+    }
+
+    getSoloRocketSafeRect() {
+        const cam = this.cameras.main;
+        let safeH = cam.height;
+        let safeW = safeH * 9 / 16;
+
+        if (safeW > cam.width) {
+            safeW = cam.width;
+            safeH = safeW * 16 / 9;
+        }
+
+        safeW = Math.max(260, Math.min(safeW, cam.width));
+        safeH = Math.max(460, Math.min(safeH, cam.height));
+
+        const x = (cam.width - safeW) / 2;
+        const y = (cam.height - safeH) / 2;
+
+        return {
+            x,
+            y,
+            w: safeW,
+            h: safeH,
+            centerX: x + safeW / 2,
+            centerY: y + safeH / 2
+        };
+    }
+
+    hideSoloRocketLobbyUi() {
+        if (!this.soloRocketPrevUiState) this.soloRocketPrevUiState = { dom: {}, phaser: {} };
+
+        this.soloRocketDomUiIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (!(id in this.soloRocketPrevUiState.dom)) this.soloRocketPrevUiState.dom[id] = el.style.display;
+            el.style.display = 'none';
+        });
+
+        const uiScene = this.scene.manager.getScene('UIScene');
+        if (!uiScene) return;
+
+        const hideKeys = ['statusContainer', 'btnA', 'txtA', 'btnB', 'txtB', 'furnBtn', 'furnText', 'itemBtn', 'itemText', 'partyDash'];
+        hideKeys.forEach(key => {
+            const obj = uiScene[key];
+            if (!obj || !obj.setVisible) return;
+            if (!(key in this.soloRocketPrevUiState.phaser)) this.soloRocketPrevUiState.phaser[key] = obj.visible;
+            obj.setVisible(false);
+        });
+
+        if (uiScene.joyStick) {
+            if (uiScene.joyStick.base?.setVisible) uiScene.joyStick.base.setVisible(true);
+            if (uiScene.joyStick.thumb?.setVisible) uiScene.joyStick.thumb.setVisible(true);
+        }
+    }
+
+    restoreSoloRocketLobbyUi() {
+        const prev = this.soloRocketPrevUiState || { dom: {}, phaser: {} };
+
+        Object.keys(prev.dom || {}).forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = prev.dom[id];
+        });
+
+        const uiScene = this.scene.manager.getScene('UIScene');
+        if (uiScene) {
+            Object.keys(prev.phaser || {}).forEach(key => {
+                const obj = uiScene[key];
+                if (obj && obj.setVisible) obj.setVisible(!!prev.phaser[key]);
+            });
+            if (uiScene.btnA?.setVisible) uiScene.btnA.setVisible(true);
+            if (uiScene.txtA?.setVisible) uiScene.txtA.setVisible(true);
+            if (uiScene.btnB?.setVisible) uiScene.btnB.setVisible(true);
+            if (uiScene.txtB?.setVisible) uiScene.txtB.setVisible(true);
+            if (uiScene.furnBtn?.setVisible) uiScene.furnBtn.setVisible(true);
+            if (uiScene.furnText?.setVisible) uiScene.furnText.setVisible(true);
+            if (uiScene.itemBtn?.setVisible) uiScene.itemBtn.setVisible(true);
+            if (uiScene.itemText?.setVisible) uiScene.itemText.setVisible(true);
+            if (uiScene.statusContainer?.setVisible) uiScene.statusContainer.setVisible(true);
+        }
+
+        this.soloRocketPrevUiState = null;
+    }
+
+    stopLobbyBgmForSoloRocket() {
+        const bgms = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire', 'bgm-party', 'shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'];
+        bgms.forEach(key => {
+            try { this.sound.getAll(key).forEach(snd => snd.stop()); } catch (_) {}
+        });
+    }
+
+    playSoloRocketBgm() {
+        try {
+            this.sound.getAll('solo-rocket-cruise-bgm').forEach(snd => {
+                snd.stop();
+                if (snd.destroy) snd.destroy();
+            });
+
+            if (!this.cache.audio.exists('solo-rocket-cruise-bgm')) {
+                console.warn('[火箭巡航] 找不到 solo-rocket-cruise-bgm.mp3，已略過音樂播放。');
+                return;
+            }
+
+            const volControl = document.getElementById('bgm-volume');
+            const vol = volControl ? Number(volControl.value || 100) / 100 : 0.8;
+            this.soloRocketBgm = this.sound.add('solo-rocket-cruise-bgm', { loop: false, volume: vol });
+            this.soloRocketBgm.play();
+        } catch (err) {
+            console.warn('[火箭巡航] BGM 播放失敗，timer 仍會繼續：', err);
+        }
+    }
+
+    stopSoloRocketBgm() {
+        try {
+            if (this.soloRocketBgm) {
+                this.soloRocketBgm.stop();
+                if (this.soloRocketBgm.destroy) this.soloRocketBgm.destroy();
+            }
+            this.sound.getAll('solo-rocket-cruise-bgm').forEach(snd => {
+                snd.stop();
+                if (snd.destroy) snd.destroy();
+            });
+        } catch (err) {
+            console.warn('[火箭巡航] 停止 BGM 失敗，已略過：', err);
+        }
+        this.soloRocketBgm = null;
+    }
+
+    resumeLobbyBgmAfterSoloRocket() {
+        if (this.sceneName === 'shrine' || this.sceneName === 'partyroom') return;
+
+        const bgms = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire'];
+        const trackKey = bgms[window.GameLogic.currentTrackIdx || 0] || 'bgm';
+        const volControl = document.getElementById('bgm-volume');
+        const vol = volControl ? Number(volControl.value || 100) / 100 : 0.8;
+
+        try {
+            bgms.forEach(key => {
+                if (key !== trackKey) this.sound.getAll(key).forEach(snd => snd.stop());
+            });
+
+            if (!this.cache.audio.exists(trackKey)) {
+                console.warn('[火箭巡航] 返回大廳時找不到原本蔥Music：', trackKey);
+                return;
+            }
+
+            let current = this.sound.get(trackKey);
+            if (!current || !current.isPlaying) {
+                this.sound.removeByKey(trackKey);
+                this.sound.add(trackKey, { loop: true, volume: vol }).play();
+            } else {
+                current.setVolume(vol);
+            }
+        } catch (err) {
+            console.warn('[火箭巡航] 恢復大廳音樂失敗，已略過：', err);
+        }
+    }
+
+    startSoloRocketCruise() {
+        if (this.soloRocketCruiseActive || !this.localPlayer || !this.localPlayer.sprite) return;
+
+        try {
+            this.soloRocketCruiseActive = true;
+            this.soloRocketCruiseFinished = false;
+            window.GameLogic.soloRocketCruiseActive = true;
+            this.soloRocketStartTime = Date.now();
+            this.soloRocketDurationMs = 157000;
+            this.soloRocketReturnPosition = {
+                x: this.localPlayer.sprite.x,
+                y: this.localPlayer.sprite.y
+            };
+
+            window.GameLogic.placingFurnitureKey = null;
+            window.GameLogic.armedItemState = null;
+            window.GameLogic.armedItemName = null;
+
+            this.hideSoloRocketLobbyUi();
+            this.stopLobbyBgmForSoloRocket();
+            this.playSoloRocketBgm();
+
+            this.localPlayer.sprite.setVelocity(0, 0);
+            this.localPlayer.sprite.setVisible(false);
+            if (this.localPlayer.sprite.body) this.localPlayer.sprite.body.enable = false;
+            if (this.localPlayer.nameContainer) this.localPlayer.nameContainer.setVisible(false);
+            if (this.localPlayer.bubbleContainer) this.localPlayer.bubbleContainer.setVisible(false);
+            if (this.localPlayer.partyScoreContainer) this.localPlayer.partyScoreContainer.setVisible(false);
+            if (this.localPlayer.localAura) this.localPlayer.localAura.setVisible(false);
+
+            this.createSoloRocketCruiseLayer();
+
+            this.soloRocketTimer = this.time.delayedCall(this.soloRocketDurationMs, () => {
+                this.finishSoloRocketCruise();
+            });
+        } catch (err) {
+            console.warn('[火箭巡航] 啟動失敗，已清理回大廳：', err);
+            alert('火箭巡航啟動失敗，已返回大廳。');
+            this.clearSoloRocketCruise(false);
+        }
+    }
+
+    createSoloRocketCruiseLayer() {
+        const cam = this.cameras.main;
+        const rect = this.getSoloRocketSafeRect();
+        this.soloRocketSafeRect = rect;
+        this.soloRocketStars = [];
+
+        const container = this.add.container(0, 0).setDepth(9600).setScrollFactor(0);
+        this.soloRocketContainer = container;
+
+        const base = this.add.graphics();
+        base.fillStyle(0x000000, 1).fillRect(0, 0, cam.width, cam.height);
+        base.fillStyle(0x02020d, 1).fillRect(rect.x, rect.y, rect.w, rect.h);
+        container.add(base);
+
+        if (this.textures.exists('solo-rocket-bg')) {
+            const bg = this.add.tileSprite(rect.centerX, rect.centerY, rect.w, rect.h, 'solo-rocket-bg');
+            const src = this.textures.get('solo-rocket-bg').getSourceImage();
+            const texW = Math.max(1, src?.width || 1080);
+            const bgScale = rect.w / texW;
+            bg.setTileScale(bgScale, bgScale);
+            bg.setDepth(9601);
+            container.add(bg);
+            this.soloRocketBg = bg;
+        } else {
+            console.warn('[火箭巡航] 找不到 solo-rocket-bg.png，改用黑底星空 fallback。');
+            for (let i = 0; i < 90; i++) {
+                const star = this.add.circle(
+                    Phaser.Math.Between(rect.x + 8, rect.x + rect.w - 8),
+                    Phaser.Math.Between(rect.y + 8, rect.y + rect.h - 8),
+                    Phaser.Math.FloatBetween(0.8, 2.2),
+                    0xffffff,
+                    Phaser.Math.FloatBetween(0.35, 0.95)
+                );
+                star.__speed = Phaser.Math.Between(35, 130);
+                container.add(star);
+                this.soloRocketStars.push(star);
+            }
+        }
+
+        const decor = this.add.graphics();
+        decor.lineStyle(3, 0x8a2be2, 1).strokeRect(rect.x, rect.y, rect.w, rect.h);
+        decor.lineStyle(1, 0xffffff, 0.25).strokeRect(rect.x + 6, rect.y + 6, rect.w - 12, rect.h - 12);
+        decor.fillStyle(0x7b2cff, 0.10);
+        decor.fillRect(0, 0, Math.max(0, rect.x), cam.height);
+        decor.fillRect(rect.x + rect.w, 0, Math.max(0, cam.width - rect.x - rect.w), cam.height);
+        container.add(decor);
+
+        for (let i = 0; i < 36; i++) {
+            const onLeft = Math.random() < 0.5;
+            const sideW = onLeft ? rect.x : (cam.width - rect.x - rect.w);
+            if (sideW <= 4) continue;
+            const sx = onLeft ? Phaser.Math.Between(0, Math.max(1, rect.x - 4)) : Phaser.Math.Between(rect.x + rect.w + 4, cam.width);
+            const sy = Phaser.Math.Between(0, cam.height);
+            const sideStar = this.add.circle(sx, sy, Phaser.Math.FloatBetween(1, 2.5), 0xb99cff, Phaser.Math.FloatBetween(0.15, 0.55));
+            sideStar.__speed = Phaser.Math.Between(15, 60);
+            container.add(sideStar);
+            this.soloRocketStars.push(sideStar);
+        }
+
+        if (this.textures.exists('rocket-onion-player')) {
+            const rocket = this.add.image(rect.centerX, rect.y + rect.h * 0.72, 'rocket-onion-player');
+            const src = this.textures.get('rocket-onion-player').getSourceImage();
+            const maxW = Math.min(118, rect.w * 0.28);
+            const scale = maxW / Math.max(1, src?.width || maxW);
+            rocket.setScale(scale);
+            rocket.setDepth(9610);
+            container.add(rocket);
+            this.soloRocketPlayer = rocket;
+            this.soloRocketPlayerRadius = Math.max(24, maxW * 0.42);
+        } else {
+            console.warn('[火箭巡航] 找不到 rocket-onion-player.png，改用簡易火箭 fallback。');
+            const rocketContainer = this.add.container(rect.centerX, rect.y + rect.h * 0.72).setDepth(9610);
+            const rocketG = this.add.graphics();
+            rocketG.fillStyle(0xf5f5ff, 1).fillRoundedRect(-20, -46, 40, 76, 18);
+            rocketG.fillStyle(0xff4444, 1).fillTriangle(0, -72, -22, -38, 22, -38);
+            rocketG.fillStyle(0x66ccff, 1).fillCircle(0, -18, 10);
+            rocketG.fillStyle(0x8a2be2, 1).fillTriangle(-20, 12, -44, 44, -14, 34);
+            rocketG.fillTriangle(20, 12, 44, 44, 14, 34);
+            rocketContainer.add(rocketG);
+            container.add(rocketContainer);
+            this.soloRocketPlayer = rocketContainer;
+            this.soloRocketPlayerRadius = 44;
+        }
+
+        const ui = this.add.container(0, 0).setDepth(9700).setScrollFactor(0);
+        this.soloRocketUiContainer = ui;
+
+        const timerText = this.add.text(rect.centerX, rect.y + 32, '剩餘 2:37', {
+            fontSize: '24px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 5
+        }).setOrigin(0.5);
+        this.soloRocketCountdownText = timerText;
+
+        const lifeBg = this.add.graphics();
+        lifeBg.fillStyle(0x000000, 0.65).fillRoundedRect(rect.x + 14, rect.y + rect.h - 72, 150, 42, 12);
+        lifeBg.lineStyle(2, 0x39ff14, 0.9).strokeRoundedRect(rect.x + 14, rect.y + rect.h - 72, 150, 42, 12);
+        const lifeText = this.add.text(rect.x + 89, rect.y + rect.h - 51, '生命 100%', {
+            fontSize: '17px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#b6ffb6',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+        this.soloRocketLifeText = lifeText;
+
+        const makeRocketButton = (x, y, radius, color, label, actionName) => {
+            const btn = this.add.circle(x, y, radius, color, 0.92).setStrokeStyle(3, 0xffffff, 0.95).setInteractive({ useHandCursor: true });
+            const txt = this.add.text(x, y, label, {
+                fontSize: '17px',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold',
+                color: '#ffffff',
+                stroke: '#000000',
+                strokeThickness: 4
+            }).setOrigin(0.5);
+            const click = (pointer, localX, localY, event) => {
+                if (event && event.stopPropagation) event.stopPropagation();
+                console.log(`[火箭巡航] ${actionName} 尚未開放`);
+                if (typeof sendBubble === 'function') sendBubble(`${label}功能尚未開放`);
+            };
+            btn.on('pointerdown', click);
+            txt.setInteractive({ useHandCursor: true }).on('pointerdown', click);
+            ui.add([btn, txt]);
+            return { btn, txt };
+        };
+
+        const btnX = rect.x + rect.w - 58;
+        makeRocketButton(btnX, rect.y + rect.h - 62, 34, 0xd9534f, '發射', 'fire');
+        makeRocketButton(btnX, rect.y + rect.h - 142, 34, 0x0077cc, '旋轉', 'spin');
+
+        ui.add([timerText, lifeBg, lifeText]);
+    }
+
+    updateSoloRocketCruise(time, delta) {
+        if (!this.soloRocketCruiseActive) return;
+
+        this.hideSoloRocketLobbyUi();
+
+        const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const dt = Math.min(delta || 16, 50) / 1000;
+
+        if (this.soloRocketBg && typeof this.soloRocketBg.tilePositionY === 'number') {
+            this.soloRocketBg.tilePositionY -= 140 * dt / Math.max(0.1, this.soloRocketBg.tileScaleY || 1);
+        }
+
+        if (Array.isArray(this.soloRocketStars)) {
+            this.soloRocketStars.forEach(star => {
+                if (!star || !star.active) return;
+                star.y += (star.__speed || 60) * dt;
+                if (star.y > this.cameras.main.height + 10) {
+                    star.y = -10;
+                }
+            });
+        }
+
+        if (!this.soloRocketCruiseFinished && this.soloRocketPlayer) {
+            const uiScene = this.scene.manager.getScene('UIScene');
+            let ix = 0;
+            let iy = 0;
+
+            if (uiScene && uiScene.joyStick && uiScene.joyStick.force > 0) {
+                const forceRate = Phaser.Math.Clamp(uiScene.joyStick.force / 40, 0.2, 1);
+                ix = Math.cos(uiScene.joyStick.angle * Math.PI / 180) * forceRate;
+                iy = Math.sin(uiScene.joyStick.angle * Math.PI / 180) * forceRate;
+            } else if (document.activeElement.tagName !== 'INPUT') {
+                if (!this.soloRocketWasd) this.soloRocketWasd = this.input.keyboard.addKeys('W,A,S,D');
+                if (this.cursors.left.isDown || this.soloRocketWasd.A.isDown) ix -= 1;
+                if (this.cursors.right.isDown || this.soloRocketWasd.D.isDown) ix += 1;
+                if (this.cursors.up.isDown || this.soloRocketWasd.W.isDown) iy -= 1;
+                if (this.cursors.down.isDown || this.soloRocketWasd.S.isDown) iy += 1;
+            }
+
+            if (ix !== 0 || iy !== 0) {
+                const len = Math.sqrt(ix * ix + iy * iy) || 1;
+                ix /= len;
+                iy /= len;
+            }
+
+            const speed = 285;
+            const pad = this.soloRocketPlayerRadius || 42;
+            this.soloRocketPlayer.x = Phaser.Math.Clamp(this.soloRocketPlayer.x + ix * speed * dt, rect.x + pad, rect.x + rect.w - pad);
+            this.soloRocketPlayer.y = Phaser.Math.Clamp(this.soloRocketPlayer.y + iy * speed * dt, rect.y + pad, rect.y + rect.h - pad);
+        }
+
+        if (this.soloRocketCountdownText) {
+            const elapsed = Date.now() - (this.soloRocketStartTime || Date.now());
+            const remainSec = Math.max(0, Math.ceil((this.soloRocketDurationMs - elapsed) / 1000));
+            const m = Math.floor(remainSec / 60);
+            const s = String(remainSec % 60).padStart(2, '0');
+            this.soloRocketCountdownText.setText(`剩餘 ${m}:${s}`);
+
+            if (!this.soloRocketCruiseFinished && elapsed >= this.soloRocketDurationMs) {
+                this.finishSoloRocketCruise();
+            }
+        }
+    }
+
+    finishSoloRocketCruise() {
+        if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
+
+        this.soloRocketCruiseFinished = true;
+        if (this.soloRocketTimer) {
+            this.soloRocketTimer.remove(false);
+            this.soloRocketTimer = null;
+        }
+
+        this.stopSoloRocketBgm();
+
+        const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        if (this.soloRocketResultContainer) this.soloRocketResultContainer.destroy(true);
+
+        const result = this.add.container(0, 0).setDepth(9800).setScrollFactor(0);
+        this.soloRocketResultContainer = result;
+
+        const panelW = Math.min(rect.w - 40, 360);
+        const panelH = 260;
+        const px = rect.centerX - panelW / 2;
+        const py = rect.centerY - panelH / 2;
+
+        const bg = this.add.graphics();
+        bg.fillStyle(0x050008, 0.96).fillRoundedRect(px, py, panelW, panelH, 18);
+        bg.lineStyle(4, 0x8a2be2, 1).strokeRoundedRect(px, py, panelW, panelH, 18);
+        bg.lineStyle(2, 0xffffff, 0.25).strokeRoundedRect(px + 8, py + 8, panelW - 16, panelH - 16, 14);
+
+        const title = this.add.text(rect.centerX, py + 62, '火箭巡航完成', {
+            fontSize: '28px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#8a2be2',
+            strokeThickness: 5
+        }).setOrigin(0.5);
+
+        const life = this.add.text(rect.centerX, py + 116, '剩餘生命：100%', {
+            fontSize: '20px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#b6ffb6',
+            stroke: '#000000',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+
+        const btnBg = this.add.rectangle(rect.centerX, py + 184, 180, 48, 0xffffff, 1).setStrokeStyle(3, 0xeeeeff, 1).setInteractive({ useHandCursor: true });
+        const btnText = this.add.text(rect.centerX, py + 184, '返回大廳', {
+            fontSize: '20px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#000000'
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+        const click = (pointer, localX, localY, event) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+            this.returnFromSoloRocketCruise();
+        };
+        btnBg.on('pointerdown', click);
+        btnText.on('pointerdown', click);
+
+        result.add([bg, title, life, btnBg, btnText]);
+    }
+
+    returnFromSoloRocketCruise() {
+        this.clearSoloRocketCruise(false);
+        if (typeof sendBubble === 'function') sendBubble('回到洋蔥大廳。');
+    }
+
+    clearSoloRocketCruise(skipMusicResume = false) {
+        try {
+            if (this.soloRocketTimer) this.soloRocketTimer.remove(false);
+        } catch (_) {}
+        this.soloRocketTimer = null;
+
+        this.stopSoloRocketBgm();
+
+        try {
+            if (this.soloRocketContainer) this.soloRocketContainer.destroy(true);
+            if (this.soloRocketUiContainer) this.soloRocketUiContainer.destroy(true);
+            if (this.soloRocketResultContainer) this.soloRocketResultContainer.destroy(true);
+        } catch (err) {
+            console.warn('[火箭巡航] Phaser 物件清理失敗，已略過：', err);
+        }
+
+        this.soloRocketContainer = null;
+        this.soloRocketUiContainer = null;
+        this.soloRocketResultContainer = null;
+        this.soloRocketPlayer = null;
+        this.soloRocketBg = null;
+        this.soloRocketStars = [];
+        this.soloRocketCountdownText = null;
+        this.soloRocketLifeText = null;
+        this.soloRocketSafeRect = null;
+        this.soloRocketWasd = null;
+        this.soloRocketStartTime = 0;
+        this.soloRocketCruiseActive = false;
+        this.soloRocketCruiseFinished = false;
+        window.GameLogic.soloRocketCruiseActive = false;
+
+        const sprite = this.localPlayer?.sprite;
+        if (sprite && sprite.active) {
+            if (sprite.body) sprite.body.enable = true;
+            sprite.setVisible(true);
+            sprite.setVelocity(0, 0);
+            if (this.soloRocketReturnPosition) {
+                sprite.setPosition(this.soloRocketReturnPosition.x, this.soloRocketReturnPosition.y);
+            }
+            if (this.anims.exists('idle')) sprite.play('idle', true);
+            this.cameras.main.startFollow(sprite, true, 0.08, 0.08);
+        }
+
+        if (this.localPlayer?.nameContainer) this.localPlayer.nameContainer.setVisible(true);
+        if (this.localPlayer?.bubbleContainer) this.localPlayer.bubbleContainer.setVisible(false);
+        if (this.localPlayer?.partyScoreContainer) this.localPlayer.partyScoreContainer.setVisible(false);
+        this.soloRocketReturnPosition = null;
+
+        this.restoreSoloRocketLobbyUi();
+        if (!skipMusicResume) this.resumeLobbyBgmAfterSoloRocket();
+    }
     }
   
     getCurrentPlayerPathForAction() {
@@ -5811,6 +6457,17 @@ if (activeBubbleMsg) {
             if (this.lockOnTarget) this.lockOnTarget.setVisible(false);
             if (this.placePrompt) this.placePrompt.setVisible(false);
 
+            return;
+        }
+
+        if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished) {
+            this.updateSoloRocketCruise(time, delta);
+            if (this.smartPromptBg) this.smartPromptBg.setVisible(false);
+            if (this.smartPromptText) this.smartPromptText.setVisible(false);
+            if (this.waterPromptBg) this.waterPromptBg.setVisible(false);
+            if (this.waterPromptText) this.waterPromptText.setVisible(false);
+            if (this.lockOnTarget) this.lockOnTarget.setVisible(false);
+            if (this.placePrompt) this.placePrompt.setVisible(false);
             return;
         }
 
