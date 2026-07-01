@@ -4193,6 +4193,44 @@ this.events.on('action_B', () => {
         const px = cx - panelW / 2;
         const py = cy - panelH / 2;
 
+        // 補強：即使 Phaser 把點擊先送到全螢幕 blocker，也能用座標判斷按鈕是否被點到。
+        const isPointInHitRect = (pointX, pointY, rect) => {
+            return pointX >= rect.x - rect.w / 2 &&
+                   pointX <= rect.x + rect.w / 2 &&
+                   pointY >= rect.y - rect.h / 2 &&
+                   pointY <= rect.y + rect.h / 2;
+        };
+
+        const noticeBtnHit = {
+            x: cx,
+            y: py + panelH - 44,
+            w: 170,
+            h: 62
+        };
+
+        const cancelBtnHit = {
+            x: cx - 82,
+            y: py + panelH - 48,
+            w: 152,
+            h: 62
+        };
+
+        const payBtnHit = {
+            x: cx + 82,
+            y: py + panelH - 48,
+            w: 152,
+            h: 62
+        };
+
+        const safeClosePaymentConfirm = () => {
+            this.closeSoloRocketPaymentConfirm();
+        };
+
+        const safePayAndStartRocket = () => {
+            this.closeSoloRocketPaymentConfirm();
+            this.requestSoloRocketPayment(cost);
+        };
+
         // 遮罩獨立放在面板下方，阻擋背後選單點擊，但不蓋住確認按鈕。
         const blocker = this.add.rectangle(cx, cy, cam.width, cam.height, 0x000000, 0.74)
             .setDepth(9888)
@@ -4201,6 +4239,36 @@ this.events.on('action_B', () => {
 
         blocker.on('pointerdown', (pointer, localX, localY, event) => {
             if (event && event.stopPropagation) event.stopPropagation();
+
+            const pointX = pointer ? pointer.x : null;
+            const pointY = pointer ? pointer.y : null;
+            if (pointX === null || pointY === null) return;
+
+            // 通知模式：點「知道了」
+            if (isNotice && isPointInHitRect(pointX, pointY, noticeBtnHit)) {
+                safeClosePaymentConfirm();
+                return;
+            }
+
+            // 確認模式：點「取消」
+            if (!isNotice && isPointInHitRect(pointX, pointY, cancelBtnHit)) {
+                safeClosePaymentConfirm();
+                return;
+            }
+
+            // 確認模式：點「支付啟動」
+            if (!isNotice && isPointInHitRect(pointX, pointY, payBtnHit)) {
+                safePayAndStartRocket();
+                return;
+            }
+
+            // 點在面板內其他地方：不關閉、不穿透
+            if (pointX >= px && pointX <= px + panelW && pointY >= py && pointY <= py + panelH) {
+                return;
+            }
+
+            // 點到面板外：關閉支付確認面板
+            safeClosePaymentConfirm();
         });
 
         const container = this.add.container(0, 0)
@@ -4280,16 +4348,15 @@ this.events.on('action_B', () => {
 
         if (isNotice) {
             makeConfirmBtn(cx, py + panelH - 44, 150, 42, '知道了', 0xffffff, () => {
-                this.closeSoloRocketPaymentConfirm();
+                safeClosePaymentConfirm();
             });
         } else {
             makeConfirmBtn(cx - 82, py + panelH - 48, 132, 42, '取消', 0x444444, () => {
-                this.closeSoloRocketPaymentConfirm();
+                safeClosePaymentConfirm();
             });
 
             makeConfirmBtn(cx + 82, py + panelH - 48, 132, 42, '支付啟動', 0xffffff, () => {
-                this.closeSoloRocketPaymentConfirm();
-                this.requestSoloRocketPayment(cost);
+                safePayAndStartRocket();
             });
         }
 
