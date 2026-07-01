@@ -4738,28 +4738,37 @@ this.events.on('action_B', () => {
         this.soloRocketCountdownText = timerText;
 
         const drawHeart = (graphics, cx, cy, size) => {
+            // Phaser Graphics 沒有 bezierCurveTo()，這裡改用多段 lineTo 畫出近似圓潤愛心。
+            const pts = [
+                [0.00, 0.34],
+                [-0.10, 0.26],
+                [-0.22, 0.15],
+                [-0.35, 0.02],
+                [-0.46, -0.12],
+                [-0.50, -0.28],
+                [-0.44, -0.42],
+                [-0.31, -0.50],
+                [-0.17, -0.48],
+                [-0.07, -0.38],
+                [0.00, -0.25],
+                [0.07, -0.38],
+                [0.17, -0.48],
+                [0.31, -0.50],
+                [0.44, -0.42],
+                [0.50, -0.28],
+                [0.46, -0.12],
+                [0.35, 0.02],
+                [0.22, 0.15],
+                [0.10, 0.26]
+            ];
+
             graphics.beginPath();
-            graphics.moveTo(cx, cy + size * 0.30);
-            graphics.bezierCurveTo(
-                cx - size * 0.52, cy + size * 0.02,
-                cx - size * 0.58, cy - size * 0.46,
-                cx - size * 0.18, cy - size * 0.46
-            );
-            graphics.bezierCurveTo(
-                cx - size * 0.02, cy - size * 0.46,
-                cx, cy - size * 0.28,
-                cx, cy - size * 0.12
-            );
-            graphics.bezierCurveTo(
-                cx, cy - size * 0.28,
-                cx + size * 0.02, cy - size * 0.46,
-                cx + size * 0.18, cy - size * 0.46
-            );
-            graphics.bezierCurveTo(
-                cx + size * 0.58, cy - size * 0.46,
-                cx + size * 0.52, cy + size * 0.02,
-                cx, cy + size * 0.30
-            );
+            graphics.moveTo(cx + pts[0][0] * size, cy + pts[0][1] * size);
+
+            for (let i = 1; i < pts.length; i++) {
+                graphics.lineTo(cx + pts[i][0] * size, cy + pts[i][1] * size);
+            }
+
             graphics.closePath();
         };
 
