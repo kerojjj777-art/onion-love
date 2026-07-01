@@ -4027,6 +4027,16 @@ this.events.on('action_B', () => {
             console.warn('[火箭巡航] 支付確認面板清理失敗，已略過：', err);
         }
 
+        // 修正：soloChickenMenuBlocker 是獨立於 container 外的透明遮罩，
+        // 若沒有銷毀，後續火箭巡航完成畫面的「返回大廳」點擊會被吃掉。
+        try {
+            if (blocker && blocker.destroy) {
+                blocker.destroy();
+            }
+        } catch (err) {
+            console.warn('[獨樂雞選單] Blocker 清理失敗，已略過：', err);
+        }
+
         try {
             if (container && this.tweens) {
                 this.tweens.killTweensOf(container);
@@ -4837,6 +4847,48 @@ this.events.on('action_B', () => {
             this.returnFromSoloRocketCruise();
         };
 
+        // 修正：建立一個最高層透明點擊捕捉區。
+        // 只要點擊座標落在「返回大廳」按鈕範圍內，就直接執行返回。
+        const returnBtnHit = {
+            x: rect.centerX,
+            y: py + 184,
+            w: 240,
+            h: 88
+        };
+
+        const resultClickCatcher = this.add.zone(
+            this.cameras.main.width / 2,
+            this.cameras.main.height / 2,
+            this.cameras.main.width,
+            this.cameras.main.height
+        )
+            .setDepth(9905)
+            .setScrollFactor(0)
+            .setInteractive();
+
+        this.soloRocketResultClickCatcher = resultClickCatcher;
+
+        const handleResultClick = (pointer, localX, localY, event) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+
+            const pointX = pointer ? pointer.x : null;
+            const pointY = pointer ? pointer.y : null;
+            if (pointX === null || pointY === null) return;
+
+            const inReturnBtn =
+                pointX >= returnBtnHit.x - returnBtnHit.w / 2 &&
+                pointX <= returnBtnHit.x + returnBtnHit.w / 2 &&
+                pointY >= returnBtnHit.y - returnBtnHit.h / 2 &&
+                pointY <= returnBtnHit.y + returnBtnHit.h / 2;
+
+            if (inReturnBtn) {
+                safeReturnFromSoloRocket(pointer, localX, localY, event);
+            }
+        };
+
+        resultClickCatcher.on('pointerdown', handleResultClick);
+        resultClickCatcher.on('pointerup', handleResultClick);
+
         const bg = this.add.graphics();
         bg.fillStyle(0x050008, 0.96).fillRoundedRect(px, py, panelW, panelH, 18);
         bg.lineStyle(4, 0x8a2be2, 1).strokeRoundedRect(px, py, panelW, panelH, 18);
@@ -4904,6 +4956,7 @@ this.events.on('action_B', () => {
             if (this.soloRocketContainer) this.soloRocketContainer.destroy(true);
             if (this.soloRocketUiContainer) this.soloRocketUiContainer.destroy(true);
             if (this.soloRocketResultContainer) this.soloRocketResultContainer.destroy(true);
+            if (this.soloRocketResultClickCatcher) this.soloRocketResultClickCatcher.destroy();
         } catch (err) {
             console.warn('[火箭巡航] Phaser 物件清理失敗，已略過：', err);
         }
@@ -4911,6 +4964,7 @@ this.events.on('action_B', () => {
         this.soloRocketContainer = null;
         this.soloRocketUiContainer = null;
         this.soloRocketResultContainer = null;
+        this.soloRocketResultClickCatcher = null;
         this.soloRocketPlayer = null;
         this.soloRocketBg = null;
         this.soloRocketStars = [];
