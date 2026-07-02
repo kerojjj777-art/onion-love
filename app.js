@@ -1920,6 +1920,7 @@ class BootScene extends Phaser.Scene {
         this.load.image('solo-rocket-bg', 'solo-rocket-bg.png');
         this.load.image('rocket-onion-player', 'rocket-onion-player.png');
         this.load.image('solo-rocket-moon-rabbit', 'solo-rocket-moon-rabbit.png');
+        this.load.image('solo-rocket-monster-chicken', 'solo-rocket-monster-chicken.png');
         this.load.audio('solo-rocket-cruise-bgm', 'solo-rocket-cruise-bgm.mp3');
         this.load.audio('solo-rocket-landing', 'solo-rocket-landing.mp3');
         this.load.audio('solo-rocket-typing', 'solo-rocket-typing.mp3');
@@ -1929,6 +1930,17 @@ class BootScene extends Phaser.Scene {
         let grd = this.make.graphics({x: 0, y: 0, add: false});
         grd.fillStyle(0xffffff, 1); grd.fillCircle(4, 4, 4); // 畫一個半徑 4 的圓
         grd.generateTexture('particle_flare', 8, 8); // 生成名為 'particle_flare' 的紋理
+        // 火箭巡航階段4 fallback：小怪獸素材缺失時，改用程式繪製的安全圖，不讓副本黑屏。
+        let monsterFallbackGr = this.make.graphics({ x: 0, y: 0, add: false });
+        monsterFallbackGr.fillStyle(0xb388ff, 1).fillCircle(32, 32, 22);
+        monsterFallbackGr.fillStyle(0xe6ccff, 1).fillCircle(22, 25, 7);
+        monsterFallbackGr.fillCircle(42, 25, 7);
+        monsterFallbackGr.fillStyle(0x111111, 1).fillCircle(22, 25, 2.5);
+        monsterFallbackGr.fillCircle(42, 25, 2.5);
+        monsterFallbackGr.lineStyle(3, 0x111111, 1).strokeCircle(32, 38, 8);
+        monsterFallbackGr.lineStyle(4, 0x7e57c2, 1).lineBetween(16, 20, 6, 10).lineBetween(48, 20, 58, 10);
+        monsterFallbackGr.generateTexture('solo-rocket-monster-fallback', 64, 64);
+        monsterFallbackGr.destroy();
     }
    create() {
         // 修正2：經驗條改為橘紅漸層
@@ -2313,6 +2325,27 @@ class MainScene extends Phaser.Scene {
         this.soloRocketIntroShakeTween = null;
         this.soloRocketEndingRushStarted = false;
         this.soloRocketEndingFadeStarted = false;
+
+        // 階段4：小怪獸、光束、發射冷卻與本場計分暫存狀態
+        this.soloRocketMonsters = [];
+        this.soloRocketBeams = [];
+        this.soloRocketMonsterSpawnTimer = null;
+        this.soloRocketMonsterStartTimer = null;
+        this.soloRocketMonsterStopTimer = null;
+        this.soloRocketMonsterSpawnActive = false;
+        this.soloRocketMonsterSpawnStopped = false;
+        this.soloRocketMonsterSpawnedCount = 0;
+        this.soloRocketMaxMonsters = 50;
+        this.soloRocketLastFireAt = 0;
+        this.soloRocketFireCooldownMs = 320;
+        this.soloRocketStage4ClearedForEnding = false;
+        this.soloRocketStats = {
+            monsterKills: 0,
+            monsterHits: 0,
+            asteroidsDodged: 0,
+            spinDodges: 0,
+            bossKilled: false
+        };
 
         window.GameLogic.soloRocketCruiseActive = false;
         
@@ -4617,6 +4650,7 @@ this.events.on('action_B', () => {
             this.soloRocketStartTime = 0;
             this.soloRocketDurationMs = 157000;
             this.soloRocketLifeValue = 100;
+            this.resetSoloRocketStage4State();
             this.soloRocketReturnPosition = {
                 x: this.localPlayer.sprite.x,
                 y: this.localPlayer.sprite.y
@@ -4819,6 +4853,18 @@ this.events.on('action_B', () => {
         if (this.soloRocketTimer) this.soloRocketTimer.remove(false);
         this.soloRocketTimer = this.time.delayedCall(this.soloRocketDurationMs, () => {
             this.finishSoloRocketCruise();
+        });
+
+        this.soloRocketMonsterStartTimer = this.time.delayedCall(12000, () => {
+            this.soloRocketMonsterStartTimer = null;
+            if (this.soloRocketCruiseActive && !this.soloRocketCruiseFinished) {
+                this.startSoloRocketMonsterSpawning();
+            }
+        });
+
+        this.soloRocketMonsterStopTimer = this.time.delayedCall(152000, () => {
+            this.soloRocketMonsterStopTimer = null;
+            this.stopSoloRocketMonsterSpawning();
         });
 
         this.startSoloRocketIntroTimeline();
@@ -5326,6 +5372,316 @@ this.events.on('action_B', () => {
         }
     }
 
+    resetSoloRocketStage4State() {
+        this.clearSoloRocketStage4Objects(true);
+        this.soloRocketMonsterSpawnedCount = 0;
+        this.soloRocketMonsterSpawnActive = false;
+        this.soloRocketMonsterSpawnStopped = false;
+        this.soloRocketLastFireAt = 0;
+        this.soloRocketStage4ClearedForEnding = false;
+        this.soloRocketStats = {
+            monsterKills: 0,
+            monsterHits: 0,
+            asteroidsDodged: 0,
+            spinDodges: 0,
+            bossKilled: false
+        };
+    }
+
+    clearSoloRocketStage4Objects(resetStats = false) {
+        const removeTimer = (timer) => {
+            try {
+                if (timer && timer.remove) timer.remove(false);
+            } catch (_) {}
+        };
+
+        removeTimer(this.soloRocketMonsterSpawnTimer);
+        removeTimer(this.soloRocketMonsterStartTimer);
+        removeTimer(this.soloRocketMonsterStopTimer);
+
+        this.soloRocketMonsterSpawnTimer = null;
+        this.soloRocketMonsterStartTimer = null;
+        this.soloRocketMonsterStopTimer = null;
+        this.soloRocketMonsterSpawnActive = false;
+
+        const destroyObj = (obj) => {
+            try {
+                if (!obj) return;
+                if (this.tweens) this.tweens.killTweensOf(obj);
+                if (obj.destroy) obj.destroy();
+            } catch (_) {}
+        };
+
+        (this.soloRocketMonsters || []).forEach(destroyObj);
+        (this.soloRocketBeams || []).forEach(destroyObj);
+
+        this.soloRocketMonsters = [];
+        this.soloRocketBeams = [];
+        this.soloRocketLastFireAt = 0;
+
+        if (resetStats) {
+            this.soloRocketMonsterSpawnedCount = 0;
+            this.soloRocketMonsterSpawnStopped = false;
+            this.soloRocketStage4ClearedForEnding = false;
+            this.soloRocketStats = {
+                monsterKills: 0,
+                monsterHits: 0,
+                asteroidsDodged: 0,
+                spinDodges: 0,
+                bossKilled: false
+            };
+        } else {
+            this.soloRocketMonsterSpawnStopped = true;
+        }
+    }
+
+    startSoloRocketMonsterSpawning() {
+        if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
+        if (!this.soloRocketGameplayStarted || this.soloRocketTutorialActive || this.soloRocketIntroActive) return;
+        if (this.soloRocketMonsterSpawnActive || this.soloRocketMonsterSpawnStopped) return;
+        if ((this.soloRocketMonsterSpawnedCount || 0) >= (this.soloRocketMaxMonsters || 50)) return;
+
+        this.soloRocketMonsterSpawnActive = true;
+        this.scheduleSoloRocketMonsterSpawn(Phaser.Math.Between(250, 800));
+    }
+
+    stopSoloRocketMonsterSpawning() {
+        this.soloRocketMonsterSpawnActive = false;
+        this.soloRocketMonsterSpawnStopped = true;
+        try {
+            if (this.soloRocketMonsterSpawnTimer) this.soloRocketMonsterSpawnTimer.remove(false);
+        } catch (_) {}
+        this.soloRocketMonsterSpawnTimer = null;
+    }
+
+    scheduleSoloRocketMonsterSpawn(delayMs = null) {
+        if (!this.soloRocketMonsterSpawnActive || this.soloRocketCruiseFinished) return;
+        if (this.soloRocketMonsterSpawnTimer) return;
+
+        const elapsed = Date.now() - (this.soloRocketStartTime || Date.now());
+        if (elapsed >= 152000 || (this.soloRocketMonsterSpawnedCount || 0) >= (this.soloRocketMaxMonsters || 50)) {
+            this.stopSoloRocketMonsterSpawning();
+            return;
+        }
+
+        const nextDelay = Number.isFinite(delayMs) ? delayMs : Phaser.Math.Between(1200, 2500);
+        this.soloRocketMonsterSpawnTimer = this.time.delayedCall(nextDelay, () => {
+            this.soloRocketMonsterSpawnTimer = null;
+
+            if (!this.soloRocketMonsterSpawnActive || !this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
+            const nowElapsed = Date.now() - (this.soloRocketStartTime || Date.now());
+            if (nowElapsed >= 152000) {
+                this.stopSoloRocketMonsterSpawning();
+                return;
+            }
+
+            this.spawnSoloRocketMonster();
+            this.scheduleSoloRocketMonsterSpawn();
+        });
+    }
+
+    spawnSoloRocketMonster() {
+        if (!this.soloRocketContainer || !this.soloRocketPlayer) return;
+        if ((this.soloRocketMonsterSpawnedCount || 0) >= (this.soloRocketMaxMonsters || 50)) {
+            this.stopSoloRocketMonsterSpawning();
+            return;
+        }
+
+        const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const size = Phaser.Math.Between(38, 52);
+        const spawnFromTop = Math.random() < 0.72;
+        const spawnX = Phaser.Math.Between(Math.floor(rect.x + size), Math.floor(rect.x + rect.w - size));
+        const spawnY = spawnFromTop
+            ? rect.y - size
+            : Phaser.Math.Between(Math.floor(rect.y + 26), Math.floor(rect.y + rect.h * 0.38));
+
+        const targetX = this.soloRocketPlayer.x || rect.centerX;
+        const targetY = this.soloRocketPlayer.y || (rect.y + rect.h * 0.72);
+        let dx = targetX - spawnX;
+        let dy = targetY - spawnY;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        dx /= len;
+        dy /= len;
+
+        const key = this.textures.exists('solo-rocket-monster-chicken')
+            ? 'solo-rocket-monster-chicken'
+            : 'solo-rocket-monster-fallback';
+
+        const monster = this.add.image(spawnX, spawnY, key)
+            .setDisplaySize(size, size)
+            .setDepth(9612)
+            .setScrollFactor(0);
+
+        monster.__soloRocketHp = 1;
+        monster.__soloRocketVx = dx * Phaser.Math.Between(75, 125);
+        monster.__soloRocketVy = dy * Phaser.Math.Between(75, 125);
+        monster.__soloRocketTargetY = targetY;
+        monster.__soloRocketRadius = size * 0.42;
+        monster.__soloRocketDead = false;
+
+        this.soloRocketContainer.add(monster);
+        this.soloRocketMonsters = this.soloRocketMonsters || [];
+        this.soloRocketMonsters.push(monster);
+        this.soloRocketMonsterSpawnedCount = (this.soloRocketMonsterSpawnedCount || 0) + 1;
+    }
+
+    canUseSoloRocketAction() {
+        return !!(
+            this.soloRocketCruiseActive &&
+            this.soloRocketGameplayStarted &&
+            !this.soloRocketCruiseFinished &&
+            !this.soloRocketInputLocked &&
+            !this.soloRocketTutorialActive &&
+            !this.soloRocketIntroActive &&
+            !this.soloRocketEndingActive
+        );
+    }
+
+    fireSoloRocketBeam() {
+        if (!this.canUseSoloRocketAction() || !this.soloRocketPlayer || !this.soloRocketContainer) return;
+
+        const now = Date.now();
+        const cooldown = this.soloRocketFireCooldownMs || 320;
+        if (now - (this.soloRocketLastFireAt || 0) < cooldown) return;
+        this.soloRocketLastFireAt = now;
+
+        const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const startX = Phaser.Math.Clamp(this.soloRocketPlayer.x || rect.centerX, rect.x + 10, rect.x + rect.w - 10);
+        const startY = (this.soloRocketPlayer.y || rect.centerY) - Math.max(24, this.soloRocketPlayerRadius || 28);
+
+        const beam = this.add.rectangle(startX, startY, 8, 48, 0x8ffcff, 0.96)
+            .setStrokeStyle(2, 0xffffff, 0.9)
+            .setDepth(9611)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        beam.__soloRocketVy = -760;
+        beam.__soloRocketDamage = 2;
+        beam.__soloRocketUsed = false;
+
+        this.soloRocketContainer.add(beam);
+        this.soloRocketBeams = this.soloRocketBeams || [];
+        this.soloRocketBeams.push(beam);
+    }
+
+    destroySoloRocketBeam(beam) {
+        if (!beam) return;
+        this.soloRocketBeams = (this.soloRocketBeams || []).filter(b => b !== beam);
+        try { if (beam.destroy) beam.destroy(); } catch (_) {}
+    }
+
+    destroySoloRocketMonster(monster) {
+        if (!monster) return;
+        this.soloRocketMonsters = (this.soloRocketMonsters || []).filter(m => m !== monster);
+        monster.__soloRocketDead = true;
+        try { if (monster.destroy) monster.destroy(); } catch (_) {}
+    }
+
+    updateSoloRocketStage4(dt) {
+        if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
+
+        const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const beams = [...(this.soloRocketBeams || [])];
+        const monsters = [...(this.soloRocketMonsters || [])];
+
+        beams.forEach(beam => {
+            if (!beam || !beam.active) {
+                this.destroySoloRocketBeam(beam);
+                return;
+            }
+            beam.y += (beam.__soloRocketVy || -720) * dt;
+            if (beam.y < rect.y - 70) this.destroySoloRocketBeam(beam);
+        });
+
+        monsters.forEach(monster => {
+            if (!monster || !monster.active || monster.__soloRocketDead) {
+                this.destroySoloRocketMonster(monster);
+                return;
+            }
+
+            monster.x += (monster.__soloRocketVx || 0) * dt;
+            monster.y += (monster.__soloRocketVy || 90) * dt;
+
+            const passedPlayerLine = (monster.__soloRocketVy || 0) > 0 && monster.y > (monster.__soloRocketTargetY || rect.centerY) + 150;
+            const outOfBounds =
+                monster.y > rect.y + rect.h + 90 ||
+                monster.x < rect.x - 90 ||
+                monster.x > rect.x + rect.w + 90;
+
+            if (passedPlayerLine || outOfBounds) {
+                this.destroySoloRocketMonster(monster);
+            }
+        });
+
+        this.checkSoloRocketBeamMonsterHits();
+        this.checkSoloRocketMonsterPlayerHits();
+    }
+
+    checkSoloRocketBeamMonsterHits() {
+        const beams = [...(this.soloRocketBeams || [])];
+        const monsters = [...(this.soloRocketMonsters || [])];
+
+        beams.forEach(beam => {
+            if (!beam || !beam.active || beam.__soloRocketUsed) return;
+
+            let beamBounds;
+            try { beamBounds = beam.getBounds(); } catch (_) { return; }
+
+            for (const monster of monsters) {
+                if (!monster || !monster.active || monster.__soloRocketDead) continue;
+
+                let monsterBounds;
+                try { monsterBounds = monster.getBounds(); } catch (_) { continue; }
+
+                if (Phaser.Geom.Intersects.RectangleToRectangle(beamBounds, monsterBounds)) {
+                    beam.__soloRocketUsed = true;
+                    monster.__soloRocketHp = (monster.__soloRocketHp || 1) - (beam.__soloRocketDamage || 2);
+                    this.destroySoloRocketBeam(beam);
+
+                    if (monster.__soloRocketHp <= 0) {
+                        this.handleSoloRocketMonsterKilled(monster);
+                    }
+                    break;
+                }
+            }
+        });
+    }
+
+    handleSoloRocketMonsterKilled(monster) {
+        this.destroySoloRocketMonster(monster);
+        this.soloRocketStats = this.soloRocketStats || {};
+        this.soloRocketStats.monsterKills = (this.soloRocketStats.monsterKills || 0) + 1;
+        this.setSoloRocketLifeValue((this.soloRocketLifeValue || 0) + 5);
+    }
+
+    checkSoloRocketMonsterPlayerHits() {
+        if (!this.soloRocketPlayer || !this.soloRocketPlayer.active) return;
+
+        let playerBounds;
+        try { playerBounds = this.soloRocketPlayer.getBounds(); } catch (_) { return; }
+
+        const monsters = [...(this.soloRocketMonsters || [])];
+        for (const monster of monsters) {
+            if (!monster || !monster.active || monster.__soloRocketDead) continue;
+
+            let monsterBounds;
+            try { monsterBounds = monster.getBounds(); } catch (_) { continue; }
+
+            if (Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, monsterBounds)) {
+                this.destroySoloRocketMonster(monster);
+                this.soloRocketStats = this.soloRocketStats || {};
+                this.soloRocketStats.monsterHits = (this.soloRocketStats.monsterHits || 0) + 1;
+                this.setSoloRocketLifeValue((this.soloRocketLifeValue || 0) - 10);
+
+                if ((this.soloRocketLifeValue || 0) <= 0) {
+                    this.setSoloRocketLifeValue(0);
+                    this.finishSoloRocketCruise();
+                    return;
+                }
+            }
+        }
+    }
+  
     createSoloRocketCruiseLayer() {
         const cam = this.cameras.main;
         const rect = this.getSoloRocketSafeRect();
@@ -5604,6 +5960,11 @@ this.events.on('action_B', () => {
                     return;
                 }
 
+                if (actionName === 'fire') {
+                    this.fireSoloRocketBeam();
+                    return;
+                }
+
                 console.log(`[火箭巡航] ${actionName} 尚未開放`);
                 if (typeof sendBubble === 'function') sendBubble(`${label}功能尚未開放`);
             };
@@ -5666,9 +6027,18 @@ this.events.on('action_B', () => {
 
         const elapsed = Date.now() - (this.soloRocketStartTime || Date.now());
 
+        if (!this.soloRocketCruiseFinished && elapsed >= 152000) {
+            this.stopSoloRocketMonsterSpawning();
+        }
+
         if (!this.soloRocketCruiseFinished && elapsed >= 154000) {
             this.soloRocketInputLocked = true;
             this.soloRocketEndingActive = true;
+
+            if (!this.soloRocketStage4ClearedForEnding) {
+                this.soloRocketStage4ClearedForEnding = true;
+                this.clearSoloRocketStage4Objects(false);
+            }
         }
 
         if (!this.soloRocketCruiseFinished && elapsed >= 155000) {
@@ -5710,6 +6080,9 @@ this.events.on('action_B', () => {
             this.soloRocketPlayer.y = Phaser.Math.Clamp(this.soloRocketPlayer.y + iy * speed * dt, rect.y + pad, rect.y + rect.h - pad);
         }
 
+        this.updateSoloRocketStage4(dt);
+        if (this.soloRocketCruiseFinished) return;
+
         if (this.soloRocketCountdownText) {
             const remainSec = Math.max(0, Math.ceil((this.soloRocketDurationMs - elapsed) / 1000));
             const m = Math.floor(remainSec / 60);
@@ -5737,16 +6110,18 @@ this.events.on('action_B', () => {
 
         this.clearSoloRocketTutorial();
         this.clearSoloRocketIntroFx();
+        this.clearSoloRocketStage4Objects(false);
         this.stopSoloRocketBgm();
 
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
         if (this.soloRocketResultContainer) this.soloRocketResultContainer.destroy(true);
+        if (this.soloRocketResultClickCatcher) this.soloRocketResultClickCatcher.destroy();
 
         const result = this.add.container(0, 0).setDepth(9800).setScrollFactor(0);
         this.soloRocketResultContainer = result;
 
-        const panelW = Math.min(rect.w - 40, 360);
-        const panelH = 260;
+        const panelW = Math.min(rect.w - 40, 380);
+        const panelH = 380;
         const px = rect.centerX - panelW / 2;
         const py = rect.centerY - panelH / 2;
 
@@ -5758,12 +6133,10 @@ this.events.on('action_B', () => {
             this.returnFromSoloRocketCruise();
         };
 
-        // 修正：建立一個最高層透明點擊捕捉區。
-        // 只要點擊座標落在「返回大廳」按鈕範圍內，就直接執行返回。
         const returnBtnHit = {
             x: rect.centerX,
-            y: py + 184,
-            w: 240,
+            y: py + 314,
+            w: 250,
             h: 88
         };
 
@@ -5805,7 +6178,7 @@ this.events.on('action_B', () => {
         bg.lineStyle(4, 0x8a2be2, 1).strokeRoundedRect(px, py, panelW, panelH, 18);
         bg.lineStyle(2, 0xffffff, 0.25).strokeRoundedRect(px + 8, py + 8, panelW - 16, panelH - 16, 14);
 
-        const title = this.add.text(rect.centerX, py + 62, '火箭巡航完成', {
+        const title = this.add.text(rect.centerX, py + 46, '火箭巡航結算', {
             fontSize: '28px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
@@ -5814,28 +6187,39 @@ this.events.on('action_B', () => {
             strokeThickness: 5
         }).setOrigin(0.5);
 
-        const life = this.add.text(rect.centerX, py + 116, `剩餘生命：${Math.round(this.soloRocketLifeValue ?? 100)}%`, {
-            fontSize: '20px',
+        const stats = this.soloRocketStats || {};
+        const resultText = [
+            `剩餘生命：${Math.round(this.soloRocketLifeValue ?? 100)}%`,
+            `擊殺小怪獸：${stats.monsterKills || 0}`,
+            `被小怪獸撞擊：${stats.monsterHits || 0}`,
+            `躲過隕石：${stats.asteroidsDodged || 0}`,
+            `成功旋轉閃避：${stats.spinDodges || 0}`,
+            `是否擊殺魔王：${stats.bossKilled ? '是' : '否'}`
+        ].join('\n');
+
+        const body = this.add.text(rect.centerX, py + 94, resultText, {
+            fontSize: '19px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
-            color: '#b6ffb6',
+            color: '#eaffff',
             stroke: '#000000',
-            strokeThickness: 4
-        }).setOrigin(0.5);
+            strokeThickness: 4,
+            lineSpacing: 9,
+            align: 'left'
+        }).setOrigin(0.5, 0);
 
-        const btnBg = this.add.rectangle(rect.centerX, py + 184, 180, 48, 0xffffff, 1)
+        const btnBg = this.add.rectangle(rect.centerX, py + 314, 180, 48, 0xffffff, 1)
             .setStrokeStyle(3, 0xeeeeff, 1)
             .setInteractive({ useHandCursor: true });
 
-        const btnText = this.add.text(rect.centerX, py + 184, '返回大廳', {
+        const btnText = this.add.text(rect.centerX, py + 314, '返回大廳', {
             fontSize: '20px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#000000'
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-        // 透明 hitbox 放在最上層，只負責接「返回大廳」點擊，避免點擊被其他物件吃掉。
-        const returnHit = this.add.zone(rect.centerX, py + 184, 220, 76)
+        const returnHit = this.add.zone(rect.centerX, py + 314, 220, 76)
             .setInteractive({ useHandCursor: true });
 
         const click = safeReturnFromSoloRocket;
@@ -5847,7 +6231,7 @@ this.events.on('action_B', () => {
         btnText.on('pointerup', click);
         returnHit.on('pointerup', click);
 
-        result.add([bg, title, life, btnBg, btnText, returnHit]);
+        result.add([bg, title, body, btnBg, btnText, returnHit]);
     }
 
     returnFromSoloRocketCruise() {
@@ -5865,6 +6249,7 @@ this.events.on('action_B', () => {
 
         this.clearSoloRocketTutorial();
         this.clearSoloRocketIntroFx();
+        this.clearSoloRocketStage4Objects(true);
 
         try {
             if (this.soloRocketLifeBreathTween) this.soloRocketLifeBreathTween.remove();
