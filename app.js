@@ -1921,6 +1921,9 @@ class BootScene extends Phaser.Scene {
         this.load.image('rocket-onion-player', 'rocket-onion-player.png');
         this.load.image('solo-rocket-moon-rabbit', 'solo-rocket-moon-rabbit.png');
         this.load.audio('solo-rocket-cruise-bgm', 'solo-rocket-cruise-bgm.mp3');
+        this.load.audio('solo-rocket-landing', 'solo-rocket-landing.mp3');
+        this.load.audio('solo-rocket-typing', 'solo-rocket-typing.mp3');
+        this.load.audio('solo-rocket-radio_beep', 'solo-rocket-radio_beep.mp3');
 
         // 在記憶體中畫一個簡單的白色發光點紋理給粒子使用
         let grd = this.make.graphics({x: 0, y: 0, add: false});
@@ -2306,6 +2309,7 @@ class MainScene extends Phaser.Scene {
         this.soloRocketWhiteFade = null;
         this.soloRocketIntroTweens = [];
         this.soloRocketIntroTimers = [];
+        this.soloRocketIntroFxObjects = [];
         this.soloRocketEndingRushStarted = false;
         this.soloRocketEndingFadeStarted = false;
 
@@ -4539,6 +4543,29 @@ this.events.on('action_B', () => {
         this.soloRocketBgm = null;
     }
 
+    playSoloRocketIntroSfx(key) {
+        try {
+            if (window.GameLogic.muteSFX) return;
+
+            if (!this.cache.audio.exists(key)) {
+                console.warn(`[火箭巡航] 找不到 ${key}.mp3，已略過音效。`);
+                return;
+            }
+
+            const sfxControl = document.getElementById('sfx-volume');
+            const vol = sfxControl
+                ? Number(sfxControl.value || 100) / 100
+                : (window.GameLogic.sfxVolume !== undefined ? Number(window.GameLogic.sfxVolume || 100) / 100 : 1);
+
+            if (!Number.isFinite(vol) || vol <= 0) return;
+
+            this.sound.play(key, { volume: vol });
+        } catch (err) {
+            console.warn(`[火箭巡航] 播放 ${key} 失敗，已略過：`, err);
+        }
+    }
+  
+  
     resumeLobbyBgmAfterSoloRocket() {
         if (this.sceneName === 'shrine' || this.sceneName === 'partyroom') return;
 
@@ -4810,6 +4837,12 @@ this.events.on('action_B', () => {
         } catch (_) {}
 
         try {
+            (this.soloRocketIntroFxObjects || []).forEach(obj => {
+                if (obj && obj.destroy) obj.destroy();
+            });
+        } catch (_) {}
+
+        try {
             if (this.soloRocketMoonRabbitContainer) this.soloRocketMoonRabbitContainer.destroy(true);
         } catch (err) {
             console.warn('[火箭巡航] 玉兔通訊清理失敗，已略過：', err);
@@ -4817,6 +4850,7 @@ this.events.on('action_B', () => {
 
         this.soloRocketIntroTweens = [];
         this.soloRocketIntroTimers = [];
+        this.soloRocketIntroFxObjects = [];
         this.soloRocketMoonRabbitContainer = null;
     }
 
@@ -4845,6 +4879,10 @@ this.events.on('action_B', () => {
         rocket.setScale(finalScaleX * introScale, finalScaleY * introScale);
         rocket.setAngle(0);
         rocket.setAlpha(1);
+
+        const landingSfxTimer = this.time.delayedCall(1000, () => {
+            this.playSoloRocketIntroSfx('solo-rocket-landing');
+        });
 
         const landingTween = this.tweens.add({
             targets: rocket,
@@ -4889,27 +4927,147 @@ this.events.on('action_B', () => {
         });
 
         this.soloRocketIntroTweens.push(landingTween, circleTween, settleTween);
+        this.soloRocketIntroTimers.push(landingSfxTimer);
 
-        const rabbitTimer = this.time.delayedCall(6000, () => {
+        const powerFxTimer = this.time.delayedCall(6000, () => {
+            if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished || !rocket.active) return;
+
+            this.playSoloRocketIntroSfx('solo-rocket-radio_beep');
             this.showSoloRocketMoonRabbitComms();
+
+            rocket.setPosition(finalX, finalY);
+            rocket.setScale(finalScaleX, finalScaleY);
+
+            const shakeTween = this.tweens.add({
+                targets: rocket,
+                x: { from: finalX - 3, to: finalX + 3 },
+                y: { from: finalY - 2, to: finalY + 2 },
+                angle: { from: -1.4, to: 1.4 },
+                yoyo: true,
+                repeat: -1,
+                duration: 55,
+                ease: 'Sine.easeInOut'
+            });
+
+            this.soloRocketIntroTweens.push(shakeTween);
+
+            const emitYellowRing = () => {
+                if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
+
+                const ring = this.add.circle(finalX, finalY, Math.min(rect.w, rect.h) * 0.065, 0xffff00, 0)
+                    .setStrokeStyle(3, 0xffee55, 0.95)
+                    .setDepth(9755)
+                    .setScrollFactor(0);
+
+                this.soloRocketIntroFxObjects = this.soloRocketIntroFxObjects || [];
+                this.soloRocketIntroFxObjects.push(ring);
+
+                const ringTween = this.tweens.add({
+                    targets: ring,
+                    scale: 3.6,
+                    alpha: 0,
+                    duration: 950,
+                    ease: 'Sine.easeOut',
+                    onComplete: () => {
+                        try {
+                            ring.destroy();
+                            this.soloRocketIntroFxObjects = (this.soloRocketIntroFxObjects || []).filter(obj => obj !== ring);
+                        } catch (_) {}
+                    }
+                });
+
+                this.soloRocketIntroTweens.push(ringTween);
+            };
+
+            emitYellowRing();
+
+            const ringTimer = this.time.addEvent({
+                delay: 430,
+                repeat: 10,
+                callback: emitYellowRing
+            });
+
+            this.soloRocketIntroTimers.push(ringTimer);
         });
 
         const unlockTimer = this.time.delayedCall(11000, () => {
-            this.clearSoloRocketIntroFx();
-            if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
-            this.soloRocketIntroActive = false;
-            this.soloRocketInputLocked = false;
-            if (rocket && rocket.active) {
-                rocket.setPosition(finalX, finalY);
-                rocket.setScale(finalScaleX, finalScaleY);
-                rocket.setAngle(0);
-                rocket.setAlpha(1);
+            this.playSoloRocketIntroSfx('solo-rocket-radio_beep');
+
+            const comms = this.soloRocketMoonRabbitContainer;
+            if (comms && comms.active) {
+                try {
+                    this.tweens.killTweensOf(comms);
+                    if (comms.list) {
+                        comms.list.forEach(child => {
+                            if (child) this.tweens.killTweensOf(child);
+                        });
+                    }
+
+                    for (let i = 0; i < 8; i++) {
+                        const bar = this.add.rectangle(
+                            rect.x + Phaser.Math.Between(24, Math.floor(rect.w - 24)),
+                            rect.y + Phaser.Math.Between(70, Math.floor(rect.h * 0.48)),
+                            Phaser.Math.Between(28, 110),
+                            Phaser.Math.Between(3, 9),
+                            [0xffffff, 0x00ffff, 0xff00ff, 0xffff00][i % 4],
+                            0.88
+                        ).setDepth(9765).setScrollFactor(0);
+
+                        this.soloRocketIntroFxObjects.push(bar);
+
+                        this.tweens.add({
+                            targets: bar,
+                            x: bar.x + Phaser.Math.Between(-42, 42),
+                            alpha: 0,
+                            duration: Phaser.Math.Between(80, 150),
+                            ease: 'Stepped',
+                            onComplete: () => {
+                                try { bar.destroy(); } catch (_) {}
+                            }
+                        });
+                    }
+
+                    this.tweens.add({
+                        targets: comms,
+                        x: { from: -10, to: 10 },
+                        y: { from: 5, to: -5 },
+                        alpha: { from: 1, to: 0.25 },
+                        scaleX: { from: 1.03, to: 0.96 },
+                        scaleY: { from: 0.96, to: 1.04 },
+                        yoyo: true,
+                        repeat: 4,
+                        duration: 26,
+                        ease: 'Stepped',
+                        onComplete: () => {
+                            try {
+                                if (comms && comms.active) comms.setVisible(false);
+                            } catch (_) {}
+                        }
+                    });
+                } catch (_) {}
             }
+
+            const finishUnlock = this.time.delayedCall(190, () => {
+                this.clearSoloRocketIntroFx();
+
+                if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
+
+                this.soloRocketIntroActive = false;
+                this.soloRocketInputLocked = false;
+
+                if (rocket && rocket.active) {
+                    rocket.setPosition(finalX, finalY);
+                    rocket.setScale(finalScaleX, finalScaleY);
+                    rocket.setAngle(0);
+                    rocket.setAlpha(1);
+                }
+            });
+
+            this.soloRocketIntroTimers.push(finishUnlock);
         });
 
-        this.soloRocketIntroTimers.push(rabbitTimer, unlockTimer);
+        this.soloRocketIntroTimers.push(powerFxTimer, unlockTimer);
     }
-
     showSoloRocketMoonRabbitComms() {
         if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
 
@@ -4930,7 +5088,10 @@ this.events.on('action_B', () => {
         const dd = String(now.getDate()).padStart(2, '0');
         const hh = String(now.getHours()).padStart(2, '0');
         const mi = String(now.getMinutes()).padStart(2, '0');
-        const msg = `收到收到，日期：${yyyy}/${mm}/${dd}，時間：${hh}:${mi}，一隻洋蔥要飛來月球訪視，完畢。`;
+
+        const msg =
+            `收到收到，日期：${yyyy}/${mm}/${dd}，時間：${hh}:${mi}，\n` +
+            `一隻洋蔥要飛來月球訪視，完畢，期待與你相見!`;
 
         const rabbitSize = Math.min(96, rect.w * 0.24);
         const rabbitX = rect.x + rect.w - rabbitSize * 0.62;
@@ -4947,12 +5108,12 @@ this.events.on('action_B', () => {
             }).setOrigin(0.5).setAlpha(0);
         }
 
-        const bubbleW = Math.min(rect.w - 44, 310);
-        const bubbleH = 92;
+        const bubbleW = Math.min(rect.w - 44, 328);
+        const bubbleH = 104;
         const bubbleX = rect.x + 18;
         const bubbleY = Math.max(rect.y + 78, rabbitY - bubbleH / 2);
 
-        const bubble = this.add.graphics();
+        const bubble = this.add.graphics().setAlpha(0);
         bubble.fillStyle(0xffffff, 0.92).fillRoundedRect(bubbleX, bubbleY, bubbleW, bubbleH, 14);
         bubble.lineStyle(3, 0x8a2be2, 1).strokeRoundedRect(bubbleX, bubbleY, bubbleW, bubbleH, 14);
         bubble.fillStyle(0xffffff, 0.92).fillTriangle(
@@ -4964,42 +5125,119 @@ this.events.on('action_B', () => {
             bubbleY + bubbleH * 0.76
         );
 
-        const txt = this.add.text(bubbleX + 15, bubbleY + 14, msg, {
+        const txt = this.add.text(bubbleX + 15, bubbleY + 15, '', {
             fontSize: '15px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#111111',
-            lineSpacing: 5,
+            lineSpacing: 7,
             wordWrap: { width: bubbleW - 30 }
         }).setAlpha(0);
 
         container.add([bubble, txt, rabbit]);
-        container.setAlpha(0);
+        container.setAlpha(1);
+        container.setScale(1, 1);
 
-        this.soloRocketIntroTweens.push(this.tweens.add({
-            targets: container,
-            alpha: 1,
-            duration: 260,
-            ease: 'Sine.easeOut'
-        }));
+        const noiseBars = [];
+        const glitchColors = [0xffffff, 0x00ffff, 0xff00ff, 0xffff00];
 
-        this.soloRocketIntroTweens.push(this.tweens.add({
-            targets: [rabbit, txt],
-            alpha: 1,
-            duration: 260,
-            ease: 'Sine.easeOut'
-        }));
+        for (let i = 0; i < 14; i++) {
+            const bar = this.add.rectangle(
+                rect.x + Phaser.Math.Between(18, Math.floor(rect.w - 18)),
+                rect.y + Phaser.Math.Between(68, Math.floor(rect.h * 0.48)),
+                Phaser.Math.Between(24, 130),
+                Phaser.Math.Between(3, 10),
+                glitchColors[i % glitchColors.length],
+                0
+            ).setScrollFactor(0);
 
-        this.soloRocketIntroTweens.push(this.tweens.add({
+            noiseBars.push(bar);
+            container.add(bar);
+        }
+
+        const glitchState = { tick: 0 };
+        const appearGlitch = this.time.addEvent({
+            delay: 42,
+            repeat: 7,
+            callback: () => {
+                glitchState.tick += 1;
+
+                container.setX(Phaser.Math.Between(-10, 10));
+                container.setY(Phaser.Math.Between(-5, 5));
+                container.setScale(
+                    Phaser.Math.FloatBetween(0.96, 1.04),
+                    Phaser.Math.FloatBetween(0.96, 1.04)
+                );
+
+                const flashAlpha = glitchState.tick % 2 === 0 ? 1 : 0.18;
+                bubble.setAlpha(flashAlpha);
+                rabbit.setAlpha(flashAlpha);
+                txt.setAlpha(0);
+
+                noiseBars.forEach(bar => {
+                    bar.setPosition(
+                        rect.x + Phaser.Math.Between(18, Math.floor(rect.w - 18)),
+                        rect.y + Phaser.Math.Between(68, Math.floor(rect.h * 0.48))
+                    );
+                    bar.setSize(Phaser.Math.Between(24, 130), Phaser.Math.Between(3, 10));
+                    bar.setAlpha(Phaser.Math.FloatBetween(0.35, 0.95));
+                });
+            },
+            callbackScope: this
+        });
+
+        const appearDone = this.time.delayedCall(390, () => {
+            if (!container || !container.active) return;
+
+            container.setX(0);
+            container.setY(0);
+            container.setScale(1, 1);
+            bubble.setAlpha(1);
+            rabbit.setAlpha(1);
+            txt.setAlpha(1);
+
+            noiseBars.forEach(bar => {
+                try { bar.destroy(); } catch (_) {}
+            });
+
+            const chars = Array.from(msg);
+            let idx = 0;
+            const typeDelay = Math.max(24, Math.floor(3900 / Math.max(chars.length, 1)));
+
+            const typeTimer = this.time.addEvent({
+                delay: typeDelay,
+                repeat: chars.length - 1,
+                callback: () => {
+                    if (!txt || !txt.active) return;
+                    idx += 1;
+                    txt.setText(chars.slice(0, idx).join(''));
+                }
+            });
+
+            const typingSfx1 = this.time.delayedCall(120, () => {
+                this.playSoloRocketIntroSfx('solo-rocket-typing');
+            });
+
+            const typingSfx2 = this.time.delayedCall(2450, () => {
+                this.playSoloRocketIntroSfx('solo-rocket-typing');
+            });
+
+            this.soloRocketIntroTimers.push(typeTimer, typingSfx1, typingSfx2);
+        });
+
+        this.soloRocketIntroTimers.push(appearGlitch, appearDone);
+
+        const rabbitFloatTween = this.tweens.add({
             targets: rabbit,
             y: rabbitY - 7,
             yoyo: true,
             repeat: -1,
             duration: 650,
             ease: 'Sine.easeInOut'
-        }));
-    }
+        });
 
+        this.soloRocketIntroTweens.push(rabbitFloatTween);
+    }
     beginSoloRocketEndingSequence() {
         if (this.soloRocketEndingRushStarted || !this.soloRocketPlayer) return;
 
