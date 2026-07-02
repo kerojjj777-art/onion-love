@@ -1921,6 +1921,7 @@ class BootScene extends Phaser.Scene {
         this.load.image('rocket-onion-player', 'rocket-onion-player.png');
         this.load.image('solo-rocket-moon-rabbit', 'solo-rocket-moon-rabbit.png');
         this.load.image('solo-rocket-monster-chicken', 'solo-rocket-monster-chicken.png');
+        this.load.image('solo-rocket-heart-life-container', 'solo-rocket-heart-life-container.png');
         this.load.audio('solo-rocket-cruise-bgm', 'solo-rocket-cruise-bgm.mp3');
         this.load.audio('solo-rocket-landing', 'solo-rocket-landing.mp3');
         this.load.audio('solo-rocket-typing', 'solo-rocket-typing.mp3');
@@ -5605,7 +5606,7 @@ this.events.on('action_B', () => {
         if (!spawnFromTop) {
             monster.setAlpha(0);
             this.showSoloRocketMonsterWarpIn(spawnX, spawnY, size);
-            monster.__soloRocketSpawnTimer = this.time.delayedCall(2000, () => {
+            monster.__soloRocketSpawnTimer = this.time.delayedCall(1300, () => {
                 if (!monster || !monster.active || monster.__soloRocketDead) return;
                 monster.__soloRocketSpawnPending = false;
                 monster.__soloRocketVx = monster.__soloRocketReadyVx || vx;
@@ -5654,8 +5655,8 @@ this.events.on('action_B', () => {
                 scale: 2.4 + i * 0.55,
                 angle: 180 + i * 90,
                 alpha: 0,
-                duration: 720,
-                delay: i * 330,
+                duration: 430,
+                delay: i * 220,
                 repeat: 1,
                 ease: 'Sine.easeOut',
                 onComplete: () => {
@@ -5683,7 +5684,7 @@ this.events.on('action_B', () => {
                     y: y + Math.sin(ang) * Phaser.Math.Between(12, 34),
                     angle: Phaser.Math.Between(160, 420),
                     alpha: 0,
-                    duration: Phaser.Math.Between(520, 960),
+                    duration: Phaser.Math.Between(420, 650),
                     yoyo: true,
                     repeat: 1,
                     ease: 'Sine.easeInOut',
@@ -5703,7 +5704,7 @@ this.events.on('action_B', () => {
             scale: 1.55,
             angle: 720,
             alpha: { from: 0.9, to: 0.25 },
-            duration: 250,
+            duration: 185,
             yoyo: true,
             repeat: 6,
             ease: 'Sine.easeInOut',
@@ -5826,7 +5827,6 @@ this.events.on('action_B', () => {
         this.soloRocketLastSpinAt = now;
 
         const rocket = this.soloRocketPlayer;
-        const baseAngle = rocket.angle || 0;
         const baseScaleX = rocket.scaleX || 1;
         const baseScaleY = rocket.scaleY || 1;
 
@@ -5841,9 +5841,10 @@ this.events.on('action_B', () => {
         } catch (_) {}
 
         if (this.tweens) this.tweens.killTweensOf(rocket);
+        rocket.setAngle(0);
         this.tweens.add({
             targets: rocket,
-            angle: baseAngle + 360,
+            angle: 360,
             scaleX: baseScaleX * 1.08,
             scaleY: baseScaleY * 1.08,
             duration: 420,
@@ -5851,7 +5852,7 @@ this.events.on('action_B', () => {
             onComplete: () => {
                 try {
                     if (rocket && rocket.active) {
-                        rocket.setAngle(baseAngle);
+                        rocket.setAngle(0);
                         rocket.setScale(baseScaleX, baseScaleY);
                     }
                 } catch (_) {}
@@ -6101,7 +6102,7 @@ this.events.on('action_B', () => {
 
         const baseX = rocket.x;
         const baseY = rocket.y;
-        const baseAngle = rocket.angle || 0;
+        const baseAngle = 0;
         const auraSize = Math.max(42, (this.soloRocketPlayerRadius || 28) * 2.2);
 
         try {
@@ -6139,11 +6140,13 @@ this.events.on('action_B', () => {
         });
 
         // 火箭短暫震動。只在受擊當下使用，不影響 11 秒開場震動清理。
+        if (this.tweens) this.tweens.killTweensOf(rocket);
+        rocket.setAngle(0);
         this.tweens.add({
             targets: rocket,
             x: { from: baseX - 5, to: baseX + 5 },
             y: { from: baseY - 3, to: baseY + 3 },
-            angle: { from: baseAngle - 2.2, to: baseAngle + 2.2 },
+            angle: { from: -2.2, to: 2.2 },
             yoyo: true,
             repeat: 4,
             duration: 34,
@@ -6152,7 +6155,7 @@ this.events.on('action_B', () => {
                 try {
                     if (rocket && rocket.active) {
                         rocket.setPosition(baseX, baseY);
-                        rocket.setAngle(baseAngle);
+                        rocket.setAngle(0);
                         if (rocket.clearTint) rocket.clearTint();
                     }
                 } catch (_) {}
@@ -6207,7 +6210,7 @@ this.events.on('action_B', () => {
 
         this.soloRocketStats = this.soloRocketStats || {};
         this.soloRocketStats.monsterKills = (this.soloRocketStats.monsterKills || 0) + 1;
-        this.setSoloRocketLifeValue((this.soloRocketLifeValue || 0) + 5);
+        this.setSoloRocketLifeValue((this.soloRocketLifeValue || 0) + 3);
     }
 
     checkSoloRocketMonsterPlayerHits() {
@@ -6460,55 +6463,54 @@ this.events.on('action_B', () => {
         const heartCx = rect.x + rect.w - 56;
         const heartCy = rect.y + 98;
         const heartSize = 58;
-        const lifeUi = this.add.container(0, 0);
+        const heartDisplaySize = 88;
+        const lifeUi = this.add.container(heartCx, heartCy);
 
         const heartGlow = this.add.graphics();
-        heartGlow.fillStyle(0x39ff14, 0.12);
-        drawHeart(heartGlow, heartCx, heartCy, heartSize + 7);
+        heartGlow.fillStyle(0xffffff, 0.18);
+        drawHeart(heartGlow, 0, 0, heartSize + 10);
         heartGlow.fillPath();
+        heartGlow.setBlendMode(Phaser.BlendModes.ADD);
 
-        const heartBg = this.add.graphics();
-        heartBg.fillStyle(0x08220d, 0.78);
-        drawHeart(heartBg, heartCx, heartCy, heartSize);
-        heartBg.fillPath();
-        heartBg.lineStyle(3, 0x39ff14, 0.95);
-        drawHeart(heartBg, heartCx, heartCy, heartSize);
-        heartBg.strokePath();
+        const heartBack = this.add.graphics();
+        heartBack.fillStyle(0x001a08, 0.62);
+        drawHeart(heartBack, 0, 0, heartSize - 2);
+        heartBack.fillPath();
 
-        const fillBaseY = heartCy + heartSize * 0.48;
+        const fillBaseY = heartSize * 0.48;
         const fillMaxHeight = heartSize * 1.18;
         const fillRect = this.add.rectangle(
-            heartCx,
+            0,
             fillBaseY,
             heartSize * 1.10,
             fillMaxHeight,
-            0x4deeff,
+            0x39ff14,
             0.92
-        ).setOrigin(0.5, 1);
+        ).setOrigin(0.5, 1).setBlendMode(Phaser.BlendModes.ADD);
 
         const waterSurface = this.add.ellipse(
-            heartCx,
+            0,
             fillBaseY - fillMaxHeight,
             heartSize * 1.02,
             9,
-            0xeaffff,
-            0.78
+            0xeaffd8,
+            0.86
         ).setBlendMode(Phaser.BlendModes.ADD);
 
         const waterBubbles = [];
         for (let i = 0; i < 5; i++) {
             const bubbleDot = this.add.circle(
-                heartCx + Phaser.Math.Between(-18, 18),
-                heartCy + Phaser.Math.Between(-18, 22),
+                Phaser.Math.Between(-18, 18),
+                Phaser.Math.Between(-18, 22),
                 Phaser.Math.FloatBetween(1.6, 3.2),
                 0xffffff,
-                0.28
+                0.30
             ).setBlendMode(Phaser.BlendModes.ADD);
             waterBubbles.push(bubbleDot);
             this.tweens.add({
                 targets: bubbleDot,
                 y: bubbleDot.y - Phaser.Math.Between(8, 18),
-                alpha: { from: 0.18, to: 0.55 },
+                alpha: { from: 0.16, to: 0.52 },
                 yoyo: true,
                 repeat: -1,
                 duration: Phaser.Math.Between(700, 1200),
@@ -6518,7 +6520,7 @@ this.events.on('action_B', () => {
 
         const heartMaskShape = this.add.graphics();
         heartMaskShape.fillStyle(0xffffff, 1);
-        drawHeart(heartMaskShape, heartCx, heartCy, heartSize - 3);
+        drawHeart(heartMaskShape, 0, 0, heartSize - 3);
         heartMaskShape.fillPath();
         heartMaskShape.setVisible(false);
         const heartMask = heartMaskShape.createGeometryMask();
@@ -6526,7 +6528,22 @@ this.events.on('action_B', () => {
         waterSurface.setMask(heartMask);
         waterBubbles.forEach(b => b.setMask(heartMask));
 
-        const lifeText = this.add.text(heartCx, heartCy + 6, '100%', {
+        let heartFrame;
+        if (this.textures.exists('solo-rocket-heart-life-container')) {
+            heartFrame = this.add.image(0, 0, 'solo-rocket-heart-life-container')
+                .setDisplaySize(heartDisplaySize, heartDisplaySize)
+                .setAlpha(0.98);
+        } else {
+            heartFrame = this.add.graphics();
+            heartFrame.fillStyle(0x08220d, 0.38);
+            drawHeart(heartFrame, 0, 0, heartSize);
+            heartFrame.fillPath();
+            heartFrame.lineStyle(3, 0xffffff, 0.92);
+            drawHeart(heartFrame, 0, 0, heartSize);
+            heartFrame.strokePath();
+        }
+
+        const lifeText = this.add.text(0, 6, '100%', {
             fontSize: '17px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
@@ -6535,26 +6552,30 @@ this.events.on('action_B', () => {
             strokeThickness: 5
         }).setOrigin(0.5);
 
-        lifeUi.add([heartGlow, fillRect, waterSurface, ...waterBubbles, heartMaskShape, heartBg, lifeText]);
+        lifeUi.add([heartGlow, heartBack, fillRect, waterSurface, ...waterBubbles, heartMaskShape, heartFrame, lifeText]);
         ui.add([timerText, lifeUi]);
 
         this.soloRocketLifeText = lifeText;
         this.soloRocketLifeUi = {
             container: lifeUi,
+            glow: heartGlow,
+            frame: heartFrame,
             fillRect,
             waterSurface,
             waterBubbles,
             text: lifeText,
             fillBaseY,
-            fillMaxHeight
+            fillMaxHeight,
+            baseX: heartCx,
+            baseY: heartCy
         };
 
         this.soloRocketLifeBreathTween = this.tweens.add({
-            targets: lifeUi,
-            alpha: { from: 0.88, to: 1 },
-            scaleX: { from: 0.98, to: 1.03 },
-            scaleY: { from: 0.98, to: 1.03 },
-            duration: 1100,
+            targets: heartFrame,
+            alpha: { from: 0.84, to: 1 },
+            scaleX: { from: 0.985, to: 1.045 },
+            scaleY: { from: 0.985, to: 1.045 },
+            duration: 1050,
             yoyo: true,
             repeat: -1,
             ease: 'Sine.easeInOut'
@@ -6701,19 +6722,23 @@ this.events.on('action_B', () => {
         const ui = this.soloRocketLifeUi;
         if (!ui || !ui.container || !ui.text) return;
 
+        const baseX = Number.isFinite(ui.baseX) ? ui.baseX : 0;
+        const baseY = Number.isFinite(ui.baseY) ? ui.baseY : 0;
+
         try {
             this.tweens.killTweensOf(ui.container);
             this.tweens.killTweensOf(ui.text);
         } catch (_) {}
 
-        ui.container.setPosition(0, 0);
+        ui.container.setPosition(baseX, baseY);
+        ui.container.setAngle(0);
         ui.text.setColor('#ffffff');
         ui.text.setStroke('#ff1744', 6);
 
         this.tweens.add({
             targets: ui.container,
-            x: { from: -8, to: 8 },
-            y: { from: -5, to: 5 },
+            x: { from: baseX - 8, to: baseX + 8 },
+            y: { from: baseY - 5, to: baseY + 5 },
             angle: { from: -3, to: 3 },
             yoyo: true,
             repeat: 5,
@@ -6722,7 +6747,7 @@ this.events.on('action_B', () => {
             onComplete: () => {
                 try {
                     if (ui.container && ui.container.active) {
-                        ui.container.setPosition(0, 0);
+                        ui.container.setPosition(baseX, baseY);
                         ui.container.setAngle(0);
                     }
                 } catch (_) {}
@@ -6983,7 +7008,24 @@ this.events.on('action_B', () => {
     }
 
     returnFromSoloRocketCruise() {
-        this.clearSoloRocketCruise(false);
+        this.clearSoloRocketCruise(true);
+
+        try {
+            const game = window.GameLogic.phaserGame;
+            if (game && window.GameLogic.phaserLoaded) {
+                game.scene.stop('MainScene');
+                game.scene.start('MainScene');
+                game.scene.bringToTop('UIScene');
+            } else {
+                this.restoreSoloRocketLobbyUi();
+                this.resumeLobbyBgmAfterSoloRocket();
+            }
+        } catch (err) {
+            console.warn('[火箭巡航] 返回大廳時重啟 MainScene 失敗，改用原本清理流程：', err);
+            this.restoreSoloRocketLobbyUi();
+            this.resumeLobbyBgmAfterSoloRocket();
+        }
+
         console.log('[火箭巡航] 已返回洋蔥大廳。');
     }
 
