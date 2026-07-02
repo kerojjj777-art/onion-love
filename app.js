@@ -2310,6 +2310,7 @@ class MainScene extends Phaser.Scene {
         this.soloRocketIntroTweens = [];
         this.soloRocketIntroTimers = [];
         this.soloRocketIntroFxObjects = [];
+        this.soloRocketIntroShakeTween = null;
         this.soloRocketEndingRushStarted = false;
         this.soloRocketEndingFadeStarted = false;
 
@@ -4825,8 +4826,24 @@ this.events.on('action_B', () => {
 
     clearSoloRocketIntroFx() {
         try {
+            if (this.soloRocketIntroShakeTween) {
+                if (this.soloRocketIntroShakeTween.stop) this.soloRocketIntroShakeTween.stop();
+                if (this.soloRocketIntroShakeTween.remove) this.soloRocketIntroShakeTween.remove();
+            }
+        } catch (_) {}
+        this.soloRocketIntroShakeTween = null;
+
+        try {
+            if (this.soloRocketPlayer && this.tweens) {
+                this.tweens.killTweensOf(this.soloRocketPlayer);
+            }
+        } catch (_) {}
+
+        try {
             (this.soloRocketIntroTweens || []).forEach(tw => {
-                if (tw && tw.remove) tw.remove();
+                if (!tw) return;
+                if (tw.stop) tw.stop();
+                if (tw.remove) tw.remove();
             });
         } catch (_) {}
 
@@ -4949,6 +4966,7 @@ this.events.on('action_B', () => {
                 ease: 'Sine.easeInOut'
             });
 
+            this.soloRocketIntroShakeTween = shakeTween;
             this.soloRocketIntroTweens.push(shakeTween);
 
             const emitYellowRing = () => {
@@ -4992,6 +5010,33 @@ this.events.on('action_B', () => {
 
         const unlockTimer = this.time.delayedCall(11000, () => {
             this.playSoloRocketIntroSfx('solo-rocket-radio_beep');
+
+            // 關鍵修正：
+            // 第 11 秒一到，先強制停止火箭震動並解除操作鎖。
+            // 不再把「恢復操控」依賴後面的 GLITCH 消失動畫或 190ms 延遲 timer。
+            try {
+                if (this.soloRocketIntroShakeTween) {
+                    if (this.soloRocketIntroShakeTween.stop) this.soloRocketIntroShakeTween.stop();
+                    if (this.soloRocketIntroShakeTween.remove) this.soloRocketIntroShakeTween.remove();
+                }
+            } catch (_) {}
+            this.soloRocketIntroShakeTween = null;
+
+            try {
+                if (this.tweens && rocket) this.tweens.killTweensOf(rocket);
+            } catch (_) {}
+
+            if (this.soloRocketCruiseActive && !this.soloRocketCruiseFinished) {
+                this.soloRocketIntroActive = false;
+                this.soloRocketInputLocked = false;
+
+                if (rocket && rocket.active) {
+                    rocket.setPosition(finalX, finalY);
+                    rocket.setScale(finalScaleX, finalScaleY);
+                    rocket.setAngle(0);
+                    rocket.setAlpha(1);
+                }
+            }
 
             const comms = this.soloRocketMoonRabbitContainer;
             if (comms && comms.active) {
@@ -5048,6 +5093,8 @@ this.events.on('action_B', () => {
             }
 
             const finishUnlock = this.time.delayedCall(190, () => {
+                // 這裡只負責清除玉兔通訊、黃光圈、雜訊條等視覺殘留。
+                // 操控解鎖已在第 11 秒當下完成，避免被清理 timer 影響。
                 this.clearSoloRocketIntroFx();
 
                 if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
