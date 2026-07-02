@@ -4633,6 +4633,7 @@ this.events.on('action_B', () => {
             .setScrollFactor(0);
 
         this.soloRocketTutorialContainer = container;
+        this.soloRocketTutorialStartPending = false;
 
         const fullBlocker = this.add.zone(cam.width / 2, cam.height / 2, cam.width, cam.height)
             .setInteractive();
@@ -4652,7 +4653,8 @@ this.events.on('action_B', () => {
         }).setOrigin(0.5);
 
         const body = this.add.text(rect.centerX, py + 92,
-            '「我的一小滴淚，是洋蔥的汪洋」，曾經登上月球的宇宙洋蔥如是説。\n\n' +
+            '『我的一小滴淚，是洋蔥的汪洋』，\n' +
+            '曾經登上月球的宇宙洋蔥如是說\n\n' +
             '搖桿控制方向，躲避隕石攻擊，發射擊退怪獸，\n' +
             '旋轉可彈開魔王攻擊或來不及躲開的隕石。\n\n' +
             '努力飛向月球吧！找到玉兔星人國民外交！！！！',
@@ -4669,6 +4671,9 @@ this.events.on('action_B', () => {
         const btnY = py + panelH - 56;
         const btnW = 180;
         const btnH = 46;
+        const hitW = btnW + 42;
+        const hitH = btnH + 30;
+
         const btnBg = this.add.rectangle(rect.centerX, btnY, btnW, btnH, 0xffffff, 1)
             .setStrokeStyle(3, 0xeeeeff, 1)
             .setInteractive({ useHandCursor: true });
@@ -4680,47 +4685,87 @@ this.events.on('action_B', () => {
             color: '#000000'
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-        const startHit = this.add.zone(rect.centerX, btnY, btnW + 30, btnH + 24)
+        const startHit = this.add.zone(rect.centerX, btnY, hitW, hitH)
             .setInteractive({ useHandCursor: true });
 
         const isPointInStart = (pointer) => {
             if (!pointer) return false;
-            return pointer.x >= rect.centerX - (btnW + 30) / 2 &&
-                   pointer.x <= rect.centerX + (btnW + 30) / 2 &&
-                   pointer.y >= btnY - (btnH + 24) / 2 &&
-                   pointer.y <= btnY + (btnH + 24) / 2;
+            const pxNow = Number(pointer.x);
+            const pyNow = Number(pointer.y);
+            if (!Number.isFinite(pxNow) || !Number.isFinite(pyNow)) return false;
+
+            return pxNow >= rect.centerX - hitW / 2 &&
+                   pxNow <= rect.centerX + hitW / 2 &&
+                   pyNow >= btnY - hitH / 2 &&
+                   pyNow <= btnY + hitH / 2;
         };
 
         const start = (pointer, localX, localY, event) => {
             if (event && event.stopPropagation) event.stopPropagation();
-            if (this.soloRocketGameplayStarted) return;
+            if (this.soloRocketGameplayStarted || this.soloRocketTutorialStartPending) return;
+
+            this.soloRocketTutorialStartPending = true;
+
             this.tweens.add({
                 targets: [btnBg, btnText],
                 scaleX: 0.94,
                 scaleY: 0.94,
                 yoyo: true,
                 duration: 80,
-                onComplete: () => this.startSoloRocketGameplay()
+                onComplete: () => {
+                    this.startSoloRocketGameplay();
+                }
+            });
+
+            // 防呆：若某些裝置沒有正常跑完 tween，也不要卡在教學畫面。
+            this.time.delayedCall(180, () => {
+                if (!this.soloRocketGameplayStarted && this.soloRocketTutorialStartPending) {
+                    this.startSoloRocketGameplay();
+                }
             });
         };
 
-        fullBlocker.on('pointerdown', (pointer, localX, localY, event) => {
+        const tryStartFromPointer = (pointer, localX, localY, event) => {
             if (event && event.stopPropagation) event.stopPropagation();
             if (isPointInStart(pointer)) start(pointer, localX, localY, event);
-        });
+        };
+
+        fullBlocker.on('pointerdown', tryStartFromPointer);
+        fullBlocker.on('pointerup', tryStartFromPointer);
+
         btnBg.on('pointerdown', start);
+        btnBg.on('pointerup', start);
         btnText.on('pointerdown', start);
+        btnText.on('pointerup', start);
         startHit.on('pointerdown', start);
+        startHit.on('pointerup', start);
+
+        // 關鍵修正：避免 fullBlocker 在部分裝置上攔截按鈕事件後，按鈕沒有收到 pointer。
+        this.soloRocketTutorialPointerHandler = tryStartFromPointer;
+        this.input.on('pointerdown', this.soloRocketTutorialPointerHandler);
+        this.input.on('pointerup', this.soloRocketTutorialPointerHandler);
 
         container.add([fullBlocker, panel, title, body, btnBg, btnText, startHit]);
     }
 
     clearSoloRocketTutorial() {
         try {
+            if (this.soloRocketTutorialPointerHandler && this.input) {
+                this.input.off('pointerdown', this.soloRocketTutorialPointerHandler);
+                this.input.off('pointerup', this.soloRocketTutorialPointerHandler);
+            }
+        } catch (err) {
+            console.warn('[火箭巡航] 教學點擊監聽清理失敗，已略過：', err);
+        }
+
+        try {
             if (this.soloRocketTutorialContainer) this.soloRocketTutorialContainer.destroy(true);
         } catch (err) {
             console.warn('[火箭巡航] 教學介面清理失敗，已略過：', err);
         }
+
+        this.soloRocketTutorialPointerHandler = null;
+        this.soloRocketTutorialStartPending = false;
         this.soloRocketTutorialContainer = null;
     }
 
