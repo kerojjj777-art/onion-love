@@ -6526,13 +6526,6 @@ this.events.on('action_B', () => {
         waterSurface.setMask(heartMask);
         waterBubbles.forEach(b => b.setMask(heartMask));
 
-        const heartMaskShape = this.add.graphics();
-        heartMaskShape.fillStyle(0xffffff, 1);
-        drawHeart(heartMaskShape, heartCx, heartCy, heartSize - 3);
-        heartMaskShape.fillPath();
-        heartMaskShape.setVisible(false);
-        fillRect.setMask(heartMaskShape.createGeometryMask());
-
         const lifeText = this.add.text(heartCx, heartCy + 6, '100%', {
             fontSize: '17px',
             fontFamily: 'Arial, sans-serif',
