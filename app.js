@@ -2338,6 +2338,7 @@ class MainScene extends Phaser.Scene {
         this.soloRocketMaxMonsters = 50;
         this.soloRocketLastFireAt = 0;
         this.soloRocketFireCooldownMs = 320;
+        this.soloRocketStage4FxObjects = [];
         this.soloRocketStage4ClearedForEnding = false;
         this.soloRocketStats = {
             monsterKills: 0,
@@ -2662,8 +2663,33 @@ class MainScene extends Phaser.Scene {
         this.initPrinceCatSync();
 
         this.cursors = this.input.keyboard.createCursorKeys(); this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE); this.shiftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
-        this.spaceKey.on('down', (e) => { if (!e.repeat && document.activeElement.tagName !== 'INPUT') this.spacePressTime = Date.now(); });
-        this.spaceKey.on('up', () => { if (document.activeElement.tagName === 'INPUT') return; let duration = Date.now() - this.spacePressTime; if (window.GameLogic.placingFurnitureKey) this.events.emit('action_A_place'); else if (duration > 500) this.events.emit('action_A_long'); else this.events.emit('action_A_short'); });
+        this.spaceKey.on('down', (e) => {
+            if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+
+            // 火箭巡航中，Space 不再走大廳 A 鍵流程，改為直接發射光束。
+            if (this.soloRocketCruiseActive && !this.soloRocketCruiseFinished) {
+                if (e && e.preventDefault) e.preventDefault();
+                if (!e.repeat && this.fireSoloRocketBeam) this.fireSoloRocketBeam();
+                return;
+            }
+
+            if (!e.repeat) this.spacePressTime = Date.now();
+        });
+
+        this.spaceKey.on('up', (e) => {
+            if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+
+            // 火箭巡航中避免 Space keyup 觸發原本 A 鍵短按/長按事件。
+            if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished) {
+                if (e && e.preventDefault) e.preventDefault();
+                return;
+            }
+
+            let duration = Date.now() - this.spacePressTime;
+            if (window.GameLogic.placingFurnitureKey) this.events.emit('action_A_place');
+            else if (duration > 500) this.events.emit('action_A_long');
+            else this.events.emit('action_A_short');
+        });
         
         this.shiftKey.on('down', (e) => { 
             if (!e.repeat && document.activeElement.tagName !== 'INPUT') {
@@ -5413,11 +5439,26 @@ this.events.on('action_B', () => {
         };
 
         (this.soloRocketMonsters || []).forEach(destroyObj);
-        (this.soloRocketBeams || []).forEach(destroyObj);
+
+        [...(this.soloRocketBeams || [])].forEach(beam => {
+            try {
+                if (this.destroySoloRocketBeam) this.destroySoloRocketBeam(beam);
+                else destroyObj(beam);
+            } catch (_) {
+                destroyObj(beam);
+            }
+        });
+
+        (this.soloRocketStage4FxObjects || []).forEach(destroyObj);
 
         this.soloRocketMonsters = [];
         this.soloRocketBeams = [];
+        this.soloRocketStage4FxObjects = [];
         this.soloRocketLastFireAt = 0;
+
+        try {
+            if (this.soloRocketPlayer && this.soloRocketPlayer.clearTint) this.soloRocketPlayer.clearTint();
+        } catch (_) {}
 
         if (resetStats) {
             this.soloRocketMonsterSpawnedCount = 0;
@@ -5545,21 +5586,86 @@ this.events.on('action_B', () => {
         if (now - (this.soloRocketLastFireAt || 0) < cooldown) return;
         this.soloRocketLastFireAt = now;
 
+        try {
+            if (this.sound && this.sound.context && this.sound.context.state === 'suspended') {
+                this.sound.context.resume();
+            }
+        } catch (_) {}
+
+        try {
+            if (!window.GameLogic.muteSFX && this.cache.audio.exists('minimum_laser')) {
+                window.playSFX(this, 'minimum_laser');
+            }
+        } catch (_) {}
+
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
         const startX = Phaser.Math.Clamp(this.soloRocketPlayer.x || rect.centerX, rect.x + 10, rect.x + rect.w - 10);
-        const startY = (this.soloRocketPlayer.y || rect.centerY) - Math.max(24, this.soloRocketPlayerRadius || 28);
+        const startY = (this.soloRocketPlayer.y || rect.centerY) - Math.max(30, this.soloRocketPlayerRadius || 28);
 
-        const beam = this.add.rectangle(startX, startY, 8, 48, 0x8ffcff, 0.96)
-            .setStrokeStyle(2, 0xffffff, 0.9)
-            .setDepth(9611)
+        // 主碰撞光束：保留 rectangle，讓 getBounds() 穩定可用。
+        const beam = this.add.rectangle(startX, startY, 10, 68, 0xdfffff, 1)
+            .setStrokeStyle(2, 0xffffff, 0.95)
+            .setDepth(9616)
             .setScrollFactor(0)
             .setBlendMode(Phaser.BlendModes.ADD);
 
-        beam.__soloRocketVy = -760;
+        // 視覺光暈：跟著主光束移動，但不參與碰撞。
+        const glow = this.add.rectangle(startX, startY, 28, 86, 0x33eaff, 0.22)
+            .setDepth(9615)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        const head = this.add.circle(startX, startY - 42, 8, 0xffffff, 0.98)
+            .setDepth(9617)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        glow.__soloRocketOffsetY = 0;
+        head.__soloRocketOffsetY = -42;
+
+        beam.__soloRocketVy = -860;
         beam.__soloRocketDamage = 2;
         beam.__soloRocketUsed = false;
+        beam.__soloRocketFx = [glow, head];
 
-        this.soloRocketContainer.add(beam);
+        this.soloRocketContainer.add([glow, beam, head]);
+
+        // 發射口短暫噴發粒子，數量少，避免效能負擔。
+        this.soloRocketStage4FxObjects = this.soloRocketStage4FxObjects || [];
+        if (this.textures.exists('particle_flare')) {
+            for (let i = 0; i < 7; i++) {
+                const p = this.add.image(
+                    startX + Phaser.Math.Between(-12, 12),
+                    startY + Phaser.Math.Between(14, 26),
+                    'particle_flare'
+                )
+                    .setTint([0x8ffcff, 0xffffff, 0x4deeff][i % 3])
+                    .setAlpha(0.92)
+                    .setScale(Phaser.Math.FloatBetween(0.65, 1.25))
+                    .setDepth(9618)
+                    .setScrollFactor(0)
+                    .setBlendMode(Phaser.BlendModes.ADD);
+
+                this.soloRocketContainer.add(p);
+                this.soloRocketStage4FxObjects.push(p);
+
+                this.tweens.add({
+                    targets: p,
+                    x: p.x + Phaser.Math.Between(-24, 24),
+                    y: p.y + Phaser.Math.Between(10, 34),
+                    alpha: 0,
+                    scaleX: 0.08,
+                    scaleY: 0.08,
+                    duration: Phaser.Math.Between(140, 240),
+                    ease: 'Sine.easeOut',
+                    onComplete: () => {
+                        try { p.destroy(); } catch (_) {}
+                        this.soloRocketStage4FxObjects = (this.soloRocketStage4FxObjects || []).filter(obj => obj !== p);
+                    }
+                });
+            }
+        }
+
         this.soloRocketBeams = this.soloRocketBeams || [];
         this.soloRocketBeams.push(beam);
     }
@@ -5567,6 +5673,15 @@ this.events.on('action_B', () => {
     destroySoloRocketBeam(beam) {
         if (!beam) return;
         this.soloRocketBeams = (this.soloRocketBeams || []).filter(b => b !== beam);
+
+        try {
+            if (Array.isArray(beam.__soloRocketFx)) {
+                beam.__soloRocketFx.forEach(fx => {
+                    try { if (fx && fx.destroy) fx.destroy(); } catch (_) {}
+                });
+            }
+        } catch (_) {}
+
         try { if (beam.destroy) beam.destroy(); } catch (_) {}
     }
 
@@ -5590,7 +5705,16 @@ this.events.on('action_B', () => {
                 return;
             }
             beam.y += (beam.__soloRocketVy || -720) * dt;
-            if (beam.y < rect.y - 70) this.destroySoloRocketBeam(beam);
+
+            if (Array.isArray(beam.__soloRocketFx)) {
+                beam.__soloRocketFx.forEach(fx => {
+                    if (!fx || !fx.active) return;
+                    fx.x = beam.x;
+                    fx.y = beam.y + (fx.__soloRocketOffsetY || 0);
+                });
+            }
+
+            if (beam.y < rect.y - 90) this.destroySoloRocketBeam(beam);
         });
 
         monsters.forEach(monster => {
@@ -5617,6 +5741,146 @@ this.events.on('action_B', () => {
         this.checkSoloRocketMonsterPlayerHits();
     }
 
+    showSoloRocketMonsterExplosion(x, y, mode = 'kill') {
+        if (!this.soloRocketContainer) return;
+
+        this.soloRocketStage4FxObjects = this.soloRocketStage4FxObjects || [];
+
+        const isHitPlayer = mode === 'hitPlayer';
+        const colors = isHitPlayer
+            ? [0xff3355, 0xffaa33, 0xffffff, 0x9b1bff]
+            : [0xffffff, 0xffdd55, 0xff8844, 0x66ffff];
+
+        const ringColor = isHitPlayer ? 0xff3355 : 0xffdd55;
+
+        const ring = this.add.circle(x, y, 10, ringColor, 0)
+            .setStrokeStyle(4, ringColor, 0.9)
+            .setDepth(9620)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        this.soloRocketContainer.add(ring);
+        this.soloRocketStage4FxObjects.push(ring);
+
+        this.tweens.add({
+            targets: ring,
+            scale: isHitPlayer ? 3.2 : 2.6,
+            alpha: 0,
+            duration: 300,
+            ease: 'Sine.easeOut',
+            onComplete: () => {
+                try { ring.destroy(); } catch (_) {}
+                this.soloRocketStage4FxObjects = (this.soloRocketStage4FxObjects || []).filter(obj => obj !== ring);
+            }
+        });
+
+        if (!this.textures.exists('particle_flare')) return;
+
+        const count = isHitPlayer ? 18 : 14;
+        for (let i = 0; i < count; i++) {
+            const p = this.add.image(x, y, 'particle_flare')
+                .setTint(colors[i % colors.length])
+                .setAlpha(0.95)
+                .setScale(Phaser.Math.FloatBetween(0.85, 1.65))
+                .setDepth(9621)
+                .setScrollFactor(0)
+                .setBlendMode(Phaser.BlendModes.ADD);
+
+            const angle = Math.random() * Math.PI * 2;
+            const dist = Phaser.Math.Between(isHitPlayer ? 28 : 22, isHitPlayer ? 78 : 60);
+
+            this.soloRocketContainer.add(p);
+            this.soloRocketStage4FxObjects.push(p);
+
+            this.tweens.add({
+                targets: p,
+                x: x + Math.cos(angle) * dist,
+                y: y + Math.sin(angle) * dist,
+                alpha: 0,
+                scaleX: 0.05,
+                scaleY: 0.05,
+                duration: Phaser.Math.Between(220, 420),
+                ease: 'Cubic.easeOut',
+                onComplete: () => {
+                    try { p.destroy(); } catch (_) {}
+                    this.soloRocketStage4FxObjects = (this.soloRocketStage4FxObjects || []).filter(obj => obj !== p);
+                }
+            });
+        }
+    }
+
+    showSoloRocketPlayerHitFeedback() {
+        const rocket = this.soloRocketPlayer;
+        if (!rocket || !rocket.active || !this.soloRocketContainer) return;
+
+        const baseX = rocket.x;
+        const baseY = rocket.y;
+        const baseAngle = rocket.angle || 0;
+        const auraSize = Math.max(42, (this.soloRocketPlayerRadius || 28) * 2.2);
+
+        try {
+            if (rocket.setTint) rocket.setTint(0xff7a7a);
+        } catch (_) {}
+
+        // 狀態下降感：紅紫色短暫漸層感光暈。
+        const auraOuter = this.add.circle(baseX, baseY, auraSize * 0.65, 0xff2244, 0.20)
+            .setDepth(9622)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        const auraInner = this.add.circle(baseX, baseY, auraSize * 0.38, 0x7b2cff, 0.24)
+            .setDepth(9623)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        this.soloRocketContainer.add([auraOuter, auraInner]);
+        this.soloRocketStage4FxObjects = this.soloRocketStage4FxObjects || [];
+        this.soloRocketStage4FxObjects.push(auraOuter, auraInner);
+
+        this.tweens.add({
+            targets: [auraOuter, auraInner],
+            scaleX: 2.2,
+            scaleY: 1.65,
+            alpha: 0,
+            duration: 360,
+            ease: 'Sine.easeOut',
+            onComplete: () => {
+                [auraOuter, auraInner].forEach(obj => {
+                    try { if (obj && obj.destroy) obj.destroy(); } catch (_) {}
+                });
+                this.soloRocketStage4FxObjects = (this.soloRocketStage4FxObjects || []).filter(obj => obj !== auraOuter && obj !== auraInner);
+            }
+        });
+
+        // 火箭短暫震動。只在受擊當下使用，不影響 11 秒開場震動清理。
+        this.tweens.add({
+            targets: rocket,
+            x: { from: baseX - 5, to: baseX + 5 },
+            y: { from: baseY - 3, to: baseY + 3 },
+            angle: { from: baseAngle - 2.2, to: baseAngle + 2.2 },
+            yoyo: true,
+            repeat: 4,
+            duration: 34,
+            ease: 'Sine.easeInOut',
+            onComplete: () => {
+                try {
+                    if (rocket && rocket.active) {
+                        rocket.setPosition(baseX, baseY);
+                        rocket.setAngle(baseAngle);
+                        if (rocket.clearTint) rocket.clearTint();
+                    }
+                } catch (_) {}
+            }
+        });
+
+        this.time.delayedCall(190, () => {
+            try {
+                if (rocket && rocket.active && rocket.clearTint) rocket.clearTint();
+            } catch (_) {}
+        });
+    }
+
+  
     checkSoloRocketBeamMonsterHits() {
         const beams = [...(this.soloRocketBeams || [])];
         const monsters = [...(this.soloRocketMonsters || [])];
@@ -5648,7 +5912,12 @@ this.events.on('action_B', () => {
     }
 
     handleSoloRocketMonsterKilled(monster) {
+        const x = monster ? monster.x : 0;
+        const y = monster ? monster.y : 0;
+
+        this.showSoloRocketMonsterExplosion(x, y, 'kill');
         this.destroySoloRocketMonster(monster);
+
         this.soloRocketStats = this.soloRocketStats || {};
         this.soloRocketStats.monsterKills = (this.soloRocketStats.monsterKills || 0) + 1;
         this.setSoloRocketLifeValue((this.soloRocketLifeValue || 0) + 5);
@@ -5668,7 +5937,13 @@ this.events.on('action_B', () => {
             try { monsterBounds = monster.getBounds(); } catch (_) { continue; }
 
             if (Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, monsterBounds)) {
+                const hitX = monster.x;
+                const hitY = monster.y;
+
+                this.showSoloRocketMonsterExplosion(hitX, hitY, 'hitPlayer');
+                this.showSoloRocketPlayerHitFeedback();
                 this.destroySoloRocketMonster(monster);
+
                 this.soloRocketStats = this.soloRocketStats || {};
                 this.soloRocketStats.monsterHits = (this.soloRocketStats.monsterHits || 0) + 1;
                 this.setSoloRocketLifeValue((this.soloRocketLifeValue || 0) - 10);
@@ -5929,7 +6204,10 @@ this.events.on('action_B', () => {
         this.setSoloRocketLifeValue(this.soloRocketLifeValue ?? 100);
 
         const makeRocketButton = (x, y, radius, color, label, actionName) => {
-            const btn = this.add.circle(x, y, radius, color, 0.5).setStrokeStyle(3, 0xffffff, 0.85).setInteractive({ useHandCursor: true });
+            const btn = this.add.circle(x, y, radius, color, 0.62)
+                .setStrokeStyle(3, 0xffffff, 0.9)
+                .setScrollFactor(0);
+
             const txt = this.add.text(x, y, label, {
                 fontSize: '17px',
                 fontFamily: 'Arial, sans-serif',
@@ -5937,11 +6215,18 @@ this.events.on('action_B', () => {
                 color: '#ffffff',
                 stroke: '#000000',
                 strokeThickness: 4
-            }).setOrigin(0.5);
+            }).setOrigin(0.5).setScrollFactor(0);
+
+            // 透明 Hit Zone：比圓形略大，專門負責接收 pointerdown。
+            // 避免玩家點到文字邊緣、透明區或手機觸控偏移時沒有反應。
+            const hit = this.add.zone(x, y, radius * 2.12, radius * 2.12)
+                .setScrollFactor(0)
+                .setInteractive({ useHandCursor: true });
+
             const click = (pointer, localX, localY, event) => {
                 if (event && event.stopPropagation) event.stopPropagation();
 
-                btn.setFillStyle(0xffffff, 0.82);
+                btn.setFillStyle(0xffffff, 0.86);
                 this.tweens.add({
                     targets: [btn, txt],
                     scaleX: 0.88,
@@ -5949,7 +6234,7 @@ this.events.on('action_B', () => {
                     yoyo: true,
                     duration: 80,
                     onComplete: () => {
-                        btn.setFillStyle(color, 0.5);
+                        btn.setFillStyle(color, 0.62);
                         btn.setScale(1);
                         txt.setScale(1);
                     }
@@ -5968,10 +6253,14 @@ this.events.on('action_B', () => {
                 console.log(`[火箭巡航] ${actionName} 尚未開放`);
                 if (typeof sendBubble === 'function') sendBubble(`${label}功能尚未開放`);
             };
-            btn.on('pointerdown', click);
-            txt.setInteractive({ useHandCursor: true }).on('pointerdown', click);
-            ui.add([btn, txt]);
-            return { btn, txt };
+
+            hit.on('pointerdown', click);
+            hit.on('pointerup', (pointer, localX, localY, event) => {
+                if (event && event.stopPropagation) event.stopPropagation();
+            });
+
+            ui.add([btn, txt, hit]);
+            return { btn, txt, hit };
         };
 
         const btnX = rect.x + rect.w - 58;
