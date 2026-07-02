@@ -13,7 +13,13 @@ const ASSETS = [
 self.addEventListener('install', (e) => {
     self.skipWaiting();
     e.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+        caches.open(CACHE_NAME).then(async (cache) => {
+            await Promise.allSettled(
+                ASSETS.map((asset) => cache.add(asset).catch((err) => {
+                    console.warn('[SW] 快取失敗，已略過：', asset, err);
+                }))
+            );
+        })
     );
 });
 
