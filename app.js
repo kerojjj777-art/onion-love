@@ -4179,7 +4179,11 @@ this.events.on('action_B', () => {
             return;
         }
 
-        const localCoins = Number(window.GameLogic.myProfile?.coins || 0);
+        const localCoins = Number(
+            window.GameLogic.myProfile && window.GameLogic.myProfile.coins
+                ? window.GameLogic.myProfile.coins
+                : 0
+        );
         if (!Number.isFinite(localCoins) || localCoins < cost) {
             this.openSoloRocketPaymentConfirm(cost, {
                 mode: 'notice',
@@ -4196,7 +4200,9 @@ this.events.on('action_B', () => {
         if (this.soloRocketPaymentPending) return;
         this.soloRocketPaymentPending = true;
 
-        const uid = window.GameLogic.currentUser?.uid;
+        const uid = window.GameLogic.currentUser && window.GameLogic.currentUser.uid
+            ? window.GameLogic.currentUser.uid
+            : null;
         if (!uid) {
             this.soloRocketPaymentPending = false;
             this.openSoloRocketPaymentConfirm(cost, {
@@ -4287,7 +4293,11 @@ this.events.on('action_B', () => {
 
         const cam = this.cameras.main;
         const isNotice = options.mode === 'notice';
-        const localCoinsRaw = Number(window.GameLogic.myProfile?.coins || 0);
+        const localCoinsRaw = Number(
+            window.GameLogic.myProfile && window.GameLogic.myProfile.coins
+                ? window.GameLogic.myProfile.coins
+                : 0
+        );
         const localCoins = Number.isFinite(localCoinsRaw) ? localCoinsRaw : 0;
         const afterCoins = Math.max(0, localCoins - cost);
 
@@ -4532,8 +4542,12 @@ this.events.on('action_B', () => {
         }
 
         if (uiScene.joyStick) {
-            if (uiScene.joyStick.base?.setVisible) uiScene.joyStick.base.setVisible(true);
-            if (uiScene.joyStick.thumb?.setVisible) uiScene.joyStick.thumb.setVisible(true);
+            if (uiScene.joyStick.base && uiScene.joyStick.base.setVisible) {
+                uiScene.joyStick.base.setVisible(true);
+            }
+            if (uiScene.joyStick.thumb && uiScene.joyStick.thumb.setVisible) {
+                uiScene.joyStick.thumb.setVisible(true);
+            }
         }
     }
 
@@ -4551,15 +4565,15 @@ this.events.on('action_B', () => {
                 const obj = uiScene[key];
                 if (obj && obj.setVisible) obj.setVisible(!!prev.phaser[key]);
             });
-            if (uiScene.btnA?.setVisible) uiScene.btnA.setVisible(true);
-            if (uiScene.txtA?.setVisible) uiScene.txtA.setVisible(true);
-            if (uiScene.btnB?.setVisible) uiScene.btnB.setVisible(true);
-            if (uiScene.txtB?.setVisible) uiScene.txtB.setVisible(true);
-            if (uiScene.furnBtn?.setVisible) uiScene.furnBtn.setVisible(true);
-            if (uiScene.furnText?.setVisible) uiScene.furnText.setVisible(true);
-            if (uiScene.itemBtn?.setVisible) uiScene.itemBtn.setVisible(true);
-            if (uiScene.itemText?.setVisible) uiScene.itemText.setVisible(true);
-            if (uiScene.statusContainer?.setVisible) uiScene.statusContainer.setVisible(true);
+            if (uiScene.btnA && uiScene.btnA.setVisible) uiScene.btnA.setVisible(true);
+            if (uiScene.txtA && uiScene.txtA.setVisible) uiScene.txtA.setVisible(true);
+            if (uiScene.btnB && uiScene.btnB.setVisible) uiScene.btnB.setVisible(true);
+            if (uiScene.txtB && uiScene.txtB.setVisible) uiScene.txtB.setVisible(true);
+            if (uiScene.furnBtn && uiScene.furnBtn.setVisible) uiScene.furnBtn.setVisible(true);
+            if (uiScene.furnText && uiScene.furnText.setVisible) uiScene.furnText.setVisible(true);
+            if (uiScene.itemBtn && uiScene.itemBtn.setVisible) uiScene.itemBtn.setVisible(true);
+            if (uiScene.itemText && uiScene.itemText.setVisible) uiScene.itemText.setVisible(true);
+            if (uiScene.statusContainer && uiScene.statusContainer.setVisible) uiScene.statusContainer.setVisible(true);
         }
 
         if (this.minimap && prev.cameras && ('minimap' in prev.cameras)) {
@@ -5463,7 +5477,7 @@ this.events.on('action_B', () => {
             destroyObj(monster);
         });
 
-        [...(this.soloRocketMonsterBullets || [])].forEach(bullet => {
+        (this.soloRocketMonsterBullets || []).slice().forEach(bullet => {
             try {
                 if (this.destroySoloRocketMonsterBullet) this.destroySoloRocketMonsterBullet(bullet);
                 else destroyObj(bullet);
@@ -5472,7 +5486,7 @@ this.events.on('action_B', () => {
             }
         });
 
-        [...(this.soloRocketBeams || [])].forEach(beam => {
+        (this.soloRocketBeams || []).slice().forEach(beam => {
             try {
                 if (this.destroySoloRocketBeam) this.destroySoloRocketBeam(beam);
                 else destroyObj(beam);
@@ -5699,7 +5713,8 @@ this.events.on('action_B', () => {
         }
 
         this.soloRocketContainer.add(fxList);
-        this.soloRocketStage4FxObjects.push(...fxList);
+        this.soloRocketStage4FxObjects = this.soloRocketStage4FxObjects || [];
+        fxList.forEach(obj => this.soloRocketStage4FxObjects.push(obj));
 
         this.tweens.add({
             targets: core,
@@ -6056,9 +6071,9 @@ this.events.on('action_B', () => {
         if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
 
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
-        const beams = [...(this.soloRocketBeams || [])];
-        const monsters = [...(this.soloRocketMonsters || [])];
-        const bullets = [...(this.soloRocketMonsterBullets || [])];
+        const beams = (this.soloRocketBeams || []).slice();
+        const monsters = (this.soloRocketMonsters || []).slice();
+        const bullets = (this.soloRocketMonsterBullets || []).slice();
         const now = Date.now();
 
         beams.forEach(beam => {
@@ -6282,8 +6297,8 @@ this.events.on('action_B', () => {
     }
   
     checkSoloRocketBeamMonsterHits() {
-        const beams = [...(this.soloRocketBeams || [])];
-        const monsters = [...(this.soloRocketMonsters || [])];
+        const beams = (this.soloRocketBeams || []).slice();
+        const monsters = (this.soloRocketMonsters || []).slice();
 
         beams.forEach(beam => {
             if (!beam || !beam.active || beam.__soloRocketUsed) return;
@@ -6330,7 +6345,7 @@ this.events.on('action_B', () => {
         let playerBounds;
         try { playerBounds = this.soloRocketPlayer.getBounds(); } catch (_) { return; }
 
-        const monsters = [...(this.soloRocketMonsters || [])];
+        const monsters = (this.soloRocketMonsters || []).slice();
         for (const monster of monsters) {
             if (!monster || !monster.active || monster.__soloRocketDead || monster.__soloRocketSpawnPending || monster.__soloRocketCanBeHit === false) continue;
 
@@ -6366,7 +6381,7 @@ this.events.on('action_B', () => {
         let playerBounds;
         try { playerBounds = this.soloRocketPlayer.getBounds(); } catch (_) { return; }
 
-        const bullets = [...(this.soloRocketMonsterBullets || [])];
+        const bullets = (this.soloRocketMonsterBullets || []).slice();
         for (const bullet of bullets) {
             if (!bullet || !bullet.active) continue;
 
@@ -6412,7 +6427,7 @@ this.events.on('action_B', () => {
         if (this.textures.exists('solo-rocket-bg')) {
             const bg = this.add.tileSprite(rect.centerX, rect.centerY, rect.w, rect.h, 'solo-rocket-bg');
             const src = this.textures.get('solo-rocket-bg').getSourceImage();
-            const texW = Math.max(1, src?.width || 1080);
+            const texW = Math.max(1, src && src.width ? src.width : 1080);
             const bgScale = rect.w / texW;
             bg.setTileScale(bgScale, bgScale);
             bg.setDepth(9601);
@@ -6679,7 +6694,9 @@ this.events.on('action_B', () => {
             strokeThickness: 5
         }).setOrigin(0.5);
 
-        lifeUi.add([heartGlow, fillRect, liquidGlow, waterSurface, ...waterBubbles, heartMaskShape, heartFrame, lifeText]);
+        lifeUi.add([heartGlow, fillRect, liquidGlow, waterSurface]);
+        waterBubbles.forEach(bubble => lifeUi.add(bubble));
+        lifeUi.add([heartMaskShape, heartFrame, lifeText]);
         ui.add([timerText, lifeUi]);
 
         this.soloRocketLifeText = lifeText;
@@ -6707,7 +6724,11 @@ this.events.on('action_B', () => {
             ease: 'Sine.easeInOut'
         });
 
-        this.setSoloRocketLifeValue(this.soloRocketLifeValue ?? 100);
+        this.setSoloRocketLifeValue(
+            this.soloRocketLifeValue !== null && this.soloRocketLifeValue !== undefined
+                ? this.soloRocketLifeValue
+                : 100
+        );
 
         const makeRocketButton = (x, y, radius, color, label, actionName) => {
             const btn = this.add.circle(x, y, radius, color, 0.62)
@@ -7096,7 +7117,7 @@ this.events.on('action_B', () => {
 
         const stats = this.soloRocketStats || {};
         const resultText = [
-            `剩餘生命：${Math.round(this.soloRocketLifeValue ?? 100)}%`,
+            `剩餘生命：${Math.round(this.soloRocketLifeValue !== null && this.soloRocketLifeValue !== undefined ? this.soloRocketLifeValue : 100)}%`,
             `擊殺小怪獸：${stats.monsterKills || 0}`,
             `被小怪獸撞擊：${stats.monsterHits || 0}`,
             `躲過隕石：${stats.asteroidsDodged || 0}`,
@@ -7206,7 +7227,9 @@ this.events.on('action_B', () => {
         this.soloRocketCruiseFinished = false;
         window.GameLogic.soloRocketCruiseActive = false;
 
-        const sprite = this.localPlayer?.sprite;
+        const sprite = this.localPlayer && this.localPlayer.sprite
+            ? this.localPlayer.sprite
+            : null;
         if (sprite && sprite.active) {
             if (sprite.body) sprite.body.enable = true;
             sprite.setVisible(true);
@@ -7218,9 +7241,9 @@ this.events.on('action_B', () => {
             this.cameras.main.startFollow(sprite, true, 0.08, 0.08);
         }
 
-        if (this.localPlayer?.nameContainer) this.localPlayer.nameContainer.setVisible(true);
-        if (this.localPlayer?.bubbleContainer) this.localPlayer.bubbleContainer.setVisible(false);
-        if (this.localPlayer?.partyScoreContainer) this.localPlayer.partyScoreContainer.setVisible(false);
+        if (this.localPlayer && this.localPlayer.nameContainer) this.localPlayer.nameContainer.setVisible(true);
+        if (this.localPlayer && this.localPlayer.bubbleContainer) this.localPlayer.bubbleContainer.setVisible(false);
+        if (this.localPlayer && this.localPlayer.partyScoreContainer) this.localPlayer.partyScoreContainer.setVisible(false);
         this.soloRocketReturnPosition = null;
 
         this.restoreSoloRocketLobbyUi();
