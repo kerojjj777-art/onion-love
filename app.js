@@ -1972,6 +1972,8 @@ class BootScene extends Phaser.Scene {
         this.load.audio('solo-rocket-typing', 'solo-rocket-typing.mp3');
         this.load.audio('solo-rocket-radio_beep', 'solo-rocket-radio_beep.mp3');
         this.load.audio('solo-rocket-monster-chicken-die', 'solo-rocket-monster-chicken-die.mp3');
+        this.load.audio('solo-rocket-bang', 'solo-rocket-bang.mp3');
+        this.load.audio('solo-rocket-turn', 'solo-rocket-turn.mp3');
 
         // 在記憶體中畫一個簡單的白色發光點紋理給粒子使用
         let grd = this.make.graphics({x: 0, y: 0, add: false});
@@ -2387,6 +2389,7 @@ class MainScene extends Phaser.Scene {
         this.soloRocketLifeUi = null;
         this.soloRocketLifeValue = 100;
         this.soloRocketLifeBreathTween = null;
+        this.soloRocketLifePulseTween = null;
         this.soloRocketThrusterFx = null;
         this.soloRocketStartTime = 0;
         this.soloRocketDurationMs = 157000;
@@ -2442,6 +2445,7 @@ class MainScene extends Phaser.Scene {
         this.soloRocketSpinButtonState = null;
         this.soloRocketSpinCooldownFill = null;
         this.soloRocketSpinCooldownText = null;
+        this.soloRocketSpinCooldownMaskShape = null;
         this.soloRocketSpinCooldownMaxHeight = 0;
         this.soloRocketSpinCooldownBaseY = 0;
         this.soloRocketStats = {
@@ -6125,8 +6129,8 @@ this.events.on('action_B', () => {
         this.showSoloRocketSpinShieldFx();
 
         try {
-            if (!window.GameLogic.muteSFX && this.cache.audio.exists('solo-rocket-radio_beep')) {
-                window.playSFX(this, 'solo-rocket-radio_beep');
+            if (!window.GameLogic.muteSFX && this.cache.audio.exists('solo-rocket-turn')) {
+                window.playSFX(this, 'solo-rocket-turn');
             }
         } catch (_) {}
 
@@ -6637,6 +6641,14 @@ this.events.on('action_B', () => {
         const rocket = this.soloRocketPlayer;
         if (!rocket || !rocket.active || !this.soloRocketContainer) return;
 
+        try {
+            const now = Date.now();
+            if (!window.GameLogic.muteSFX && now - (this.__soloRocketLastBangAt || 0) > 120 && this.cache.audio.exists('solo-rocket-bang')) {
+                this.__soloRocketLastBangAt = now;
+                window.playSFX(this, 'solo-rocket-bang');
+            }
+        } catch (_) {}
+
         if (this.tweens) this.tweens.killTweensOf(rocket);
         this.resetSoloRocketPlayerFacingUp(true);
 
@@ -6768,6 +6780,22 @@ this.events.on('action_B', () => {
             if (Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, monsterBounds)) {
                 const hitX = monster.x;
                 const hitY = monster.y;
+                const isSpinning = this.soloRocketSpinActive || Date.now() < (this.__soloRocketSpinInvincibleUntil || 0);
+
+                if (isSpinning) {
+                    monster.__soloRocketSpinBlocked = true;
+
+                    this.showSoloRocketAsteroidBlockedFx(hitX, hitY);
+                    this.showSoloRocketMonsterExplosion(hitX, hitY, 'kill');
+                    this.playSoloRocketMonsterDieSfx();
+                    this.destroySoloRocketMonster(monster);
+
+                    this.soloRocketStats = this.soloRocketStats || {};
+                    this.soloRocketStats.spinDodges = (this.soloRocketStats.spinDodges || 0) + 1;
+                    this.soloRocketStats.monsterKills = (this.soloRocketStats.monsterKills || 0) + 1;
+
+                    continue;
+                }
 
                 this.showSoloRocketMonsterExplosion(hitX, hitY, 'hitPlayer');
                 this.playSoloRocketMonsterDieSfx();
@@ -6789,7 +6817,7 @@ this.events.on('action_B', () => {
 
     checkSoloRocketMonsterBulletPlayerHits() {
         if (!this.soloRocketPlayer || !this.soloRocketPlayer.active) return;
-        if (Date.now() < (this.__soloRocketSpinInvincibleUntil || 0)) return;
+        const isSpinning = this.soloRocketSpinActive || Date.now() < (this.__soloRocketSpinInvincibleUntil || 0);
 
         let playerBounds;
         try { playerBounds = this.soloRocketPlayer.getBounds(); } catch (_) { return; }
@@ -6804,6 +6832,16 @@ this.events.on('action_B', () => {
             if (Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, bulletBounds)) {
                 const hitX = bullet.x;
                 const hitY = bullet.y;
+
+                if (isSpinning) {
+                    this.destroySoloRocketMonsterBullet(bullet);
+                    this.showSoloRocketAsteroidBlockedFx(hitX, hitY);
+
+                    this.soloRocketStats = this.soloRocketStats || {};
+                    this.soloRocketStats.spinDodges = (this.soloRocketStats.spinDodges || 0) + 1;
+
+                    continue;
+                }
 
                 this.destroySoloRocketMonsterBullet(bullet);
 
@@ -7007,52 +7045,55 @@ this.events.on('action_B', () => {
         const heartCy = rect.y + 98;
         const heartSize = 58;
         const heartDisplaySize = heartSize * 1.62;
+        const heartMaskSize = heartDisplaySize * 0.86;
         const lifeUi = this.add.container(0, 0);
 
-        const fillBaseY = heartCy + heartSize * 0.48;
-        const fillMaxHeight = heartSize * 1.18;
+        const fillBaseY = heartCy + heartMaskSize * 0.52;
+        const fillMaxHeight = heartMaskSize * 1.05;
 
         const fillRect = this.add.rectangle(
             heartCx,
             fillBaseY,
-            heartSize * 1.04,
+            heartMaskSize * 1.22,
             fillMaxHeight,
             0x39ff14,
-            0.88
+            0.9
         ).setOrigin(0.5, 1).setBlendMode(Phaser.BlendModes.ADD);
 
         const liquidGlow = this.add.rectangle(
             heartCx,
             fillBaseY,
-            heartSize * 1.22,
+            heartMaskSize * 1.36,
             fillMaxHeight,
             0xa6ff66,
-            0.24
+            0.28
         ).setOrigin(0.5, 1).setBlendMode(Phaser.BlendModes.ADD);
 
         const waterSurface = this.add.ellipse(
             heartCx,
             fillBaseY - fillMaxHeight,
-            heartSize * 1.02,
-            9,
+            heartMaskSize * 1.05,
+            10,
             0xeaffff,
-            0.84
+            0.88
         ).setBlendMode(Phaser.BlendModes.ADD);
 
         const waterBubbles = [];
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 6; i++) {
             const bubbleDot = this.add.circle(
-                heartCx + Phaser.Math.Between(-18, 18),
-                heartCy + Phaser.Math.Between(-18, 22),
-                Phaser.Math.FloatBetween(1.6, 3.2),
+                heartCx + Phaser.Math.Between(-22, 22),
+                heartCy + Phaser.Math.Between(-22, 24),
+                Phaser.Math.FloatBetween(1.7, 3.4),
                 0xffffff,
-                0.34
+                0.36
             ).setBlendMode(Phaser.BlendModes.ADD);
+
             waterBubbles.push(bubbleDot);
+
             this.tweens.add({
                 targets: bubbleDot,
                 y: bubbleDot.y - Phaser.Math.Between(8, 18),
-                alpha: { from: 0.18, to: 0.62 },
+                alpha: { from: 0.18, to: 0.64 },
                 yoyo: true,
                 repeat: -1,
                 duration: Phaser.Math.Between(700, 1200),
@@ -7062,14 +7103,17 @@ this.events.on('action_B', () => {
 
         const heartMaskShape = this.add.graphics();
         heartMaskShape.fillStyle(0xffffff, 1);
-        drawHeartMaskPath(heartMaskShape, heartCx, heartCy, heartSize - 3);
+        drawHeartMaskPath(heartMaskShape, heartCx, heartCy, heartMaskSize);
         heartMaskShape.fillPath();
         heartMaskShape.setVisible(false);
+
         const heartMask = heartMaskShape.createGeometryMask();
         fillRect.setMask(heartMask);
         liquidGlow.setMask(heartMask);
         waterSurface.setMask(heartMask);
-        waterBubbles.forEach(b => b.setMask(heartMask));
+        waterBubbles.forEach(function(b) {
+            b.setMask(heartMask);
+        });
 
         let heartGlow = null;
         let heartFrame = null;
@@ -7098,6 +7142,24 @@ this.events.on('action_B', () => {
             heartFrame.strokePath();
         }
 
+        const heartPulse = this.add.container(heartCx, heartCy).setAlpha(0.34);
+
+        if (this.textures.exists('solo-rocket-heart-life-container')) {
+            const pulseImg = this.add.image(0, 0, 'solo-rocket-heart-life-container')
+                .setDisplaySize(heartDisplaySize * 1.16, heartDisplaySize * 1.16)
+                .setTint(0x39ff14)
+                .setAlpha(1)
+                .setBlendMode(Phaser.BlendModes.ADD);
+            heartPulse.add(pulseImg);
+        } else {
+            const pulseShape = this.add.graphics();
+            pulseShape.lineStyle(4, 0x39ff14, 0.9);
+            drawHeartMaskPath(pulseShape, 0, 0, heartMaskSize + 6);
+            pulseShape.strokePath();
+            pulseShape.setBlendMode(Phaser.BlendModes.ADD);
+            heartPulse.add(pulseShape);
+        }
+      
         const lifeText = this.add.text(heartCx, heartCy + 6, '100%', {
             fontSize: '17px',
             fontFamily: 'Arial, sans-serif',
@@ -7107,7 +7169,7 @@ this.events.on('action_B', () => {
             strokeThickness: 5
         }).setOrigin(0.5);
 
-        lifeUi.add([heartGlow, fillRect, liquidGlow, waterSurface]);
+        lifeUi.add([heartPulse, heartGlow, fillRect, liquidGlow, waterSurface]);
         waterBubbles.forEach(bubble => lifeUi.add(bubble));
         lifeUi.add([heartMaskShape, heartFrame, lifeText]);
         ui.add([timerText, lifeUi]);
@@ -7115,6 +7177,7 @@ this.events.on('action_B', () => {
         this.soloRocketLifeText = lifeText;
         this.soloRocketLifeUi = {
             container: lifeUi,
+            heartPulse,
             heartGlow,
             heartFrame,
             fillRect,
@@ -7135,6 +7198,16 @@ this.events.on('action_B', () => {
             yoyo: true,
             repeat: -1,
             ease: 'Sine.easeInOut'
+        });
+
+        this.soloRocketLifePulseTween = this.tweens.add({
+            targets: heartPulse,
+            alpha: { from: 0.36, to: 0 },
+            scaleX: { from: 0.92, to: 1.34 },
+            scaleY: { from: 0.92, to: 1.34 },
+            duration: 920,
+            repeat: -1,
+            ease: 'Cubic.easeOut'
         });
 
         this.setSoloRocketLifeValue(
@@ -7209,16 +7282,34 @@ this.events.on('action_B', () => {
         };
 
         const btnX = rect.x + rect.w - 58;
-        this.soloRocketFireButtonState = makeRocketButton(btnX, rect.y + rect.h - 62, 34, 0xd9534f, '發射', 'fire');
-        this.soloRocketSpinButtonState = makeRocketButton(btnX, rect.y + rect.h - 142, 34, 0x0077cc, '旋轉', 'spin');
+        const spinBtnY = rect.y + rect.h - 142;
+        const spinBtnRadius = 34;
 
-        const spinFill = this.add.rectangle(btnX, rect.y + rect.h - 142 + 29, 58, 0.01, 0x66ccff, 0.42)
+        this.soloRocketFireButtonState = makeRocketButton(btnX, rect.y + rect.h - 62, 34, 0xd9534f, '發射', 'fire');
+        this.soloRocketSpinButtonState = makeRocketButton(btnX, spinBtnY, spinBtnRadius, 0x0077cc, '旋轉', 'spin');
+
+        const spinFillMaskShape = this.add.circle(btnX, spinBtnY, spinBtnRadius - 2, 0xffffff, 1)
+            .setScrollFactor(0)
+            .setVisible(false);
+
+        const spinFillMask = spinFillMaskShape.createGeometryMask();
+
+        const spinFill = this.add.rectangle(
+            btnX,
+            spinBtnY + spinBtnRadius - 2,
+            (spinBtnRadius - 2) * 2,
+            0.01,
+            0x66ccff,
+            0.45
+        )
             .setOrigin(0.5, 1)
             .setScrollFactor(0)
             .setVisible(false)
             .setBlendMode(Phaser.BlendModes.ADD);
 
-        const spinCdText = this.add.text(btnX, rect.y + rect.h - 142 + 18, '', {
+        spinFill.setMask(spinFillMask);
+
+        const spinCdText = this.add.text(btnX, spinBtnY + 3, '', {
             fontSize: '14px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
@@ -7227,12 +7318,13 @@ this.events.on('action_B', () => {
             strokeThickness: 4
         }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
 
-        ui.add([spinFill, spinCdText]);
+        ui.add([spinFillMaskShape, spinFill, spinCdText]);
 
+        this.soloRocketSpinCooldownMaskShape = spinFillMaskShape;
         this.soloRocketSpinCooldownFill = spinFill;
         this.soloRocketSpinCooldownText = spinCdText;
-        this.soloRocketSpinCooldownMaxHeight = 58;
-        this.soloRocketSpinCooldownBaseY = rect.y + rect.h - 142 + 29;
+        this.soloRocketSpinCooldownMaxHeight = (spinBtnRadius - 2) * 2;
+        this.soloRocketSpinCooldownBaseY = spinBtnY + spinBtnRadius - 2;
         this.updateSoloRocketSpinCooldownUi();
 
         // life UI 已在上方改為愛心容器，這裡不再加入舊版 lifeBg / lifeText
@@ -7320,40 +7412,74 @@ this.events.on('action_B', () => {
         try {
             this.tweens.killTweensOf(ui.container);
             this.tweens.killTweensOf(ui.text);
+            if (ui.heartFrame) this.tweens.killTweensOf(ui.heartFrame);
+            if (ui.heartGlow) this.tweens.killTweensOf(ui.heartGlow);
+            if (ui.heartPulse) this.tweens.killTweensOf(ui.heartPulse);
         } catch (_) {}
 
         ui.container.setPosition(0, 0);
+        ui.container.setAngle(0);
         ui.text.setColor('#ffffff');
-        ui.text.setStroke('#ff1744', 6);
+        ui.text.setStroke('#ffffff', 6);
+
+        try {
+            if (ui.heartFrame && ui.heartFrame.setTint) ui.heartFrame.setTint(0xffffff);
+            if (ui.heartGlow && ui.heartGlow.setTint) ui.heartGlow.setTint(0xffffff);
+        } catch (_) {}
+
+        const gx = ui.text.x;
+        const gy = ui.text.y;
+        const glitchA = this.add.rectangle(gx - 3, gy - 12, 82, 5, 0xffffff, 0.92)
+            .setDepth(9710)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        const glitchB = this.add.rectangle(gx + 6, gy + 9, 70, 4, 0xffffff, 0.78)
+            .setDepth(9710)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        const glitchC = this.add.rectangle(gx - 10, gy + 1, 44, 3, 0x39ff14, 0.72)
+            .setDepth(9711)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        if (this.soloRocketUiContainer) {
+            this.soloRocketUiContainer.add(glitchA);
+            this.soloRocketUiContainer.add(glitchB);
+            this.soloRocketUiContainer.add(glitchC);
+        }
 
         this.tweens.add({
-            targets: ui.container,
-            x: { from: -8, to: 8 },
-            y: { from: -5, to: 5 },
-            angle: { from: -3, to: 3 },
+            targets: [glitchA, glitchB, glitchC],
+            x: '+=10',
+            alpha: 0,
+            duration: 95,
             yoyo: true,
-            repeat: 5,
-            duration: 26,
+            repeat: 2,
             ease: 'Stepped',
             onComplete: () => {
-                try {
-                    if (ui.container && ui.container.active) {
-                        ui.container.setPosition(0, 0);
-                        ui.container.setAngle(0);
-                    }
-                } catch (_) {}
+                try { glitchA.destroy(); } catch (_) {}
+                try { glitchB.destroy(); } catch (_) {}
+                try { glitchC.destroy(); } catch (_) {}
             }
         });
 
         this.tweens.add({
             targets: ui.text,
-            scaleX: { from: 1.32, to: 1 },
-            scaleY: { from: 1.32, to: 1 },
-            duration: 180,
-            ease: 'Back.easeOut',
+            alpha: { from: 0.15, to: 1 },
+            duration: 55,
+            yoyo: true,
+            repeat: 4,
+            ease: 'Stepped',
             onComplete: () => {
                 try {
-                    if (ui.text && ui.text.active) ui.text.setStroke('#0b5d22', 5);
+                    if (ui.text && ui.text.active) {
+                        ui.text.setAlpha(1);
+                        ui.text.setStroke('#0b5d22', 5);
+                    }
+                    if (ui.heartFrame && ui.heartFrame.clearTint) ui.heartFrame.clearTint();
+                    if (ui.heartGlow && ui.heartGlow.clearTint) ui.heartGlow.clearTint();
                 } catch (_) {}
             }
         });
@@ -7438,7 +7564,7 @@ this.events.on('action_B', () => {
                 iy /= len;
             }
 
-            const speed = 360;
+            const speed = 325;
             const pad = this.soloRocketPlayerRadius || 28;
             this.soloRocketPlayer.x = Phaser.Math.Clamp(this.soloRocketPlayer.x + ix * speed * dt, rect.x + pad, rect.x + rect.w - pad);
             this.soloRocketPlayer.y = Phaser.Math.Clamp(this.soloRocketPlayer.y + iy * speed * dt, rect.y + pad, rect.y + rect.h - pad);
@@ -7631,6 +7757,10 @@ this.events.on('action_B', () => {
             if (this.soloRocketLifeBreathTween) this.soloRocketLifeBreathTween.remove();
         } catch (_) {}
 
+        try {
+            if (this.soloRocketLifePulseTween) this.soloRocketLifePulseTween.remove();
+        } catch (_) {}
+
         safeDestroySoloRocketObject(this.soloRocketThrusterFx);
         safeDestroySoloRocketObject(this.soloRocketWhiteFade);
         safeDestroySoloRocketObject(this.soloRocketResultClickCatcher);
@@ -7649,6 +7779,7 @@ this.events.on('action_B', () => {
         this.soloRocketLifeText = null;
         this.soloRocketLifeUi = null;
         this.soloRocketLifeBreathTween = null;
+        this.soloRocketLifePulseTween = null;
         this.soloRocketThrusterFx = null;
         this.soloRocketWhiteFade = null;
         this.soloRocketSafeRect = null;
@@ -7657,6 +7788,7 @@ this.events.on('action_B', () => {
         this.soloRocketSpinButtonState = null;
         this.soloRocketSpinCooldownFill = null;
         this.soloRocketSpinCooldownText = null;
+        this.soloRocketSpinCooldownMaskShape = null;
         this.soloRocketSpinCooldownMaxHeight = 0;
         this.soloRocketSpinCooldownBaseY = 0;
         this.soloRocketSpinActive = false;
