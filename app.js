@@ -1966,6 +1966,7 @@ class BootScene extends Phaser.Scene {
         this.load.image('solo-rocket-moon-rabbit', 'solo-rocket-moon-rabbit.png');
         this.load.image('solo-rocket-monster-chicken', 'solo-rocket-monster-chicken.png');
         this.load.image('solo-rocket-heart-life-container', 'solo-rocket-heart-life-container.png');
+        this.load.image('solo-rocket-space-rock', 'solo-rocket-space-rock.png');
         this.load.audio('solo-rocket-cruise-bgm', 'solo-rocket-cruise-bgm.mp3');
         this.load.audio('solo-rocket-landing', 'solo-rocket-landing.mp3');
         this.load.audio('solo-rocket-typing', 'solo-rocket-typing.mp3');
@@ -1987,6 +1988,15 @@ class BootScene extends Phaser.Scene {
         monsterFallbackGr.lineStyle(4, 0x7e57c2, 1).lineBetween(16, 20, 6, 10).lineBetween(48, 20, 58, 10);
         monsterFallbackGr.generateTexture('solo-rocket-monster-fallback', 64, 64);
         monsterFallbackGr.destroy();
+        // 火箭巡航階段5 fallback：隕石素材缺失時，改用程式繪製的安全圖，不讓副本黑屏。
+        let asteroidFallbackGr = this.make.graphics({ x: 0, y: 0, add: false });
+        asteroidFallbackGr.fillStyle(0xb0bec5, 1).fillCircle(32, 32, 25);
+        asteroidFallbackGr.fillStyle(0x78909c, 1).fillCircle(22, 25, 8);
+        asteroidFallbackGr.fillStyle(0x607d8b, 1).fillCircle(43, 36, 7);
+        asteroidFallbackGr.fillStyle(0xeceff1, 0.8).fillCircle(26, 18, 4);
+        asteroidFallbackGr.lineStyle(3, 0xffffff, 0.35).strokeCircle(32, 32, 25);
+        asteroidFallbackGr.generateTexture('solo-rocket-space-rock-fallback', 64, 64);
+        asteroidFallbackGr.destroy();
     }
    create() {
         // 修正2：經驗條改為橘紅漸層
@@ -2417,9 +2427,23 @@ class MainScene extends Phaser.Scene {
         this.soloRocketLastFireAt = 0;
         this.soloRocketLastSpinAt = 0;
         this.soloRocketFireCooldownMs = 320;
-        this.soloRocketSpinCooldownMs = 720;
+        this.soloRocketSpinCooldownMs = 5000;
         this.soloRocketStage4FxObjects = [];
         this.soloRocketStage4ClearedForEnding = false;
+
+        // 階段5：隕石、旋轉防禦與冷卻 UI
+        this.soloRocketAsteroids = [];
+        this.soloRocketAsteroidSpawnActive = false;
+        this.soloRocketAsteroidSpawnStopped = false;
+        this.soloRocketAsteroidNextSpawnAt = 0;
+        this.soloRocketSpinActive = false;
+        this.soloRocketSpinShield = null;
+        this.soloRocketSpinShieldTween = null;
+        this.soloRocketSpinButtonState = null;
+        this.soloRocketSpinCooldownFill = null;
+        this.soloRocketSpinCooldownText = null;
+        this.soloRocketSpinCooldownMaxHeight = 0;
+        this.soloRocketSpinCooldownBaseY = 0;
         this.soloRocketStats = {
             monsterKills: 0,
             monsterHits: 0,
@@ -5520,8 +5544,15 @@ this.events.on('action_B', () => {
         this.soloRocketMonsterSpawnStopped = false;
         this.soloRocketMaxMonsters = 120;
         this.soloRocketMonsterBullets = [];
+        this.soloRocketAsteroids = [];
+        this.soloRocketAsteroidSpawnActive = false;
+        this.soloRocketAsteroidSpawnStopped = false;
+        this.soloRocketAsteroidNextSpawnAt = 12000;
         this.soloRocketLastFireAt = 0;
         this.soloRocketLastSpinAt = 0;
+        this.soloRocketSpinCooldownMs = 5000;
+        this.soloRocketSpinActive = false;
+        this.__soloRocketSpinInvincibleUntil = 0;
         this.soloRocketStage4ClearedForEnding = false;
         this.soloRocketStats = {
             monsterKills: 0,
@@ -5547,6 +5578,8 @@ this.events.on('action_B', () => {
         this.soloRocketMonsterStartTimer = null;
         this.soloRocketMonsterStopTimer = null;
         this.soloRocketMonsterSpawnActive = false;
+        this.soloRocketAsteroidSpawnActive = false;
+        this.soloRocketAsteroidSpawnStopped = true;
 
         const destroyObj = (obj) => {
             try {
@@ -5583,15 +5616,32 @@ this.events.on('action_B', () => {
             }
         });
 
+        (this.soloRocketAsteroids || []).slice().forEach(asteroid => {
+            try {
+                if (this.destroySoloRocketAsteroid) this.destroySoloRocketAsteroid(asteroid);
+                else destroyObj(asteroid);
+            } catch (_) {
+                destroyObj(asteroid);
+            }
+        });
+
+        try {
+            if (this.destroySoloRocketSpinShield) this.destroySoloRocketSpinShield();
+        } catch (_) {}
+
         (this.soloRocketStage4FxObjects || []).forEach(destroyObj);
 
         this.soloRocketMonsters = [];
         this.soloRocketBeams = [];
         this.soloRocketMonsterBullets = [];
+        this.soloRocketAsteroids = [];
         this.soloRocketStage4FxObjects = [];
         this.soloRocketLastFireAt = 0;
         this.soloRocketLastSpinAt = 0;
-
+        this.soloRocketSpinActive = false;
+        this.__soloRocketSpinInvincibleUntil = 0;
+        this.soloRocketAsteroidSpawnActive = false;
+        this.soloRocketAsteroidNextSpawnAt = 12000;
         try {
             if (this.soloRocketPlayer && this.soloRocketPlayer.clearTint) this.soloRocketPlayer.clearTint();
         } catch (_) {}
@@ -5848,6 +5898,111 @@ this.events.on('action_B', () => {
         } catch (_) {}
     }
 
+    destroySoloRocketSpinShield() {
+        try {
+            if (this.soloRocketSpinShieldTween) {
+                if (this.soloRocketSpinShieldTween.stop) this.soloRocketSpinShieldTween.stop();
+                if (this.soloRocketSpinShieldTween.remove) this.soloRocketSpinShieldTween.remove();
+            }
+        } catch (_) {}
+        this.soloRocketSpinShieldTween = null;
+
+        try {
+            if (this.soloRocketSpinShield && this.soloRocketSpinShield.destroy) {
+                this.soloRocketSpinShield.destroy(true);
+            }
+        } catch (_) {}
+
+        this.soloRocketSpinShield = null;
+    }
+
+    showSoloRocketSpinShieldFx() {
+        const rocket = this.soloRocketPlayer;
+        if (!rocket || !rocket.active || !this.soloRocketContainer) return;
+
+        this.destroySoloRocketSpinShield();
+
+        const radius = Math.max(46, (this.soloRocketPlayerRadius || 28) * 1.95);
+        const shield = this.add.container(rocket.x, rocket.y).setDepth(9625).setScrollFactor(0);
+
+        const outer = this.add.circle(0, 0, radius, 0x00ccff, 0.18)
+            .setStrokeStyle(5, 0x99eeff, 0.98)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        const inner = this.add.circle(0, 0, radius * 0.62, 0x66ddff, 0.15)
+            .setStrokeStyle(2, 0xffffff, 0.85)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        shield.add([outer, inner]);
+        this.soloRocketContainer.add(shield);
+        this.soloRocketSpinShield = shield;
+        this.soloRocketStage4FxObjects = this.soloRocketStage4FxObjects || [];
+        this.soloRocketStage4FxObjects.push(shield);
+
+        this.soloRocketSpinShieldTween = this.tweens.add({
+            targets: shield,
+            scaleX: { from: 0.72, to: 1.46 },
+            scaleY: { from: 0.72, to: 1.46 },
+            alpha: { from: 1, to: 0 },
+            angle: 270,
+            duration: 700,
+            ease: 'Cubic.easeOut',
+            onComplete: () => {
+                try { this.destroySoloRocketSpinShield(); } catch (_) {}
+                this.soloRocketStage4FxObjects = (this.soloRocketStage4FxObjects || []).filter(obj => obj !== shield);
+            }
+        });
+    }
+
+    updateSoloRocketSpinShieldPosition() {
+        if (!this.soloRocketSpinShield || !this.soloRocketPlayer || !this.soloRocketPlayer.active) return;
+        try {
+            this.soloRocketSpinShield.setPosition(this.soloRocketPlayer.x, this.soloRocketPlayer.y);
+        } catch (_) {}
+    }
+
+    updateSoloRocketSpinCooldownUi() {
+        const state = this.soloRocketSpinButtonState;
+        const fill = this.soloRocketSpinCooldownFill;
+        const cdText = this.soloRocketSpinCooldownText;
+        if (!state || !state.btn || !state.txt || !fill || !cdText) return;
+
+        const cooldown = this.soloRocketSpinCooldownMs || 5000;
+        const elapsed = Date.now() - (this.soloRocketLastSpinAt || 0);
+        const remaining = Math.max(0, cooldown - elapsed);
+        const maxH = this.soloRocketSpinCooldownMaxHeight || 62;
+        const baseY = this.soloRocketSpinCooldownBaseY || fill.y;
+
+        if (remaining > 0) {
+            const progress = Phaser.Math.Clamp(1 - remaining / cooldown, 0, 1);
+            const nextHeight = Math.max(2, maxH * progress);
+
+            fill.setVisible(true);
+            fill.y = baseY;
+            fill.height = nextHeight;
+            fill.displayHeight = nextHeight;
+
+            cdText.setVisible(true);
+            cdText.setText(String(Math.ceil(remaining / 1000)) + '秒');
+
+            state.btn.setAlpha(0.36);
+            state.txt.setAlpha(0.82);
+            state.txt.setText('冷卻');
+            return;
+        }
+
+        fill.setVisible(false);
+        fill.height = 0.01;
+        fill.displayHeight = 0.01;
+        cdText.setVisible(false);
+        cdText.setText('');
+
+        state.btn.setAlpha(0.62);
+        state.txt.setAlpha(1);
+        state.txt.setText('旋轉');
+    }
+
+
     fireSoloRocketBeam() {
         if (!this.canUseSoloRocketAction() || !this.soloRocketPlayer || !this.soloRocketContainer) return;
 
@@ -5944,9 +6099,16 @@ this.events.on('action_B', () => {
         if (!this.canUseSoloRocketAction() || !this.soloRocketPlayer) return;
 
         const now = Date.now();
-        const cooldown = this.soloRocketSpinCooldownMs || 720;
-        if (now - (this.soloRocketLastSpinAt || 0) < cooldown) return;
+        const cooldown = this.soloRocketSpinCooldownMs || 5000;
+        if (now - (this.soloRocketLastSpinAt || 0) < cooldown) {
+            this.updateSoloRocketSpinCooldownUi();
+            return;
+        }
+
         this.soloRocketLastSpinAt = now;
+        this.soloRocketSpinActive = true;
+        this.__soloRocketSpinInvincibleUntil = now + 700;
+        this.updateSoloRocketSpinCooldownUi();
 
         const rocket = this.soloRocketPlayer;
 
@@ -5960,9 +6122,7 @@ this.events.on('action_B', () => {
             ? Number(rocket.__soloRocketNormalScaleY)
             : (rocket.scaleY || 1);
 
-        this.soloRocketStats = this.soloRocketStats || {};
-        this.soloRocketStats.spinDodges = (this.soloRocketStats.spinDodges || 0) + 1;
-        this.__soloRocketSpinInvincibleUntil = Date.now() + 520;
+        this.showSoloRocketSpinShieldFx();
 
         try {
             if (!window.GameLogic.muteSFX && this.cache.audio.exists('solo-rocket-radio_beep')) {
@@ -5972,10 +6132,10 @@ this.events.on('action_B', () => {
 
         this.tweens.add({
             targets: rocket,
-            angle: 360,
-            scaleX: baseScaleX * 1.08,
-            scaleY: baseScaleY * 1.08,
-            duration: 420,
+            angle: 720,
+            scaleX: baseScaleX * 1.10,
+            scaleY: baseScaleY * 1.10,
+            duration: 700,
             ease: 'Cubic.easeOut',
             onComplete: () => {
                 try {
@@ -5987,7 +6147,11 @@ this.events.on('action_B', () => {
             }
         });
 
-        this.time.delayedCall(460, () => this.resetSoloRocketPlayerFacingUp(true));
+        this.time.delayedCall(720, () => {
+            this.soloRocketSpinActive = false;
+            this.resetSoloRocketPlayerFacingUp(true);
+            this.destroySoloRocketSpinShield();
+        });
     }
   
     destroySoloRocketBeam(beam) {
@@ -6034,6 +6198,249 @@ this.events.on('action_B', () => {
         } catch (_) {}
         try { if (bullet.destroy) bullet.destroy(); } catch (_) {}
     }
+
+    destroySoloRocketAsteroid(asteroid) {
+        if (!asteroid) return;
+        this.soloRocketAsteroids = (this.soloRocketAsteroids || []).filter(a => a !== asteroid);
+        try { if (asteroid.destroy) asteroid.destroy(); } catch (_) {}
+    }
+
+    getSoloRocketAsteroidKey() {
+        if (this.textures.exists('solo-rocket-space-rock')) return 'solo-rocket-space-rock';
+        return 'solo-rocket-space-rock-fallback';
+    }
+
+    spawnSoloRocketAsteroid(x, y, size, vx, vy, spin) {
+        if (!this.soloRocketContainer) return null;
+
+        const key = this.getSoloRocketAsteroidKey();
+        if (!this.textures.exists(key)) return null;
+
+        const asteroid = this.add.image(x, y, key)
+            .setDisplaySize(size, size)
+            .setDepth(9613)
+            .setScrollFactor(0);
+
+        asteroid.__soloRocketVx = vx || 0;
+        asteroid.__soloRocketVy = vy || 140;
+        asteroid.__soloRocketSpin = spin || 120;
+        asteroid.__soloRocketRadius = size * 0.43;
+        asteroid.__soloRocketHitPlayer = false;
+        asteroid.__soloRocketCounted = false;
+        asteroid.__soloRocketSpinBlocked = false;
+
+        this.soloRocketContainer.add(asteroid);
+        this.soloRocketAsteroids = this.soloRocketAsteroids || [];
+        this.soloRocketAsteroids.push(asteroid);
+
+        return asteroid;
+    }
+
+    spawnSoloRocketAsteroidScatter(elapsed) {
+        const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const lateGame = elapsed >= 60000;
+        const relaxGame = elapsed >= 126000;
+        const count = lateGame && !relaxGame && Math.random() < 0.35 ? 2 : 1;
+
+        for (let i = 0; i < count; i++) {
+            const size = Phaser.Math.Between(34, lateGame ? 56 : 48);
+            const x = Phaser.Math.Between(Math.floor(rect.x + size), Math.floor(rect.x + rect.w - size));
+            const y = rect.y - size - i * 46;
+            const vx = Phaser.Math.Between(-18, 18);
+            const vy = relaxGame
+                ? Phaser.Math.Between(115, 165)
+                : (lateGame ? Phaser.Math.Between(145, 215) : Phaser.Math.Between(95, 150));
+            const spin = Phaser.Math.Between(70, 180) * (Math.random() < 0.5 ? -1 : 1);
+            this.spawnSoloRocketAsteroid(x, y, size, vx, vy, spin);
+        }
+    }
+
+    spawnSoloRocketAsteroidRow(elapsed) {
+        const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const size = Phaser.Math.Clamp(Math.floor(rect.w / 8.8), 36, 48);
+        const spacing = Math.max(size * 1.28, 48);
+        const gapSlots = Phaser.Math.Between(4, 5);
+        const gapWidth = spacing * gapSlots;
+        const minGapCenter = rect.x + gapWidth / 2 + 24;
+        const maxGapCenter = rect.x + rect.w - gapWidth / 2 - 24;
+        let gapCenter = rect.centerX;
+        if (maxGapCenter > minGapCenter) {
+            gapCenter = Phaser.Math.Between(Math.floor(minGapCenter), Math.floor(maxGapCenter));
+        }
+        const y = rect.y - size - 10;
+        const relaxGame = elapsed >= 126000;
+        const vy = relaxGame ? Phaser.Math.Between(120, 165) : Phaser.Math.Between(150, 215);
+
+        for (let x = rect.x + spacing / 2; x < rect.x + rect.w; x += spacing) {
+            if (Math.abs(x - gapCenter) < gapWidth / 2) continue;
+
+            const drift = Phaser.Math.Between(-8, 8);
+            const spin = Phaser.Math.Between(95, 210) * (Math.random() < 0.5 ? -1 : 1);
+            this.spawnSoloRocketAsteroid(x, y + Phaser.Math.Between(-8, 8), size, drift, vy, spin);
+        }
+    }
+
+    updateSoloRocketAsteroids(dt, elapsed) {
+        if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
+
+        const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+
+        if (elapsed >= 12000 && elapsed < 152000 && !this.soloRocketAsteroidSpawnStopped) {
+            this.soloRocketAsteroidSpawnActive = true;
+            if (!this.soloRocketAsteroidNextSpawnAt || this.soloRocketAsteroidNextSpawnAt < 12000) {
+                this.soloRocketAsteroidNextSpawnAt = 12000;
+            }
+
+            if (elapsed >= this.soloRocketAsteroidNextSpawnAt) {
+                if (elapsed >= 60000 && Math.random() < (elapsed >= 126000 ? 0.55 : 0.82)) {
+                    this.spawnSoloRocketAsteroidRow(elapsed);
+                } else {
+                    this.spawnSoloRocketAsteroidScatter(elapsed);
+                }
+
+                const nextGap = elapsed >= 126000
+                    ? Phaser.Math.Between(3900, 5600)
+                    : (elapsed >= 60000 ? Phaser.Math.Between(2300, 3300) : Phaser.Math.Between(1400, 2400));
+
+                this.soloRocketAsteroidNextSpawnAt = elapsed + nextGap;
+            }
+        } else if (elapsed >= 152000) {
+            this.soloRocketAsteroidSpawnActive = false;
+            this.soloRocketAsteroidSpawnStopped = true;
+        }
+
+        const asteroids = (this.soloRocketAsteroids || []).slice();
+        asteroids.forEach(asteroid => {
+            if (!asteroid || !asteroid.active) {
+                this.destroySoloRocketAsteroid(asteroid);
+                return;
+            }
+
+            asteroid.x += (asteroid.__soloRocketVx || 0) * dt;
+            asteroid.y += (asteroid.__soloRocketVy || 130) * dt;
+            asteroid.angle += (asteroid.__soloRocketSpin || 120) * dt;
+
+            if (asteroid.y > rect.y + rect.h + 78) {
+                if (!asteroid.__soloRocketCounted && !asteroid.__soloRocketHitPlayer) {
+                    this.soloRocketStats = this.soloRocketStats || {};
+                    this.soloRocketStats.asteroidsDodged = (this.soloRocketStats.asteroidsDodged || 0) + 1;
+                    asteroid.__soloRocketCounted = true;
+                }
+                this.destroySoloRocketAsteroid(asteroid);
+            }
+        });
+
+        this.checkSoloRocketAsteroidPlayerHits();
+    }
+
+    checkSoloRocketAsteroidPlayerHits() {
+        if (!this.soloRocketPlayer || !this.soloRocketPlayer.active) return;
+
+        let playerBounds;
+        try { playerBounds = this.soloRocketPlayer.getBounds(); } catch (_) { return; }
+
+        const asteroids = (this.soloRocketAsteroids || []).slice();
+        for (const asteroid of asteroids) {
+            if (!asteroid || !asteroid.active || asteroid.__soloRocketHitPlayer) continue;
+
+            let asteroidBounds;
+            try { asteroidBounds = asteroid.getBounds(); } catch (_) { continue; }
+
+            if (!Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, asteroidBounds)) continue;
+
+            const hitX = asteroid.x;
+            const hitY = asteroid.y;
+            const isSpinning = this.soloRocketSpinActive || Date.now() < (this.__soloRocketSpinInvincibleUntil || 0);
+
+            if (isSpinning) {
+                if (!asteroid.__soloRocketSpinBlocked) {
+                    asteroid.__soloRocketSpinBlocked = true;
+                    asteroid.__soloRocketCounted = true;
+                    this.soloRocketStats = this.soloRocketStats || {};
+                    this.soloRocketStats.spinDodges = (this.soloRocketStats.spinDodges || 0) + 1;
+                    this.soloRocketStats.asteroidsDodged = (this.soloRocketStats.asteroidsDodged || 0) + 1;
+                    this.showSoloRocketAsteroidBlockedFx(hitX, hitY);
+                }
+
+                this.destroySoloRocketAsteroid(asteroid);
+                continue;
+            }
+
+            asteroid.__soloRocketHitPlayer = true;
+            this.showSoloRocketPlayerHitFeedback();
+            this.showSoloRocketMonsterExplosion(hitX, hitY, 'hitPlayer');
+            this.destroySoloRocketAsteroid(asteroid);
+
+            this.setSoloRocketLifeValue((this.soloRocketLifeValue || 0) - 5);
+
+            if ((this.soloRocketLifeValue || 0) <= 0) {
+                this.setSoloRocketLifeValue(0);
+                this.finishSoloRocketCruise();
+                return;
+            }
+        }
+    }
+
+    showSoloRocketAsteroidBlockedFx(x, y) {
+        if (!this.soloRocketContainer) return;
+
+        this.soloRocketStage4FxObjects = this.soloRocketStage4FxObjects || [];
+
+        const ring = this.add.circle(x, y, 12, 0x00ccff, 0)
+            .setStrokeStyle(5, 0x99eeff, 0.96)
+            .setDepth(9627)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        this.soloRocketContainer.add(ring);
+        this.soloRocketStage4FxObjects.push(ring);
+
+        this.tweens.add({
+            targets: ring,
+            scale: 3.1,
+            alpha: 0,
+            duration: 340,
+            ease: 'Sine.easeOut',
+            onComplete: () => {
+                try { ring.destroy(); } catch (_) {}
+                this.soloRocketStage4FxObjects = (this.soloRocketStage4FxObjects || []).filter(obj => obj !== ring);
+            }
+        });
+
+        if (!this.textures.exists('particle_flare')) return;
+
+        for (let i = 0; i < 12; i++) {
+            const p = this.add.image(x, y, 'particle_flare')
+                .setTint(i % 2 === 0 ? 0x99eeff : 0xffffff)
+                .setAlpha(0.95)
+                .setScale(Phaser.Math.FloatBetween(0.75, 1.35))
+                .setDepth(9628)
+                .setScrollFactor(0)
+                .setBlendMode(Phaser.BlendModes.ADD);
+
+            const angle = Math.random() * Math.PI * 2;
+            const dist = Phaser.Math.Between(24, 68);
+
+            this.soloRocketContainer.add(p);
+            this.soloRocketStage4FxObjects.push(p);
+
+            this.tweens.add({
+                targets: p,
+                x: x + Math.cos(angle) * dist,
+                y: y + Math.sin(angle) * dist,
+                alpha: 0,
+                scaleX: 0.05,
+                scaleY: 0.05,
+                duration: Phaser.Math.Between(210, 380),
+                ease: 'Cubic.easeOut',
+                onComplete: () => {
+                    try { p.destroy(); } catch (_) {}
+                    this.soloRocketStage4FxObjects = (this.soloRocketStage4FxObjects || []).filter(obj => obj !== p);
+                }
+            });
+        }
+    }
+
 
     fireSoloRocketMonsterBulletBurst(monster) {
         if (!monster || !monster.active || monster.__soloRocketDead || monster.__soloRocketSpawnPending || !this.soloRocketContainer) return;
@@ -6798,12 +7205,35 @@ this.events.on('action_B', () => {
             });
 
             ui.add([btn, txt, hit]);
-            return { btn, txt, hit };
+            return { btn, txt, hit, x, y, radius, color };
         };
 
         const btnX = rect.x + rect.w - 58;
-        makeRocketButton(btnX, rect.y + rect.h - 62, 34, 0xd9534f, '發射', 'fire');
-        makeRocketButton(btnX, rect.y + rect.h - 142, 34, 0x0077cc, '旋轉', 'spin');
+        this.soloRocketFireButtonState = makeRocketButton(btnX, rect.y + rect.h - 62, 34, 0xd9534f, '發射', 'fire');
+        this.soloRocketSpinButtonState = makeRocketButton(btnX, rect.y + rect.h - 142, 34, 0x0077cc, '旋轉', 'spin');
+
+        const spinFill = this.add.rectangle(btnX, rect.y + rect.h - 142 + 29, 58, 0.01, 0x66ccff, 0.42)
+            .setOrigin(0.5, 1)
+            .setScrollFactor(0)
+            .setVisible(false)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        const spinCdText = this.add.text(btnX, rect.y + rect.h - 142 + 18, '', {
+            fontSize: '14px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#003344',
+            strokeThickness: 4
+        }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+
+        ui.add([spinFill, spinCdText]);
+
+        this.soloRocketSpinCooldownFill = spinFill;
+        this.soloRocketSpinCooldownText = spinCdText;
+        this.soloRocketSpinCooldownMaxHeight = 58;
+        this.soloRocketSpinCooldownBaseY = rect.y + rect.h - 142 + 29;
+        this.updateSoloRocketSpinCooldownUi();
 
         // life UI 已在上方改為愛心容器，這裡不再加入舊版 lifeBg / lifeText
     }
@@ -7015,6 +7445,9 @@ this.events.on('action_B', () => {
         }
 
         this.updateSoloRocketStage4(dt);
+        this.updateSoloRocketSpinShieldPosition();
+        this.updateSoloRocketAsteroids(dt, elapsed);
+        this.updateSoloRocketSpinCooldownUi();
         if (this.soloRocketCruiseFinished) return;
 
         if (this.soloRocketCountdownText) {
@@ -7124,11 +7557,10 @@ this.events.on('action_B', () => {
         const stats = this.soloRocketStats || {};
         const resultText = [
             `剩餘生命：${Math.round(this.soloRocketLifeValue !== null && this.soloRocketLifeValue !== undefined ? this.soloRocketLifeValue : 100)}%`,
-            `擊殺小怪獸：${stats.monsterKills || 0}`,
-            `被小怪獸撞擊：${stats.monsterHits || 0}`,
-            `躲過隕石：${stats.asteroidsDodged || 0}`,
-            `成功旋轉閃避：${stats.spinDodges || 0}`,
-            `是否擊殺魔王：${stats.bossKilled ? '是' : '否'}`
+            `擊殺小怪獸數：${stats.monsterKills || 0}`,
+            `躲過隕石顆數：${stats.asteroidsDodged || 0}`,
+            `成功旋轉閃避次數：${stats.spinDodges || 0}`,
+            `是否擊殺魔王：否`
         ].join('\n');
 
         const body = this.add.text(rect.centerX, py + 94, resultText, {
@@ -7221,6 +7653,18 @@ this.events.on('action_B', () => {
         this.soloRocketWhiteFade = null;
         this.soloRocketSafeRect = null;
         this.soloRocketWasd = null;
+        this.soloRocketFireButtonState = null;
+        this.soloRocketSpinButtonState = null;
+        this.soloRocketSpinCooldownFill = null;
+        this.soloRocketSpinCooldownText = null;
+        this.soloRocketSpinCooldownMaxHeight = 0;
+        this.soloRocketSpinCooldownBaseY = 0;
+        this.soloRocketSpinActive = false;
+        this.__soloRocketSpinInvincibleUntil = 0;
+        this.soloRocketAsteroids = [];
+        this.soloRocketAsteroidSpawnActive = false;
+        this.soloRocketAsteroidSpawnStopped = true;
+        this.soloRocketAsteroidNextSpawnAt = 0;
         this.soloRocketStartTime = 0;
         this.soloRocketGameplayStarted = false;
         this.soloRocketTutorialActive = false;
