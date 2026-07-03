@@ -2440,6 +2440,10 @@ class MainScene extends Phaser.Scene {
 
         // 階段6：魔王、追蹤導彈、玉兔通訊與終場閉環狀態
         this.soloRocketBoss = null;
+        this.soloRocketBossHpBar = null;
+        this.soloRocketBossHpFill = null;
+        this.soloRocketBossHpText = null;
+        this.soloRocketBossFloatTween = null;
         this.soloRocketBossHp = 80;
         this.soloRocketBossMaxHp = 80;
         this.soloRocketBossSpawned = false;
@@ -2814,7 +2818,7 @@ class MainScene extends Phaser.Scene {
         if (this.minimap) this.minimap.ignore([this.smartPromptBg, this.smartPromptText, this.waterPromptBg, this.waterPromptText, this.lockOnTarget]);
         this.initPrinceCatSync();
 
-        this.cursors = this.input.keyboard.createCursorKeys(); this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE); this.shiftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
+        this.cursors = this.input.keyboard.createCursorKeys(); this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE); this.shiftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT); this.altKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ALT);
         this.spaceKey.on('down', (e) => {
             if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
 
@@ -2843,12 +2847,27 @@ class MainScene extends Phaser.Scene {
             else this.events.emit('action_A_short');
         });
         
-        this.shiftKey.on('down', (e) => { 
+        this.altKey.on('down', (e) => {
             if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
 
+            // 火箭巡航中，Alt / Option 專用於旋轉防禦；Shift 不再觸發火箭旋轉。
             if (this.soloRocketCruiseActive && !this.soloRocketCruiseFinished) {
                 if (e && e.preventDefault) e.preventDefault();
                 if (!e.repeat && this.spinSoloRocketPlayer) this.spinSoloRocketPlayer();
+            }
+        });
+
+        this.altKey.on('up', (e) => {
+            if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished) {
+                if (e && e.preventDefault) e.preventDefault();
+            }
+        });
+
+        this.shiftKey.on('down', (e) => { 
+            if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+
+            if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished) {
+                if (e && e.preventDefault) e.preventDefault();
                 return;
             }
 
@@ -4909,7 +4928,7 @@ this.events.on('action_B', () => {
         const cam = this.cameras.main;
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
         const panelW = Math.min(rect.w - 28, 430);
-        const panelH = Math.min(rect.h - 60, 420);
+        const panelH = Math.min(rect.h - 44, 470);
         const px = rect.centerX - panelW / 2;
         const py = rect.centerY - panelH / 2;
 
@@ -4937,19 +4956,22 @@ this.events.on('action_B', () => {
             strokeThickness: 5
         }).setOrigin(0.5);
 
-        const body = this.add.text(rect.centerX, py + 92,
-            '『我的一小滴淚，是洋蔥的汪洋』，\n' +
+        const body = this.add.text(rect.centerX, py + 84,
+            '『我的一小滴淚，是洋蔥的汪洋』\n' +
             '曾經登上月球的宇宙洋蔥如是說\n\n' +
-            '搖桿控制方向，躲避隕石攻擊，發射擊退怪獸，\n' +
-            '旋轉可彈開魔王攻擊或來不及躲開的隕石。\n\n' +
-            '努力飛向月球吧！找到玉兔星人國民外交！！！！',
+            '搖桿或鍵盤方向鍵控制方向\n' +
+            '「發射」(空白鍵) 擊殺宇宙雞雞\n' +
+            '「旋轉」(ALT鍵) 可掃開一切[冷卻3秒]\n\n' +
+            '勇敢飛向月球吧!!!\n' +
+            '找到玉兔星人好好國民外交一番\n' +
+            'GOOD LUCK !',
             {
-                fontSize: '16px',
+                fontSize: '15px',
                 fontFamily: 'Arial, sans-serif',
                 color: '#ffffff',
                 align: 'center',
-                lineSpacing: 7,
-                wordWrap: { width: panelW - 44 }
+                lineSpacing: 8,
+                wordWrap: { width: panelW - 34 }
             }
         ).setOrigin(0.5, 0);
 
@@ -5569,9 +5591,9 @@ this.events.on('action_B', () => {
         this.soloRocketRabbitComms = container;
 
         const safeMessage = String(message || '');
-        const rabbitSize = Math.min(92, rect.w * 0.23);
-        const rabbitX = rect.x + rect.w - rabbitSize * 0.58;
-        const rabbitY = rect.y + rect.h * 0.34;
+        const rabbitSize = Math.min(82, rect.w * 0.20);
+        const rabbitX = rect.x + rect.w - rabbitSize * 0.68;
+        const rabbitY = rect.y + rect.h * 0.26;
 
         let rabbit;
         if (this.textures.exists('solo-rocket-moon-rabbit')) {
@@ -5583,38 +5605,38 @@ this.events.on('action_B', () => {
             }).setOrigin(0.5);
         }
 
-        const bubbleW = Math.min(rect.w - 42, 340);
-        const bubbleH = 132;
+        const bubbleW = Math.min(rect.w - rabbitSize - 42, 310);
+        const bubbleH = 142;
         const bubbleX = rect.x + 16;
-        const bubbleY = Math.max(rect.y + 54, rabbitY - bubbleH / 2);
+        const bubbleY = Math.max(rect.y + 44, rabbitY - bubbleH / 2 + 4);
 
         const bubble = this.add.graphics();
-        bubble.fillStyle(0xffffff, 0.94).fillRoundedRect(bubbleX, bubbleY, bubbleW, bubbleH, 14);
-        bubble.lineStyle(3, 0x8a2be2, 1).strokeRoundedRect(bubbleX, bubbleY, bubbleW, bubbleH, 14);
-        bubble.lineStyle(1, 0x00ffff, 0.55).strokeRoundedRect(bubbleX + 5, bubbleY + 5, bubbleW - 10, bubbleH - 10, 10);
-        bubble.fillStyle(0xffffff, 0.94).fillTriangle(
+        bubble.fillStyle(0xffffff, 0.95).fillRoundedRect(bubbleX, bubbleY, bubbleW, bubbleH, 14);
+        bubble.lineStyle(4, 0x8a2be2, 1).strokeRoundedRect(bubbleX, bubbleY, bubbleW, bubbleH, 14);
+        bubble.lineStyle(2, 0x00ffff, 0.55).strokeRoundedRect(bubbleX + 6, bubbleY + 6, bubbleW - 12, bubbleH - 12, 10);
+        bubble.fillStyle(0xffffff, 0.95).fillTriangle(
             bubbleX + bubbleW,
-            bubbleY + bubbleH * 0.58,
+            bubbleY + bubbleH * 0.43,
             bubbleX + bubbleW + 18,
-            bubbleY + bubbleH * 0.68,
+            bubbleY + bubbleH * 0.52,
             bubbleX + bubbleW,
-            bubbleY + bubbleH * 0.78
+            bubbleY + bubbleH * 0.61
         );
 
-        const label = this.add.text(bubbleX + 14, bubbleY + 10, '月球管制緊急通訊', {
-            fontSize: '12px',
+        const label = this.add.text(bubbleX + 15, bubbleY + 10, '月球管制緊急通訊', {
+            fontSize: '13px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#6a00a8'
         });
 
-        const txt = this.add.text(bubbleX + 14, bubbleY + 35, '', {
-            fontSize: '15px',
+        const txt = this.add.text(bubbleX + 15, bubbleY + 40, '', {
+            fontSize: '18px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#111111',
-            lineSpacing: 8,
-            wordWrap: { width: bubbleW - 28, useAdvancedWrap: true }
+            lineSpacing: 12,
+            wordWrap: { width: bubbleW - 30, useAdvancedWrap: true }
         });
 
         const noiseBars = [];
@@ -5622,12 +5644,12 @@ this.events.on('action_B', () => {
         for (let i = 0; i < 12; i++) {
             const bar = this.add.rectangle(
                 rect.x + Phaser.Math.Between(18, Math.floor(rect.w - 18)),
-                rect.y + Phaser.Math.Between(50, Math.floor(rect.h * 0.48)),
+                rect.y + Phaser.Math.Between(40, Math.floor(rect.h * 0.45)),
                 Phaser.Math.Between(26, 132),
                 Phaser.Math.Between(3, 9),
                 glitchColors[i % glitchColors.length],
                 0
-            ).setScrollFactor(0);
+            ).setScrollFactor(0).setDepth(9767);
             noiseBars.push(bar);
         }
 
@@ -5662,7 +5684,7 @@ this.events.on('action_B', () => {
                 noiseBars.forEach(bar => {
                     bar.setPosition(
                         rect.x + Phaser.Math.Between(18, Math.floor(rect.w - 18)),
-                        rect.y + Phaser.Math.Between(50, Math.floor(rect.h * 0.48))
+                        rect.y + Phaser.Math.Between(40, Math.floor(rect.h * 0.45))
                     );
                     bar.setSize(Phaser.Math.Between(26, 132), Phaser.Math.Between(3, 9));
                     bar.setAlpha(Phaser.Math.FloatBetween(0.38, 0.92));
@@ -5679,11 +5701,12 @@ this.events.on('action_B', () => {
             label.setAlpha(1);
             rabbit.setAlpha(1);
             noiseBars.forEach(bar => {
-                try { bar.destroy(); } catch (_) {}
+                try { bar.setAlpha(0); } catch (_) {}
             });
         });
 
         container.__soloRocketFxTimers = [glitchTimer, cleanupGlitchTimer];
+        container.__soloRocketNoiseBars = noiseBars;
 
         const floatTween = this.tweens.add({
             targets: rabbit,
@@ -5695,9 +5718,9 @@ this.events.on('action_B', () => {
         });
         container.__soloRocketFxTweens = [floatTween];
 
-        const chars = Array.from(safeMessage);
+        const displayChars = Array.from(safeMessage);
         let idx = 0;
-        const typeDelay = Math.max(22, Math.floor(3100 / Math.max(chars.length, 1)));
+        const typeDelay = 30;
 
         if (this.soloRocketRabbitTypingTimer) {
             try { this.soloRocketRabbitTypingTimer.remove(false); } catch (_) {}
@@ -5706,18 +5729,23 @@ this.events.on('action_B', () => {
 
         this.soloRocketRabbitTypingTimer = this.time.addEvent({
             delay: typeDelay,
-            repeat: Math.max(0, chars.length - 1),
+            repeat: Math.max(0, displayChars.length - 1),
             callback: () => {
                 if (!txt || !txt.active) return;
                 idx += 1;
-                txt.setText(chars.slice(0, idx).join(''));
+                txt.setText(displayChars.slice(0, idx).join(''));
                 this.soloRocketRabbitTypingIndex = idx;
-                if (idx === 1 || idx % 20 === 0) {
+                if (idx === 1 || idx % 18 === 0) {
                     this.playSoloRocketIntroSfx('solo-rocket-typing');
                 }
             },
             callbackScope: this
         });
+
+        const finishTypingTimer = this.time.delayedCall(1800, () => {
+            if (txt && txt.active) txt.setText(safeMessage);
+        });
+        container.__soloRocketFxTimers.push(finishTypingTimer);
     }
 
     hideSoloRocketStage6RabbitComms(silent = false) {
@@ -5748,20 +5776,54 @@ this.events.on('action_B', () => {
 
         if (!silent) this.playSoloRocketIntroSfx('solo-rocket-radio_beep');
 
+        const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const bars = [];
+        const glitchColors = [0xffffff, 0x00ffff, 0xff00ff, 0x8a2be2];
+        for (let i = 0; i < 16; i++) {
+            const bar = this.add.rectangle(
+                rect.x + Phaser.Math.Between(8, Math.floor(rect.w - 8)),
+                rect.y + Phaser.Math.Between(36, Math.floor(rect.h * 0.48)),
+                Phaser.Math.Between(36, 180),
+                Phaser.Math.Between(3, 11),
+                glitchColors[i % glitchColors.length],
+                Phaser.Math.FloatBetween(0.45, 0.95)
+            ).setDepth(9768).setScrollFactor(0).setBlendMode(Phaser.BlendModes.ADD);
+            bars.push(bar);
+        }
+
         try {
             this.tweens.killTweensOf(container);
-            this.tweens.add({
-                targets: container,
-                alpha: 0,
-                scaleX: 0.96,
-                scaleY: 0.96,
-                duration: 180,
-                ease: 'Cubic.easeIn',
-                onComplete: () => {
-                    try { if (container && container.destroy) container.destroy(true); } catch (_) {}
-                }
+            let ticks = 0;
+            const glitchTimer = this.time.addEvent({
+                delay: 38,
+                repeat: 7,
+                callback: () => {
+                    ticks += 1;
+                    if (container && container.active) {
+                        container.setX(Phaser.Math.Between(-16, 16));
+                        container.setY(Phaser.Math.Between(-7, 7));
+                        container.setAlpha(ticks % 2 === 0 ? 0.92 : 0.22);
+                    }
+                    bars.forEach(bar => {
+                        if (!bar || !bar.active) return;
+                        bar.setPosition(
+                            rect.x + Phaser.Math.Between(8, Math.floor(rect.w - 8)),
+                            rect.y + Phaser.Math.Between(36, Math.floor(rect.h * 0.48))
+                        );
+                        bar.setSize(Phaser.Math.Between(36, 180), Phaser.Math.Between(3, 11));
+                        bar.setAlpha(Phaser.Math.FloatBetween(0.35, 0.95));
+                    });
+                },
+                callbackScope: this
+            });
+
+            this.time.delayedCall(360, () => {
+                try { if (glitchTimer && glitchTimer.remove) glitchTimer.remove(false); } catch (_) {}
+                bars.forEach(bar => { try { if (bar && bar.destroy) bar.destroy(); } catch (_) {} });
+                try { if (container && container.destroy) container.destroy(true); } catch (_) {}
             });
         } catch (_) {
+            bars.forEach(bar => { try { if (bar && bar.destroy) bar.destroy(); } catch (_) {} });
             try { if (container && container.destroy) container.destroy(true); } catch (_) {}
         }
     }
@@ -5806,7 +5868,7 @@ this.events.on('action_B', () => {
 
         if (elapsed >= 56000 && !this.soloRocketBossWarning1Shown) {
             this.soloRocketBossWarning1Shown = true;
-            this.showSoloRocketStage6RabbitComms('呼叫！呼叫！洋蔥！隕石大量發生！請小心！........!!!');
+            this.showSoloRocketStage6RabbitComms('呼叫！呼叫！洋蔥！\n隕石大量發生！請小心！........!!!');
         }
 
         if (elapsed >= 63000 && !this.soloRocketBossWarning1Closed) {
@@ -5820,10 +5882,10 @@ this.events.on('action_B', () => {
 
         if (elapsed >= 117000 && !this.soloRocketBossWarning2Shown) {
             this.soloRocketBossWarning2Shown = true;
-            this.showSoloRocketStage6RabbitComms('洋蔥小心！古代銀河巨雞魔出沒!!!! 注意安全!!!!');
+            this.showSoloRocketStage6RabbitComms('洋蔥小心！\n古代銀河巨雞魔出沒!!!! 注意安全!!!!');
         }
 
-        if (elapsed >= 124000 && !this.soloRocketBossWarning2Closed) {
+        if (elapsed >= 122000 && !this.soloRocketBossWarning2Closed) {
             this.soloRocketBossWarning2Closed = true;
             this.hideSoloRocketStage6RabbitComms(false);
         }
@@ -5838,6 +5900,8 @@ this.events.on('action_B', () => {
 
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
         const rocket = this.soloRocketPlayer;
+
+        this.triggerSoloRocketBossPunishmentIfNeeded(rect, rocket);
 
         this.tweens.add({
             targets: rocket,
@@ -5924,10 +5988,20 @@ this.events.on('action_B', () => {
         this.soloRocketBossMissileTimer = null;
 
         try {
+            if (this.soloRocketBossFloatTween && this.soloRocketBossFloatTween.stop) this.soloRocketBossFloatTween.stop();
+        } catch (_) {}
+        this.soloRocketBossFloatTween = null;
+
+        try {
             if (this.soloRocketBoss && this.tweens) this.tweens.killTweensOf(this.soloRocketBoss);
         } catch (_) {}
         destroyObj(this.soloRocketBoss, false);
         this.soloRocketBoss = null;
+
+        destroyObj(this.soloRocketBossHpBar, true);
+        this.soloRocketBossHpBar = null;
+        this.soloRocketBossHpFill = null;
+        this.soloRocketBossHpText = null;
 
         (this.soloRocketBossMissiles || []).slice().forEach(function(missile) {
             try {
@@ -5975,6 +6049,423 @@ this.events.on('action_B', () => {
         }
     }
 
+    updateSoloRocketBossTimeline(elapsed) {
+        if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
+        if (elapsed >= 126000 && !this.soloRocketBossSpawned && !this.soloRocketBossKilled) {
+            this.spawnSoloRocketBoss();
+        }
+    }
+
+    spawnSoloRocketBoss() {
+        if (!this.soloRocketContainer || !this.soloRocketPlayer) return;
+        if (this.soloRocketBossSpawned || this.soloRocketBossKilled) return;
+
+        const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        this.soloRocketBossSpawned = true;
+        this.soloRocketBossEntering = true;
+        this.soloRocketBossHp = this.soloRocketBossMaxHp || 80;
+
+        try {
+            if (this.soloRocketMonsterSpawnTimer) this.soloRocketMonsterSpawnTimer.remove(false);
+        } catch (_) {}
+        this.soloRocketMonsterSpawnTimer = null;
+        this.soloRocketMonsterSpawnActive = false;
+        this.soloRocketAsteroidSpawnActive = false;
+
+        const bossSize = Math.min(142, rect.w * 0.34);
+        const key = this.textures.exists('solo-rocket-monster-boss-chicken')
+            ? 'solo-rocket-monster-boss-chicken'
+            : 'solo-rocket-monster-chicken';
+
+        const boss = this.add.image(rect.centerX, rect.y - bossSize, key)
+            .setDisplaySize(bossSize, bossSize)
+            .setDepth(9628)
+            .setScrollFactor(0);
+
+        boss.__soloRocketBoss = true;
+        boss.__soloRocketRadius = bossSize * 0.40;
+        boss.__baseY = rect.y + bossSize * 0.62;
+
+        this.soloRocketBoss = boss;
+        this.soloRocketContainer.add(boss);
+        this.createSoloRocketBossHpUi();
+        this.updateSoloRocketBossHpUi();
+
+        const warning = this.add.text(rect.centerX, rect.y + 52, '巨雞魔王 出現！', {
+            fontSize: '24px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ff3333',
+            stroke: '#ffffff',
+            strokeThickness: 5
+        }).setOrigin(0.5).setDepth(9764).setScrollFactor(0).setAlpha(0);
+        this.soloRocketContainer.add(warning);
+        this.soloRocketStage4FxObjects = this.soloRocketStage4FxObjects || [];
+        this.soloRocketStage4FxObjects.push(warning);
+
+        this.tweens.add({
+            targets: warning,
+            alpha: 1,
+            scaleX: 1.12,
+            scaleY: 1.12,
+            yoyo: true,
+            repeat: 3,
+            duration: 140,
+            ease: 'Sine.easeInOut',
+            onComplete: () => {
+                this.tweens.add({
+                    targets: warning,
+                    alpha: 0,
+                    duration: 260,
+                    onComplete: () => {
+                        try { warning.destroy(); } catch (_) {}
+                        this.soloRocketStage4FxObjects = (this.soloRocketStage4FxObjects || []).filter(obj => obj !== warning);
+                    }
+                });
+            }
+        });
+
+        this.tweens.add({
+            targets: boss,
+            y: boss.__baseY,
+            duration: 1050,
+            ease: 'Back.easeOut',
+            onComplete: () => {
+                this.soloRocketBossEntering = false;
+                this.soloRocketBossFloatTween = this.tweens.add({
+                    targets: boss,
+                    x: rect.centerX + 18,
+                    y: boss.__baseY + 8,
+                    yoyo: true,
+                    repeat: -1,
+                    duration: 1550,
+                    ease: 'Sine.easeInOut'
+                });
+            }
+        });
+    }
+
+    createSoloRocketBossHpUi() {
+        if (this.soloRocketBossHpBar) {
+            try { this.soloRocketBossHpBar.destroy(true); } catch (_) {}
+        }
+        const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const barW = Math.min(rect.w - 72, 300);
+        const barH = 14;
+        const x = rect.centerX;
+        const y = rect.y + 34;
+        const c = this.add.container(0, 0).setDepth(9762).setScrollFactor(0);
+        const label = this.add.text(x, y - 18, '巨雞魔王', {
+            fontSize: '15px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#8a0000',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+        const bg = this.add.rectangle(x, y, barW, barH, 0x220000, 0.85)
+            .setStrokeStyle(3, 0xffffff, 0.95);
+        const fill = this.add.rectangle(x - barW / 2 + 2, y, barW - 4, barH - 5, 0xff2233, 1)
+            .setOrigin(0, 0.5);
+        c.add([label, bg, fill]);
+        this.soloRocketBossHpBar = c;
+        this.soloRocketBossHpFill = fill;
+        this.soloRocketBossHpText = label;
+        if (this.soloRocketContainer) this.soloRocketContainer.add(c);
+    }
+
+    updateSoloRocketBossHpUi() {
+        if (!this.soloRocketBossHpFill) return;
+        const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const barW = Math.min(rect.w - 72, 300) - 4;
+        const hpRate = Phaser.Math.Clamp((this.soloRocketBossHp || 0) / Math.max(1, this.soloRocketBossMaxHp || 80), 0, 1);
+        this.soloRocketBossHpFill.displayWidth = Math.max(1, barW * hpRate);
+        if (this.soloRocketBossHpText) {
+            this.soloRocketBossHpText.setText(`巨雞魔王  ${Math.max(0, Math.ceil(this.soloRocketBossHp || 0))}/${this.soloRocketBossMaxHp || 80}`);
+        }
+    }
+
+    playSoloRocketBossHitSfx() {
+        try {
+            if (!window.GameLogic.muteSFX && this.cache.audio.exists('solo-rocket-bang-on-boss')) {
+                window.playSFX(this, 'solo-rocket-bang-on-boss');
+            }
+        } catch (_) {}
+    }
+
+    playSoloRocketBossDieSfx() {
+        try {
+            if (!window.GameLogic.muteSFX && this.cache.audio.exists('solo-rocket-monster-boss-chicken-die')) {
+                window.playSFX(this, 'solo-rocket-monster-boss-chicken-die');
+            }
+        } catch (_) {}
+    }
+
+    showSoloRocketBossHitFx(x, y) {
+        if (!this.soloRocketContainer) return;
+        const boss = this.soloRocketBoss;
+        if (boss && boss.active) {
+            try { boss.setTint(0xffffff); } catch (_) {}
+            this.time.delayedCall(70, () => {
+                try { if (boss && boss.active) boss.setTint(0xff7777); } catch (_) {}
+            });
+            this.time.delayedCall(140, () => {
+                try { if (boss && boss.active) boss.clearTint(); } catch (_) {}
+            });
+        }
+        this.showSoloRocketMonsterExplosion(x, y, 'hitPlayer');
+    }
+
+    checkSoloRocketBeamBossHits() {
+        const boss = this.soloRocketBoss;
+        if (!boss || !boss.active || this.soloRocketBossKilled || this.soloRocketBossEntering) return;
+
+        let bossBounds;
+        try { bossBounds = boss.getBounds(); } catch (_) { return; }
+
+        const beams = (this.soloRocketBeams || []).slice();
+        for (const beam of beams) {
+            if (!beam || !beam.active || beam.__soloRocketUsed) continue;
+            let beamBounds;
+            try { beamBounds = beam.getBounds(); } catch (_) { continue; }
+            if (!Phaser.Geom.Intersects.RectangleToRectangle(beamBounds, bossBounds)) continue;
+
+            beam.__soloRocketUsed = true;
+            const hitX = beam.x || boss.x;
+            const hitY = beam.y || boss.y;
+            const damage = beam.__soloRocketDamage || 2;
+            this.destroySoloRocketBeam(beam);
+            this.soloRocketBossHp = Math.max(0, (this.soloRocketBossHp || 0) - damage);
+            this.playSoloRocketBossHitSfx();
+            this.showSoloRocketBossHitFx(hitX, hitY);
+            this.updateSoloRocketBossHpUi();
+
+            if (this.soloRocketBossHp <= 0) {
+                this.handleSoloRocketBossKilled();
+                return;
+            }
+        }
+    }
+
+    handleSoloRocketBossKilled() {
+        if (this.soloRocketBossKilled) return;
+        const boss = this.soloRocketBoss;
+        const x = boss && boss.active ? boss.x : (this.soloRocketSafeRect ? this.soloRocketSafeRect.centerX : 0);
+        const y = boss && boss.active ? boss.y : 0;
+
+        this.soloRocketBossKilled = true;
+        this.soloRocketStats = this.soloRocketStats || {};
+        this.soloRocketStats.bossKilled = true;
+        this.playSoloRocketBossDieSfx();
+
+        for (let i = 0; i < 3; i++) {
+            this.time.delayedCall(i * 120, () => this.showSoloRocketMonsterExplosion(x + Phaser.Math.Between(-30, 30), y + Phaser.Math.Between(-30, 30), 'kill'));
+        }
+
+        (this.soloRocketBossMissiles || []).slice().forEach(m => this.destroySoloRocketBossMissile(m, true));
+        this.soloRocketBossMissiles = [];
+
+        if (this.soloRocketBossHpBar) {
+            try { this.soloRocketBossHpBar.destroy(true); } catch (_) {}
+            this.soloRocketBossHpBar = null;
+            this.soloRocketBossHpFill = null;
+            this.soloRocketBossHpText = null;
+        }
+
+        if (boss && boss.active) {
+            try { if (this.soloRocketBossFloatTween && this.soloRocketBossFloatTween.stop) this.soloRocketBossFloatTween.stop(); } catch (_) {}
+            this.tweens.add({
+                targets: boss,
+                alpha: 0,
+                scaleX: 1.45,
+                scaleY: 1.45,
+                angle: boss.angle + 35,
+                duration: 520,
+                ease: 'Cubic.easeOut',
+                onComplete: () => {
+                    try { if (boss.destroy) boss.destroy(); } catch (_) {}
+                    if (this.soloRocketBoss === boss) this.soloRocketBoss = null;
+                }
+            });
+        }
+    }
+
+    spawnSoloRocketBossMissile() {
+        const boss = this.soloRocketBoss;
+        if (!boss || !boss.active || this.soloRocketBossKilled || this.soloRocketBossEntering || !this.soloRocketPlayer) return;
+        if ((this.soloRocketBossMissiles || []).length >= 4) return;
+
+        const missile = this.add.circle(boss.x, boss.y + 32, 11, 0xff3311, 0.95)
+            .setStrokeStyle(3, 0xffdd66, 0.9)
+            .setDepth(9632)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+        const core = this.add.circle(boss.x, boss.y + 32, 5, 0xffffff, 0.95)
+            .setDepth(9633)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+        const tail1 = this.add.circle(boss.x, boss.y + 32, 8, 0xff7722, 0.35)
+            .setDepth(9631)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+        const tail2 = this.add.circle(boss.x, boss.y + 32, 5, 0xff0000, 0.25)
+            .setDepth(9630)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        const dx = (this.soloRocketPlayer.x || boss.x) - boss.x;
+        const dy = (this.soloRocketPlayer.y || boss.y) - boss.y;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        missile.__vx = dx / len * 135;
+        missile.__vy = dy / len * 135;
+        missile.__age = 0;
+        missile.__radius = 9;
+        missile.__fxObjects = [core, tail1, tail2];
+
+        this.soloRocketContainer.add([tail2, tail1, missile, core]);
+        this.soloRocketBossMissiles = this.soloRocketBossMissiles || [];
+        this.soloRocketBossMissiles.push(missile);
+    }
+
+    destroySoloRocketBossMissile(missile, blocked = false) {
+        if (!missile) return;
+        this.soloRocketBossMissiles = (this.soloRocketBossMissiles || []).filter(m => m !== missile);
+        const x = missile.x;
+        const y = missile.y;
+        try {
+            (missile.__fxObjects || []).forEach(fx => { try { if (fx && fx.destroy) fx.destroy(); } catch (_) {} });
+        } catch (_) {}
+        try { if (missile.destroy) missile.destroy(); } catch (_) {}
+        if (blocked) this.showSoloRocketAsteroidBlockedFx(x, y);
+        else this.showSoloRocketMonsterExplosion(x, y, 'hitPlayer');
+    }
+
+    updateSoloRocketBossMissiles(dt) {
+        if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
+        const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const player = this.soloRocketPlayer;
+        const isSpinning = this.soloRocketSpinActive || Date.now() < (this.__soloRocketSpinInvincibleUntil || 0);
+
+        (this.soloRocketBossMissiles || []).slice().forEach(missile => {
+            if (!missile || !missile.active) {
+                this.destroySoloRocketBossMissile(missile, false);
+                return;
+            }
+
+            missile.__age = (missile.__age || 0) + dt;
+
+            if (player && player.active) {
+                let dx = player.x - missile.x;
+                let dy = player.y - missile.y;
+                const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                dx /= len;
+                dy /= len;
+                const speed = 150;
+                missile.__vx = Phaser.Math.Linear(missile.__vx || 0, dx * speed, 0.026);
+                missile.__vy = Phaser.Math.Linear(missile.__vy || 0, dy * speed, 0.026);
+            }
+
+            missile.x += (missile.__vx || 0) * dt;
+            missile.y += (missile.__vy || 0) * dt;
+            missile.angle += 560 * dt;
+
+            const fx = missile.__fxObjects || [];
+            if (fx[0]) { fx[0].x = missile.x; fx[0].y = missile.y; fx[0].angle = missile.angle; }
+            if (fx[1]) { fx[1].x = missile.x - (missile.__vx || 0) * 0.045; fx[1].y = missile.y - (missile.__vy || 0) * 0.045; fx[1].setScale(1 + Math.sin(missile.__age * 18) * 0.18); }
+            if (fx[2]) { fx[2].x = missile.x - (missile.__vx || 0) * 0.080; fx[2].y = missile.y - (missile.__vy || 0) * 0.080; fx[2].setScale(1 + Math.cos(missile.__age * 15) * 0.18); }
+
+            const out = missile.x < rect.x - 80 || missile.x > rect.x + rect.w + 80 || missile.y < rect.y - 120 || missile.y > rect.y + rect.h + 120 || missile.__age > 9;
+            if (out) {
+                this.destroySoloRocketBossMissile(missile, false);
+                return;
+            }
+
+            if (player && player.active) {
+                const dist = Phaser.Math.Distance.Between(missile.x, missile.y, player.x, player.y);
+                const hitDist = (missile.__radius || 9) + Math.max(14, (this.soloRocketPlayerRadius || 28) * 0.55);
+                if (dist <= hitDist) {
+                    if (isSpinning) {
+                        this.destroySoloRocketBossMissile(missile, true);
+                        this.soloRocketStats = this.soloRocketStats || {};
+                        this.soloRocketStats.spinDodges = (this.soloRocketStats.spinDodges || 0) + 1;
+                        return;
+                    }
+
+                    this.destroySoloRocketBossMissile(missile, false);
+                    this.showSoloRocketPlayerHitFeedback();
+                    this.soloRocketStats = this.soloRocketStats || {};
+                    this.soloRocketStats.monsterHits = (this.soloRocketStats.monsterHits || 0) + 1;
+                    this.setSoloRocketLifeValue((this.soloRocketLifeValue || 0) - 12);
+                    if ((this.soloRocketLifeValue || 0) <= 0) {
+                        this.setSoloRocketLifeValue(0);
+                        this.finishSoloRocketCruise();
+                    }
+                }
+            }
+        });
+    }
+
+    updateSoloRocketBoss(dt, elapsed) {
+        const boss = this.soloRocketBoss;
+        if (!boss || !boss.active || this.soloRocketBossKilled) return;
+
+        if (!this.soloRocketBossEntering && elapsed < 152000) {
+            const now = Date.now();
+            if (now - (this.soloRocketBossLastMissileAt || 0) >= (this.soloRocketBossMissileIntervalMs || 5000)) {
+                this.soloRocketBossLastMissileAt = now;
+                this.spawnSoloRocketBossMissile();
+            }
+        }
+
+        this.checkSoloRocketBeamBossHits();
+        this.updateSoloRocketBossHpUi();
+    }
+
+    triggerSoloRocketBossPunishmentIfNeeded(rect, rocket) {
+        if (this.soloRocketBossKilled || this.soloRocketBossPunished || !rocket) return;
+        if (!this.soloRocketBossSpawned) return;
+
+        this.soloRocketBossPunished = true;
+        this.soloRocketStats = this.soloRocketStats || {};
+        this.soloRocketStats.bossPunished = true;
+        this.setSoloRocketLifeValue(Math.max(0, (this.soloRocketLifeValue || 0) - 25));
+        this.showSoloRocketPlayerHitFeedback();
+
+        const boss = this.soloRocketBoss;
+        if (boss && boss.active) {
+            try { if (this.soloRocketBossFloatTween && this.soloRocketBossFloatTween.stop) this.soloRocketBossFloatTween.stop(); } catch (_) {}
+            this.tweens.add({
+                targets: boss,
+                x: rect.centerX,
+                y: rocket.y + 34,
+                scaleX: boss.scaleX * 1.16,
+                scaleY: boss.scaleY * 1.16,
+                alpha: 0.72,
+                duration: 650,
+                ease: 'Cubic.easeIn'
+            });
+        }
+
+        const warning = this.add.text(rect.centerX, rect.centerY - 32, '魔王追擊！', {
+            fontSize: '30px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ff2233',
+            stroke: '#ffffff',
+            strokeThickness: 6
+        }).setOrigin(0.5).setDepth(9769).setScrollFactor(0);
+        this.soloRocketContainer.add(warning);
+        this.tweens.add({
+            targets: warning,
+            alpha: 0,
+            scaleX: 1.55,
+            scaleY: 1.55,
+            duration: 740,
+            ease: 'Cubic.easeOut',
+            onComplete: () => { try { warning.destroy(); } catch (_) {} }
+        });
+    }
+  
     clearSoloRocketStage4Objects(resetStats = false) {
         const removeTimer = (timer) => {
             try {
@@ -7032,8 +7523,10 @@ this.events.on('action_B', () => {
         });
 
         this.checkSoloRocketBeamMonsterHits();
+        this.checkSoloRocketBeamBossHits();
         this.checkSoloRocketMonsterPlayerHits();
         this.checkSoloRocketMonsterBulletPlayerHits();
+    }
     }
     showSoloRocketMonsterExplosion(x, y, mode = 'kill') {
         if (!this.soloRocketContainer) return;
@@ -8068,6 +8561,7 @@ this.events.on('action_B', () => {
         const elapsed = Date.now() - (this.soloRocketStartTime || Date.now());
 
         this.updateSoloRocketStage6WarningTimeline(elapsed);
+        this.updateSoloRocketBossTimeline(elapsed);
 
         if (!this.soloRocketCruiseFinished && elapsed >= 152000) {
             this.stopSoloRocketMonsterSpawning();
@@ -8125,6 +8619,8 @@ this.events.on('action_B', () => {
         this.updateSoloRocketStage4(dt);
         this.updateSoloRocketSpinShieldPosition();
         this.updateSoloRocketAsteroids(dt, elapsed);
+        this.updateSoloRocketBoss(dt, elapsed);
+        this.updateSoloRocketBossMissiles(dt);
         this.updateSoloRocketSpinCooldownUi();
         if (this.soloRocketCruiseFinished) return;
 
@@ -8156,6 +8652,7 @@ this.events.on('action_B', () => {
         this.clearSoloRocketTutorial();
         this.clearSoloRocketIntroFx();
         this.clearSoloRocketStage4Objects(false);
+        this.clearSoloRocketStage6Objects(false);
         this.stopSoloRocketBgm();
 
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
@@ -8238,7 +8735,8 @@ this.events.on('action_B', () => {
             `擊殺小怪獸數：${stats.monsterKills || 0}`,
             `躲過隕石顆數：${stats.asteroidsDodged || 0}`,
             `成功旋轉閃避次數：${stats.spinDodges || 0}`,
-            `是否擊殺魔王：否`
+            `是否擊殺魔王：${stats.bossKilled || this.soloRocketBossKilled ? '是' : '否'}`,
+            `是否受到魔王衝刺懲罰：${stats.bossPunished || this.soloRocketBossPunished ? '是' : '否'}`
         ].join('\n');
 
         const body = this.add.text(rect.centerX, py + 94, resultText, {
