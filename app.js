@@ -1974,6 +1974,9 @@ class BootScene extends Phaser.Scene {
         this.load.audio('solo-rocket-monster-chicken-die', 'solo-rocket-monster-chicken-die.mp3');
         this.load.audio('solo-rocket-bang', 'solo-rocket-bang.mp3');
         this.load.audio('solo-rocket-turn', 'solo-rocket-turn.mp3');
+        this.load.image('solo-rocket-monster-boss-chicken', 'solo-rocket-monster-boss-chicken.png');
+        this.load.audio('solo-rocket-bang-on-boss', 'solo-rocket-bang-on-boss.mp3');
+        this.load.audio('solo-rocket-monster-boss-chicken-die', 'solo-rocket-monster-boss-chicken-die.mp3');
 
         // 在記憶體中畫一個簡單的白色發光點紋理給粒子使用
         let grd = this.make.graphics({x: 0, y: 0, add: false});
@@ -2435,6 +2438,27 @@ class MainScene extends Phaser.Scene {
         this.soloRocketStage4FxObjects = [];
         this.soloRocketStage4ClearedForEnding = false;
 
+        // 階段6：魔王、追蹤導彈、玉兔通訊與終場閉環狀態
+        this.soloRocketBoss = null;
+        this.soloRocketBossHp = 80;
+        this.soloRocketBossMaxHp = 80;
+        this.soloRocketBossSpawned = false;
+        this.soloRocketBossKilled = false;
+        this.soloRocketBossPunished = false;
+        this.soloRocketBossEntering = false;
+        this.soloRocketBossMissiles = [];
+        this.soloRocketBossMissileTimer = null;
+        this.soloRocketBossLastMissileAt = 0;
+        this.soloRocketBossMissileIntervalMs = 5000;
+        this.soloRocketBossWarning1Shown = false;
+        this.soloRocketBossWarning1Closed = false;
+        this.soloRocketBossWarning2Shown = false;
+        this.soloRocketBossWarning2Closed = false;
+        this.soloRocketRabbitComms = null;
+        this.soloRocketRabbitTypingTimer = null;
+        this.soloRocketRabbitTypingIndex = 0;
+        this.soloRocketFinalEscapeStarted = false;
+
         // 階段5：隕石、旋轉防禦與冷卻 UI
         this.soloRocketAsteroids = [];
         this.soloRocketAsteroidSpawnActive = false;
@@ -2454,7 +2478,8 @@ class MainScene extends Phaser.Scene {
             monsterHits: 0,
             asteroidsDodged: 0,
             spinDodges: 0,
-            bossKilled: false
+            bossKilled: false,
+            bossPunished: false
         };
 
         window.GameLogic.soloRocketCruiseActive = false;
@@ -5573,6 +5598,7 @@ this.events.on('action_B', () => {
 
     resetSoloRocketStage4State() {
         this.clearSoloRocketStage4Objects(true);
+        if (this.clearSoloRocketStage6Objects) this.clearSoloRocketStage6Objects(true);
         this.soloRocketMonsterSpawnedCount = 0;
         this.soloRocketMonsterSpawnActive = false;
         this.soloRocketMonsterSpawnStopped = false;
@@ -5593,8 +5619,81 @@ this.events.on('action_B', () => {
             monsterHits: 0,
             asteroidsDodged: 0,
             spinDodges: 0,
-            bossKilled: false
+            bossKilled: false,
+            bossPunished: false
         };
+
+    clearSoloRocketStage6Objects(resetFlags = false) {
+        const scene = this;
+        const removeTimer = function(timer) {
+            try {
+                if (timer && timer.remove) timer.remove(false);
+            } catch (_) {}
+        };
+        const destroyObj = function(obj, destroyChildren) {
+            try {
+                if (!obj) return;
+                if (scene.tweens) scene.tweens.killTweensOf(obj);
+                if (obj.destroy) {
+                    if (destroyChildren) obj.destroy(true);
+                    else obj.destroy();
+                }
+            } catch (_) {}
+        };
+
+        removeTimer(this.soloRocketRabbitTypingTimer);
+        removeTimer(this.soloRocketBossMissileTimer);
+        this.soloRocketRabbitTypingTimer = null;
+        this.soloRocketBossMissileTimer = null;
+
+        try {
+            if (this.soloRocketBoss && this.tweens) this.tweens.killTweensOf(this.soloRocketBoss);
+        } catch (_) {}
+        destroyObj(this.soloRocketBoss, false);
+        this.soloRocketBoss = null;
+
+        (this.soloRocketBossMissiles || []).slice().forEach(function(missile) {
+            try {
+                if (missile && missile.__trailEmitter && missile.__trailEmitter.destroy) missile.__trailEmitter.destroy();
+            } catch (_) {}
+            try {
+                if (missile && missile.__trailParticles && missile.__trailParticles.destroy) missile.__trailParticles.destroy();
+            } catch (_) {}
+            try {
+                if (missile && missile.__spinTween && missile.__spinTween.remove) missile.__spinTween.remove();
+            } catch (_) {}
+            try {
+                if (missile && missile.__glowTween && missile.__glowTween.remove) missile.__glowTween.remove();
+            } catch (_) {}
+            try {
+                if (missile && missile.__fxObjects && missile.__fxObjects.forEach) {
+                    missile.__fxObjects.forEach(function(fx) { destroyObj(fx, true); });
+                }
+            } catch (_) {}
+            destroyObj(missile, true);
+        });
+
+        this.soloRocketBossMissiles = [];
+
+        destroyObj(this.soloRocketRabbitComms, true);
+        this.soloRocketRabbitComms = null;
+        this.soloRocketRabbitTypingIndex = 0;
+
+        this.soloRocketBossEntering = false;
+        this.soloRocketBossLastMissileAt = 0;
+
+        if (resetFlags) {
+            this.soloRocketBossHp = 80;
+            this.soloRocketBossMaxHp = 80;
+            this.soloRocketBossSpawned = false;
+            this.soloRocketBossKilled = false;
+            this.soloRocketBossPunished = false;
+            this.soloRocketBossWarning1Shown = false;
+            this.soloRocketBossWarning1Closed = false;
+            this.soloRocketBossWarning2Shown = false;
+            this.soloRocketBossWarning2Closed = false;
+            this.soloRocketFinalEscapeStarted = false;
+        }
     }
 
     clearSoloRocketStage4Objects(resetStats = false) {
@@ -5689,7 +5788,8 @@ this.events.on('action_B', () => {
                 monsterHits: 0,
                 asteroidsDodged: 0,
                 spinDodges: 0,
-                bossKilled: false
+                bossKilled: false,
+                bossPunished: false
             };
         } else {
             this.soloRocketMonsterSpawnStopped = true;
@@ -7905,6 +8005,7 @@ this.events.on('action_B', () => {
         this.clearSoloRocketTutorial();
         this.clearSoloRocketIntroFx();
         this.clearSoloRocketStage4Objects(true);
+        if (this.clearSoloRocketStage6Objects) this.clearSoloRocketStage6Objects(true);
 
         const safeDestroySoloRocketObject = (obj, destroyChildren = false) => {
             try {
@@ -7973,6 +8074,15 @@ this.events.on('action_B', () => {
         this.soloRocketInputLocked = false;
         this.soloRocketEndingRushStarted = false;
         this.soloRocketEndingFadeStarted = false;
+        this.soloRocketFinalEscapeStarted = false;
+        this.soloRocketBossEntering = false;
+        this.soloRocketBossSpawned = false;
+        this.soloRocketBossKilled = false;
+        this.soloRocketBossPunished = false;
+        this.soloRocketBossWarning1Shown = false;
+        this.soloRocketBossWarning1Closed = false;
+        this.soloRocketBossWarning2Shown = false;
+        this.soloRocketBossWarning2Closed = false;
         this.soloRocketCruiseActive = false;
         this.soloRocketCruiseFinished = false;
         window.GameLogic.soloRocketCruiseActive = false;
