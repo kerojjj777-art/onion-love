@@ -717,7 +717,11 @@ window.normalizePrinceCatProfileFields = function() {
 };
 
 window.getPrinceCatRewardList = function() {
-    const bond = Number(window.GameLogic.myProfile?.princeBond || 0);
+    const bond = Number(
+        window.GameLogic.myProfile && window.GameLogic.myProfile.princeBond
+            ? window.GameLogic.myProfile.princeBond
+            : 0
+    );
 
     return [
         {
@@ -777,7 +781,11 @@ window.openPrinceCatRewardDetail = function() {
 
     const rankEl = document.getElementById('reward-my-rank');
     if (rankEl) {
-        const bond = Number(window.GameLogic.myProfile?.princeBond || 0);
+        const bond = Number(
+            window.GameLogic.myProfile && window.GameLogic.myProfile.princeBond
+                ? window.GameLogic.myProfile.princeBond
+                : 0
+        );
         rankEl.innerText = `目前王子麵羈絆：${bond.toFixed(1)}`;
     }
 
@@ -970,7 +978,10 @@ window.updateOnlinePlayersUI = function() {
     html += '<div style="color:var(--mucha-gold); font-weight:bold; margin-bottom:5px; text-align:center; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 3px;">誰在線上</div>';
 
     let now = Date.now();
-    let players = { ...(window.GameLogic.onlinePlayers || {}) };
+    let players = Object.assign({}, window.GameLogic.onlinePlayers || {});
+    const currentUid = window.GameLogic.currentUser && window.GameLogic.currentUser.uid
+        ? window.GameLogic.currentUser.uid
+        : null;
 
     let roomPlayers = {};
     if (window.GameLogic.currentScene === 'cafe') roomPlayers = window.GameLogic.cafePlayers || {};
@@ -996,7 +1007,7 @@ window.updateOnlinePlayersUI = function() {
     for (let uid in players) {
         let p = players[uid];
         if (!p.roomFallback && p.lastActive && (now - p.lastActive > 30000)) continue;
-        if (!p.lastActive && uid !== window.GameLogic.currentUser?.uid && !roomPlayers[uid]) continue;
+        if (!p.lastActive && uid !== currentUid && !roomPlayers[uid]) continue;
         html += `<div style="margin-top:5px; display:flex; align-items:center;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${p.color || '#fff'}; margin-right:8px; border:1px solid #000;"></span>${p.name || '匿名'}</div>`;
     }
 
@@ -1010,7 +1021,10 @@ window.startShrineRitual = function() {
         let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
         if (ms) {
             ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire'].forEach(k => ms.sound.stopByKey(k));
-            if (!ms.sound.get('shrine-wierd-people-sound')?.isPlaying) ms.sound.play('shrine-wierd-people-sound', {loop: true});
+            const shrineSound = ms.sound.get('shrine-wierd-people-sound');
+            if (!shrineSound || !shrineSound.isPlaying) {
+                ms.sound.play('shrine-wierd-people-sound', { loop: true });
+            }
         }
     }
 };
@@ -1063,15 +1077,42 @@ window.acceptSummon = function() {
 
 let voteTarget = null; let voteTalisman = null;
 window.selectVoteTarget = function(uid) { 
-    if (voteTarget === uid) { voteTarget = null; document.getElementById('vote-tgt-' + uid)?.classList.remove('selected'); }
-    else { voteTarget = uid; document.querySelectorAll('[id^="vote-tgt-"]').forEach(b => b.classList.remove('selected')); document.getElementById('vote-tgt-' + uid)?.classList.add('selected'); }
+    if (voteTarget === uid) {
+        voteTarget = null;
+        const targetEl = document.getElementById('vote-tgt-' + uid);
+        if (targetEl) targetEl.classList.remove('selected');
+    } else {
+        voteTarget = uid;
+        document.querySelectorAll('[id^="vote-tgt-"]').forEach(b => b.classList.remove('selected'));
+        const targetEl = document.getElementById('vote-tgt-' + uid);
+        if (targetEl) targetEl.classList.add('selected');
+    }
+
     // 修正4：即時上傳未確認的選擇供他人觀看
-    update(ref(window.GameLogic.db, `shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`), { target: voteTarget || 'none', name: window.GameLogic.myProfile.name, confirmed: false });
+    update(ref(window.GameLogic.db, `shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`), {
+        target: voteTarget || 'none',
+        name: window.GameLogic.myProfile.name,
+        confirmed: false
+    });
 };
+
 window.selectVoteTalisman = function(tId) { 
-    if (voteTalisman === tId) { voteTalisman = null; document.getElementById('vote-tali-' + tId)?.classList.remove('selected'); }
-    else { voteTalisman = tId; document.querySelectorAll('[id^="vote-tali-"]').forEach(b => b.classList.remove('selected')); document.getElementById('vote-tali-' + tId)?.classList.add('selected'); }
-    update(ref(window.GameLogic.db, `shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`), { talisman: voteTalisman || 'none', name: window.GameLogic.myProfile.name, confirmed: false });
+    if (voteTalisman === tId) {
+        voteTalisman = null;
+        const taliEl = document.getElementById('vote-tali-' + tId);
+        if (taliEl) taliEl.classList.remove('selected');
+    } else {
+        voteTalisman = tId;
+        document.querySelectorAll('[id^="vote-tali-"]').forEach(b => b.classList.remove('selected'));
+        const taliEl = document.getElementById('vote-tali-' + tId);
+        if (taliEl) taliEl.classList.add('selected');
+    }
+
+    update(ref(window.GameLogic.db, `shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`), {
+        talisman: voteTalisman || 'none',
+        name: window.GameLogic.myProfile.name,
+        confirmed: false
+    });
 };
 window.submitVote = function() {
     if (!voteTarget || !voteTalisman) return alert("請選擇一位淨化對象與一款符咒！");
@@ -1583,7 +1624,10 @@ function leaveShrine() {
                 let coins = snap.val() || {};
                 let updates = {};
                 Object.keys(coins).forEach(k => {
-                if (k.startsWith('shrine_coin_') || coins[k]?.scene === 'shrine') updates[`droppedCoins/${k}`] = null;
+                    const coinData = coins[k] || {};
+                    if (k.startsWith('shrine_coin_') || coinData.scene === 'shrine') {
+                        updates[`droppedCoins/${k}`] = null;
+                    }
                 });
                 if (Object.keys(updates).length > 0) update(ref(window.GameLogic.db), updates);
             });
@@ -1979,19 +2023,40 @@ class BootScene extends Phaser.Scene {
             } else {
                 const sourceTexture = this.textures.get(sourceKey);
                 const sourceImage =
-                    sourceTexture?.getSourceImage
+                    sourceTexture && sourceTexture.getSourceImage
                         ? sourceTexture.getSourceImage()
-                        : sourceTexture?.source?.[0]?.image;
+                        : (
+                            sourceTexture &&
+                            sourceTexture.source &&
+                            sourceTexture.source[0] &&
+                            sourceTexture.source[0].image
+                                ? sourceTexture.source[0].image
+                                : null
+                        );
 
                 const sourceWidth =
-                    sourceImage?.width ||
-                    sourceTexture?.source?.[0]?.width ||
-                    0;
+                    sourceImage && sourceImage.width
+                        ? sourceImage.width
+                        : (
+                            sourceTexture &&
+                            sourceTexture.source &&
+                            sourceTexture.source[0] &&
+                            sourceTexture.source[0].width
+                                ? sourceTexture.source[0].width
+                                : 0
+                        );
 
                 const sourceHeight =
-                    sourceImage?.height ||
-                    sourceTexture?.source?.[0]?.height ||
-                    0;
+                    sourceImage && sourceImage.height
+                        ? sourceImage.height
+                        : (
+                            sourceTexture &&
+                            sourceTexture.source &&
+                            sourceTexture.source[0] &&
+                            sourceTexture.source[0].height
+                                ? sourceTexture.source[0].height
+                                : 0
+                        );
 
                 if (sourceWidth < 600 || sourceHeight < 100) {
                     console.warn(`[王子麵餵食] tools-pet-cat-can-open.png 尺寸不正確：${sourceWidth}×${sourceHeight}。需要至少 600×100，6 格橫排，每格 100×100。已略過開罐動畫，不中斷 BootScene。`);
@@ -2132,8 +2197,12 @@ class UIScene extends Phaser.Scene {
             });
             if (this.partyDash) this.partyDash.setVisible(false);
             if (this.joyStick) {
-                if (this.joyStick.base?.setVisible) this.joyStick.base.setVisible(true);
-                if (this.joyStick.thumb?.setVisible) this.joyStick.thumb.setVisible(true);
+                if (this.joyStick.base && this.joyStick.base.setVisible) {
+                    this.joyStick.base.setVisible(true);
+                }
+                if (this.joyStick.thumb && this.joyStick.thumb.setVisible) {
+                    this.joyStick.thumb.setVisible(true);
+                }
             }
             return;
         }
@@ -2618,7 +2687,10 @@ class MainScene extends Phaser.Scene {
                     if (data.state === 'stealing') this.mimiSprite.play('mimi-steal', true);
                     else if (data.state === 'laughing') this.mimiSprite.play('mimi-laugh', true);
                     else if (data.state === 'down') { 
-                        if (this.mimiSprite.anims.currentAnim?.key !== 'mimi-down') {
+                        const mimiCurrentAnim = this.mimiSprite && this.mimiSprite.anims
+                            ? this.mimiSprite.anims.currentAnim
+                            : null;
+                        if (!mimiCurrentAnim || mimiCurrentAnim.key !== 'mimi-down') {
                             this.mimiSprite.play('mimi-down', true);
                         }
                         if (!this.mimiSprite.isBlinking) {
@@ -2979,7 +3051,7 @@ this.events.on('action_A_short', () => {
                         scene: this.sceneName
                     });
 
-                    if (this.sceneName === 'partyroom' && window.PartyLogic?.roomId) {
+                    if (this.sceneName === 'partyroom' && window.PartyLogic && window.PartyLogic.roomId) {
                         update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), {
                             action: 'throwWater',
                             actionTime: waterActionTime,
@@ -3052,7 +3124,22 @@ this.events.on('action_A_short', () => {
                 return; 
             }
 
-            if (this.localPlayer.isSweeping) { let vol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100; if (!window.GameLogic.muteSFX && !this.sound.get('brooming1')?.isPlaying && vol > 0) { if (this.sound.get('brooming1')) this.sound.play('brooming1', {volume: vol}); else this.sound.add('brooming1', {volume: vol}).play(); } this.qteProgress += (100 / this.qteTotalClicks); if (this.qteProgress >= 100) { this.qteProgress = 100; this.finishSweeping(true); } return; }
+            if (this.localPlayer.isSweeping) {
+                let vol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100;
+                const broomingSound = this.sound.get('brooming1');
+
+                if (!window.GameLogic.muteSFX && (!broomingSound || !broomingSound.isPlaying) && vol > 0) {
+                    if (broomingSound) this.sound.play('brooming1', { volume: vol });
+                    else this.sound.add('brooming1', { volume: vol }).play();
+                }
+
+                this.qteProgress += (100 / this.qteTotalClicks);
+                if (this.qteProgress >= 100) {
+                    this.qteProgress = 100;
+                    this.finishSweeping(true);
+                }
+                return;
+            }
             if (this.sceneName === '7eonion' && this.storeManager) { 
                 let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.storeManager.x, this.storeManager.y); 
                 if (dist < 150) { 
@@ -3447,7 +3534,8 @@ this.events.on('action_B', () => {
             }
         });
         
-        this.partyAllHitsListener = onValue(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic?.roomId}/hits`), (snap) => {
+        const activePartyRoomId = window.PartyLogic && window.PartyLogic.roomId ? window.PartyLogic.roomId : '';
+        this.partyAllHitsListener = onValue(ref(window.GameLogic.db, `partyRooms/${activePartyRoomId}/hits`), (snap) => {
             let hits = snap.val() || {};
             for (let uid in hits) {
                 if (uid === window.GameLogic.currentUser.uid) continue;
@@ -3510,7 +3598,7 @@ this.events.on('action_B', () => {
             }
         });
       
-      this.partyHitListener = onValue(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic?.roomId}/hits/${window.GameLogic.currentUser.uid}`), (snap) => {
+      this.partyHitListener = onValue(ref(window.GameLogic.db, `partyRooms/${activePartyRoomId}/hits/${window.GameLogic.currentUser.uid}`), (snap) => {
             let data = snap.val();
             if (data && data.time && (Date.now() - data.time < 2000)) {
                 if (this.localPlayer.isInvincible) return;
@@ -4066,8 +4154,8 @@ this.events.on('action_B', () => {
     closeSoloChickenMenu() {
         const timer = this.soloChickenMenuTimer;
         const rippleTimer = this.soloChickenRippleTimer;
-        const tweens = Array.isArray(this.soloChickenMenuTweens) ? [...this.soloChickenMenuTweens] : [];
-        const ripples = Array.isArray(this.soloChickenMenuRipples) ? [...this.soloChickenMenuRipples] : [];
+        const tweens = Array.isArray(this.soloChickenMenuTweens) ? this.soloChickenMenuTweens.slice() : [];
+        const ripples = Array.isArray(this.soloChickenMenuRipples) ? this.soloChickenMenuRipples.slice() : [];
         const container = this.soloChickenMenuContainer;
         const blocker = this.soloChickenMenuBlocker;
 
@@ -5795,7 +5883,8 @@ this.events.on('action_B', () => {
         }
 
         this.soloRocketContainer.add(fxList);
-        this.soloRocketStage4FxObjects.push(...fxList);
+        this.soloRocketStage4FxObjects = this.soloRocketStage4FxObjects || [];
+        fxList.forEach(obj => this.soloRocketStage4FxObjects.push(obj));
 
         this.tweens.add({
             targets: core,
@@ -7628,7 +7717,7 @@ entity.showOffRainbowTween = this.tweens.add({
         if (data.interactingUid && data.lockedUntil && now < data.lockedUntil) return;
         if (data.state === 'petting' && data.lockedUntil && now < data.lockedUntil) return;
 
-        let nextData = { ...data };
+        let nextData = Object.assign({}, data);
 
         const currentX = Number.isFinite(Number(nextData.x)) ? Number(nextData.x) : 1024;
         const currentY = Number.isFinite(Number(nextData.y)) ? Number(nextData.y) : 1024;
@@ -7639,8 +7728,7 @@ entity.showOffRainbowTween = this.tweens.add({
         const stateExpired = !nextData.stateUntil || now > nextData.stateUntil;
 
         if (isWalking && reachedTarget) {
-            nextData = {
-                ...nextData,
+            nextData = Object.assign({}, nextData, {
                 x: targetX,
                 y: targetY,
                 targetX,
@@ -7650,7 +7738,7 @@ entity.showOffRainbowTween = this.tweens.add({
                 stateUntil: now + Phaser.Math.Between(2000, 5000),
                 interactingUid: null,
                 lockedUntil: 0
-            };
+            });
         } else if (stateExpired) {
             nextData = this.choosePrinceCatNextState(now);
         }
@@ -7702,7 +7790,11 @@ entity.showOffRainbowTween = this.tweens.add({
             animKey = 'prince-cat-stand';
         }
 
-        if (this.anims.exists(animKey) && (this.princeCatSprite.anims.currentAnim?.key !== animKey || !this.princeCatSprite.anims.isPlaying)) {
+        const princeCurrentAnim = this.princeCatSprite && this.princeCatSprite.anims
+            ? this.princeCatSprite.anims.currentAnim
+            : null;
+
+        if (this.anims.exists(animKey) && (!princeCurrentAnim || princeCurrentAnim.key !== animKey || !this.princeCatSprite.anims.isPlaying)) {
             this.princeCatSprite.play(animKey, true);
         }
 
@@ -7916,9 +8008,41 @@ createSafeCatCanOpenAnim() {
     }
 
     const sourceTexture = this.textures.get(sourceKey);
-    const sourceImage = sourceTexture?.getSourceImage ? sourceTexture.getSourceImage() : sourceTexture?.source?.[0]?.image;
-    const sourceWidth = sourceImage?.width || sourceTexture?.source?.[0]?.width || 0;
-    const sourceHeight = sourceImage?.height || sourceTexture?.source?.[0]?.height || 0;
+    const sourceImage =
+        sourceTexture && sourceTexture.getSourceImage
+            ? sourceTexture.getSourceImage()
+            : (
+                sourceTexture &&
+                sourceTexture.source &&
+                sourceTexture.source[0] &&
+                sourceTexture.source[0].image
+                    ? sourceTexture.source[0].image
+                    : null
+            );
+
+    const sourceWidth =
+        sourceImage && sourceImage.width
+            ? sourceImage.width
+            : (
+                sourceTexture &&
+                sourceTexture.source &&
+                sourceTexture.source[0] &&
+                sourceTexture.source[0].width
+                    ? sourceTexture.source[0].width
+                    : 0
+            );
+
+    const sourceHeight =
+        sourceImage && sourceImage.height
+            ? sourceImage.height
+            : (
+                sourceTexture &&
+                sourceTexture.source &&
+                sourceTexture.source[0] &&
+                sourceTexture.source[0].height
+                    ? sourceTexture.source[0].height
+                    : 0
+            );
 
     if (sourceWidth < 600 || sourceHeight < 100) {
         console.warn(`[王子麵餵食] tools-pet-cat-can-open.png 尺寸不正確：${sourceWidth}×${sourceHeight}。需要 600×100，6 格橫排，每格 100×100。已略過開罐動畫。`);
@@ -7936,7 +8060,7 @@ createSafeCatCanOpenAnim() {
         }
 
         const sheetTexture = this.textures.get(sheetKey);
-        const hasFrame0 = !!(sheetTexture?.frames && sheetTexture.frames['0']);
+        const hasFrame0 = !!(sheetTexture && sheetTexture.frames && sheetTexture.frames['0']);
 
         if (!hasFrame0) {
             console.warn('[王子麵餵食] pet-cat-can-open-sheet 沒有 frame 0，略過開罐動畫建立。');
@@ -7961,7 +8085,7 @@ showCatCanOpenEffect(x, y) {
         const sheetKey = 'pet-cat-can-open-sheet';
         const animKey = 'pet-cat-can-open';
         const sheetTexture = this.textures.exists(sheetKey) ? this.textures.get(sheetKey) : null;
-        const hasFrame0 = !!(sheetTexture?.frames && sheetTexture.frames['0']);
+        const hasFrame0 = !!(sheetTexture && sheetTexture.frames && sheetTexture.frames['0']);
 
         if (!hasFrame0 || !this.anims.exists(animKey)) {
             const popText = this.add.text(x, y, '啪！', {
@@ -8003,10 +8127,16 @@ showCatCanOpenEffect(x, y) {
 }
 
 finishPrinceCatFeeding(uid, catRef, feedingToken = null) {
-    uid = uid || window.GameLogic.currentUser?.uid;
+    uid = uid || (
+        window.GameLogic.currentUser && window.GameLogic.currentUser.uid
+            ? window.GameLogic.currentUser.uid
+            : null
+    );
     if (!uid) return;
 
-    const sprite = this.localPlayer?.sprite;
+    const sprite = this.localPlayer && this.localPlayer.sprite
+        ? this.localPlayer.sprite
+        : null;
 
     if (sprite) {
         const sameToken = !feedingToken || !sprite.princeCatFeedingToken || sprite.princeCatFeedingToken === feedingToken;
@@ -8042,8 +8172,13 @@ finishPrinceCatFeeding(uid, catRef, feedingToken = null) {
         }
 
         const restoreNow = Date.now();
-        const catX = Number.isFinite(latest.x) ? latest.x : (this.princeCatSprite?.x || 1024);
-        const catY = Number.isFinite(latest.y) ? latest.y : (this.princeCatSprite?.y || 1024);
+        const catX = Number.isFinite(latest.x)
+            ? latest.x
+            : (this.princeCatSprite && this.princeCatSprite.x ? this.princeCatSprite.x : 1024);
+
+        const catY = Number.isFinite(latest.y)
+            ? latest.y
+            : (this.princeCatSprite && this.princeCatSprite.y ? this.princeCatSprite.y : 1024);
 
         update(safeCatRef, {
             interactingUid: null,
@@ -10064,10 +10199,13 @@ window.syncRpsState = function(roomId) {
                     let avgBet = Math.round((myData.betValue + otherData.betValue) / 2);
                     get(ref(window.GameLogic.db, `users`)).then(uSnap => {
                         let uDB = uSnap.val();
-                        let p1C = (uDB[myUid]?.coins || 0) - avgBet;
-                        let p2C = (uDB[otherUid]?.coins || 0) - avgBet;
+                        const myUserData = uDB[myUid] || {};
+                        const otherUserData = uDB[otherUid] || {};
+
+                        let p1C = (myUserData.coins || 0) - avgBet;
+                        let p2C = (otherUserData.coins || 0) - avgBet;
                         
-                        let maxBet = Math.max(0, Math.min(uDB[myUid]?.coins || 0, uDB[otherUid]?.coins || 0, 10000));
+                        let maxBet = Math.max(0, Math.min(myUserData.coins || 0, otherUserData.coins || 0, 10000));
                         let ratio = maxBet > 0 ? (avgBet / maxBet) : 0;
                         let mult = 1;
                         if (ratio > 2/3) mult = 2;
@@ -10557,8 +10695,11 @@ window.syncRpsState = function(roomId) {
                 if (uids.sort()[0] === myUid && !data.moneyDistributed) {
                     get(ref(window.GameLogic.db, `users`)).then(uSnap => {
                         let uDB = uSnap.val();
-                        let p1C = uDB[myUid]?.coins || 0;
-                        let p2C = uDB[otherUid]?.coins || 0;
+                        const myUserData = uDB[myUid] || {};
+                        const otherUserData = uDB[otherUid] || {};
+
+                        let p1C = myUserData.coins || 0;
+                        let p2C = otherUserData.coins || 0;
                         
                        // ==========================================
                         // 修正：主機端分配資料庫獎金時，必須用客觀視角判斷，不能直接套用上方只算給本機看的 getAmt
@@ -11142,7 +11283,7 @@ window.checkPendingWeeklyRewardNotice = async function() {
         } else {
             const sweepsData = sweepSnap.val() || {};
             const sorted = Object.entries(sweepsData)
-                .map(([k, v]) => ({ uid: k, ...v }))
+                .map(([k, v]) => Object.assign({ uid: k }, v))
                 .sort((a, b) => (b.count || 0) - (a.count || 0));
             hasPending = sorted.findIndex(p => p.uid === uid) >= 0;
         }
@@ -11259,7 +11400,9 @@ window.openWeeklyRewardDetail = async function() {
     ]);
     
     let sweepsData = sweepSnap.val() || {};
-    let sorted = Object.entries(sweepsData).map(([k, v]) => ({uid: k, ...v})).sort((a,b) => b.count - a.count);
+    let sorted = Object.entries(sweepsData)
+        .map(([k, v]) => Object.assign({ uid: k }, v))
+        .sort((a, b) => b.count - a.count);
     let myRankIndex = sorted.findIndex(p => p.uid === uid);
     let mySweeps = myRankIndex >= 0 ? sorted[myRankIndex].count : 0;
     
@@ -11382,7 +11525,7 @@ window.openMedalList = function() {
         grid.innerHTML = '<div style="grid-column: span 3; text-align:center; color:#888;">尚未獲得任何戰績勳章</div>';
     } else {
         let html = '';
-        window.currentRenderedMedals = [...medals].reverse();
+        window.currentRenderedMedals = medals.slice().reverse();
 
         window.currentRenderedMedals.forEach((m, idx) => {
             html += `<div class="medal-item" onclick="window.showMedalDetail(${idx})">
@@ -11398,7 +11541,7 @@ window.openMedalList = function() {
 };
 
 window.showMedalDetail = function(idx) {
-    let rendered = window.currentRenderedMedals || [...(window.GameLogic.myProfile.medals || [])].reverse();
+    let rendered = window.currentRenderedMedals || (window.GameLogic.myProfile.medals || []).slice().reverse();
     let m = rendered[idx];
     if (!m) return;
 
