@@ -1921,6 +1921,7 @@ class BootScene extends Phaser.Scene {
         this.load.image('rocket-onion-player', 'rocket-onion-player.png');
         this.load.image('solo-rocket-moon-rabbit', 'solo-rocket-moon-rabbit.png');
         this.load.image('solo-rocket-monster-chicken', 'solo-rocket-monster-chicken.png');
+        this.load.image('solo-rocket-heart-life-container', 'solo-rocket-heart-life-container.png');
         this.load.audio('solo-rocket-cruise-bgm', 'solo-rocket-cruise-bgm.mp3');
         this.load.audio('solo-rocket-landing', 'solo-rocket-landing.mp3');
         this.load.audio('solo-rocket-typing', 'solo-rocket-typing.mp3');
@@ -5598,16 +5599,19 @@ this.events.on('action_B', () => {
         monster.__soloRocketRadius = size * 0.42;
         monster.__soloRocketDead = false;
         monster.__soloRocketSpawnPending = !spawnFromTop;
+        monster.__soloRocketCanBeHit = spawnFromTop;
         monster.__soloRocketFloatPhase = Math.random() * Math.PI * 2;
         monster.__soloRocketFloatOffset = 0;
         monster.__soloRocketNextShotAt = Date.now() + Phaser.Math.Between(900, 1800);
 
         if (!spawnFromTop) {
+            const warpMs = 1300;
             monster.setAlpha(0);
-            this.showSoloRocketMonsterWarpIn(spawnX, spawnY, size);
-            monster.__soloRocketSpawnTimer = this.time.delayedCall(2000, () => {
+            this.showSoloRocketMonsterWarpIn(spawnX, spawnY, size, warpMs);
+            monster.__soloRocketSpawnTimer = this.time.delayedCall(warpMs, () => {
                 if (!monster || !monster.active || monster.__soloRocketDead) return;
                 monster.__soloRocketSpawnPending = false;
+                monster.__soloRocketCanBeHit = true;
                 monster.__soloRocketVx = monster.__soloRocketReadyVx || vx;
                 monster.__soloRocketVy = monster.__soloRocketReadyVy || vy;
                 monster.__soloRocketNextShotAt = Date.now() + Phaser.Math.Between(650, 1300);
@@ -5628,8 +5632,88 @@ this.events.on('action_B', () => {
         this.soloRocketMonsterSpawnedCount = (this.soloRocketMonsterSpawnedCount || 0) + 1;
     }
 
-    showSoloRocketMonsterWarpIn(x, y, size = 48) {
+    showSoloRocketMonsterWarpIn(x, y, size = 48, durationMs = 1300) {
         if (!this.soloRocketContainer) return;
+
+        const warpMs = Phaser.Math.Clamp(Number(durationMs) || 1300, 500, 2500);
+        this.soloRocketStage4FxObjects = this.soloRocketStage4FxObjects || [];
+        const fxList = [];
+
+        const core = this.add.circle(x, y, Math.max(8, size * 0.18), 0x09000f, 0.88)
+            .setStrokeStyle(2, 0xd9b3ff, 0.95)
+            .setDepth(9611)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+        fxList.push(core);
+
+        for (let i = 0; i < 3; i++) {
+            const ring = this.add.circle(x, y, Math.max(10, size * 0.26 + i * 8), 0x000000, 0)
+                .setStrokeStyle(3, [0x7b2cff, 0xd9b3ff, 0xffffff][i], 0.75)
+                .setDepth(9610 + i)
+                .setScrollFactor(0)
+                .setBlendMode(Phaser.BlendModes.ADD);
+            fxList.push(ring);
+
+            const ringDelay = i * 130;
+            this.tweens.add({
+                targets: ring,
+                scale: 2.4 + i * 0.55,
+                angle: 180 + i * 90,
+                alpha: 0,
+                duration: Math.max(260, warpMs - ringDelay),
+                delay: ringDelay,
+                ease: 'Sine.easeOut',
+                onComplete: () => {
+                    try { ring.destroy(); } catch (_) {}
+                    this.soloRocketStage4FxObjects = (this.soloRocketStage4FxObjects || []).filter(obj => obj !== ring);
+                }
+            });
+        }
+
+        if (this.textures.exists('particle_flare')) {
+            for (let i = 0; i < 16; i++) {
+                const ang = (Math.PI * 2 / 16) * i;
+                const p = this.add.image(x + Math.cos(ang) * size * 0.35, y + Math.sin(ang) * size * 0.18, 'particle_flare')
+                    .setTint([0x7b2cff, 0xffffff, 0xd9b3ff][i % 3])
+                    .setAlpha(0.88)
+                    .setScale(Phaser.Math.FloatBetween(0.55, 1.12))
+                    .setDepth(9614)
+                    .setScrollFactor(0)
+                    .setBlendMode(Phaser.BlendModes.ADD);
+                fxList.push(p);
+
+                this.tweens.add({
+                    targets: p,
+                    x: x + Math.cos(ang) * Phaser.Math.Between(24, 54),
+                    y: y + Math.sin(ang) * Phaser.Math.Between(12, 34),
+                    angle: Phaser.Math.Between(160, 420),
+                    alpha: 0,
+                    duration: Phaser.Math.Between(420, 820),
+                    ease: 'Sine.easeOut',
+                    onComplete: () => {
+                        try { p.destroy(); } catch (_) {}
+                        this.soloRocketStage4FxObjects = (this.soloRocketStage4FxObjects || []).filter(obj => obj !== p);
+                    }
+                });
+            }
+        }
+
+        this.soloRocketContainer.add(fxList);
+        this.soloRocketStage4FxObjects.push(...fxList);
+
+        this.tweens.add({
+            targets: core,
+            scale: 2.1,
+            angle: 720,
+            alpha: 0,
+            duration: warpMs,
+            ease: 'Sine.easeOut',
+            onComplete: () => {
+                try { core.destroy(); } catch (_) {}
+                this.soloRocketStage4FxObjects = (this.soloRocketStage4FxObjects || []).filter(obj => obj !== core);
+            }
+        });
+    }
 
         this.soloRocketStage4FxObjects = this.soloRocketStage4FxObjects || [];
         const fxList = [];
@@ -5723,6 +5807,24 @@ this.events.on('action_B', () => {
             !this.soloRocketIntroActive &&
             !this.soloRocketEndingActive
         );
+    }
+
+    resetSoloRocketPlayerFacingUp(resetScale = true) {
+        const rocket = this.soloRocketPlayer;
+        if (!rocket || !rocket.active) return;
+
+        try {
+            rocket.setAngle(0);
+            if (resetScale && rocket.setScale) {
+                const sx = Number.isFinite(Number(rocket.__soloRocketNormalScaleX))
+                    ? Number(rocket.__soloRocketNormalScaleX)
+                    : (rocket.scaleX || 1);
+                const sy = Number.isFinite(Number(rocket.__soloRocketNormalScaleY))
+                    ? Number(rocket.__soloRocketNormalScaleY)
+                    : (rocket.scaleY || 1);
+                rocket.setScale(sx, sy);
+            }
+        } catch (_) {}
     }
 
     fireSoloRocketBeam() {
@@ -5826,9 +5928,16 @@ this.events.on('action_B', () => {
         this.soloRocketLastSpinAt = now;
 
         const rocket = this.soloRocketPlayer;
-        const baseAngle = rocket.angle || 0;
-        const baseScaleX = rocket.scaleX || 1;
-        const baseScaleY = rocket.scaleY || 1;
+
+        if (this.tweens) this.tweens.killTweensOf(rocket);
+        this.resetSoloRocketPlayerFacingUp(true);
+
+        const baseScaleX = Number.isFinite(Number(rocket.__soloRocketNormalScaleX))
+            ? Number(rocket.__soloRocketNormalScaleX)
+            : (rocket.scaleX || 1);
+        const baseScaleY = Number.isFinite(Number(rocket.__soloRocketNormalScaleY))
+            ? Number(rocket.__soloRocketNormalScaleY)
+            : (rocket.scaleY || 1);
 
         this.soloRocketStats = this.soloRocketStats || {};
         this.soloRocketStats.spinDodges = (this.soloRocketStats.spinDodges || 0) + 1;
@@ -5840,10 +5949,9 @@ this.events.on('action_B', () => {
             }
         } catch (_) {}
 
-        if (this.tweens) this.tweens.killTweensOf(rocket);
         this.tweens.add({
             targets: rocket,
-            angle: baseAngle + 360,
+            angle: 360,
             scaleX: baseScaleX * 1.08,
             scaleY: baseScaleY * 1.08,
             duration: 420,
@@ -5851,12 +5959,14 @@ this.events.on('action_B', () => {
             onComplete: () => {
                 try {
                     if (rocket && rocket.active) {
-                        rocket.setAngle(baseAngle);
+                        rocket.setAngle(0);
                         rocket.setScale(baseScaleX, baseScaleY);
                     }
                 } catch (_) {}
             }
         });
+
+        this.time.delayedCall(460, () => this.resetSoloRocketPlayerFacingUp(true));
     }
   
     destroySoloRocketBeam(beam) {
@@ -6099,9 +6209,11 @@ this.events.on('action_B', () => {
         const rocket = this.soloRocketPlayer;
         if (!rocket || !rocket.active || !this.soloRocketContainer) return;
 
+        if (this.tweens) this.tweens.killTweensOf(rocket);
+        this.resetSoloRocketPlayerFacingUp(true);
+
         const baseX = rocket.x;
         const baseY = rocket.y;
-        const baseAngle = rocket.angle || 0;
         const auraSize = Math.max(42, (this.soloRocketPlayerRadius || 28) * 2.2);
 
         try {
@@ -6138,12 +6250,12 @@ this.events.on('action_B', () => {
             }
         });
 
-        // 火箭短暫震動。只在受擊當下使用，不影響 11 秒開場震動清理。
+        // 火箭短暫震動。受擊前先停止舊 tween，結束後一律回到正面朝上。
         this.tweens.add({
             targets: rocket,
             x: { from: baseX - 5, to: baseX + 5 },
             y: { from: baseY - 3, to: baseY + 3 },
-            angle: { from: baseAngle - 2.2, to: baseAngle + 2.2 },
+            angle: { from: -2.2, to: 2.2 },
             yoyo: true,
             repeat: 4,
             duration: 34,
@@ -6152,20 +6264,22 @@ this.events.on('action_B', () => {
                 try {
                     if (rocket && rocket.active) {
                         rocket.setPosition(baseX, baseY);
-                        rocket.setAngle(baseAngle);
+                        this.resetSoloRocketPlayerFacingUp(true);
                         if (rocket.clearTint) rocket.clearTint();
                     }
                 } catch (_) {}
             }
         });
 
-        this.time.delayedCall(190, () => {
+        this.time.delayedCall(220, () => {
             try {
-                if (rocket && rocket.active && rocket.clearTint) rocket.clearTint();
+                if (rocket && rocket.active) {
+                    this.resetSoloRocketPlayerFacingUp(true);
+                    if (rocket.clearTint) rocket.clearTint();
+                }
             } catch (_) {}
         });
     }
-
   
     checkSoloRocketBeamMonsterHits() {
         const beams = [...(this.soloRocketBeams || [])];
@@ -6178,7 +6292,7 @@ this.events.on('action_B', () => {
             try { beamBounds = beam.getBounds(); } catch (_) { return; }
 
             for (const monster of monsters) {
-                if (!monster || !monster.active || monster.__soloRocketDead) continue;
+                if (!monster || !monster.active || monster.__soloRocketDead || monster.__soloRocketSpawnPending || monster.__soloRocketCanBeHit === false) continue;
 
                 let monsterBounds;
                 try { monsterBounds = monster.getBounds(); } catch (_) { continue; }
@@ -6218,7 +6332,7 @@ this.events.on('action_B', () => {
 
         const monsters = [...(this.soloRocketMonsters || [])];
         for (const monster of monsters) {
-            if (!monster || !monster.active || monster.__soloRocketDead) continue;
+            if (!monster || !monster.active || monster.__soloRocketDead || monster.__soloRocketSpawnPending || monster.__soloRocketCanBeHit === false) continue;
 
             let monsterBounds;
             try { monsterBounds = monster.getBounds(); } catch (_) { continue; }
@@ -6386,6 +6500,12 @@ this.events.on('action_B', () => {
             this.soloRocketPlayerRadius = 28;
         }
 
+        if (this.soloRocketPlayer) {
+            this.soloRocketPlayer.__soloRocketNormalScaleX = this.soloRocketPlayer.scaleX || 1;
+            this.soloRocketPlayer.__soloRocketNormalScaleY = this.soloRocketPlayer.scaleY || 1;
+            this.resetSoloRocketPlayerFacingUp(true);
+        }
+
         if (this.textures.exists('particle_flare') && this.soloRocketPlayer) {
             this.soloRocketThrusterFx = this.add.particles(0, 0, 'particle_flare', {
                 lifespan: { min: 260, max: 420 },
@@ -6422,8 +6542,8 @@ this.events.on('action_B', () => {
         }).setOrigin(1, 0);
         this.soloRocketCountdownText = timerText;
 
-        const drawHeart = (graphics, cx, cy, size) => {
-            // Phaser Graphics 沒有 bezierCurveTo()，這裡改用多段 lineTo 畫出近似圓潤愛心。
+        const drawHeartMaskPath = (graphics, cx, cy, size) => {
+            // 只作為液體遮罩使用：真正的生命容器外觀改由 PNG 呈現。
             const pts = [
                 [0.00, 0.34],
                 [-0.10, 0.26],
@@ -6449,42 +6569,38 @@ this.events.on('action_B', () => {
 
             graphics.beginPath();
             graphics.moveTo(cx + pts[0][0] * size, cy + pts[0][1] * size);
-
             for (let i = 1; i < pts.length; i++) {
                 graphics.lineTo(cx + pts[i][0] * size, cy + pts[i][1] * size);
             }
-
             graphics.closePath();
         };
 
         const heartCx = rect.x + rect.w - 56;
         const heartCy = rect.y + 98;
         const heartSize = 58;
+        const heartDisplaySize = heartSize * 1.62;
         const lifeUi = this.add.container(0, 0);
-
-        const heartGlow = this.add.graphics();
-        heartGlow.fillStyle(0x39ff14, 0.12);
-        drawHeart(heartGlow, heartCx, heartCy, heartSize + 7);
-        heartGlow.fillPath();
-
-        const heartBg = this.add.graphics();
-        heartBg.fillStyle(0x08220d, 0.78);
-        drawHeart(heartBg, heartCx, heartCy, heartSize);
-        heartBg.fillPath();
-        heartBg.lineStyle(3, 0x39ff14, 0.95);
-        drawHeart(heartBg, heartCx, heartCy, heartSize);
-        heartBg.strokePath();
 
         const fillBaseY = heartCy + heartSize * 0.48;
         const fillMaxHeight = heartSize * 1.18;
+
         const fillRect = this.add.rectangle(
             heartCx,
             fillBaseY,
-            heartSize * 1.10,
+            heartSize * 1.04,
             fillMaxHeight,
-            0x4deeff,
-            0.92
-        ).setOrigin(0.5, 1);
+            0x39ff14,
+            0.88
+        ).setOrigin(0.5, 1).setBlendMode(Phaser.BlendModes.ADD);
+
+        const liquidGlow = this.add.rectangle(
+            heartCx,
+            fillBaseY,
+            heartSize * 1.22,
+            fillMaxHeight,
+            0xa6ff66,
+            0.24
+        ).setOrigin(0.5, 1).setBlendMode(Phaser.BlendModes.ADD);
 
         const waterSurface = this.add.ellipse(
             heartCx,
@@ -6492,7 +6608,7 @@ this.events.on('action_B', () => {
             heartSize * 1.02,
             9,
             0xeaffff,
-            0.78
+            0.84
         ).setBlendMode(Phaser.BlendModes.ADD);
 
         const waterBubbles = [];
@@ -6502,13 +6618,13 @@ this.events.on('action_B', () => {
                 heartCy + Phaser.Math.Between(-18, 22),
                 Phaser.Math.FloatBetween(1.6, 3.2),
                 0xffffff,
-                0.28
+                0.34
             ).setBlendMode(Phaser.BlendModes.ADD);
             waterBubbles.push(bubbleDot);
             this.tweens.add({
                 targets: bubbleDot,
                 y: bubbleDot.y - Phaser.Math.Between(8, 18),
-                alpha: { from: 0.18, to: 0.55 },
+                alpha: { from: 0.18, to: 0.62 },
                 yoyo: true,
                 repeat: -1,
                 duration: Phaser.Math.Between(700, 1200),
@@ -6518,13 +6634,41 @@ this.events.on('action_B', () => {
 
         const heartMaskShape = this.add.graphics();
         heartMaskShape.fillStyle(0xffffff, 1);
-        drawHeart(heartMaskShape, heartCx, heartCy, heartSize - 3);
+        drawHeartMaskPath(heartMaskShape, heartCx, heartCy, heartSize - 3);
         heartMaskShape.fillPath();
         heartMaskShape.setVisible(false);
         const heartMask = heartMaskShape.createGeometryMask();
         fillRect.setMask(heartMask);
+        liquidGlow.setMask(heartMask);
         waterSurface.setMask(heartMask);
         waterBubbles.forEach(b => b.setMask(heartMask));
+
+        let heartGlow = null;
+        let heartFrame = null;
+
+        if (this.textures.exists('solo-rocket-heart-life-container')) {
+            heartGlow = this.add.image(heartCx, heartCy, 'solo-rocket-heart-life-container')
+                .setDisplaySize(heartDisplaySize * 1.08, heartDisplaySize * 1.08)
+                .setTint(0xffffff)
+                .setAlpha(0.32)
+                .setBlendMode(Phaser.BlendModes.ADD);
+
+            heartFrame = this.add.image(heartCx, heartCy, 'solo-rocket-heart-life-container')
+                .setDisplaySize(heartDisplaySize, heartDisplaySize)
+                .setAlpha(1);
+        } else {
+            console.warn('[火箭巡航] 找不到 solo-rocket-heart-life-container.png，生命容器暫用安全 fallback。');
+
+            heartGlow = this.add.graphics();
+            heartGlow.fillStyle(0xffffff, 0.12);
+            drawHeartMaskPath(heartGlow, heartCx, heartCy, heartSize + 8);
+            heartGlow.fillPath();
+
+            heartFrame = this.add.graphics();
+            heartFrame.lineStyle(3, 0x39ff14, 0.95);
+            drawHeartMaskPath(heartFrame, heartCx, heartCy, heartSize);
+            heartFrame.strokePath();
+        }
 
         const lifeText = this.add.text(heartCx, heartCy + 6, '100%', {
             fontSize: '17px',
@@ -6535,13 +6679,16 @@ this.events.on('action_B', () => {
             strokeThickness: 5
         }).setOrigin(0.5);
 
-        lifeUi.add([heartGlow, fillRect, waterSurface, ...waterBubbles, heartMaskShape, heartBg, lifeText]);
+        lifeUi.add([heartGlow, fillRect, liquidGlow, waterSurface, ...waterBubbles, heartMaskShape, heartFrame, lifeText]);
         ui.add([timerText, lifeUi]);
 
         this.soloRocketLifeText = lifeText;
         this.soloRocketLifeUi = {
             container: lifeUi,
+            heartGlow,
+            heartFrame,
             fillRect,
+            liquidGlow,
             waterSurface,
             waterBubbles,
             text: lifeText,
@@ -6550,10 +6697,10 @@ this.events.on('action_B', () => {
         };
 
         this.soloRocketLifeBreathTween = this.tweens.add({
-            targets: lifeUi,
-            alpha: { from: 0.88, to: 1 },
-            scaleX: { from: 0.98, to: 1.03 },
-            scaleY: { from: 0.98, to: 1.03 },
+            targets: heartGlow,
+            alpha: { from: 0.18, to: 0.56 },
+            scaleX: { from: 0.98, to: 1.08 },
+            scaleY: { from: 0.98, to: 1.08 },
             duration: 1100,
             yoyo: true,
             repeat: -1,
@@ -6651,6 +6798,7 @@ this.events.on('action_B', () => {
 
         try {
             this.tweens.killTweensOf(ui.fillRect);
+            if (ui.liquidGlow) this.tweens.killTweensOf(ui.liquidGlow);
             if (ui.waterSurface) this.tweens.killTweensOf(ui.waterSurface);
         } catch (_) {}
 
@@ -6661,6 +6809,17 @@ this.events.on('action_B', () => {
             duration: isDamage ? 260 : 180,
             ease: isDamage ? 'Cubic.easeOut' : 'Sine.easeOut'
         });
+
+        if (ui.liquidGlow) {
+            this.tweens.add({
+                targets: ui.liquidGlow,
+                height: nextHeight,
+                y: ui.fillBaseY,
+                alpha: ratio > 0.08 ? 0.24 : 0,
+                duration: isDamage ? 260 : 180,
+                ease: isDamage ? 'Cubic.easeOut' : 'Sine.easeOut'
+            });
+        }
 
         if (ui.waterSurface) {
             this.tweens.add({
@@ -6999,17 +7158,26 @@ this.events.on('action_B', () => {
         this.clearSoloRocketIntroFx();
         this.clearSoloRocketStage4Objects(true);
 
+        const safeDestroySoloRocketObject = (obj, destroyChildren = false) => {
+            try {
+                if (!obj) return;
+                if (this.tweens) this.tweens.killTweensOf(obj);
+                if (obj.destroy) obj.destroy(destroyChildren);
+            } catch (err) {
+                console.warn('[火箭巡航] 單一物件清理失敗，已略過：', err);
+            }
+        };
+
         try {
             if (this.soloRocketLifeBreathTween) this.soloRocketLifeBreathTween.remove();
-            if (this.soloRocketThrusterFx) this.soloRocketThrusterFx.destroy();
-            if (this.soloRocketWhiteFade) this.soloRocketWhiteFade.destroy();
-            if (this.soloRocketContainer) this.soloRocketContainer.destroy(true);
-            if (this.soloRocketUiContainer) this.soloRocketUiContainer.destroy(true);
-            if (this.soloRocketResultContainer) this.soloRocketResultContainer.destroy(true);
-            if (this.soloRocketResultClickCatcher) this.soloRocketResultClickCatcher.destroy();
-        } catch (err) {
-            console.warn('[火箭巡航] Phaser 物件清理失敗，已略過：', err);
-        }
+        } catch (_) {}
+
+        safeDestroySoloRocketObject(this.soloRocketThrusterFx);
+        safeDestroySoloRocketObject(this.soloRocketWhiteFade);
+        safeDestroySoloRocketObject(this.soloRocketResultClickCatcher);
+        safeDestroySoloRocketObject(this.soloRocketResultContainer, true);
+        safeDestroySoloRocketObject(this.soloRocketUiContainer, true);
+        safeDestroySoloRocketObject(this.soloRocketContainer, true);
 
         this.soloRocketContainer = null;
         this.soloRocketUiContainer = null;
