@@ -7527,7 +7527,7 @@ this.events.on('action_B', () => {
         this.checkSoloRocketMonsterPlayerHits();
         this.checkSoloRocketMonsterBulletPlayerHits();
     }
-    }
+  
     showSoloRocketMonsterExplosion(x, y, mode = 'kill') {
         if (!this.soloRocketContainer) return;
 
