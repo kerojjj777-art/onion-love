@@ -5622,6 +5622,7 @@ this.events.on('action_B', () => {
             bossKilled: false,
             bossPunished: false
         };
+    }
 
     clearSoloRocketStage6Objects(resetFlags = false) {
         const scene = this;
