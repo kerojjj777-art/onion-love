@@ -5555,6 +5555,280 @@ this.events.on('action_B', () => {
 
         this.soloRocketIntroTweens.push(rabbitFloatTween);
     }
+
+    showSoloRocketStage6RabbitComms(message) {
+        if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
+
+        this.hideSoloRocketStage6RabbitComms(true);
+
+        const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const container = this.add.container(0, 0)
+            .setDepth(9766)
+            .setScrollFactor(0);
+
+        this.soloRocketRabbitComms = container;
+
+        const safeMessage = String(message || '');
+        const rabbitSize = Math.min(92, rect.w * 0.23);
+        const rabbitX = rect.x + rect.w - rabbitSize * 0.58;
+        const rabbitY = rect.y + rect.h * 0.34;
+
+        let rabbit;
+        if (this.textures.exists('solo-rocket-moon-rabbit')) {
+            rabbit = this.add.image(rabbitX, rabbitY, 'solo-rocket-moon-rabbit')
+                .setDisplaySize(rabbitSize, rabbitSize);
+        } else {
+            rabbit = this.add.text(rabbitX, rabbitY, '🐰', {
+                fontSize: `${Math.round(rabbitSize * 0.68)}px`
+            }).setOrigin(0.5);
+        }
+
+        const bubbleW = Math.min(rect.w - 42, 340);
+        const bubbleH = 132;
+        const bubbleX = rect.x + 16;
+        const bubbleY = Math.max(rect.y + 54, rabbitY - bubbleH / 2);
+
+        const bubble = this.add.graphics();
+        bubble.fillStyle(0xffffff, 0.94).fillRoundedRect(bubbleX, bubbleY, bubbleW, bubbleH, 14);
+        bubble.lineStyle(3, 0x8a2be2, 1).strokeRoundedRect(bubbleX, bubbleY, bubbleW, bubbleH, 14);
+        bubble.lineStyle(1, 0x00ffff, 0.55).strokeRoundedRect(bubbleX + 5, bubbleY + 5, bubbleW - 10, bubbleH - 10, 10);
+        bubble.fillStyle(0xffffff, 0.94).fillTriangle(
+            bubbleX + bubbleW,
+            bubbleY + bubbleH * 0.58,
+            bubbleX + bubbleW + 18,
+            bubbleY + bubbleH * 0.68,
+            bubbleX + bubbleW,
+            bubbleY + bubbleH * 0.78
+        );
+
+        const label = this.add.text(bubbleX + 14, bubbleY + 10, '月球管制緊急通訊', {
+            fontSize: '12px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#6a00a8'
+        });
+
+        const txt = this.add.text(bubbleX + 14, bubbleY + 35, '', {
+            fontSize: '15px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#111111',
+            lineSpacing: 8,
+            wordWrap: { width: bubbleW - 28, useAdvancedWrap: true }
+        });
+
+        const noiseBars = [];
+        const glitchColors = [0xffffff, 0x00ffff, 0xff00ff, 0xffff00];
+        for (let i = 0; i < 12; i++) {
+            const bar = this.add.rectangle(
+                rect.x + Phaser.Math.Between(18, Math.floor(rect.w - 18)),
+                rect.y + Phaser.Math.Between(50, Math.floor(rect.h * 0.48)),
+                Phaser.Math.Between(26, 132),
+                Phaser.Math.Between(3, 9),
+                glitchColors[i % glitchColors.length],
+                0
+            ).setScrollFactor(0);
+            noiseBars.push(bar);
+        }
+
+        container.add([bubble, label, txt, rabbit, ...noiseBars]);
+        container.setAlpha(0);
+        container.setScale(0.98);
+
+        this.playSoloRocketIntroSfx('solo-rocket-radio_beep');
+
+        this.tweens.add({
+            targets: container,
+            alpha: 1,
+            scaleX: 1,
+            scaleY: 1,
+            duration: 180,
+            ease: 'Cubic.easeOut'
+        });
+
+        const glitchState = { tick: 0 };
+        const glitchTimer = this.time.addEvent({
+            delay: 46,
+            repeat: 8,
+            callback: () => {
+                if (!container || !container.active) return;
+                glitchState.tick += 1;
+                container.setX(Phaser.Math.Between(-8, 8));
+                container.setY(Phaser.Math.Between(-4, 4));
+                const flashAlpha = glitchState.tick % 2 === 0 ? 1 : 0.24;
+                bubble.setAlpha(flashAlpha);
+                label.setAlpha(flashAlpha);
+                rabbit.setAlpha(flashAlpha);
+                noiseBars.forEach(bar => {
+                    bar.setPosition(
+                        rect.x + Phaser.Math.Between(18, Math.floor(rect.w - 18)),
+                        rect.y + Phaser.Math.Between(50, Math.floor(rect.h * 0.48))
+                    );
+                    bar.setSize(Phaser.Math.Between(26, 132), Phaser.Math.Between(3, 9));
+                    bar.setAlpha(Phaser.Math.FloatBetween(0.38, 0.92));
+                });
+            },
+            callbackScope: this
+        });
+
+        const cleanupGlitchTimer = this.time.delayedCall(560, () => {
+            if (!container || !container.active) return;
+            container.setX(0);
+            container.setY(0);
+            bubble.setAlpha(1);
+            label.setAlpha(1);
+            rabbit.setAlpha(1);
+            noiseBars.forEach(bar => {
+                try { bar.destroy(); } catch (_) {}
+            });
+        });
+
+        container.__soloRocketFxTimers = [glitchTimer, cleanupGlitchTimer];
+
+        const floatTween = this.tweens.add({
+            targets: rabbit,
+            y: rabbitY - 7,
+            yoyo: true,
+            repeat: -1,
+            duration: 680,
+            ease: 'Sine.easeInOut'
+        });
+        container.__soloRocketFxTweens = [floatTween];
+
+        const chars = Array.from(safeMessage);
+        let idx = 0;
+        const typeDelay = Math.max(22, Math.floor(3100 / Math.max(chars.length, 1)));
+
+        if (this.soloRocketRabbitTypingTimer) {
+            try { this.soloRocketRabbitTypingTimer.remove(false); } catch (_) {}
+            this.soloRocketRabbitTypingTimer = null;
+        }
+
+        this.soloRocketRabbitTypingTimer = this.time.addEvent({
+            delay: typeDelay,
+            repeat: Math.max(0, chars.length - 1),
+            callback: () => {
+                if (!txt || !txt.active) return;
+                idx += 1;
+                txt.setText(chars.slice(0, idx).join(''));
+                this.soloRocketRabbitTypingIndex = idx;
+                if (idx === 1 || idx % 20 === 0) {
+                    this.playSoloRocketIntroSfx('solo-rocket-typing');
+                }
+            },
+            callbackScope: this
+        });
+    }
+
+    hideSoloRocketStage6RabbitComms(silent = false) {
+        const container = this.soloRocketRabbitComms;
+        this.soloRocketRabbitComms = null;
+        this.soloRocketRabbitTypingIndex = 0;
+
+        try {
+            if (this.soloRocketRabbitTypingTimer) this.soloRocketRabbitTypingTimer.remove(false);
+        } catch (_) {}
+        this.soloRocketRabbitTypingTimer = null;
+
+        if (!container) return;
+
+        try {
+            (container.__soloRocketFxTimers || []).forEach(timer => {
+                if (timer && timer.remove) timer.remove(false);
+            });
+        } catch (_) {}
+
+        try {
+            (container.__soloRocketFxTweens || []).forEach(tween => {
+                if (!tween) return;
+                if (tween.stop) tween.stop();
+                if (tween.remove) tween.remove();
+            });
+        } catch (_) {}
+
+        if (!silent) this.playSoloRocketIntroSfx('solo-rocket-radio_beep');
+
+        try {
+            this.tweens.killTweensOf(container);
+            this.tweens.add({
+                targets: container,
+                alpha: 0,
+                scaleX: 0.96,
+                scaleY: 0.96,
+                duration: 180,
+                ease: 'Cubic.easeIn',
+                onComplete: () => {
+                    try { if (container && container.destroy) container.destroy(true); } catch (_) {}
+                }
+            });
+        } catch (_) {
+            try { if (container && container.destroy) container.destroy(true); } catch (_) {}
+        }
+    }
+
+    pauseSoloRocketStage6FirstWarningSpawns() {
+        if (this.__soloRocketStage6Pause1Applied) return;
+        this.__soloRocketStage6Pause1Applied = true;
+
+        try {
+            if (this.soloRocketMonsterSpawnTimer) this.soloRocketMonsterSpawnTimer.remove(false);
+        } catch (_) {}
+        this.soloRocketMonsterSpawnTimer = null;
+        this.soloRocketMonsterSpawnActive = false;
+
+        this.soloRocketAsteroidSpawnActive = false;
+        this.soloRocketAsteroidNextSpawnAt = 64000;
+    }
+
+    resumeSoloRocketStage6FirstWarningSpawns() {
+        if (!this.__soloRocketStage6Pause1Applied || this.__soloRocketStage6Pause1Released) return;
+        this.__soloRocketStage6Pause1Released = true;
+
+        if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
+
+        this.soloRocketAsteroidSpawnActive = true;
+        if (!this.soloRocketAsteroidNextSpawnAt || this.soloRocketAsteroidNextSpawnAt < 64000) {
+            this.soloRocketAsteroidNextSpawnAt = 64000;
+        }
+
+        if (!this.soloRocketMonsterSpawnStopped && (this.soloRocketMonsterSpawnedCount || 0) < (this.soloRocketMaxMonsters || 120)) {
+            this.soloRocketMonsterSpawnActive = false;
+            this.startSoloRocketMonsterSpawning();
+        }
+    }
+
+    updateSoloRocketStage6WarningTimeline(elapsed) {
+        if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
+
+        if (elapsed >= 55000 && elapsed < 64000) {
+            this.pauseSoloRocketStage6FirstWarningSpawns();
+        }
+
+        if (elapsed >= 56000 && !this.soloRocketBossWarning1Shown) {
+            this.soloRocketBossWarning1Shown = true;
+            this.showSoloRocketStage6RabbitComms('呼叫！呼叫！洋蔥！隕石大量發生！請小心！........!!!');
+        }
+
+        if (elapsed >= 63000 && !this.soloRocketBossWarning1Closed) {
+            this.soloRocketBossWarning1Closed = true;
+            this.hideSoloRocketStage6RabbitComms(false);
+        }
+
+        if (elapsed >= 64000) {
+            this.resumeSoloRocketStage6FirstWarningSpawns();
+        }
+
+        if (elapsed >= 117000 && !this.soloRocketBossWarning2Shown) {
+            this.soloRocketBossWarning2Shown = true;
+            this.showSoloRocketStage6RabbitComms('洋蔥小心！古代銀河巨雞魔出沒!!!! 注意安全!!!!');
+        }
+
+        if (elapsed >= 124000 && !this.soloRocketBossWarning2Closed) {
+            this.soloRocketBossWarning2Closed = true;
+            this.hideSoloRocketStage6RabbitComms(false);
+        }
+    }
+
     beginSoloRocketEndingSequence() {
         if (this.soloRocketEndingRushStarted || !this.soloRocketPlayer) return;
 
@@ -5622,6 +5896,8 @@ this.events.on('action_B', () => {
             bossKilled: false,
             bossPunished: false
         };
+        this.__soloRocketStage6Pause1Applied = false;
+        this.__soloRocketStage6Pause1Released = false;
     }
 
     clearSoloRocketStage6Objects(resetFlags = false) {
@@ -5694,6 +5970,8 @@ this.events.on('action_B', () => {
             this.soloRocketBossWarning2Shown = false;
             this.soloRocketBossWarning2Closed = false;
             this.soloRocketFinalEscapeStarted = false;
+            this.__soloRocketStage6Pause1Applied = false;
+            this.__soloRocketStage6Pause1Released = false;
         }
     }
 
@@ -6422,7 +6700,7 @@ this.events.on('action_B', () => {
 
     spawnSoloRocketAsteroidScatter(elapsed) {
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
-        const lateGame = elapsed >= 60000;
+        const lateGame = elapsed >= 64000;
         const relaxGame = elapsed >= 126000;
         const count = lateGame && !relaxGame && Math.random() < 0.35 ? 2 : 1;
 
@@ -6468,15 +6746,23 @@ this.events.on('action_B', () => {
         if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
 
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const generationPaused = elapsed >= 55000 && elapsed < 64000;
 
-        if (elapsed >= 12000 && elapsed < 152000 && !this.soloRocketAsteroidSpawnStopped) {
+        if (generationPaused) {
+            this.soloRocketAsteroidSpawnActive = false;
+            if (!this.soloRocketAsteroidNextSpawnAt || this.soloRocketAsteroidNextSpawnAt < 64000) {
+                this.soloRocketAsteroidNextSpawnAt = 64000;
+            }
+        }
+
+        if (!generationPaused && elapsed >= 12000 && elapsed < 152000 && !this.soloRocketAsteroidSpawnStopped) {
             this.soloRocketAsteroidSpawnActive = true;
             if (!this.soloRocketAsteroidNextSpawnAt || this.soloRocketAsteroidNextSpawnAt < 12000) {
                 this.soloRocketAsteroidNextSpawnAt = 12000;
             }
 
             if (elapsed >= this.soloRocketAsteroidNextSpawnAt) {
-                if (elapsed >= 60000 && Math.random() < (elapsed >= 126000 ? 0.68 : 0.90)) {
+                if (elapsed >= 64000 && Math.random() < (elapsed >= 126000 ? 0.68 : 0.90)) {
                     this.spawnSoloRocketAsteroidRow(elapsed);
                 } else {
                     this.spawnSoloRocketAsteroidScatter(elapsed);
@@ -6484,7 +6770,7 @@ this.events.on('action_B', () => {
 
                 const nextGap = elapsed >= 126000
                     ? Phaser.Math.Between(3000, 4600)
-                    : (elapsed >= 60000 ? Phaser.Math.Between(1750, 2600) : Phaser.Math.Between(1400, 2400));
+                    : (elapsed >= 64000 ? Phaser.Math.Between(1750, 2600) : Phaser.Math.Between(1400, 2400));
 
                 this.soloRocketAsteroidNextSpawnAt = elapsed + nextGap;
             }
@@ -7780,6 +8066,8 @@ this.events.on('action_B', () => {
         }
 
         const elapsed = Date.now() - (this.soloRocketStartTime || Date.now());
+
+        this.updateSoloRocketStage6WarningTimeline(elapsed);
 
         if (!this.soloRocketCruiseFinished && elapsed >= 152000) {
             this.stopSoloRocketMonsterSpawning();
@@ -10581,6 +10869,15 @@ document.getElementById("save-edit-btn").addEventListener("click", () => { let n
 document.getElementById("send-btn").addEventListener("click", sendChat);
 window.addEventListener("keydown", (e) => { if (e.key === "Enter") { if (document.activeElement === chatInput) sendChat(); else if (document.activeElement === document.getElementById("pm-input")) window.sendPM(); } });
 function sendBubble(msg, options = {}) { 
+    if (msg === undefined || msg === null) {
+        msg = "";
+    }
+    msg = String(msg);
+
+    if (msg.trim() === "") {
+        return;
+    }
+
     if (window.GameLogic.currentUser) { 
         const bubbleTime = Date.now();
         const bubbleAnchor = options.bubbleAnchor || null;
