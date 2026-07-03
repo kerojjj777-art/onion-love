@@ -7,7 +7,7 @@ const firebaseConfig = {
   databaseURL: "https://onion-love-default-rtdb.firebaseio.com", projectId: "onion-love",
   storageBucket: "onion-love.firebasestorage.app", messagingSenderId: "431036248901",
   appId: "1:431036248901:web:533465a08cfa8410f7c42c"
-};
+}; 
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
