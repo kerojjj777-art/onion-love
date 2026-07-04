@@ -5697,7 +5697,12 @@ this.events.on('action_B', () => {
             noiseBars.push(bar);
         }
 
-        container.add([bubble, label, txt, rabbit, ...noiseBars]);
+        container.add([bubble, label, txt, rabbit]);
+
+        noiseBars.forEach(function(bar) {
+            container.add(bar);
+        });
+
         container.setAlpha(0);
         container.setScale(0.98);
 
