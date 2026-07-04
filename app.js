@@ -46,7 +46,7 @@ window.GameLogic = {
     selectedServerRoom: DEFAULT_SERVER_ROOM, currentServerRoom: DEFAULT_SERVER_ROOM, serverRooms: SERVER_ROOMS, authGuardSigningOut: false
 };
 
-let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, profileViewingUid = null;
+let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, profileViewingUid = null;
 window.switchScene = switchScene; window.showProfileModal = showProfileModal; window.leaveCafe = leaveCafe; window.signOut = signOut; window.auth = auth;
 
 // ====== 入口房間共用工具 ======
@@ -1028,7 +1028,7 @@ window.openLeaderboardModal = function() {
 window.renderLeaderboard = function(offset) {
     let weekId = window.getWeekId(offset);
     document.querySelector('#leaderboard-modal h3').innerText = offset === 0 ? '🏆 本週戰況' : '🏆 上週結算';
-    get(ref(window.GameLogic.db, `weeklySweeps/${weekId}`)).then(snap => {
+    get(ref(window.GameLogic.db, window.getServerRoomPath(`weeklySweeps/${weekId}`))).then(snap => {
         let data = snap.val() || {};
         let sorted = Object.values(data).sort((a, b) => b.count - a.count);
         let html = '';
@@ -1807,7 +1807,10 @@ onAuthStateChanged(auth, async (user) => {
         });
         onValue(ref(db, `users/${user.uid}/unreadPMs`), snap => { window.GameLogic.unreadPMs = snap.val() || {}; window.updateUnreadGlow(); if (document.getElementById('inventory-modal').style.display === 'block') { window.openInventoryModal(); } });
         onValue(ref(db, 'manuals'), snap => { const data = snap.val(); window.manualPages = []; if (data) { Object.keys(data).forEach(key => { window.manualPages.push({ key: key, imgBase64: data[key].imgBase64, timestamp: data[key].timestamp }); }); window.manualPages.sort((a, b) => a.timestamp - b.timestamp); } window.renderManualPage(); });
-        onValue(ref(db, 'cafeFurniture'), snap => window.GameLogic.cafeFurniture = snap.val() || {});
+        if (cafeFurnitureUnsubscribe) { cafeFurnitureUnsubscribe(); cafeFurnitureUnsubscribe = null; }
+        cafeFurnitureUnsubscribe = onValue(ref(db, window.getServerRoomPath('cafeFurniture')), snap => {
+            window.GameLogic.cafeFurniture = snap.val() || {};
+        });
 
         // 全局強制召喚監聽
         // 全局強制召喚監聽與 60 秒倒數
@@ -1864,6 +1867,9 @@ onAuthStateChanged(auth, async (user) => {
 
         if (connectedUnsubscribe) { connectedUnsubscribe(); connectedUnsubscribe = null; }
         if (onlinePlayersUnsubscribe) { onlinePlayersUnsubscribe(); onlinePlayersUnsubscribe = null; }
+        if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
+        if (memoryUnsubscribe) { memoryUnsubscribe(); memoryUnsubscribe = null; }
+        if (cafeFurnitureUnsubscribe) { cafeFurnitureUnsubscribe(); cafeFurnitureUnsubscribe = null; }
         if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; }
         if (shrineUnsubscribe) { shrineUnsubscribe(); shrineUnsubscribe = null; }
         if (shrineEventUnsubscribe) { shrineEventUnsubscribe(); shrineEventUnsubscribe = null; }
@@ -2167,7 +2173,7 @@ function gainRewards(coins, exp) {
     update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins, exp: p.exp, level: p.level, sweeps: p.sweeps }).catch(err => console.warn('Firebase 更新玩家獎勵失敗:', err));
     
     let weekId = window.getWeekId(0);
-    let sweepRef = ref(window.GameLogic.db, `weeklySweeps/${weekId}/${window.GameLogic.currentUser.uid}`);
+    let sweepRef = ref(window.GameLogic.db, window.getServerRoomPath(`weeklySweeps/${weekId}/${window.GameLogic.currentUser.uid}`));
     get(sweepRef).then(snap => {
         let currentCount = snap.exists() ? snap.val().count : 0;
         update(sweepRef, { name: p.name, count: currentCount + 1 });
@@ -2996,7 +3002,7 @@ class MainScene extends Phaser.Scene {
         this.trashes = [];
         
         if (this.isCafe) {
-            this.leaderboardListener = onValue(ref(window.GameLogic.db, `weeklySweeps/${window.getWeekId(0)}`), (snap) => {
+            this.leaderboardListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath(`weeklySweeps/${window.getWeekId(0)}`)), (snap) => {
                 let data = snap.val() || {}; let sorted = Object.values(data).sort((a, b) => b.count - a.count);
                 window.GameLogic.currentTop3 = sorted.slice(0, 3);
                 if (window.GameLogic.currentScoreboard) {
@@ -3351,7 +3357,7 @@ class MainScene extends Phaser.Scene {
         this.events.off('action_A_long');
         this.events.off('action_B');
 
-        this.events.on('action_A_place', () => { let key = window.GameLogic.placingFurnitureKey; if(key && this.furnitureSprites[key]) { let f = this.furnitureSprites[key]; f.sprite.setVelocity(0, 0); let path = this.isCafe ? `cafeFurniture/${key}` : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}` : `shrineFurniture/${key}`); update(ref(window.GameLogic.db, path), { locked: true, x: f.sprite.x, y: f.sprite.y, ownerUid: window.GameLogic.currentUser.uid }); window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); } });
+        this.events.on('action_A_place', () => { let key = window.GameLogic.placingFurnitureKey; if(key && this.furnitureSprites[key]) { let f = this.furnitureSprites[key]; f.sprite.setVelocity(0, 0); let path = this.isCafe ? window.getServerRoomPath(`cafeFurniture/${key}`) : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}` : `shrineFurniture/${key}`); update(ref(window.GameLogic.db, path), { locked: true, x: f.sprite.x, y: f.sprite.y, ownerUid: window.GameLogic.currentUser.uid }); window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); } });
 
 this.events.on('action_A_short', () => {
     if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
@@ -13809,7 +13815,7 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
                 this.localPlayer.sprite.setVelocity(0, 0).play('idle', true); let f = this.furnitureSprites[window.GameLogic.placingFurnitureKey];
                 if (f && f.sprite && f.sprite.active) {
                     f.sprite.setVelocity(vx, vy); this.cameras.main.startFollow(f.sprite, true, 0.1, 0.1); this.placePrompt.setPosition(f.sprite.x, f.sprite.y - 80).setVisible(true);
-                    if (vx !== 0 || vy !== 0) { if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) { let path = this.isCafe ? `cafeFurniture/${window.GameLogic.placingFurnitureKey}` : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${window.GameLogic.placingFurnitureKey}` : `shrineFurniture/${window.GameLogic.placingFurnitureKey}`); update(ref(window.GameLogic.db, path), { x: f.sprite.x, y: f.sprite.y }); this.lastSyncTime = Date.now(); } }
+                    if (vx !== 0 || vy !== 0) { if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) { let path = this.isCafe ? window.getServerRoomPath(`cafeFurniture/${window.GameLogic.placingFurnitureKey}`) : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${window.GameLogic.placingFurnitureKey}` : `shrineFurniture/${window.GameLogic.placingFurnitureKey}`); update(ref(window.GameLogic.db, path), { x: f.sprite.x, y: f.sprite.y }); this.lastSyncTime = Date.now(); } }
                 }
             } else {
                 this.placePrompt.setVisible(false); this.localPlayer.sprite.setVelocity(vx, vy); 
@@ -14174,7 +14180,7 @@ function openFurnitureCatalog() {
             
             modal.style.display = 'none'; let isCafe = window.GameLogic.currentScene === "cafe"; let isDoghouse = window.GameLogic.currentScene === "doghouse"; let isShrine = window.GameLogic.currentScene === "shrine";
             let targetDict = isCafe ? window.GameLogic.cafeFurniture : (isDoghouse ? window.GameLogic.doghouseFurniture : window.GameLogic.shrineFurniture);
-            let pathPrefix = isCafe ? 'cafeFurniture/' : (isDoghouse ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/` : 'shrineFurniture/');
+            let pathPrefix = isCafe ? window.getServerRoomPath('cafeFurniture/') : (isDoghouse ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/` : 'shrineFurniture/');
             
             let itemKey = item.key;
             if (item.infinite) { 
@@ -14296,29 +14302,93 @@ function sendBubble(msg, options = {}) {
 function sendPrinceCatBubble(msg) {
     sendBubble(msg, { bubbleAnchor: 'below', yOffset: 74 });
 }
-function sendChat() { const msg = chatInput.value.trim(); if (msg !== "" && window.GameLogic.currentUser) { const now = new Date(); push(ref(db, 'chats'), { name: window.GameLogic.myProfile.name, msg: msg, date: now.toLocaleDateString('zh-TW', {month: '2-digit', day: '2-digit'}), time: now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute:'2-digit' }) }); sendBubble(msg); chatInput.value = ""; } }
-function listenToChat() { onValue(ref(db, 'chats'), (snapshot) => { const chatBox = document.getElementById("chat-box"); chatBox.innerHTML = ""; const chats = snapshot.val(); if (chats) { let lastMsg = ""; let html = ""; let chatArray = Object.values(chats); if (chatArray.length > 0) { let latest = chatArray[chatArray.length - 1]; lastMsg = `${latest.name}：${latest.msg}`; } chatArray.reverse().forEach(c => { html += `<div style="margin-bottom: 4px;"><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg} <span style="font-size:10px; color:#bbb; margin-left:8px;">${c.date||''} ${c.time||''}</span></div>`; }); chatBox.innerHTML = html; const topBar = document.getElementById("top-notification-bar"); if (topBar && lastMsg) { topBar.innerText = `💬 最新發言｜ ${lastMsg}`; } requestAnimationFrame(() => { setTimeout(() => { chatBox.scrollTop = 0; }, 10); }); } }); }
+function sendChat() {
+    const msg = chatInput.value.trim();
+    if (msg !== "" && window.GameLogic.currentUser) {
+        const now = new Date();
+        push(ref(db, window.getServerRoomPath('chats')), {
+            name: window.GameLogic.myProfile.name,
+            msg: msg,
+            date: now.toLocaleDateString('zh-TW', {month: '2-digit', day: '2-digit'}),
+            time: now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute:'2-digit' })
+        });
+        sendBubble(msg);
+        chatInput.value = "";
+    }
+}
+
+function listenToChat() {
+    if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
+
+    chatUnsubscribe = onValue(ref(db, window.getServerRoomPath('chats')), (snapshot) => {
+        const chatBox = document.getElementById("chat-box");
+        if (!chatBox) return;
+
+        chatBox.innerHTML = "";
+        const chats = snapshot.val();
+
+        if (chats) {
+            let lastMsg = "";
+            let html = "";
+            let chatArray = Object.values(chats);
+
+            if (chatArray.length > 0) {
+                let latest = chatArray[chatArray.length - 1];
+                lastMsg = `${latest.name}：${latest.msg}`;
+            }
+
+            chatArray.reverse().forEach(c => {
+                html += `<div style="margin-bottom: 4px;"><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg} <span style="font-size:10px; color:#bbb; margin-left:8px;">${c.date||''} ${c.time||''}</span></div>`;
+            });
+
+            chatBox.innerHTML = html;
+
+            const topBar = document.getElementById("top-notification-bar");
+            if (topBar && lastMsg) {
+                topBar.innerText = `💬 最新發言｜ ${lastMsg}`;
+            }
+
+            requestAnimationFrame(() => {
+                setTimeout(() => { chatBox.scrollTop = 0; }, 10);
+            });
+        }
+    });
+}
 
 document.getElementById("upload-memory-btn").onclick = () => { const fileInput = document.getElementById("memory-file"); const textInput = document.getElementById("memory-text"); const file = fileInput.files[0]; const text = textInput.value.trim(); if (!file && !text) return alert("請上傳圖片或填寫文字！"); if (file) { const reader = new FileReader(); reader.onload = e => { const img = new Image(); img.onload = () => { const cvs = document.createElement('canvas'); let w = img.width, h = img.height; if (w > 300) { h *= 300 / w; w = 300; } cvs.width = w; cvs.height = h; cvs.getContext('2d').drawImage(img, 0, 0, w, h); saveMemoryToDB(cvs.toDataURL('image/jpeg', 0.7), text); }; img.src = e.target.result; }; reader.readAsDataURL(file); } else saveMemoryToDB("", text); fileInput.value = ""; textInput.value = ""; };
-function saveMemoryToDB(imgBase64, text) { push(ref(db, 'memories'), { uid: window.GameLogic.currentUser.uid, author: window.GameLogic.myProfile.name, img: imgBase64, text: text, time: new Date().toLocaleDateString('zh-TW') }); }
+function saveMemoryToDB(imgBase64, text) {
+    push(ref(db, window.getServerRoomPath('memories')), {
+        uid: window.GameLogic.currentUser.uid,
+        author: window.GameLogic.myProfile.name,
+        img: imgBase64,
+        text: text,
+        time: new Date().toLocaleDateString('zh-TW')
+    });
+}
+
 window.deleteMemory = async function(key) { 
-    const snap = await get(ref(db, `memories/${key}`)); 
+    const snap = await get(ref(db, window.getServerRoomPath(`memories/${key}`))); 
     if (snap.exists()) { 
         let m = snap.val(); 
         let isMine = (m.uid === window.GameLogic.currentUser.uid) || (m.author === window.GameLogic.myProfile.name); 
         if (isMine) { 
-            if (confirm("確定要刪除這條回憶嗎？")) remove(ref(db, `memories/${key}`)); 
+            if (confirm("確定要刪除這條回憶嗎？")) remove(ref(db, window.getServerRoomPath(`memories/${key}`))); 
         } else { 
             alert("您沒有權限刪除這篇回憶喔！"); 
         } 
     } 
 };
 
-function listenToMemories() { 
-    onValue(ref(db, 'memories'), snap => { 
-        const feed = document.getElementById("memory-feed"); 
+function listenToMemories() {
+    if (memoryUnsubscribe) { memoryUnsubscribe(); memoryUnsubscribe = null; }
+
+    memoryUnsubscribe = onValue(ref(db, window.getServerRoomPath('memories')), snap => { 
+        const feed = document.getElementById("memory-feed");
+        if (!feed) return;
+
         feed.innerHTML = ""; 
         const data = snap.val(); 
+
         if (data) { 
             Object.keys(data).reverse().forEach(key => { 
                 let m = data[key]; 
@@ -15724,11 +15794,12 @@ window.checkPendingWeeklyRewardNotice = async function() {
 
     const uid = window.GameLogic.currentUser.uid;
     const lastWeekId = window.getWeekId(-1);
+    const roomRewardWeekId = `${window.getCurrentServerRoomId()}_${lastWeekId}`;
 
     try {
         const [rewardSnap, sweepSnap] = await Promise.all([
-            get(ref(window.GameLogic.db, `users/${uid}/weeklyRewards/${lastWeekId}`)),
-            get(ref(window.GameLogic.db, `weeklySweeps/${lastWeekId}`))
+            get(ref(window.GameLogic.db, `users/${uid}/weeklyRewards/${roomRewardWeekId}`)),
+            get(ref(window.GameLogic.db, window.getServerRoomPath(`weeklySweeps/${lastWeekId}`)))
         ]);
 
         let hasPending = false;
@@ -15847,13 +15918,14 @@ window.openWeeklyRewardDetail = async function() {
         ruleBox.innerHTML = `<strong>【派獎規則】</strong><br>結算至每週一 00:00。<br>第1名: 10000幣+金勳章 / 第2名: 5000幣+銀勳章 / 第3名: 3000幣+銅勳章 / 參加獎: 500幣。<br>滿500次加贈5000幣及專屬勳章(滿1000次另有高階勳章)。<br>未領取將於一週後消失。`;
     }
     let lastWeekId = window.getWeekId(-1);
+    let roomRewardWeekId = `${window.getCurrentServerRoomId()}_${lastWeekId}`;
     let uid = window.GameLogic.currentUser.uid;
     let grid = document.getElementById('reward-items-grid');
     grid.innerHTML = '<div style="color:#fff; text-align:center;">結算中...</div>';
     
     let [sweepSnap, rewardSnap] = await Promise.all([
-        get(ref(window.GameLogic.db, `weeklySweeps/${lastWeekId}`)),
-        get(ref(window.GameLogic.db, `users/${uid}/weeklyRewards/${lastWeekId}`))
+        get(ref(window.GameLogic.db, window.getServerRoomPath(`weeklySweeps/${lastWeekId}`))),
+        get(ref(window.GameLogic.db, `users/${uid}/weeklyRewards/${roomRewardWeekId}`))
     ]);
     
     let sweepsData = sweepSnap.val() || {};
@@ -15886,10 +15958,10 @@ window.openWeeklyRewardDetail = async function() {
             myRewards.push({ id: 'sweep_1000', type: 'medal', medal: 'ranking-medal-cleanking-1000ps.png', name: '猛掃一千片蔥皮勳章', claimed: false }); 
         } 
         // 【修正】陣列資料必須使用 set 寫入，使用 update 會引發 Firebase 報錯導致中斷，卡在「結算中...」
-        await set(ref(window.GameLogic.db, `users/${uid}/weeklyRewards/${lastWeekId}`), myRewards); 
+        await set(ref(window.GameLogic.db, `users/${uid}/weeklyRewards/${roomRewardWeekId}`), myRewards); 
     } 
     window.currentViewingRewards = myRewards;
-    window.currentViewingWeekId = lastWeekId;
+    window.currentViewingWeekId = roomRewardWeekId;
     
     if (myRewards.length === 0) {
         grid.innerHTML = '<div style="color:#aaa; text-align:center;">上週無可領取獎勵，這週繼續加油！</div>';
