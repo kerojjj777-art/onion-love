@@ -1991,6 +1991,7 @@ class BootScene extends Phaser.Scene {
         this.load.image('solo-rocket-rabbit-shop-sign', 'solo-rocket-rabbit-shop-sign.png');
         this.load.audio('solo-rocket-rabbit-shop-bgm', 'solo-rocket-rabbit-shop-bgm.mp3');
         this.load.audio('solo-rocket-rabbit-shop-finish', 'solo-rocket-rabbit-shop-finish.mp3');
+        this.load.audio('solo-rocket-rabbit-shop-buy', 'solo-rocket-rabbit-shop-buy.mp3');
 
         // 在記憶體中畫一個簡單的白色發光點紋理給粒子使用
         let grd = this.make.graphics({x: 0, y: 0, add: false});
@@ -2408,6 +2409,7 @@ class MainScene extends Phaser.Scene {
         this.soloRocketLifeBreathTween = null;
         this.soloRocketLifePulseTween = null;
         this.soloRocketLifeFloatTween = null;
+        this.soloRocketLifeHealFxObjects = [];
         this.soloRocketThrusterFx = null;
         this.soloRocketStartTime = 0;
         this.soloRocketDurationMs = 157000;
@@ -2458,8 +2460,8 @@ class MainScene extends Phaser.Scene {
         this.soloRocketBossHpFill = null;
         this.soloRocketBossHpText = null;
         this.soloRocketBossFloatTween = null;
-        this.soloRocketBossHp = 80;
-        this.soloRocketBossMaxHp = 80;
+        this.soloRocketBossHp = 160;
+        this.soloRocketBossMaxHp = 160;
         this.soloRocketBossSpawned = false;
         this.soloRocketBossKilled = false;
         this.soloRocketBossPunished = false;
@@ -2489,6 +2491,8 @@ class MainScene extends Phaser.Scene {
         this.soloRocketAsteroidSpawnActive = false;
         this.soloRocketAsteroidSpawnStopped = false;
         this.soloRocketAsteroidNextSpawnAt = 0;
+        this.soloRocketAsteroidExtraBudget = 0;
+        this.soloRocketAsteroidExtraNextAt = 0;
         this.soloRocketSpinActive = false;
         this.soloRocketSpinShield = null;
         this.soloRocketSpinShieldTween = null;
@@ -5986,6 +5990,8 @@ this.events.on('action_B', () => {
         this.soloRocketAsteroidSpawnActive = false;
         this.soloRocketAsteroidSpawnStopped = false;
         this.soloRocketAsteroidNextSpawnAt = 12000;
+        this.soloRocketAsteroidExtraBudget = 50;
+        this.soloRocketAsteroidExtraNextAt = 64000;
         this.soloRocketLastFireAt = 0;
         this.soloRocketLastSpinAt = 0;
         this.soloRocketSpinCooldownMs = 3000;
@@ -6112,8 +6118,8 @@ this.events.on('action_B', () => {
         this.soloRocketBossLastMissileAt = 0;
 
         if (resetFlags) {
-            this.soloRocketBossHp = 80;
-            this.soloRocketBossMaxHp = 80;
+            this.soloRocketBossHp = 160;
+            this.soloRocketBossMaxHp = 160;
             this.soloRocketBossSpawned = false;
             this.soloRocketBossKilled = false;
             this.soloRocketBossPunished = false;
@@ -6337,7 +6343,8 @@ this.events.on('action_B', () => {
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
         this.soloRocketBossSpawned = true;
         this.soloRocketBossEntering = true;
-        this.soloRocketBossHp = this.soloRocketBossMaxHp || 80;
+        this.soloRocketBossMaxHp = 160;
+        this.soloRocketBossHp = this.soloRocketBossMaxHp;
 
         try {
             if (this.soloRocketMonsterSpawnTimer) this.soloRocketMonsterSpawnTimer.remove(false);
@@ -6359,6 +6366,7 @@ this.events.on('action_B', () => {
         boss.__soloRocketBoss = true;
         boss.__soloRocketRadius = bossSize * 0.40;
         boss.__baseY = rect.y + bossSize * 0.62;
+        boss.__soloRocketMoveStartedAt = 0;
 
         this.soloRocketBoss = boss;
         this.soloRocketContainer.add(boss);
@@ -6406,9 +6414,9 @@ this.events.on('action_B', () => {
             ease: 'Back.easeOut',
             onComplete: () => {
                 this.soloRocketBossEntering = false;
+                boss.__soloRocketMoveStartedAt = Date.now();
                 this.soloRocketBossFloatTween = this.tweens.add({
                     targets: boss,
-                    x: Phaser.Math.Clamp(rect.centerX + 34, rect.x + boss.displayWidth * 0.45, rect.x + rect.w - boss.displayWidth * 0.45),
                     y: boss.__baseY + 8,
                     yoyo: true,
                     repeat: -1,
@@ -6452,10 +6460,11 @@ this.events.on('action_B', () => {
         if (!this.soloRocketBossHpFill) return;
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
         const barW = Math.min(rect.w - 72, 300) - 4;
-        const hpRate = Phaser.Math.Clamp((this.soloRocketBossHp || 0) / Math.max(1, this.soloRocketBossMaxHp || 80), 0, 1);
+        const maxHp = this.soloRocketBossMaxHp || 160;
+        const hpRate = Phaser.Math.Clamp((this.soloRocketBossHp || 0) / Math.max(1, maxHp), 0, 1);
         this.soloRocketBossHpFill.displayWidth = Math.max(1, barW * hpRate);
         if (this.soloRocketBossHpText) {
-            this.soloRocketBossHpText.setText(`巨雞魔王  ${Math.max(0, Math.ceil(this.soloRocketBossHp || 0))}/${this.soloRocketBossMaxHp || 80}`);
+            this.soloRocketBossHpText.setText(`巨雞魔王  ${Math.max(0, Math.ceil(this.soloRocketBossHp || 0))}/${maxHp}`);
         }
     }
 
@@ -6714,6 +6723,22 @@ this.events.on('action_B', () => {
     updateSoloRocketBoss(dt, elapsed) {
         const boss = this.soloRocketBoss;
         if (!boss || !boss.active || this.soloRocketBossKilled) return;
+
+        if (!this.soloRocketBossEntering) {
+            const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+            const leftBound = rect.x + boss.displayWidth * 0.55;
+            const rightBound = rect.x + rect.w - boss.displayWidth * 0.55;
+            const centerX = (leftBound + rightBound) / 2;
+            const amplitude = Math.max(0, (rightBound - leftBound) / 2);
+            const startedAt = boss.__soloRocketMoveStartedAt || Date.now();
+            const t = (Date.now() - startedAt) / 1000;
+
+            boss.x = Phaser.Math.Clamp(
+                centerX + Math.sin(t * 1.08) * amplitude,
+                leftBound,
+                rightBound
+            );
+        }
 
         if (!this.soloRocketBossEntering && elapsed < 152000) {
             const now = Date.now();
@@ -7572,6 +7597,34 @@ this.events.on('action_B', () => {
 
                 this.soloRocketAsteroidNextSpawnAt = elapsed + nextGap;
             }
+
+            if (elapsed >= 64000 &&
+                elapsed < 152000 &&
+                !this.soloRocketBossSpawned &&
+                (this.soloRocketAsteroidExtraBudget || 0) > 0) {
+
+                if (!this.soloRocketAsteroidExtraNextAt || this.soloRocketAsteroidExtraNextAt < 64000) {
+                    this.soloRocketAsteroidExtraNextAt = elapsed + Phaser.Math.Between(900, 1500);
+                }
+
+                if (elapsed >= this.soloRocketAsteroidExtraNextAt) {
+                    const beforeCount = (this.soloRocketAsteroids || []).length;
+                    const batch = Math.min(
+                        this.soloRocketAsteroidExtraBudget || 0,
+                        elapsed >= 126000 ? Phaser.Math.Between(1, 2) : Phaser.Math.Between(1, 3)
+                    );
+
+                    for (let i = 0; i < batch; i++) {
+                        this.spawnSoloRocketAsteroidScatter(elapsed);
+                    }
+
+                    const afterCount = (this.soloRocketAsteroids || []).length;
+                    const spawned = Math.max(1, afterCount - beforeCount);
+                    this.soloRocketAsteroidExtraBudget = Math.max(0, (this.soloRocketAsteroidExtraBudget || 0) - spawned);
+                    this.soloRocketAsteroidExtraNextAt = elapsed + Phaser.Math.Between(850, 1650);
+                }
+            }
+
         } else if (elapsed >= 152000) {
             this.soloRocketAsteroidSpawnActive = false;
             this.soloRocketAsteroidSpawnStopped = true;
@@ -8029,7 +8082,13 @@ this.events.on('action_B', () => {
 
         this.soloRocketStats = this.soloRocketStats || {};
         this.soloRocketStats.monsterKills = (this.soloRocketStats.monsterKills || 0) + 1;
-        this.setSoloRocketLifeValue((this.soloRocketLifeValue || 0) + 5);
+
+        const oldLife = Number(this.soloRocketLifeValue || 0);
+        this.setSoloRocketLifeValue(oldLife + 5);
+
+        if (Number(this.soloRocketLifeValue || 0) > oldLife && this.showSoloRocketLifeHealFx) {
+            this.showSoloRocketLifeHealFx();
+        }
     }
 
     checkSoloRocketMonsterPlayerHits() {
@@ -8741,6 +8800,59 @@ this.events.on('action_B', () => {
         }
     }
 
+    showSoloRocketLifeHealFx() {
+        const ui = this.soloRocketLifeUi;
+        if (!ui || !ui.text || !this.soloRocketUiContainer) return;
+
+        this.soloRocketLifeHealFxObjects = this.soloRocketLifeHealFxObjects || [];
+
+        const baseX = ui.text.x;
+        const baseY = ui.text.y - 8;
+
+        for (let i = 0; i < 10; i++) {
+            const x = baseX + Phaser.Math.Between(-24, 24);
+            const y = baseY + Phaser.Math.Between(12, 34);
+            const h = Phaser.Math.Between(10, 24);
+
+            const p = this.add.rectangle(x, y, Phaser.Math.FloatBetween(2, 4), h, 0x39ff14, 0.82)
+                .setOrigin(0.5, 1)
+                .setScrollFactor(0)
+                .setBlendMode(Phaser.BlendModes.ADD);
+
+            this.soloRocketUiContainer.add(p);
+            this.soloRocketLifeHealFxObjects.push(p);
+
+            this.tweens.add({
+                targets: p,
+                y: y - Phaser.Math.Between(34, 68),
+                alpha: 0,
+                scaleX: 0.45,
+                scaleY: 1.45,
+                duration: Phaser.Math.Between(420, 720),
+                ease: 'Cubic.easeOut',
+                onComplete: function() {
+                    this.soloRocketLifeHealFxObjects = (this.soloRocketLifeHealFxObjects || []).filter(function(obj) {
+                        return obj !== p;
+                    });
+                    try { p.destroy(); } catch (_) {}
+                },
+                callbackScope: this
+            });
+        }
+
+        if (ui.heartGlow && this.tweens) {
+            this.tweens.add({
+                targets: ui.heartGlow,
+                alpha: 0.86,
+                scaleX: 1.16,
+                scaleY: 1.16,
+                yoyo: true,
+                duration: 120,
+                ease: 'Sine.easeOut'
+            });
+        }
+    }
+  
     showSoloRocketLifeHitShake() {
         const ui = this.soloRocketLifeUi;
         if (!ui || !ui.container || !ui.text) return;
@@ -9224,26 +9336,272 @@ this.events.on('action_B', () => {
             console.warn('[玉兔伴手禮店] BGM 播放失敗，已略過：', err);
         }
     }
+    startSoloRocketRabbitShopMeteors() {
+        if (!this.soloRocketRabbitShopContainer || !this.soloRocketRabbitShopMeteorLayer) return;
 
-    stopSoloRocketRabbitShopBgm() {
-        try {
-            if (this.soloRocketRabbitShopBgm) {
-                this.soloRocketRabbitShopBgm.stop();
-                if (this.soloRocketRabbitShopBgm.destroy) this.soloRocketRabbitShopBgm.destroy();
-            }
-            this.sound.getAll('solo-rocket-rabbit-shop-bgm').forEach(snd => {
-                snd.stop();
-                if (snd.destroy) snd.destroy();
-            });
-        } catch (err) {
-            console.warn('[玉兔伴手禮店] 停止 BGM 失敗，已略過：', err);
-        }
-        this.soloRocketRabbitShopBgm = null;
+        this.stopSoloRocketRabbitShopMeteors();
+        this.soloRocketRabbitShopMeteorObjects = [];
+
+        const scheduleNext = function() {
+            if (!this.soloRocketRabbitShopContainer || !this.soloRocketRabbitShopMeteorLayer) return;
+
+            const delay = Phaser.Math.Between(650, 1100);
+            this.soloRocketRabbitShopMeteorTimer = this.time.delayedCall(delay, function() {
+                this.spawnSoloRocketRabbitShopMeteor();
+                scheduleNext.call(this);
+            }, [], this);
+        };
+
+        scheduleNext.call(this);
     }
 
+    spawnSoloRocketRabbitShopMeteor() {
+        const layer = this.soloRocketRabbitShopMeteorLayer;
+        if (!layer || !this.soloRocketRabbitShopContainer) return;
+
+        const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const startX = Phaser.Math.Between(Math.floor(rect.x + 34), Math.floor(rect.x + rect.w - 34));
+        const startY = Phaser.Math.Between(Math.floor(rect.y + 80), Math.floor(rect.y + rect.h * 0.46));
+        const landX = Phaser.Math.Clamp(startX + Phaser.Math.Between(-42, 42), rect.x + 20, rect.x + rect.w - 20);
+        const landY = Phaser.Math.Between(Math.floor(rect.y + rect.h * 0.58), Math.floor(rect.y + rect.h - 105));
+
+        const meteor = this.add.graphics().setScrollFactor(0);
+        meteor.lineStyle(3, 0xffd36a, 0.92);
+        meteor.lineBetween(-20, -10, 18, 10);
+        meteor.fillStyle(0xfff2a8, 1);
+        meteor.fillCircle(18, 10, 3);
+        meteor.setBlendMode(Phaser.BlendModes.ADD);
+        meteor.setPosition(startX, startY);
+
+        layer.add(meteor);
+
+        this.soloRocketRabbitShopMeteorObjects = this.soloRocketRabbitShopMeteorObjects || [];
+        this.soloRocketRabbitShopMeteorObjects.push(meteor);
+
+        this.tweens.add({
+            targets: meteor,
+            x: landX,
+            y: landY,
+            duration: Phaser.Math.Between(520, 820),
+            ease: 'Quad.easeIn',
+            onComplete: function() {
+                if (!meteor || !meteor.active) return;
+                this.tweens.add({
+                    targets: meteor,
+                    y: landY - 12,
+                    alpha: 0.45,
+                    duration: 120,
+                    yoyo: true,
+                    ease: 'Sine.easeOut',
+                    onComplete: function() {
+                        this.spawnSoloRocketRabbitShopSparkles(landX, landY, layer);
+                        this.soloRocketRabbitShopMeteorObjects = (this.soloRocketRabbitShopMeteorObjects || []).filter(function(obj) {
+                            return obj !== meteor;
+                        });
+                        try { meteor.destroy(); } catch (_) {}
+                    },
+                    callbackScope: this
+                });
+            },
+            callbackScope: this
+        });
+    }
+
+    spawnSoloRocketRabbitShopSparkles(x, y, layer) {
+        if (!layer) return;
+
+        this.soloRocketRabbitShopMeteorObjects = this.soloRocketRabbitShopMeteorObjects || [];
+        const count = Phaser.Math.Between(4, 8);
+
+        for (let i = 0; i < count; i++) {
+            const p = this.add.circle(x, y, Phaser.Math.FloatBetween(1.8, 3.4), 0xfff2a8, 0.95)
+                .setScrollFactor(0)
+                .setBlendMode(Phaser.BlendModes.ADD);
+
+            layer.add(p);
+            this.soloRocketRabbitShopMeteorObjects.push(p);
+
+            const angle = Phaser.Math.FloatBetween(-Math.PI, 0);
+            const dist = Phaser.Math.Between(18, 42);
+
+            this.tweens.add({
+                targets: p,
+                x: x + Math.cos(angle) * dist,
+                y: y + Math.sin(angle) * dist,
+                alpha: 0,
+                scaleX: 0.2,
+                scaleY: 0.2,
+                duration: Phaser.Math.Between(260, 430),
+                ease: 'Cubic.easeOut',
+                onComplete: function() {
+                    this.soloRocketRabbitShopMeteorObjects = (this.soloRocketRabbitShopMeteorObjects || []).filter(function(obj) {
+                        return obj !== p;
+                    });
+                    try { p.destroy(); } catch (_) {}
+                },
+                callbackScope: this
+            });
+        }
+    }
+
+    stopSoloRocketRabbitShopMeteors() {
+        try {
+            if (this.soloRocketRabbitShopMeteorTimer && this.soloRocketRabbitShopMeteorTimer.remove) {
+                this.soloRocketRabbitShopMeteorTimer.remove(false);
+            }
+        } catch (_) {}
+
+        this.soloRocketRabbitShopMeteorTimer = null;
+
+        try {
+            (this.soloRocketRabbitShopMeteorObjects || []).forEach(function(obj) {
+                try {
+                    if (obj && obj.destroy) obj.destroy();
+                } catch (_) {}
+            });
+        } catch (_) {}
+
+        this.soloRocketRabbitShopMeteorObjects = [];
+
+        try {
+            if (this.soloRocketRabbitShopMeteorLayer && this.soloRocketRabbitShopMeteorLayer.destroy) {
+                this.soloRocketRabbitShopMeteorLayer.destroy(true);
+            }
+        } catch (_) {}
+
+        this.soloRocketRabbitShopMeteorLayer = null;
+    }
+    clearSoloRocketRabbitSpeechBubble() {
+        try {
+            if (this.soloRocketRabbitShopSpeechTimer && this.soloRocketRabbitShopSpeechTimer.remove) {
+                this.soloRocketRabbitShopSpeechTimer.remove(false);
+            }
+        } catch (_) {}
+
+        this.soloRocketRabbitShopSpeechTimer = null;
+
+        try {
+            if (this.soloRocketRabbitShopSpeechBubble && this.soloRocketRabbitShopSpeechBubble.destroy) {
+                this.soloRocketRabbitShopSpeechBubble.destroy(true);
+            }
+        } catch (_) {}
+
+        this.soloRocketRabbitShopSpeechBubble = null;
+        this.soloRocketRabbitShopSpeechText = null;
+        this.soloRocketRabbitShopMessage = null;
+    }
+
+    createSoloRocketRabbitSpeechBubble(text) {
+        const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const shop = this.soloRocketRabbitShopContainer;
+        if (!shop) return;
+
+        this.clearSoloRocketRabbitSpeechBubble();
+
+        const bubbleW = Math.min(rect.w - 32, 370);
+        const bubbleH = 76;
+        const bubbleX = rect.centerX;
+        const bubbleY = Phaser.Math.Clamp(
+            rect.y + rect.h * 0.22,
+            rect.y + 96,
+            rect.y + rect.h - 330
+        );
+        const bubbleLeft = bubbleX - bubbleW / 2;
+        const bubbleTop = bubbleY - bubbleH / 2;
+
+        const bubble = this.add.container(0, 0).setScrollFactor(0);
+        const bg = this.add.graphics();
+        bg.fillStyle(0x12001f, 0.72);
+        bg.fillRoundedRect(bubbleLeft, bubbleTop, bubbleW, bubbleH, 15);
+        bg.lineStyle(2, 0xffd36a, 0.92);
+        bg.strokeRoundedRect(bubbleLeft, bubbleTop, bubbleW, bubbleH, 15);
+
+        const triX = Phaser.Math.Clamp(
+            bubbleX + bubbleW * 0.26,
+            bubbleLeft + 40,
+            bubbleLeft + bubbleW - 40
+        );
+        bg.fillStyle(0x12001f, 0.72);
+        bg.fillTriangle(triX, bubbleTop + bubbleH, triX + 20, bubbleTop + bubbleH, triX + 8, bubbleTop + bubbleH + 18);
+        bg.lineStyle(2, 0xffd36a, 0.7);
+        bg.lineBetween(triX, bubbleTop + bubbleH, triX + 8, bubbleTop + bubbleH + 18);
+        bg.lineBetween(triX + 20, bubbleTop + bubbleH, triX + 8, bubbleTop + bubbleH + 18);
+
+        const txt = this.add.text(bubbleLeft + 16, bubbleTop + 14, '', {
+            fontSize: '13px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#fff8d6',
+            stroke: '#000000',
+            strokeThickness: 3,
+            lineSpacing: 3,
+            wordWrap: { width: bubbleW - 32 }
+        }).setOrigin(0, 0);
+
+        bubble.add([bg, txt]);
+        shop.add(bubble);
+
+        this.soloRocketRabbitShopSpeechBubble = bubble;
+        this.soloRocketRabbitShopSpeechText = txt;
+        this.soloRocketRabbitShopMessage = txt;
+
+        this.typeSoloRocketRabbitSpeech(text || '', 26);
+    }
+
+    typeSoloRocketRabbitSpeech(fullText, speed) {
+        const txt = this.soloRocketRabbitShopSpeechText;
+        if (!txt || !txt.active) return;
+
+        try {
+            if (this.soloRocketRabbitShopSpeechTimer && this.soloRocketRabbitShopSpeechTimer.remove) {
+                this.soloRocketRabbitShopSpeechTimer.remove(false);
+            }
+        } catch (_) {}
+
+        const safeText = String(fullText || '');
+        const chars = safeText.split('');
+        let idx = 0;
+
+        txt.setText('');
+
+        if (chars.length === 0) {
+            this.soloRocketRabbitShopSpeechTimer = null;
+            return;
+        }
+
+        this.soloRocketRabbitShopSpeechTimer = this.time.addEvent({
+            delay: Math.max(12, Number(speed || 26)),
+            repeat: chars.length - 1,
+            callback: function() {
+                idx += 1;
+                if (txt && txt.active) {
+                    txt.setText(chars.slice(0, idx).join(''));
+                }
+            },
+            callbackScope: this
+        });
+    }
     clearSoloRocketRabbitShopUi() {
         try {
             if (this.soloRocketRabbitShopInputHandler) {
+                this.input.off('pointerdown', this.soloRocketRabbitShopInputHandler, this);
+            }
+        } catch (_) {}
+
+        if (this.clearSoloRocketRabbitSpeechBubble) this.clearSoloRocketRabbitSpeechBubble();
+        if (this.stopSoloRocketRabbitShopMeteors) this.stopSoloRocketRabbitShopMeteors();
+
+        try {
+            if (this.soloRocketRabbitShopContainer) this.soloRocketRabbitShopContainer.destroy(true);
+        } catch (_) {}
+        this.soloRocketRabbitShopContainer = null;
+        this.soloRocketRabbitShopBudgetText = null;
+        this.soloRocketRabbitShopMessage = null;
+        this.soloRocketRabbitShopKeeperObj = null;
+        this.soloRocketRabbitShopHitAreas = null;
+        this.soloRocketRabbitShopInputHandler = null;
+        this.soloRocketSelectedMoonShopItemName = null;
+    }
                 this.input.off('pointerdown', this.soloRocketRabbitShopInputHandler, this);
             }
         } catch (_) {}
@@ -9259,7 +9617,7 @@ this.events.on('action_B', () => {
         this.soloRocketSelectedMoonShopItemName = null;
     }
 
-    renderSoloRocketRabbitShop() {
+        renderSoloRocketRabbitShop() {
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
         const selectedItem = this.getSoloRocketShopItemByName(this.soloRocketSelectedMoonShopItemName);
 
@@ -9287,18 +9645,9 @@ this.events.on('action_B', () => {
         fallbackBg.fillRect(rect.x, rect.y, rect.w, rect.h);
         fallbackBg.fillStyle(0xffd36a, 0.14).fillCircle(rect.x + rect.w * 0.82, rect.y + rect.h * 0.14, 58);
 
-        const title = this.add.text(rect.centerX, rect.y + 34, '玉兔伴手禮店', {
-            fontSize: '25px',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold',
-            color: '#fff8d6',
-            stroke: '#4b0082',
-            strokeThickness: 6
-        }).setOrigin(0.5);
-
-        this.soloRocketRabbitShopBudgetText = this.add.text(rect.centerX, rect.y + 66,
+        this.soloRocketRabbitShopBudgetText = this.add.text(rect.centerX, rect.y + 34,
             `月球旅費剩餘：${this.soloRocketMoonBudgetLeft || 0}`, {
-            fontSize: '17px',
+            fontSize: '18px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#ffeb8a',
@@ -9306,7 +9655,7 @@ this.events.on('action_B', () => {
             strokeThickness: 4
         }).setOrigin(0.5);
 
-        const subtitle = this.add.text(rect.centerX, rect.y + 92,
+        const subtitle = this.add.text(rect.centerX, rect.y + 62,
             '點選伴手禮查看資訊，沒花完的旅費會匯回馬德幣帳戶。', {
             fontSize: '12px',
             fontFamily: 'Arial, sans-serif',
@@ -9334,15 +9683,22 @@ this.events.on('action_B', () => {
         }
         this.soloRocketRabbitShopKeeperObj = rabbitObj;
 
+        const meteorLayer = this.add.container(0, 0).setScrollFactor(0);
+        this.soloRocketRabbitShopMeteorLayer = meteorLayer;
+
         const items = this.getSoloRocketMoonShopItems();
-        const iconSize = Math.min(88, rect.w * 0.22);
-        const productX = Phaser.Math.Clamp(rabbitX - rabbitSize * 0.62, rect.x + iconSize * 0.66, rect.x + rect.w - iconSize * 1.8);
-        const productTop = Math.max(rect.y + 290, rabbitY - iconSize * 1.35);
-        const gap = iconSize + 16;
+        const iconSize = Math.min(82, rect.w * 0.21);
+        const productGap = Math.min(iconSize + 42, rect.w * 0.30);
+        const productStartX = rect.centerX - productGap;
+        const productY = Phaser.Math.Clamp(
+            rect.y + rect.h * 0.36,
+            rect.y + 138,
+            rect.y + rect.h - 330
+        );
 
         const objects = [fullBg, fallbackBg];
         if (bgObj) objects.push(bgObj);
-        objects.push(title, this.soloRocketRabbitShopBudgetText, subtitle, rabbitObj);
+        objects.push(meteorLayer, this.soloRocketRabbitShopBudgetText, subtitle, rabbitObj);
 
         this.soloRocketRabbitShopHitAreas = {
             products: [],
@@ -9352,27 +9708,32 @@ this.events.on('action_B', () => {
         };
 
         items.forEach((item, idx) => {
-            const y = productTop + idx * gap;
+            const x = Phaser.Math.Clamp(
+                productStartX + idx * productGap,
+                rect.x + iconSize * 0.62,
+                rect.x + rect.w - iconSize * 0.62
+            );
+            const y = productY;
             const qty = (this.soloRocketMoonShopPurchases && this.soloRocketMoonShopPurchases[item.name]) || 0;
             const isSelected = selectedItem && selectedItem.name === item.name;
 
             const glow = this.add.graphics();
             glow.fillStyle(isSelected ? 0xfff0a8 : 0x000000, isSelected ? 0.34 : 0.28)
-                .fillRoundedRect(productX - iconSize / 2 - 9, y - iconSize / 2 - 9, iconSize + 18, iconSize + 18, 18);
+                .fillRoundedRect(x - iconSize / 2 - 9, y - iconSize / 2 - 9, iconSize + 18, iconSize + 18, 18);
             glow.lineStyle(isSelected ? 4 : 2, isSelected ? 0xffd36a : 0xffffff, isSelected ? 1 : 0.42)
-                .strokeRoundedRect(productX - iconSize / 2 - 9, y - iconSize / 2 - 9, iconSize + 18, iconSize + 18, 18);
+                .strokeRoundedRect(x - iconSize / 2 - 9, y - iconSize / 2 - 9, iconSize + 18, iconSize + 18, 18);
 
             let icon = null;
             if (this.textures.exists(item.key)) {
-                icon = this.add.image(productX, y, item.key).setDisplaySize(iconSize, iconSize);
+                icon = this.add.image(x, y, item.key).setDisplaySize(iconSize, iconSize);
             } else {
-                icon = this.add.text(productX, y, item.fallback, {
+                icon = this.add.text(x, y, item.fallback, {
                     fontSize: `${Math.round(iconSize * 0.52)}px`,
                     fontFamily: 'Arial, sans-serif'
                 }).setOrigin(0.5);
             }
 
-            const qtyText = this.add.text(productX + iconSize * 0.38, y + iconSize * 0.32, `×${qty}`, {
+            const qtyText = this.add.text(x + iconSize * 0.38, y + iconSize * 0.32, `×${qty}`, {
                 fontSize: '15px',
                 fontFamily: 'Arial, sans-serif',
                 fontStyle: 'bold',
@@ -9384,17 +9745,21 @@ this.events.on('action_B', () => {
             objects.push(glow, icon, qtyText);
             this.soloRocketRabbitShopHitAreas.products.push({
                 name: item.name,
-                x: productX,
-                y,
-                w: iconSize + 30,
-                h: iconSize + 30
+                x: x,
+                y: y,
+                w: iconSize + 34,
+                h: iconSize + 34
             });
         });
 
         const panelW = Math.min(rect.w - 28, 396);
         const panelH = selectedItem ? 176 : 104;
+        let panelMinY = productY + iconSize * 0.70 + panelH / 2 + 18;
+        let panelMaxY = rect.y + rect.h - 118 - panelH / 2;
+        if (panelMaxY < panelMinY) panelMaxY = panelMinY;
+
         const panelX = rect.centerX;
-        const panelY = rect.y + 184;
+        const panelY = Phaser.Math.Clamp(rect.y + rect.h * 0.56, panelMinY, panelMaxY);
         const panelLeft = panelX - panelW / 2;
         const panelTop = panelY - panelH / 2;
 
@@ -9448,11 +9813,11 @@ this.events.on('action_B', () => {
                 color: canBuy ? '#000000' : '#dddddd'
             }).setOrigin(0.5);
 
-            this.soloRocketRabbitShopHitAreas.buy = { x: buyX, y: buyY, w: 166, h: 56, itemName: selectedItem.name };
+            this.soloRocketRabbitShopHitAreas.buy = { x: buyX, y: buyY, w: 178, h: 62, itemName: selectedItem.name };
             objects.push(infoTitle, infoQty, infoDesc, buyBg, buyText);
         } else {
             const hint = this.add.text(panelX, panelY,
-                '點選左下方三個月球伴手禮，商品資訊與購買按鈕會出現在這裡。', {
+                '點選上方三個月球伴手禮，商品資訊與購買按鈕會出現在這裡。', {
                 fontSize: '15px',
                 fontFamily: 'Arial, sans-serif',
                 fontStyle: 'bold',
@@ -9479,24 +9844,23 @@ this.events.on('action_B', () => {
 
         this.soloRocketRabbitShopHitAreas.leave = { x: leaveX, y: leaveY, w: 270, h: 66 };
 
-        this.soloRocketRabbitShopMessage = this.add.text(rect.x + 14, rect.y + rect.h - 18,
-            this.soloRocketSelectedMoonShopItemName ? '玉兔：看好了就按購買，別亂花旅費喔。' : '玉兔：點商品給我看看，我幫你介紹。', {
-            fontSize: '11px',
-            fontFamily: 'Arial, sans-serif',
-            color: '#fff3b0',
-            stroke: '#000000',
-            strokeThickness: 3,
-            align: 'left',
-            wordWrap: { width: rect.w - 28 }
-        }).setOrigin(0, 0.5);
-
-        objects.push(leaveBg, leaveText, this.soloRocketRabbitShopMessage);
+        objects.push(leaveBg, leaveText);
         shop.add(objects);
+
+        const defaultSpeech = this.soloRocketSelectedMoonShopItemName
+            ? '玉兔：看好了就按購買，別亂花旅費喔。'
+            : '玉兔：遠道而來的洋蔥，看看月球限定伴手禮吧。';
+        if (this.createSoloRocketRabbitSpeechBubble) {
+            this.createSoloRocketRabbitSpeechBubble(defaultSpeech);
+        }
+
+        if (this.startSoloRocketRabbitShopMeteors) {
+            this.startSoloRocketRabbitShopMeteors();
+        }
 
         this.soloRocketRabbitShopInputHandler = this.handleSoloRocketRabbitShopPointer;
         this.input.on('pointerdown', this.soloRocketRabbitShopInputHandler, this);
     }
-
     getSoloRocketShopItemByName(itemName) {
         if (!itemName) return null;
         return this.getSoloRocketMoonShopItems().find(it => it.name === itemName) || null;
@@ -9538,8 +9902,10 @@ this.events.on('action_B', () => {
         if (!item) return;
         this.soloRocketSelectedMoonShopItemName = item.name;
         this.renderSoloRocketRabbitShop();
-        if (this.soloRocketRabbitShopMessage) {
-            this.soloRocketRabbitShopMessage.setText('玉兔：這項商品不錯吧？想買就按上面的購買。');
+        if (this.typeSoloRocketRabbitSpeech) {
+            this.typeSoloRocketRabbitSpeech('玉兔：這項商品不錯吧？想買就按購買。', 24);
+        } else if (this.soloRocketRabbitShopMessage) {
+            this.soloRocketRabbitShopMessage.setText('玉兔：這項商品不錯吧？想買就按購買。');
         }
         this.bounceSoloRocketRabbitShopkeeper();
     }
@@ -9572,14 +9938,22 @@ this.events.on('action_B', () => {
 
         if (item.limitOne && currentQty >= 1) {
             this.renderSoloRocketRabbitShop();
-            if (this.soloRocketRabbitShopMessage) this.soloRocketRabbitShopMessage.setText('玉兔：月光碎片本趟只能帶一片喔。');
+            if (this.typeSoloRocketRabbitSpeech) {
+                this.typeSoloRocketRabbitSpeech('玉兔：月光碎片本趟只能帶一片喔。', 24);
+            } else if (this.soloRocketRabbitShopMessage) {
+                this.soloRocketRabbitShopMessage.setText('玉兔：月光碎片本趟只能帶一片喔。');
+            }
             this.bounceSoloRocketRabbitShopkeeper();
             return;
         }
 
         if ((this.soloRocketMoonBudgetLeft || 0) < item.price) {
             this.renderSoloRocketRabbitShop();
-            if (this.soloRocketRabbitShopMessage) this.soloRocketRabbitShopMessage.setText('玉兔：你的月球旅費不夠喔，先不要裝闊。');
+            if (this.typeSoloRocketRabbitSpeech) {
+                this.typeSoloRocketRabbitSpeech('玉兔：你的月球旅費不夠喔，先不要裝闊。', 24);
+            } else if (this.soloRocketRabbitShopMessage) {
+                this.soloRocketRabbitShopMessage.setText('玉兔：你的月球旅費不夠喔，先不要裝闊。');
+            }
             this.bounceSoloRocketRabbitShopkeeper();
             return;
         }
@@ -9598,9 +9972,21 @@ this.events.on('action_B', () => {
             if (this.cache.audio.exists('shop-check-buying')) this.sound.play('shop-check-buying');
         } catch (_) {}
 
+        try {
+            if (this.cache.audio.exists('solo-rocket-rabbit-shop-buy')) {
+                this.sound.play('solo-rocket-rabbit-shop-buy');
+            } else {
+                console.warn('[玉兔伴手禮店] 找不到 solo-rocket-rabbit-shop-buy.mp3，已略過購買音效。');
+            }
+        } catch (err) {
+            console.warn('[玉兔伴手禮店] 購買音效播放失敗，已略過：', err);
+        }
+
         this.renderSoloRocketRabbitShop();
 
-        if (this.soloRocketRabbitShopMessage) {
+        if (this.typeSoloRocketRabbitSpeech) {
+            this.typeSoloRocketRabbitSpeech(lines[item.name] || '玉兔：謝謝惠顧。', 24);
+        } else if (this.soloRocketRabbitShopMessage) {
             this.soloRocketRabbitShopMessage.setText(lines[item.name] || '玉兔：謝謝惠顧。');
         }
         this.bounceSoloRocketRabbitShopkeeper();
@@ -9683,11 +10069,12 @@ this.events.on('action_B', () => {
         this.soloRocketResultContainer = result;
 
         const panelW = Math.min(rect.w - 34, 410);
-        const panelH = 430;
+        const maxPanelH = Math.max(360, rect.h - 36);
+        const panelH = Math.min(520, maxPanelH);
         const px = rect.centerX - panelW / 2;
-        const py = rect.centerY - panelH / 2;
-        const btnY = py + panelH - 58;
-        const returnBtnHit = { x: rect.centerX, y: btnY, w: 250, h: 92 };
+        const py = rect.y + Math.max(18, (rect.h - panelH) / 2);
+        const btnY = py + panelH - 46;
+        const returnBtnHit = { x: rect.centerX, y: btnY, w: 260, h: 86 };
 
         let didReturn = false;
         const goHome = (pointer, localX, localY, event) => {
@@ -9751,14 +10138,14 @@ this.events.on('action_B', () => {
             purchaseLines.length ? purchaseLines.join('\n') : '本趟沒有購買伴手禮，月球旅費全數匯入。'
         ];
 
-        const body = this.add.text(rect.centerX, py + 88, bodyLines.join('\n'), {
-            fontSize: '17px',
+        const body = this.add.text(rect.centerX, py + 84, bodyLines.join('\n'), {
+            fontSize: '16px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#eaffff',
             stroke: '#000000',
             strokeThickness: 4,
-            lineSpacing: 8,
+            lineSpacing: 6,
             align: 'left',
             wordWrap: { width: panelW - 42 }
         }).setOrigin(0.5, 0);
@@ -9774,7 +10161,7 @@ this.events.on('action_B', () => {
             color: '#000000'
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-        const returnHit = this.add.zone(rect.centerX, btnY, 230, 76)
+        const returnHit = this.add.zone(rect.centerX, btnY, 250, 82)
             .setInteractive({ useHandCursor: true });
 
         [btnBg, btnText, returnHit].forEach(obj => {
@@ -9826,6 +10213,14 @@ this.events.on('action_B', () => {
         try {
             if (this.soloRocketLifeFloatTween) this.soloRocketLifeFloatTween.remove();
         } catch (_) {}
+        try {
+            (this.soloRocketLifeHealFxObjects || []).forEach(function(obj) {
+                try {
+                    if (obj && obj.destroy) obj.destroy();
+                } catch (_) {}
+            });
+        } catch (_) {}
+        this.soloRocketLifeHealFxObjects = [];
 
         safeDestroySoloRocketObject(this.soloRocketThrusterFx);
         safeDestroySoloRocketObject(this.soloRocketWhiteFade);
@@ -9855,6 +10250,7 @@ this.events.on('action_B', () => {
         this.soloRocketLifeBreathTween = null;
         this.soloRocketLifePulseTween = null;
         this.soloRocketLifeFloatTween = null;
+        this.soloRocketLifeHealFxObjects = [];
         this.soloRocketThrusterFx = null;
         this.soloRocketWhiteFade = null;
         this.soloRocketSafeRect = null;
@@ -9880,6 +10276,8 @@ this.events.on('action_B', () => {
         this.soloRocketAsteroidSpawnActive = false;
         this.soloRocketAsteroidSpawnStopped = true;
         this.soloRocketAsteroidNextSpawnAt = 0;
+        this.soloRocketAsteroidExtraBudget = 0;
+        this.soloRocketAsteroidExtraNextAt = 0;
         this.soloRocketStartTime = 0;
         this.soloRocketGameplayStarted = false;
         this.soloRocketTutorialActive = false;
