@@ -9473,6 +9473,47 @@ this.events.on('action_B', () => {
             console.warn('[玉兔伴手禮店] BGM 播放失敗，已略過：', err);
         }
     }
+
+    stopSoloRocketRabbitShopBgm() {
+        try {
+            if (this.soloRocketRabbitShopBgm) {
+                try { this.soloRocketRabbitShopBgm.stop(); } catch (_) {}
+                try {
+                    if (this.soloRocketRabbitShopBgm.destroy) {
+                        this.soloRocketRabbitShopBgm.destroy();
+                    }
+                } catch (_) {}
+            }
+
+            if (this.sound) {
+                try {
+                    this.sound.getAll('solo-rocket-rabbit-shop-bgm').forEach(function(snd) {
+                        try { snd.stop(); } catch (_) {}
+                        try {
+                            if (snd.destroy) snd.destroy();
+                        } catch (_) {}
+                    });
+                } catch (_) {}
+
+                try {
+                    if (this.sound.stopByKey) {
+                        this.sound.stopByKey('solo-rocket-rabbit-shop-bgm');
+                    }
+                } catch (_) {}
+
+                try {
+                    if (this.sound.removeByKey) {
+                        this.sound.removeByKey('solo-rocket-rabbit-shop-bgm');
+                    }
+                } catch (_) {}
+            }
+        } catch (err) {
+            console.warn('[玉兔伴手禮店] 停止 BGM 失敗，已略過：', err);
+        }
+
+        this.soloRocketRabbitShopBgm = null;
+    }
+
     startSoloRocketRabbitShopMeteors() {
         if (!this.soloRocketRabbitShopContainer || !this.soloRocketRabbitShopMeteorLayer) return;
 
