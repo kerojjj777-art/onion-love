@@ -18,7 +18,7 @@ window.GameLogic = {
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0, inventoryOrder: [], princeBond: 0, princePetCountToday: 0, princeLastPetDate: "", princeRewardsClaimed: {}, princeFeedCountToday: 0, princeLastFeedDate: "" },
     cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, placingFurnitureKey: null, 
     phaserGame: null, phaserLoaded: false, pendingScene: null, db: db,
-    armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false
+    armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false, moonBunBuffUntil: 0, moonBunSweepPressCount: 0, moonBunBuffEndNotified: false
 };
 
 let cafeUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, profileViewingUid = null;
@@ -1192,9 +1192,122 @@ window.triggerPoopSplatter = function() {
 };
 
 window.currentPurchaseItem = null; window.currentPurchasePrice = 0; window.currentPurchaseQty = 1;
+
+// 補丁 6-2：月球商品共用工具與使用入口
+window.isMoonBunBuffActive = function() {
+    return Date.now() < Number(window.GameLogic.moonBunBuffUntil || 0);
+};
+
+window.formatMoonBunBuffTime = function(ms) {
+    const total = Math.max(0, Math.ceil(ms / 1000));
+    const m = Math.floor(total / 60).toString().padStart(2, '0');
+    const s = (total % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+};
+
+window.getMainSceneSafe = function() {
+    if (!window.GameLogic.phaserGame) return null;
+    try {
+        return window.GameLogic.phaserGame.scene.getScene('MainScene');
+    } catch (err) {
+        return null;
+    }
+};
+
+window.playOptionalSFX = function(key) {
+    const ms = window.getMainSceneSafe();
+    if (!ms || window.GameLogic.muteSFX) return;
+    if (!ms.cache || !ms.cache.audio || !ms.cache.audio.exists(key)) return;
+    window.playSFX(ms, key);
+};
+
+window.consumeMoonInventoryItem = function(itemName) {
+    if (!window.GameLogic.currentUser) return false;
+    const p = window.GameLogic.myProfile || {};
+    const inv = p.inventory || {};
+    if (!inv[itemName] || inv[itemName] <= 0) {
+        sendBubble(`${itemName}庫存不足！`);
+        return false;
+    }
+
+    inv[itemName] = Math.max(0, Number(inv[itemName] || 0) - 1);
+    p.inventory = inv;
+    window.GameLogic.myProfile = p;
+
+    update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventory: inv })
+        .catch(err => console.warn(`[月球商品] 扣除 ${itemName} 庫存失敗：`, err));
+
+    return true;
+};
+
+window.useMoonShard = function() {
+    sendBubble("月光碎片是玉兔兌換用的代幣，現在還不能使用。");
+};
+
+window.useMoonBun = function() {
+    if (window.GameLogic.currentScene !== 'cafe') {
+        sendBubble("月光饅頭要在洋蔥大廳吃才有感覺。");
+        return;
+    }
+
+    if (window.isMoonBunBuffActive()) {
+        sendBubble("月光饅頭的效果還在喔，不要貪吃。");
+        return;
+    }
+
+    if (!window.consumeMoonInventoryItem('月光饅頭')) return;
+
+    window.GameLogic.moonBunBuffUntil = Date.now() + 4 * 60 * 1000;
+    window.GameLogic.moonBunSweepPressCount = 0;
+    window.GameLogic.moonBunBuffEndNotified = false;
+
+    window.playOptionalSFX('moon-bun-use');
+
+    const ms = window.getMainSceneSafe();
+    if (ms) {
+        if (ms.showMoonBunUseFx) ms.showMoonBunUseFx();
+        if (ms.createOrUpdateMoonBunBuffUi) ms.createOrUpdateMoonBunBuffUi();
+    }
+
+    const magicModal = document.getElementById('magic-modal');
+    if (magicModal) magicModal.style.display = 'none';
+
+    sendBubble("月光饅頭生效！接下來 4 分鐘，掃洋蔥皮只要按兩下 A。");
+};
+
+window.useMoonStaff = function() {
+    if (window.GameLogic.currentScene !== 'cafe') {
+        sendBubble("月光法杖要在洋蔥大廳揮才夠閃。");
+        return;
+    }
+
+    if (!window.consumeMoonInventoryItem('月光法杖')) return;
+
+    window.playOptionalSFX('moon-staff-use');
+
+    const ms = window.getMainSceneSafe();
+    if (ms && ms.playMoonStaffBlessing) ms.playMoonStaffBlessing();
+
+    const magicModal = document.getElementById('magic-modal');
+    if (magicModal) magicModal.style.display = 'none';
+
+    sendBubble("你揮舞月光法杖，灑下月球祝福！");
+};
+
+window.useMoonItem = function(itemName) {
+    if (itemName === '月光饅頭') return window.useMoonBun();
+    if (itemName === '月光法杖') return window.useMoonStaff();
+    if (itemName === '月光碎片') return window.useMoonShard();
+};
+
 // 修正死碼與邏輯漏洞：將「蔥友機」加入裝備判斷，避免被當成普通消耗品吃掉。同步移除耗能的動態 import。
 window.useItem = function(itemName) {
     let inv = window.GameLogic.myProfile.inventory || {};
+
+    if (itemName === '月光碎片' || itemName === '月光法杖' || itemName === '月光饅頭') {
+        window.useMoonItem(itemName);
+        return;
+    }
 
     if (inv[itemName] && inv[itemName] > 0) {
         if (itemName === '水球' || itemName === '煙火' || itemName === '蔥友機' || itemName === '喵罐頭') {
@@ -1237,21 +1350,51 @@ window.openMagicModal = function() {
         { name: '蔥友機', icon: '<img src="playroom-onion-friend-plane.png" style="width:40px; height:40px; object-fit:contain;">', desc: '隨時發動好(ㄓㄢˋ)友(ㄉㄡˋ)邀請，按B捏緊再按A投射，被射中的好友會收到你的訊息。' },
         { name: '派對喇叭', icon: '<img src="tools-onion-party-trumpet.png" style="width:40px; height:40px; object-fit:contain;">', desc: '據說是埋在深山裡的洋蔥蔘淬煉製成的器具，吹奏他會自動調頻與洋蔥人們的腦波連結，「是時候開戰了」。按B緊握按A向全宇宙的洋蔥人發起械鬥號召。' },
         { name: '喵罐頭', icon: '<img src="shop-pet-cat-can.png" style="width:40px; height:40px; object-fit:contain;">', desc: '這世界上只有喵星人能撫慰洋蔥人的心。按B打開罐罐，靠近王子麵後按A餵食。每日前三次餵食可提升王子麵羈絆，之後王子麵會表示：夠了。' },
-        { name: '月光碎片', icon: '<img src="solo-rocket-item-moon-shard.png" style="width:40px; height:40px; object-fit:contain;">', desc: '月亮掉下來的一小角。這是之後兌換物品用的代幣，目前只能收藏與累積。\n不會出現在長按B法寶選單，也不能在場景中使用。' },
-        { name: '月光法杖', icon: '<img src="solo-rocket-item-moon-staff.png" style="width:40px; height:40px; object-fit:contain;">', desc: '月球限定的小魔杖。未來可播放月光祝福動畫，本次只做購買與入庫，暫不開放使用效果。' },
-        { name: '月光饅頭', icon: '<img src="solo-rocket-item-moon-bun.png" style="width:40px; height:40px; object-fit:contain;">', desc: '玉兔手作的月球饅頭。未來可做掃地增益，本次只做購買與入庫，暫不啟用效果。' }
+        { name: '月光碎片', icon: '<img src="solo-rocket-item-moon-shard.png" style="width:40px; height:40px; object-fit:contain;">', desc: '月亮掉下來的一小角。這是之後兌換物品用的代幣，目前只能收藏與累積。\n不會出現在長按B法寶選單，也不能在場景中使用。', action: 'token' },
+        { name: '月光法杖', icon: '<img src="solo-rocket-item-moon-staff.png" style="width:40px; height:40px; object-fit:contain;">', desc: '月球限定的小魔杖。可在洋蔥大廳揮舞，播放 15 秒月光祝福動畫。', action: 'use' },
+        { name: '月光饅頭', icon: '<img src="solo-rocket-item-moon-bun.png" style="width:40px; height:40px; object-fit:contain;">', desc: '玉兔手作的月球饅頭。可在洋蔥大廳使用，4 分鐘內掃洋蔥皮只需按兩下 A。效果期間不可疊加。', action: 'use' }
     ];
+
+    const showMagicDesc = (m) => {
+        let descSafe = m.desc.replace(/\n/g, '<br>');
+        let qty = inv[m.name] || 0;
+        let btnHtml = '';
+
+        if (m.action === 'use') {
+            const disabled = qty <= 0 ? 'disabled' : '';
+            const opacity = qty <= 0 ? 'opacity:0.45;' : '';
+            btnHtml = `<br><br><button class="btn-primary" ${disabled} style="padding:8px 14px; border-radius:8px; font-weight:bold; ${opacity}" onclick="event.stopPropagation(); window.useMoonItem('${m.name}')">使用 ${m.name}</button>`;
+        } else if (m.action === 'token') {
+            btnHtml = `<br><br><button class="btn-secondary" style="padding:8px 14px; border-radius:8px; font-weight:bold;" onclick="event.stopPropagation(); window.useMoonItem('${m.name}')">查看用途</button>`;
+        }
+
+        const descEl = document.getElementById('magic-desc');
+        if (descEl) {
+            descEl.innerHTML = `<strong style="color:#ffcc00; font-size:16px;">${m.name}</strong><br><span style="color:#b3e5ff;">持有：x${qty}</span><br><br>${descSafe}${btnHtml}`;
+        }
+    };
+
+    window.showMagicItemDesc = (idx) => {
+        const m = magics[idx];
+        if (m) showMagicDesc(m);
+    };
+
     for(let i = 0; i < 16; i++) {
         if (i < magics.length) {
-            let m = magics[i]; let qty = inv[m.name] || 0; let descSafe = m.desc.replace(/\n/g, '<br>');
-            html += `<div class="magic-slot" onclick="document.getElementById('magic-desc').innerHTML = '<strong style=\\'color:#ffcc00; font-size:16px;\\'>${m.name}</strong><br><br>${descSafe}'">
+            let m = magics[i];
+            let qty = inv[m.name] || 0;
+            html += `<div class="magic-slot" onclick="window.showMagicItemDesc(${i})">
                         ${m.icon}<div class="magic-qty">x${qty}</div>
                      </div>`;
-        } else { html += `<div class="magic-slot"></div>`; }
+        } else {
+            html += `<div class="magic-slot"></div>`;
+        }
     }
-    container.innerHTML = html; document.getElementById('magic-desc').innerText = "點擊法寶查看說明..."; document.getElementById('magic-modal').style.display = 'block';
-};
 
+    container.innerHTML = html;
+    document.getElementById('magic-desc').innerText = "點擊法寶查看說明...";
+    document.getElementById('magic-modal').style.display = 'block';
+};
 // 【新增】開發者一鍵測試：在交誼廳中央直接生成米米
 window.devSummonMimi = function() {
     if (window.GameLogic.currentScene !== 'cafe') {
@@ -1992,6 +2135,9 @@ class BootScene extends Phaser.Scene {
         this.load.audio('solo-rocket-rabbit-shop-bgm', 'solo-rocket-rabbit-shop-bgm.mp3');
         this.load.audio('solo-rocket-rabbit-shop-finish', 'solo-rocket-rabbit-shop-finish.mp3');
         this.load.audio('solo-rocket-rabbit-shop-buy', 'solo-rocket-rabbit-shop-buy.mp3');
+        // 補丁 6-2：月球商品使用效果音效。若檔案不存在，播放前會檢查 cache，不讓遊戲黑頻。
+        this.load.audio('moon-bun-use', 'onion-take-a-bite.mp3');
+        this.load.audio('moon-staff-use', 'moon-staff-use.mp3');
 
         // 在記憶體中畫一個簡單的白色發光點紋理給粒子使用
         let grd = this.make.graphics({x: 0, y: 0, add: false});
@@ -2620,6 +2766,7 @@ class MainScene extends Phaser.Scene {
 
     if (this.localPlayer && this.localPlayer.isSweeping) { 
         this.localPlayer.isSweeping = false; 
+        window.GameLogic.moonBunSweepPressCount = 0;
         this.qteContainer.setVisible(false); 
         if (this.sound.get('brooming1')) this.sound.stopByKey('brooming1'); 
 
@@ -3279,6 +3426,23 @@ this.events.on('action_A_short', () => {
                     else this.sound.add('brooming1', { volume: vol }).play();
                 }
 
+                const moonBunActive = this.isCafe && this.isMoonBunBuffActive && this.isMoonBunBuffActive();
+                if (moonBunActive) {
+                    window.GameLogic.moonBunSweepPressCount = Math.min(2, Number(window.GameLogic.moonBunSweepPressCount || 0) + 1);
+                    this.qteTotalClicks = 2;
+                    this.qteProgress = Math.min(100, window.GameLogic.moonBunSweepPressCount * 50);
+                    this.updateQTEBar(this.qteProgress);
+                    if (this.showMoonBunSweepBoostFx) this.showMoonBunSweepBoostFx(this.closestTrash, window.GameLogic.moonBunSweepPressCount);
+
+                    if (window.GameLogic.moonBunSweepPressCount >= 2) {
+                        this.qteProgress = 100;
+                        this.updateQTEBar(this.qteProgress);
+                        window.GameLogic.moonBunSweepPressCount = 0;
+                        this.finishSweeping(true);
+                    }
+                    return;
+                }
+
                 this.qteProgress += (100 / this.qteTotalClicks);
                 if (this.qteProgress >= 100) {
                     this.qteProgress = 100;
@@ -3640,7 +3804,8 @@ this.events.on('action_B', () => {
             if (!this.localPlayer.isSweeping && this.closestTrash) { 
     this.localPlayer.isSweeping = true; 
     this.qteProgress = 0; 
-    this.qteTotalClicks = Phaser.Math.Between(5, 10); 
+    window.GameLogic.moonBunSweepPressCount = 0;
+    this.qteTotalClicks = (this.isCafe && this.isMoonBunBuffActive && this.isMoonBunBuffActive()) ? 2 : Phaser.Math.Between(5, 10); 
     this.qteContainer.setVisible(true); 
 
     if (this.isCafe && window.GameLogic.currentUser) {
@@ -3952,6 +4117,8 @@ this.events.on('action_B', () => {
         document.addEventListener('visibilitychange', this.handleVisibilityMimiWalk);
 
         this.events.once('shutdown', () => {
+            if (this.clearMoonBunBuffFx) this.clearMoonBunBuffFx(false);
+            if (this.clearMoonStaffBlessing) this.clearMoonStaffBlessing();
             this.closeSoloChickenMenu();
             this.scale.off('resize', this.updateCameraBounds, this); // 確保離開場景時註銷視窗尺寸監聽，防止記憶體溢出卡頓
             if (this.leaderboardListener) this.leaderboardListener(); 
@@ -4002,6 +4169,8 @@ this.events.on('action_B', () => {
 
         this.events.once('destroy', () => {
             try {
+                if (this.clearMoonBunBuffFx) this.clearMoonBunBuffFx(false);
+                if (this.clearMoonStaffBlessing) this.clearMoonStaffBlessing();
                 if (this.clearSoloRocketCruise) this.clearSoloRocketCruise(true);
             } catch (err) {
                 console.warn('[火箭巡航] destroy 階段清理失敗，已略過：', err);
@@ -4033,6 +4202,263 @@ this.events.on('action_B', () => {
         let allColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xff8800]; let mixColors = [Phaser.Utils.Array.GetRandom(allColors), Phaser.Utils.Array.GetRandom(allColors), Phaser.Utils.Array.GetRandom(allColors)];
         let particles = this.add.particles(x, y, 'fw-particle', { speed: { min: 100, max: 250 }, angle: { min: 0, max: 360 }, scale: { start: 1.5, end: 0 }, blendMode: 'ADD', tint: mixColors, lifespan: { min: 1000, max: 2000 }, gravityY: 100, quantity: 60 });
         particles.setDepth(200); particles.explode(); this.time.delayedCall(2000, () => particles.destroy());
+    }
+
+    // 補丁 6-2：月光饅頭 buff 與月光法杖祝福動畫
+    isMoonBunBuffActive() {
+        return window.isMoonBunBuffActive && window.isMoonBunBuffActive();
+    }
+
+    createOrUpdateMoonBunBuffUi() {
+        if (!this.isCafe || !this.isMoonBunBuffActive()) {
+            this.clearMoonBunBuffFx(false);
+            return;
+        }
+
+        if (!this.moonBunBuffUi) {
+            const bg = this.add.graphics();
+            bg.fillStyle(0x3b2a0a, 0.78).fillRoundedRect(0, 0, 238, 34, 12);
+            bg.lineStyle(2, 0xffe082, 0.95).strokeRoundedRect(0, 0, 238, 34, 12);
+
+            let icon;
+            if (this.textures.exists('solo-rocket-item-moon-bun')) {
+                icon = this.add.image(19, 17, 'solo-rocket-item-moon-bun').setDisplaySize(24, 24);
+            } else {
+                icon = this.add.text(19, 17, '☾', { fontSize: '20px', color: '#ffe082' }).setOrigin(0.5);
+            }
+
+            this.moonBunBuffUiText = this.add.text(38, 17, '', {
+                fontSize: '13px',
+                fontFamily: 'Georgia',
+                fontStyle: 'bold',
+                color: '#fff7c2'
+            }).setOrigin(0, 0.5);
+
+            this.moonBunBuffUi = this.add.container(14, 112, [bg, icon, this.moonBunBuffUiText])
+                .setScrollFactor(0)
+                .setDepth(1200);
+
+            if (this.minimap) this.minimap.ignore(this.moonBunBuffUi);
+        }
+
+        const remain = Number(window.GameLogic.moonBunBuffUntil || 0) - Date.now();
+        const timeText = window.formatMoonBunBuffTime ? window.formatMoonBunBuffTime(remain) : '';
+        if (this.moonBunBuffUiText) {
+            this.moonBunBuffUiText.setText(`月光饅頭｜掃地2下A｜${timeText}`);
+        }
+
+        if (this.moonBunBuffUi) {
+            const shouldBlink = remain <= 10000;
+            this.moonBunBuffUi.setAlpha(shouldBlink ? 0.72 + Math.sin(Date.now() / 110) * 0.22 : 1);
+        }
+    }
+
+    updateMoonBunBuffUi() {
+        if (!window.GameLogic.moonBunBuffUntil) {
+            this.clearMoonBunBuffFx(false);
+            return;
+        }
+
+        if (!this.isMoonBunBuffActive()) {
+            if (!window.GameLogic.moonBunBuffEndNotified) {
+                window.GameLogic.moonBunBuffEndNotified = true;
+                window.GameLogic.moonBunBuffUntil = 0;
+                window.GameLogic.moonBunSweepPressCount = 0;
+                sendBubble("月光饅頭的力量消退了，手又開始痠了。");
+            }
+            this.clearMoonBunBuffFx(false);
+            return;
+        }
+
+        if (this.isCafe) this.createOrUpdateMoonBunBuffUi();
+        else this.clearMoonBunBuffFx(false);
+    }
+
+    clearMoonBunBuffFx(clearTimer = false) {
+        if (this.moonBunBuffUi) {
+            this.moonBunBuffUi.destroy(true);
+            this.moonBunBuffUi = null;
+            this.moonBunBuffUiText = null;
+        }
+
+        if (this.moonBunBuffEmitter) {
+            this.moonBunBuffEmitter.destroy();
+            this.moonBunBuffEmitter = null;
+        }
+
+        if (clearTimer) {
+            window.GameLogic.moonBunBuffUntil = 0;
+            window.GameLogic.moonBunSweepPressCount = 0;
+            window.GameLogic.moonBunBuffEndNotified = false;
+        }
+    }
+
+    showMoonBunUseFx() {
+        if (!this.localPlayer || !this.localPlayer.sprite) return;
+        const x = this.localPlayer.sprite.x;
+        const y = this.localPlayer.sprite.y - 18;
+
+        const flash = this.add.circle(x, y, 28, 0xfff1a8, 0.55).setDepth(220).setBlendMode('ADD');
+        this.tweens.add({
+            targets: flash,
+            scale: 2.2,
+            alpha: 0,
+            duration: 650,
+            ease: 'Sine.easeOut',
+            onComplete: () => flash.destroy()
+        });
+
+        const p = this.add.particles(x, y, 'fw-particle', {
+            speed: { min: 40, max: 140 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 1.1, end: 0 },
+            tint: [0xfff59d, 0xffe082, 0xffffff],
+            blendMode: 'ADD',
+            lifespan: 750,
+            quantity: 28
+        }).setDepth(221);
+        p.explode();
+        this.time.delayedCall(900, () => { if (p) p.destroy(); });
+    }
+
+    showMoonBunSweepBoostFx(target, step = 1) {
+        const x = target && target.active ? target.x : (this.localPlayer ? this.localPlayer.sprite.x : 0);
+        const y = target && target.active ? target.y : (this.localPlayer ? this.localPlayer.sprite.y : 0);
+
+        const label = this.add.text(x, y - 38, step >= 2 ? '滿！' : '50%', {
+            fontSize: step >= 2 ? '22px' : '18px',
+            fontFamily: 'Georgia',
+            fontStyle: 'bold',
+            color: '#fff4a3',
+            stroke: '#5d3b00',
+            strokeThickness: 4
+        }).setOrigin(0.5).setDepth(360);
+
+        this.tweens.add({
+            targets: label,
+            y: label.y - 26,
+            alpha: 0,
+            scale: 1.22,
+            duration: 520,
+            onComplete: () => label.destroy()
+        });
+
+        const p = this.add.particles(x, y, 'fw-particle', {
+            speed: { min: 35, max: 115 },
+            angle: { min: 0, max: 360 },
+            scale: { start: step >= 2 ? 1.15 : 0.8, end: 0 },
+            tint: [0xfff59d, 0xffca28, 0xffffff],
+            blendMode: 'ADD',
+            lifespan: 520,
+            quantity: step >= 2 ? 24 : 12
+        }).setDepth(350);
+        p.explode();
+        this.time.delayedCall(650, () => { if (p) p.destroy(); });
+    }
+
+    playMoonStaffBlessing() {
+        if (!this.localPlayer || !this.localPlayer.sprite) return;
+
+        this.clearMoonStaffBlessing();
+
+        const cam = this.cameras.main;
+        const cx = cam.scrollX + cam.width / 2;
+        const cy = cam.scrollY + cam.height / 2;
+
+        const layer = this.add.container(0, 0).setDepth(980);
+        this.moonStaffBlessingLayer = layer;
+
+        const moon = this.add.circle(cx, cy - 150, 62, 0xfff4b5, 0.92)
+            .setBlendMode('ADD')
+            .setStrokeStyle(4, 0xffffff, 0.75);
+        const rabbit = this.add.text(cx, cy - 157, '🐇', {
+            fontSize: '42px',
+            color: '#111111'
+        }).setOrigin(0.5);
+
+        const title = this.add.text(cx, cy - 78, '月光祝福！', {
+            fontSize: '28px',
+            fontFamily: 'Georgia',
+            fontStyle: 'bold',
+            color: '#fff7c2',
+            stroke: '#4a2e00',
+            strokeThickness: 5
+        }).setOrigin(0.5);
+
+        layer.add([moon, rabbit, title]);
+
+        this.tweens.add({
+            targets: moon,
+            scale: 1.12,
+            alpha: 0.72,
+            duration: 900,
+            yoyo: true,
+            repeat: 15
+        });
+
+        this.tweens.add({
+            targets: rabbit,
+            x: cx + 34,
+            y: cy - 172,
+            duration: 520,
+            yoyo: true,
+            repeat: 28,
+            ease: 'Sine.easeInOut'
+        });
+
+        this.moonStaffBlessingEmitter = this.add.particles(this.localPlayer.sprite.x, this.localPlayer.sprite.y - 24, 'fw-particle', {
+            speed: { min: 24, max: 130 },
+            angle: { min: 210, max: 330 },
+            scale: { start: 1.05, end: 0 },
+            alpha: { start: 1, end: 0 },
+            tint: [0xffffff, 0xfff59d, 0xffd54f, 0xf8bbd0],
+            blendMode: 'ADD',
+            lifespan: { min: 900, max: 1700 },
+            quantity: 2,
+            frequency: 70
+        }).setDepth(979);
+        this.moonStaffBlessingEmitter.startFollow(this.localPlayer.sprite, 0, -24);
+
+        this.moonStaffRingEvent = this.time.addEvent({
+            delay: 760,
+            repeat: 18,
+            callback: () => {
+                if (!this.localPlayer || !this.localPlayer.sprite || !this.localPlayer.sprite.active) return;
+                const ring = this.add.circle(this.localPlayer.sprite.x, this.localPlayer.sprite.y + 8, 22)
+                    .setStrokeStyle(4, 0xfff59d, 0.7)
+                    .setDepth(978)
+                    .setBlendMode('ADD');
+                this.tweens.add({
+                    targets: ring,
+                    scale: 3.2,
+                    alpha: 0,
+                    duration: 900,
+                    ease: 'Sine.easeOut',
+                    onComplete: () => ring.destroy()
+                });
+            }
+        });
+
+        this.time.delayedCall(15000, () => {
+            this.clearMoonStaffBlessing();
+        });
+    }
+
+    clearMoonStaffBlessing() {
+        if (this.moonStaffRingEvent) {
+            this.moonStaffRingEvent.remove(false);
+            this.moonStaffRingEvent = null;
+        }
+
+        if (this.moonStaffBlessingEmitter) {
+            this.moonStaffBlessingEmitter.destroy();
+            this.moonStaffBlessingEmitter = null;
+        }
+
+        if (this.moonStaffBlessingLayer) {
+            this.moonStaffBlessingLayer.destroy(true);
+            this.moonStaffBlessingLayer = null;
+        }
     }
 
     openSoloChickenMenu() {
@@ -11979,6 +12405,7 @@ if (activeBubbleMsg) {
         this.localPlayer.isSweeping = false; 
         this.qteContainer.setVisible(false); 
         if (this.sound.get('brooming1')) this.sound.stopByKey('brooming1'); 
+        window.GameLogic.moonBunSweepPressCount = 0;
 
         if (this.isCafe && window.GameLogic.currentUser) {
             update(ref(window.GameLogic.db, `cafePlayers/${window.GameLogic.currentUser.uid}`), {
@@ -12339,6 +12766,7 @@ if (activeBubbleMsg) {
 
     update(time, delta) {
         if (!window.GameLogic.currentUser) return;
+        if (this.updateMoonBunBuffUi) this.updateMoonBunBuffUi(time);
         let vx = 0; let vy = 0; let speed = 180; const uiScene = this.scene.manager.getScene('UIScene'); let px = this.localPlayer.sprite.x; let py = this.localPlayer.sprite.y;
         let evData = window.GameLogic.shrineEventData; let isPurifying = (this.sceneName === 'shrine' && evData && evData.state === 'purifying');
 
@@ -12589,7 +13017,7 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
         
         } else if (this.localPlayer.isSweeping) {
             this.localPlayer.sprite.setVelocity(0, 0); this.localPlayer.sprite.play('clean', true); 
-            this.qteProgress -= (delta * 0.02); if (this.qteProgress < 0) this.qteProgress = 0; this.updateQTEBar(this.qteProgress);
+            if (!(this.isCafe && this.isMoonBunBuffActive && this.isMoonBunBuffActive())) this.qteProgress -= (delta * 0.02); if (this.qteProgress < 0) this.qteProgress = 0; this.updateQTEBar(this.qteProgress);
             if (this.closestTrash) this.qteContainer.setPosition(this.closestTrash.x, this.closestTrash.y + 40);
             this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
         } else if (this.localPlayer.isSleeping) {
