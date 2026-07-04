@@ -9607,22 +9607,8 @@ this.events.on('action_B', () => {
         this.soloRocketRabbitShopInputHandler = null;
         this.soloRocketSelectedMoonShopItemName = null;
     }
-                this.input.off('pointerdown', this.soloRocketRabbitShopInputHandler, this);
-            }
-        } catch (_) {}
-        try {
-            if (this.soloRocketRabbitShopContainer) this.soloRocketRabbitShopContainer.destroy(true);
-        } catch (_) {}
-        this.soloRocketRabbitShopContainer = null;
-        this.soloRocketRabbitShopBudgetText = null;
-        this.soloRocketRabbitShopMessage = null;
-        this.soloRocketRabbitShopKeeperObj = null;
-        this.soloRocketRabbitShopHitAreas = null;
-        this.soloRocketRabbitShopInputHandler = null;
-        this.soloRocketSelectedMoonShopItemName = null;
-    }
-
-        renderSoloRocketRabbitShop() {
+  
+    renderSoloRocketRabbitShop() {
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
         const selectedItem = this.getSoloRocketShopItemByName(this.soloRocketSelectedMoonShopItemName);
 
