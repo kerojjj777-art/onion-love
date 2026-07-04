@@ -2177,8 +2177,8 @@ class BootScene extends Phaser.Scene {
         // 補丁 6-2：月球商品使用效果音效。若檔案不存在，播放前會檢查 cache，不讓遊戲黑頻。
         this.load.audio('moon-bun-use', 'onion-take-a-bite.mp3');
         this.load.audio('moon-staff-use', 'moon-staff-use.mp3');
-        // 補丁 6-2 後續：月光法杖五隻跳舞兔子。缺圖時 playMoonStaffBlessing() 會自動用文字兔子 fallback。
-        this.load.image('moon-staff-dance-rabbit', 'solo-rocket-item-moon-staff-dance-rabbits.png');
+        // 補丁 6-2 後續：月光法杖五隻跳舞兔子。80px 橫排 spritesheet；缺圖時 playMoonStaffBlessing() 會自動用文字兔子 fallback。
+        this.load.spritesheet('moon-staff-dance-rabbit', 'solo-rocket-item-moon-staff-dance-rabbits.png', { frameWidth: 80, frameHeight: 80 });
 
         // 在記憶體中畫一個簡單的白色發光點紋理給粒子使用
         let grd = this.make.graphics({x: 0, y: 0, add: false});
@@ -4568,30 +4568,61 @@ this.events.on('action_B', () => {
             });
         });
 
-        // 五隻兔子：原地跳兩下後，順時針跳到下一個位置。
+        // 五隻兔子：改用 80px spritesheet；以施放玩家目前位置為中心持續移動。
         const rabbitContainers = [];
         const rabbitRadius = 96;
+        const rabbitAnimKey = 'moon-staff-dance-rabbit-hop';
+
+        const getMoonStaffCasterCenter = () => {
+            if (casterSprite && casterSprite.active) {
+                targetX = casterSprite.x;
+                targetY = casterSprite.y;
+            }
+            return { x: targetX, y: targetY };
+        };
+
+        const hasRabbitSheet = this.textures.exists('moon-staff-dance-rabbit');
+        if (hasRabbitSheet && !this.anims.exists(rabbitAnimKey)) {
+            try {
+                this.anims.create({
+                    key: rabbitAnimKey,
+                    frames: this.anims.generateFrameNumbers('moon-staff-dance-rabbit'),
+                    frameRate: 8,
+                    repeat: -1
+                });
+            } catch (err) {
+                console.warn('[月光法杖] 建立跳舞兔子 spritesheet 動畫失敗，將顯示第一格：', err);
+            }
+        }
+
         for (let i = 0; i < 5; i++) {
-            const angle = Phaser.Math.DegToRad(-90 + i * 72);
-            const rx = targetX + Math.cos(angle) * rabbitRadius;
-            const ry = targetY + Math.sin(angle) * rabbitRadius - 10;
-            const rc = this.add.container(rx, ry).setDepth(988).setAlpha(0.95);
-            rc.rabbitIndex = i;
+            const center = getMoonStaffCasterCenter();
+            const startDeg = -90 + i * 72;
+            const angle = Phaser.Math.DegToRad(startDeg);
+            const rc = this.add.container(
+                center.x + Math.cos(angle) * rabbitRadius,
+                center.y + Math.sin(angle) * rabbitRadius - 10
+            ).setDepth(988).setAlpha(0.95);
+
+            rc.orbitDeg = startDeg;
 
             let rabbit;
-            if (this.textures.exists('moon-staff-dance-rabbit')) {
-                rabbit = this.add.image(0, 0, 'moon-staff-dance-rabbit').setDisplaySize(80, 80);
+            if (hasRabbitSheet) {
+                rabbit = this.add.sprite(0, 0, 'moon-staff-dance-rabbit').setDisplaySize(80, 80);
+                if (this.anims.exists(rabbitAnimKey)) rabbit.play(rabbitAnimKey);
             } else {
                 rabbit = this.add.text(0, 0, '🐇', { fontSize: '46px' }).setOrigin(0.5);
             }
+
             rabbit.setOrigin(0.5);
             rc.add(rabbit);
             rabbitContainers.push(rc);
             this.moonStaffBlessingLooseObjects.push(rc);
 
+            // 額外保留「原地跳兩下」的視覺感；spritesheet 本身也會持續播放。
             this.moonStaffBlessingTweens.push(this.tweens.add({
                 targets: rabbit,
-                y: -18,
+                y: -14,
                 duration: 210,
                 yoyo: true,
                 repeat: -1,
@@ -4600,18 +4631,34 @@ this.events.on('action_B', () => {
             }));
         }
 
+        const updateMoonStaffRabbitPositions = () => {
+            const center = getMoonStaffCasterCenter();
+            rabbitContainers.forEach((rc) => {
+                if (!rc || !rc.active) return;
+                const angle = Phaser.Math.DegToRad(rc.orbitDeg || 0);
+                rc.setPosition(
+                    center.x + Math.cos(angle) * rabbitRadius,
+                    center.y + Math.sin(angle) * rabbitRadius - 10
+                );
+            });
+        };
+
+        this.moonStaffRabbitFollowEvent = this.time.addEvent({
+            delay: 50,
+            loop: true,
+            callback: updateMoonStaffRabbitPositions
+        });
+        this.moonStaffBlessingEvents.push(this.moonStaffRabbitFollowEvent);
+
         this.moonStaffRabbitMoveEvent = this.time.addEvent({
             delay: 920,
             repeat: 15,
             callback: () => {
                 rabbitContainers.forEach((rc) => {
                     if (!rc || !rc.active) return;
-                    rc.rabbitIndex = (rc.rabbitIndex + 1) % 5;
-                    const angle = Phaser.Math.DegToRad(-90 + rc.rabbitIndex * 72);
                     this.moonStaffBlessingTweens.push(this.tweens.add({
                         targets: rc,
-                        x: targetX + Math.cos(angle) * rabbitRadius,
-                        y: targetY + Math.sin(angle) * rabbitRadius - 10,
+                        orbitDeg: Number(rc.orbitDeg || 0) + 72,
                         duration: 420,
                         ease: 'Sine.easeInOut'
                     }));
@@ -4619,6 +4666,7 @@ this.events.on('action_B', () => {
             }
         });
         this.moonStaffBlessingEvents.push(this.moonStaffRabbitMoveEvent);
+        updateMoonStaffRabbitPositions();
 
         // 角色全身：爆竹式大面積金光噴灑。
         this.moonStaffBlessingEmitter = this.add.particles(targetX, targetY - 18, 'fw-particle', {
@@ -4778,6 +4826,11 @@ this.events.on('action_B', () => {
         if (this.moonStaffRabbitMoveEvent) {
             this.moonStaffRabbitMoveEvent.remove(false);
             this.moonStaffRabbitMoveEvent = null;
+        }
+
+        if (this.moonStaffRabbitFollowEvent) {
+            this.moonStaffRabbitFollowEvent.remove(false);
+            this.moonStaffRabbitFollowEvent = null;
         }
 
         if (Array.isArray(this.moonStaffBlessingEvents)) {
