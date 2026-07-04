@@ -9364,31 +9364,52 @@ this.events.on('action_B', () => {
     openSoloRocketRabbitShop() {
         this.destroySoloRocketResultOverlay();
         this.stopSoloRocketBgm();
-        this.playSoloRocketRabbitShopBgm();
         this.renderSoloRocketRabbitShop();
+
+        if (this.playSoloRocketRabbitShopBgm) {
+            this.playSoloRocketRabbitShopBgm();
+        }
+
+        if (this.time && this.time.delayedCall) {
+            this.time.delayedCall(160, function() {
+                if (this.soloRocketRabbitShopContainer && this.playSoloRocketRabbitShopBgm) {
+                    this.playSoloRocketRabbitShopBgm();
+                }
+            }, [], this);
+        }
     }
 
     playSoloRocketRabbitShopBgm() {
         try {
-            this.stopSoloRocketRabbitShopBgm();
+            if (!this.cache.audio.exists('solo-rocket-rabbit-shop-bgm')) {
+                console.warn('[玉兔伴手禮店] 找不到 solo-rocket-rabbit-shop-bgm.mp3，請確認檔案已上傳且檔名大小寫完全一致。');
+                if (this.soloRocketRabbitShopMessage) {
+                    this.soloRocketRabbitShopMessage.setText('玉兔：我找不到商店音樂檔，請確認 solo-rocket-rabbit-shop-bgm.mp3 有上傳。');
+                }
+                return;
+            }
+
             this.stopSoloRocketBgm();
 
             if (this.stopLobbyBgmForSoloRocket) {
                 this.stopLobbyBgmForSoloRocket();
             }
 
-            if (!this.cache.audio.exists('solo-rocket-rabbit-shop-bgm')) {
-                console.warn('[玉兔伴手禮店] 找不到 solo-rocket-rabbit-shop-bgm.mp3，已略過商店音樂。');
-                return;
-            }
-
             const volControl = document.getElementById('bgm-volume');
             let vol = volControl ? Number(volControl.value || 100) / 100 : 0.8;
             if (!Number.isFinite(vol)) vol = 0.8;
-            vol = Phaser.Math.Clamp(vol, 0, 1);
+            vol = Phaser.Math.Clamp(vol, 0.05, 1);
 
-            const playShopBgmNow = function() {
+            const playNow = function() {
                 try {
+                    if (!this.soloRocketRabbitShopContainer) return;
+
+                    const current = this.soloRocketRabbitShopBgm;
+                    if (current && current.isPlaying) {
+                        current.setVolume(vol);
+                        return;
+                    }
+
                     this.sound.getAll('solo-rocket-rabbit-shop-bgm').forEach(function(snd) {
                         try {
                             snd.stop();
@@ -9402,33 +9423,52 @@ this.events.on('action_B', () => {
                     });
 
                     this.soloRocketRabbitShopBgm.play();
+
+                    if (this.time && this.time.delayedCall) {
+                        this.time.delayedCall(280, function() {
+                            if (
+                                this.soloRocketRabbitShopContainer &&
+                                this.soloRocketRabbitShopBgm &&
+                                !this.soloRocketRabbitShopBgm.isPlaying
+                            ) {
+                                try {
+                                    this.soloRocketRabbitShopBgm.play();
+                                } catch (err) {
+                                    console.warn('[玉兔伴手禮店] BGM 第二次播放仍失敗：', err);
+                                }
+                            }
+                        }, [], this);
+                    }
                 } catch (err) {
                     console.warn('[玉兔伴手禮店] BGM 實際播放失敗，已略過：', err);
                 }
             };
 
+            if (this.sound && this.sound.context && this.sound.context.state === 'suspended' && this.sound.context.resume) {
+                this.sound.context.resume().then(function() {
+                    playNow.call(this);
+                }.bind(this)).catch(function(err) {
+                    console.warn('[玉兔伴手禮店] 音訊環境喚醒失敗，改為直接嘗試播放：', err);
+                    playNow.call(this);
+                }.bind(this));
+                playNow.call(this);
+                return;
+            }
+
             if (this.sound && this.sound.locked) {
                 this.sound.once('unlocked', function() {
-                    playShopBgmNow.call(this);
+                    playNow.call(this);
                 }, this);
 
                 if (this.sound.unlock) {
                     try { this.sound.unlock(); } catch (_) {}
                 }
+
+                playNow.call(this);
                 return;
             }
 
-            if (this.sound && this.sound.context && this.sound.context.state === 'suspended' && this.sound.context.resume) {
-                this.sound.context.resume().then(function() {
-                    playShopBgmNow.call(this);
-                }.bind(this)).catch(function(err) {
-                    console.warn('[玉兔伴手禮店] 音訊環境喚醒失敗，改為直接嘗試播放：', err);
-                    playShopBgmNow.call(this);
-                }.bind(this));
-                return;
-            }
-
-            playShopBgmNow.call(this);
+            playNow.call(this);
         } catch (err) {
             console.warn('[玉兔伴手禮店] BGM 播放失敗，已略過：', err);
         }
@@ -9480,47 +9520,117 @@ this.events.on('action_B', () => {
         if (!layer || !this.soloRocketRabbitShopContainer) return;
 
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
-        const startX = Phaser.Math.Between(Math.floor(rect.x + 34), Math.floor(rect.x + rect.w - 34));
-        const startY = Phaser.Math.Between(Math.floor(rect.y + 80), Math.floor(rect.y + rect.h * 0.46));
-        const landX = Phaser.Math.Clamp(startX + Phaser.Math.Between(-42, 42), rect.x + 20, rect.x + rect.w - 20);
-        const landY = Phaser.Math.Between(Math.floor(rect.y + rect.h * 0.58), Math.floor(rect.y + rect.h - 105));
+        const startX = Phaser.Math.Between(Math.floor(rect.x + 42), Math.floor(rect.x + rect.w - 42));
+        const startY = Phaser.Math.Between(Math.floor(rect.y + 72), Math.floor(rect.y + rect.h * 0.35));
+        const landX = Phaser.Math.Clamp(startX + Phaser.Math.Between(-54, 54), rect.x + 28, rect.x + rect.w - 28);
+        const landY = Phaser.Math.Between(Math.floor(rect.y + rect.h * 0.54), Math.floor(rect.y + rect.h - 118));
 
-        const meteor = this.add.graphics().setScrollFactor(0);
-        meteor.lineStyle(6, 0xffd36a, 0.96);
-        meteor.lineBetween(-30, -15, 24, 12);
-        meteor.lineStyle(3, 0xffffff, 0.88);
-        meteor.lineBetween(-18, -9, 20, 10);
-        meteor.fillStyle(0xfff2a8, 1);
-        meteor.fillCircle(24, 12, 5);
-        meteor.setBlendMode(Phaser.BlendModes.ADD);
-        meteor.setPosition(startX, startY);
+        const trail = this.add.graphics().setScrollFactor(0);
+        trail.setBlendMode(Phaser.BlendModes.ADD);
 
-        layer.add(meteor);
+        const head = this.add.circle(startX, startY, 5, 0xfff2a8, 1)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        const halo = this.add.circle(startX, startY, 11, 0xffd36a, 0.22)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        layer.add([trail, halo, head]);
 
         this.soloRocketRabbitShopMeteorObjects = this.soloRocketRabbitShopMeteorObjects || [];
-        this.soloRocketRabbitShopMeteorObjects.push(meteor);
+        this.soloRocketRabbitShopMeteorObjects.push(trail);
+        this.soloRocketRabbitShopMeteorObjects.push(halo);
+        this.soloRocketRabbitShopMeteorObjects.push(head);
+
+        const motion = { t: 0 };
 
         this.tweens.add({
-            targets: meteor,
-            x: landX,
-            y: landY,
-            duration: Phaser.Math.Between(520, 820),
-            ease: 'Quad.easeIn',
+            targets: motion,
+            t: 1,
+            duration: Phaser.Math.Between(360, 560),
+            ease: 'Cubic.easeIn',
+            onUpdate: function() {
+                if (!this.soloRocketRabbitShopContainer || !layer || !head || !head.active) return;
+
+                const t = motion.t;
+                const x = startX + (landX - startX) * t;
+                const y = startY + (landY - startY) * t;
+
+                head.setPosition(x, y);
+                halo.setPosition(x, y);
+
+                trail.clear();
+
+                const tailT = Math.max(0, t - 0.28);
+                const tailX = startX + (landX - startX) * tailT;
+                const tailY = startY + (landY - startY) * tailT;
+
+                trail.lineStyle(4, 0xffd36a, 0.82);
+                trail.lineBetween(tailX, tailY, x, y);
+
+                trail.lineStyle(2, 0xffffff, 0.78);
+                trail.lineBetween(tailX + 2, tailY + 1, x, y);
+            },
             onComplete: function() {
-                if (!meteor || !meteor.active) return;
+                if (!this.soloRocketRabbitShopContainer || !layer) {
+                    try { trail.destroy(); } catch (_) {}
+                    try { halo.destroy(); } catch (_) {}
+                    try { head.destroy(); } catch (_) {}
+                    return;
+                }
+
+                trail.clear();
+
+                trail.lineStyle(4, 0xffd36a, 0.72);
+                trail.lineBetween(startX + (landX - startX) * 0.74, startY + (landY - startY) * 0.74, landX, landY);
+                trail.lineStyle(2, 0xffffff, 0.74);
+                trail.lineBetween(startX + (landX - startX) * 0.82, startY + (landY - startY) * 0.82, landX, landY);
+
+                head.setPosition(landX, landY);
+                halo.setPosition(landX, landY);
+
                 this.tweens.add({
-                    targets: meteor,
-                    y: landY - 12,
-                    alpha: 0.45,
-                    duration: 120,
+                    targets: trail,
+                    alpha: 0,
+                    duration: 140,
+                    ease: 'Sine.easeOut',
+                    onComplete: function() {
+                        this.soloRocketRabbitShopMeteorObjects = (this.soloRocketRabbitShopMeteorObjects || []).filter(function(obj) {
+                            return obj !== trail;
+                        });
+                        try { trail.destroy(); } catch (_) {}
+                    },
+                    callbackScope: this
+                });
+
+                this.tweens.add({
+                    targets: [head, halo],
+                    y: landY - 10,
+                    scaleX: 1.18,
+                    scaleY: 1.18,
+                    duration: 80,
                     yoyo: true,
                     ease: 'Sine.easeOut',
                     onComplete: function() {
                         this.spawnSoloRocketRabbitShopSparkles(landX, landY, layer);
-                        this.soloRocketRabbitShopMeteorObjects = (this.soloRocketRabbitShopMeteorObjects || []).filter(function(obj) {
-                            return obj !== meteor;
+
+                        this.tweens.add({
+                            targets: [head, halo],
+                            alpha: 0,
+                            scaleX: 0.25,
+                            scaleY: 0.25,
+                            duration: 180,
+                            ease: 'Cubic.easeOut',
+                            onComplete: function() {
+                                this.soloRocketRabbitShopMeteorObjects = (this.soloRocketRabbitShopMeteorObjects || []).filter(function(obj) {
+                                    return obj !== head && obj !== halo;
+                                });
+                                try { head.destroy(); } catch (_) {}
+                                try { halo.destroy(); } catch (_) {}
+                            },
+                            callbackScope: this
                         });
-                        try { meteor.destroy(); } catch (_) {}
                     },
                     callbackScope: this
                 });
@@ -9528,7 +9638,6 @@ this.events.on('action_B', () => {
             callbackScope: this
         });
     }
-
     spawnSoloRocketRabbitShopSparkles(x, y, layer) {
         if (!layer) return;
 
@@ -9993,6 +10102,13 @@ this.events.on('action_B', () => {
 
         const hit = this.soloRocketRabbitShopHitAreas;
 
+        if (
+            this.playSoloRocketRabbitShopBgm &&
+            (!this.soloRocketRabbitShopBgm || !this.soloRocketRabbitShopBgm.isPlaying)
+        ) {
+            this.playSoloRocketRabbitShopBgm();
+        }
+
         if (hit.buy && this.isSoloRocketPointerInHitArea(pointer, hit.buy)) {
             this.buySoloRocketMoonItem(hit.buy.itemName);
             return;
@@ -10121,7 +10237,7 @@ this.events.on('action_B', () => {
         this.bounceSoloRocketRabbitShopkeeper();
     }
   
-    async finalizeSoloRocketMoonShop() {
+    finalizeSoloRocketMoonShop() {
         if (this.soloRocketMoonShopFinalized || this.soloRocketMoonShopFinalizing) return;
         if (!window.GameLogic.currentUser) {
             if (this.soloRocketRabbitShopMessage) this.soloRocketRabbitShopMessage.setText('玉兔：找不到玩家資料，請先不要離開月球。');
@@ -10137,56 +10253,66 @@ this.events.on('action_B', () => {
         const profile = window.GameLogic.myProfile || {};
         const nextInventory = Object.assign({}, profile.inventory || {});
 
-        Object.keys(purchases).forEach(name => {
+        Object.keys(purchases).forEach(function(name) {
             const qty = Math.max(0, Number(purchases[name] || 0));
             if (qty > 0) nextInventory[name] = Number(nextInventory[name] || 0) + qty;
         });
 
         const nextCoins = Number(profile.coins || 0) + leftBudget;
 
+        profile.coins = nextCoins;
+        profile.inventory = nextInventory;
+        window.GameLogic.myProfile = profile;
+
+        const coinsEl = document.getElementById("vp-coins");
+        if (coinsEl) coinsEl.innerText = nextCoins;
+
+        this.soloRocketMoonShopFinalized = true;
+        this.soloRocketMoonFinalResult = {
+            summary: this.soloRocketRunSummary || this.calculateSoloRocketMoonSummary(),
+            originalBudget: originalBudget,
+            spent: spent,
+            deposit: leftBudget,
+            purchases: purchases
+        };
+
         try {
-            await update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), {
+            update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), {
                 coins: nextCoins,
                 inventory: nextInventory
+            }).catch(function(err) {
+                console.warn('[玉兔伴手禮店] 最終結算寫入失敗，但已先返回大廳：', err);
             });
-
-            profile.coins = nextCoins;
-            profile.inventory = nextInventory;
-            window.GameLogic.myProfile = profile;
-
-            const coinsEl = document.getElementById("vp-coins");
-            if (coinsEl) coinsEl.innerText = nextCoins;
-
-            this.soloRocketMoonShopFinalized = true;
-            this.soloRocketMoonFinalResult = {
-                summary: this.soloRocketRunSummary || this.calculateSoloRocketMoonSummary(),
-                originalBudget,
-                spent,
-                deposit: leftBudget,
-                purchases
-            };
-
-            try {
-                if (this.cache.audio.exists('solo-rocket-rabbit-shop-finish')) this.sound.play('solo-rocket-rabbit-shop-finish');
-            } catch (_) {}
-
-            this.stopSoloRocketRabbitShopBgm();
-            this.clearSoloRocketRabbitShopUi();
-
-            if (this.returnFromSoloRocketCruise) {
-                this.returnFromSoloRocketCruise();
-            } else {
-                this.clearSoloRocketCruise(false);
-            }
         } catch (err) {
-            console.warn('[玉兔伴手禮店] 最終結算寫入失敗：', err);
-            this.soloRocketMoonShopFinalizing = false;
-            if (this.soloRocketRabbitShopMessage) {
-                this.soloRocketRabbitShopMessage.setText('玉兔：匯款失敗，請再按一次離開，不要重整。');
+            console.warn('[玉兔伴手禮店] 最終結算送出失敗，但已先返回大廳：', err);
+        }
+
+        try {
+            if (this.cache.audio.exists('solo-rocket-rabbit-shop-finish')) this.sound.play('solo-rocket-rabbit-shop-finish');
+        } catch (_) {}
+
+        const closeShopAndReturn = function() {
+            if (this.stopSoloRocketRabbitShopBgm) this.stopSoloRocketRabbitShopBgm();
+            if (this.destroySoloRocketResultOverlay) this.destroySoloRocketResultOverlay();
+            if (this.clearSoloRocketRabbitShopUi) this.clearSoloRocketRabbitShopUi();
+
+            if (this.clearSoloRocketCruise) {
+                this.clearSoloRocketCruise(false);
+            } else if (this.returnFromSoloRocketCruise) {
+                this.returnFromSoloRocketCruise();
             }
+        };
+
+        closeShopAndReturn.call(this);
+
+        if (this.time && this.time.delayedCall) {
+            this.time.delayedCall(80, function() {
+                if (this.soloRocketRabbitShopContainer || this.soloRocketContainer || this.soloRocketResultContainer) {
+                    closeShopAndReturn.call(this);
+                }
+            }, [], this);
         }
     }
-
     showSoloRocketMoonFinalResult() {
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
         this.destroySoloRocketResultOverlay();
