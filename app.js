@@ -2282,7 +2282,16 @@ class UIScene extends Phaser.Scene {
         if (isStatusActive) { if (!this.statusBlinkTween) { this.statusText.setColor('#ff0000'); this.statusText.setShadow(0, 0, '#ffffff', 8, true, true); this.statusBlinkTween = this.tweens.add({ targets: this.statusText, alpha: 0.3, yoyo: true, repeat: -1, duration: 500 }); } } else { if (this.statusBlinkTween) { this.statusBlinkTween.stop(); this.statusBlinkTween = null; this.statusText.setAlpha(1); this.statusText.setColor('#3e2723'); this.statusText.setShadow(0, 0, '#000', 0, false, false); } }
     }
     resizeUI(gameSize) {
-        if (!this.joyStick) return; const isPortrait = gameSize.height > gameSize.width; const bottomOffset = isPortrait ? 120 : 20; const joystickX = 90; const joystickY = gameSize.height - 90 - (isPortrait ? 80 : 0);
+        if (!this.joyStick) return;
+
+        const isPortrait = gameSize.height > gameSize.width;
+        const mainScene = this.scene.manager.getScene('MainScene');
+        const isSoloRocketPlaying = !!(mainScene && mainScene.soloRocketCruiseActive && !mainScene.soloRocketCruiseFinished);
+        const portraitLift = isSoloRocketPlaying ? 135 : 80;
+        const bottomOffset = isPortrait ? 120 : 20;
+        const joystickX = 90;
+        const joystickY = gameSize.height - 90 - (isPortrait ? portraitLift : 0);
+
         this.joyStick.setPosition(joystickX, joystickY); if (this.joyStick.base) this.joyStick.base.setDepth(10); if (this.joyStick.thumb) this.joyStick.thumb.setDepth(10);
         const targetWidth = Math.min(gameSize.width * 0.45, 320); const scaleRatio = targetWidth / this.statusBg.width; this.statusBg.setScale(scaleRatio); 
         // 修正3：手機版頭像縮小
@@ -8812,14 +8821,15 @@ this.events.on('action_B', () => {
         this.soloRocketLifeHealFxObjects = this.soloRocketLifeHealFxObjects || [];
 
         const baseX = ui.text.x;
-        const baseY = ui.text.y - 8;
+        const baseY = ui.text.y - 10;
 
-        for (let i = 0; i < 10; i++) {
-            const x = baseX + Phaser.Math.Between(-24, 24);
-            const y = baseY + Phaser.Math.Between(12, 34);
-            const h = Phaser.Math.Between(10, 24);
+        for (let i = 0; i < 16; i++) {
+            const x = baseX + Phaser.Math.Between(-34, 34);
+            const y = baseY + Phaser.Math.Between(14, 46);
+            const h = Phaser.Math.Between(22, 48);
+            const color = (i % 2 === 0) ? 0x39ff14 : 0xffffff;
 
-            const p = this.add.rectangle(x, y, Phaser.Math.FloatBetween(2, 4), h, 0x39ff14, 0.82)
+            const p = this.add.rectangle(x, y, Phaser.Math.FloatBetween(4, 7), h, color, 0.94)
                 .setOrigin(0.5, 1)
                 .setScrollFactor(0)
                 .setBlendMode(Phaser.BlendModes.ADD);
@@ -8829,11 +8839,11 @@ this.events.on('action_B', () => {
 
             this.tweens.add({
                 targets: p,
-                y: y - Phaser.Math.Between(34, 68),
+                y: y - Phaser.Math.Between(58, 104),
                 alpha: 0,
-                scaleX: 0.45,
-                scaleY: 1.45,
-                duration: Phaser.Math.Between(420, 720),
+                scaleX: 0.7,
+                scaleY: 1.85,
+                duration: Phaser.Math.Between(520, 860),
                 ease: 'Cubic.easeOut',
                 onComplete: function() {
                     this.soloRocketLifeHealFxObjects = (this.soloRocketLifeHealFxObjects || []).filter(function(obj) {
@@ -8845,14 +8855,45 @@ this.events.on('action_B', () => {
             });
         }
 
+        if (ui.container && this.tweens) {
+            try {
+                if (this.soloRocketLifeFloatTween && this.soloRocketLifeFloatTween.stop) {
+                    this.soloRocketLifeFloatTween.stop();
+                }
+                this.tweens.killTweensOf(ui.container);
+                ui.container.setPosition(0, 0);
+                ui.container.setScale(1);
+            } catch (_) {}
+
+            this.tweens.add({
+                targets: ui.container,
+                y: -8,
+                scaleX: 1.08,
+                scaleY: 1.08,
+                yoyo: true,
+                duration: 125,
+                ease: 'Sine.easeOut',
+                onComplete: function() {
+                    if (ui.container && ui.container.active) {
+                        ui.container.setPosition(0, 0);
+                        ui.container.setScale(1);
+                    }
+                    if (this.startSoloRocketLifeFloatTween) {
+                        this.startSoloRocketLifeFloatTween();
+                    }
+                },
+                callbackScope: this
+            });
+        }
+
         if (ui.heartGlow && this.tweens) {
             this.tweens.add({
                 targets: ui.heartGlow,
-                alpha: 0.86,
-                scaleX: 1.16,
-                scaleY: 1.16,
+                alpha: 1,
+                scaleX: 1.28,
+                scaleY: 1.28,
                 yoyo: true,
-                duration: 120,
+                duration: 135,
                 ease: 'Sine.easeOut'
             });
         }
@@ -9038,9 +9079,11 @@ this.events.on('action_B', () => {
             const uiScene = this.scene.manager.getScene('UIScene');
             let ix = 0;
             let iy = 0;
+            let usingJoystick = false;
 
-            if (uiScene && uiScene.joyStick && uiScene.joyStick.force > 0) {
-                const forceRate = Phaser.Math.Clamp(uiScene.joyStick.force / 40, 0.2, 1);
+            if (uiScene && uiScene.joyStick && uiScene.joyStick.force > 3) {
+                usingJoystick = true;
+                const forceRate = Phaser.Math.Clamp(uiScene.joyStick.force / 40, 0, 1);
                 ix = Math.cos(uiScene.joyStick.angle * Math.PI / 180) * forceRate;
                 iy = Math.sin(uiScene.joyStick.angle * Math.PI / 180) * forceRate;
             } else if (document.activeElement.tagName !== 'INPUT') {
@@ -9053,11 +9096,13 @@ this.events.on('action_B', () => {
 
             if (ix !== 0 || iy !== 0) {
                 const len = Math.sqrt(ix * ix + iy * iy) || 1;
-                ix /= len;
-                iy /= len;
+                if (len > 1) {
+                    ix /= len;
+                    iy /= len;
+                }
             }
 
-            const speed = 325;
+            const speed = usingJoystick ? 225 : 270;
             const pad = this.soloRocketPlayerRadius || 28;
             this.soloRocketPlayer.x = Phaser.Math.Clamp(this.soloRocketPlayer.x + ix * speed * dt, rect.x + pad, rect.x + rect.w - pad);
             this.soloRocketPlayer.y = Phaser.Math.Clamp(this.soloRocketPlayer.y + iy * speed * dt, rect.y + pad, rect.y + rect.h - pad);
@@ -9327,6 +9372,17 @@ this.events.on('action_B', () => {
     playSoloRocketRabbitShopBgm() {
         try {
             this.stopSoloRocketRabbitShopBgm();
+            this.stopSoloRocketBgm();
+
+            if (this.stopLobbyBgmForSoloRocket) {
+                this.stopLobbyBgmForSoloRocket();
+            }
+
+            if (this.sound && this.sound.context && this.sound.context.state === 'suspended' && this.sound.context.resume) {
+                this.sound.context.resume().catch(function(err) {
+                    console.warn('[玉兔伴手禮店] 音訊環境喚醒失敗，已略過：', err);
+                });
+            }
 
             if (!this.cache.audio.exists('solo-rocket-rabbit-shop-bgm')) {
                 console.warn('[玉兔伴手禮店] 找不到 solo-rocket-rabbit-shop-bgm.mp3，已略過商店音樂。');
@@ -9334,8 +9390,15 @@ this.events.on('action_B', () => {
             }
 
             const volControl = document.getElementById('bgm-volume');
-            const vol = volControl ? Number(volControl.value || 100) / 100 : 0.8;
-            this.soloRocketRabbitShopBgm = this.sound.add('solo-rocket-rabbit-shop-bgm', { loop: true, volume: vol });
+            let vol = volControl ? Number(volControl.value || 100) / 100 : 0.8;
+            if (!Number.isFinite(vol)) vol = 0.8;
+            vol = Phaser.Math.Clamp(vol, 0, 1);
+
+            this.soloRocketRabbitShopBgm = this.sound.add('solo-rocket-rabbit-shop-bgm', {
+                loop: true,
+                volume: vol
+            });
+
             this.soloRocketRabbitShopBgm.play();
         } catch (err) {
             console.warn('[玉兔伴手禮店] BGM 播放失敗，已略過：', err);
@@ -9347,10 +9410,18 @@ this.events.on('action_B', () => {
         this.stopSoloRocketRabbitShopMeteors();
         this.soloRocketRabbitShopMeteorObjects = [];
 
+        for (let i = 0; i < 3; i++) {
+            this.time.delayedCall(i * 180, function() {
+                if (this.soloRocketRabbitShopContainer && this.soloRocketRabbitShopMeteorLayer) {
+                    this.spawnSoloRocketRabbitShopMeteor();
+                }
+            }, [], this);
+        }
+
         const scheduleNext = function() {
             if (!this.soloRocketRabbitShopContainer || !this.soloRocketRabbitShopMeteorLayer) return;
 
-            const delay = Phaser.Math.Between(650, 1100);
+            const delay = Phaser.Math.Between(520, 900);
             this.soloRocketRabbitShopMeteorTimer = this.time.delayedCall(delay, function() {
                 this.spawnSoloRocketRabbitShopMeteor();
                 scheduleNext.call(this);
@@ -9371,10 +9442,12 @@ this.events.on('action_B', () => {
         const landY = Phaser.Math.Between(Math.floor(rect.y + rect.h * 0.58), Math.floor(rect.y + rect.h - 105));
 
         const meteor = this.add.graphics().setScrollFactor(0);
-        meteor.lineStyle(3, 0xffd36a, 0.92);
-        meteor.lineBetween(-20, -10, 18, 10);
+        meteor.lineStyle(6, 0xffd36a, 0.96);
+        meteor.lineBetween(-30, -15, 24, 12);
+        meteor.lineStyle(3, 0xffffff, 0.88);
+        meteor.lineBetween(-18, -9, 20, 10);
         meteor.fillStyle(0xfff2a8, 1);
-        meteor.fillCircle(18, 10, 3);
+        meteor.fillCircle(24, 12, 5);
         meteor.setBlendMode(Phaser.BlendModes.ADD);
         meteor.setPosition(startX, startY);
 
@@ -9419,7 +9492,7 @@ this.events.on('action_B', () => {
         const count = Phaser.Math.Between(4, 8);
 
         for (let i = 0; i < count; i++) {
-            const p = this.add.circle(x, y, Phaser.Math.FloatBetween(1.8, 3.4), 0xfff2a8, 0.95)
+            const p = this.add.circle(x, y, Phaser.Math.FloatBetween(3.2, 6.2), 0xfff2a8, 0.98)
                 .setScrollFactor(0)
                 .setBlendMode(Phaser.BlendModes.ADD);
 
@@ -9673,6 +9746,12 @@ this.events.on('action_B', () => {
             }).setOrigin(0.5);
         }
         this.soloRocketRabbitShopKeeperObj = rabbitObj;
+        if (rabbitObj) {
+            rabbitObj.__soloRocketShopBaseX = rabbitObj.x;
+            rabbitObj.__soloRocketShopBaseY = rabbitObj.y;
+            rabbitObj.__soloRocketShopBaseScaleX = rabbitObj.scaleX;
+            rabbitObj.__soloRocketShopBaseScaleY = rabbitObj.scaleY;
+        }
 
         const meteorLayer = this.add.container(0, 0).setScrollFactor(0);
         this.soloRocketRabbitShopMeteorLayer = meteorLayer;
@@ -9869,7 +9948,6 @@ this.events.on('action_B', () => {
         if (!this.soloRocketRabbitShopContainer || !this.soloRocketRabbitShopHitAreas) return;
 
         const hit = this.soloRocketRabbitShopHitAreas;
-        this.bounceSoloRocketRabbitShopkeeper();
 
         if (hit.buy && this.isSoloRocketPointerInHitArea(pointer, hit.buy)) {
             this.buySoloRocketMoonItem(hit.buy.itemName);
@@ -9905,18 +9983,29 @@ this.events.on('action_B', () => {
         const rabbit = this.soloRocketRabbitShopKeeperObj;
         if (!rabbit || !rabbit.active || !this.tweens) return;
 
+        const baseX = Number.isFinite(Number(rabbit.__soloRocketShopBaseX)) ? Number(rabbit.__soloRocketShopBaseX) : rabbit.x;
+        const baseY = Number.isFinite(Number(rabbit.__soloRocketShopBaseY)) ? Number(rabbit.__soloRocketShopBaseY) : rabbit.y;
+        const baseScaleX = Number.isFinite(Number(rabbit.__soloRocketShopBaseScaleX)) ? Number(rabbit.__soloRocketShopBaseScaleX) : rabbit.scaleX;
+        const baseScaleY = Number.isFinite(Number(rabbit.__soloRocketShopBaseScaleY)) ? Number(rabbit.__soloRocketShopBaseScaleY) : rabbit.scaleY;
+
         this.tweens.killTweensOf(rabbit);
+        rabbit.setPosition(baseX, baseY);
+        rabbit.setScale(baseScaleX, baseScaleY);
+
         this.tweens.add({
             targets: rabbit,
-            y: rabbit.y - 12,
-            scaleX: rabbit.scaleX * 1.025,
-            scaleY: rabbit.scaleY * 1.025,
+            y: baseY - 12,
+            scaleX: baseScaleX * 1.035,
+            scaleY: baseScaleY * 1.035,
             duration: 95,
             yoyo: true,
-            ease: 'Sine.easeOut'
+            ease: 'Sine.easeOut',
+            onComplete: function() {
+                rabbit.setPosition(baseX, baseY);
+                rabbit.setScale(baseScaleX, baseScaleY);
+            }
         });
     }
-  
     buySoloRocketMoonItem(itemName) {
         if (this.soloRocketMoonShopFinalizing || this.soloRocketMoonShopFinalized) return;
 
@@ -10081,7 +10170,7 @@ this.events.on('action_B', () => {
             this.cameras.main.width,
             this.cameras.main.height
         )
-            .setDepth(9905)
+            .setDepth(9835)
             .setScrollFactor(0)
             .setInteractive();
 
@@ -10141,7 +10230,7 @@ this.events.on('action_B', () => {
             wordWrap: { width: panelW - 42 }
         }).setOrigin(0.5, 0);
 
-        const btnBg = this.add.rectangle(rect.centerX, btnY, 180, 48, 0xffffff, 1)
+        const btnBg = this.add.rectangle(rect.centerX, btnY, 190, 52, 0xffffff, 1)
             .setStrokeStyle(3, 0xffd36a, 1)
             .setInteractive({ useHandCursor: true });
 
@@ -10152,7 +10241,7 @@ this.events.on('action_B', () => {
             color: '#000000'
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-        const returnHit = this.add.zone(rect.centerX, btnY, 250, 82)
+        const returnHit = this.add.zone(rect.centerX, btnY, 280, 96)
             .setInteractive({ useHandCursor: true });
 
         [btnBg, btnText, returnHit].forEach(obj => {
@@ -10164,6 +10253,8 @@ this.events.on('action_B', () => {
     }
   
     returnFromSoloRocketCruise() {
+        if (this.destroySoloRocketResultOverlay) this.destroySoloRocketResultOverlay();
+        if (this.clearSoloRocketRabbitShopUi) this.clearSoloRocketRabbitShopUi();
         this.clearSoloRocketCruise(false);
         console.log('[火箭巡航] 已返回洋蔥大廳。');
     }
