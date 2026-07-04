@@ -225,7 +225,7 @@ function createSystemUI() {
             @keyframes electric-spin { 100% { transform: rotate(360deg); } }
             
             /* 新增：法寶庫存 Modal 特效 */
-            #magic-modal { background: linear-gradient(180deg, #02111d 0%, #003a5e 100%) !important; border: 2px solid #0088cc !important; box-shadow: inset 0 0 30px #00aaff !important; overflow: hidden; }
+            #magic-modal { background: linear-gradient(180deg, #02111d 0%, #003a5e 100%) !important; border: 2px solid #0088cc !important; box-shadow: inset 0 0 30px #00aaff !important; overflow-y: auto !important; overflow-x: hidden !important; max-height: 82vh !important; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
             .water-drop { position: absolute; width: 3px; height: 15px; background: linear-gradient(to bottom, transparent, rgba(135,206,235,0.8)); border-radius: 50%; animation: drip linear infinite; pointer-events:none; z-index:0;}
             @keyframes drip { 0% { transform: translateY(-30px); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(300px); opacity: 0; } }
 
@@ -435,7 +435,7 @@ function createSystemUI() {
 
         <div id="game-layout-container"><div id="phaser-app"></div><div id="chat-section"><button id="chat-toggle-btn">收起對話 ▲</button><div id="chat-content"><div id="chat-box"></div><div id="chat-input-area"><input type="text" id="chat-input" placeholder="說點什麼..."><button id="send-btn">發送</button></div></div></div></div>
         
-        <div id="magic-modal" class="modal" style="z-index: 260; width: 85%; max-width: 320px; position:relative;">
+        <div id="magic-modal" class="modal" style="z-index: 260; width: 85%; max-width: 340px; max-height:82vh; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; touch-action:pan-y; position:relative;">
             <div class="water-drop" style="left: 15%; animation-duration: 2s; animation-delay: 0.1s;"></div>
             <div class="water-drop" style="left: 45%; animation-duration: 2.5s; animation-delay: 1s;"></div>
             <div class="water-drop" style="left: 75%; animation-duration: 1.8s; animation-delay: 0.5s;"></div>
@@ -443,7 +443,7 @@ function createSystemUI() {
 
             <h3 style="color: #fff; margin-top: 0; border-bottom: 2px solid #00aaff; padding-bottom: 10px; position:relative; z-index:1; text-shadow: 0 0 5px #00aaff;">✨ 法寶庫存</h3>
             <div class="magic-grid" id="magic-grid-container" style="position:relative; z-index:1;"></div>
-            <div id="magic-desc" style="position:relative; z-index:1; margin-top: 15px; font-size: 13px; color: #fff; text-align: left; min-height: 60px; background: rgba(0, 31, 63, 0.85); padding: 10px; border-radius: 6px; border: 1px solid #00aaff; box-shadow: 0 0 10px rgba(0,170,255,0.3); line-height: 1.4;">點擊法寶查看說明...</div>
+            <div id="magic-desc" style="position:relative; z-index:1; margin-top: 15px; font-size: 13px; color: #fff; text-align: left; min-height: 60px; max-height: 170px; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; touch-action:pan-y; background: rgba(0, 31, 63, 0.85); padding: 10px; border-radius: 6px; border: 1px solid #00aaff; box-shadow: 0 0 10px rgba(0,170,255,0.3); line-height: 1.45;">點擊法寶查看說明...</div>
             <button class="close-modal-btn btn-secondary" style="position:relative; z-index:1; margin-top: 15px; width: 100%;" onclick="document.getElementById('magic-modal').style.display='none'">關上法寶庫</button>
         </div>
         <div id="magic-menu-blocker" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; z-index: 290; pointer-events: auto; touch-action: none;" onpointerdown="event.stopPropagation(); event.preventDefault(); window.closeQuickMenu();" ontouchstart="event.stopPropagation(); event.preventDefault(); window.closeQuickMenu();"></div>
@@ -3558,6 +3558,11 @@ this.events.on('action_A_short', () => {
                 window.GameLogic.armedItemState = null;
                 window.GameLogic.armedItemName = null;
                 sendBubble('已收起法寶');
+            } else if (name === '月光法杖' || name === '月光饅頭') {
+                // 月球商品是即用型道具，不進入 A 鍵投擲流程，避免污染既有發射法寶邏輯。
+                window.GameLogic.armedItemState = null;
+                window.GameLogic.armedItemName = null;
+                if (window.useMoonItem) window.useMoonItem(name);
             } else {
                 let inv = window.GameLogic.myProfile.inventory || {};
                 if (inv[name] > 0) {
@@ -3594,7 +3599,9 @@ this.events.on('action_B_long', () => {
                 { name: '煙火', icon: '<img src="shop-fireworks.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['煙火'] || 0 },
                 { name: '蔥友機', icon: '<img src="playroom-onion-friend-plane.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['蔥友機'] || 0 },
                 { name: '派對喇叭', icon: '<img src="tools-onion-party-trumpet.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['派對喇叭'] || 0 },
-                { name: '喵罐頭', icon: '<img src="shop-pet-cat-can.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['喵罐頭'] || 0 }
+                { name: '喵罐頭', icon: '<img src="shop-pet-cat-can.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['喵罐頭'] || 0 },
+                { name: '月光法杖', icon: '<img src="solo-rocket-item-moon-staff.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['月光法杖'] || 0 },
+                { name: '月光饅頭', icon: '<img src="solo-rocket-item-moon-bun.png" style="width:40px; height:40px; object-fit:contain; pointer-events:none;">', qty: inv['月光饅頭'] || 0 }
             ];
             
             let html = `<div style="flex: 0 0 calc(50% - 30px);"></div>`;
@@ -4364,84 +4371,181 @@ this.events.on('action_B', () => {
         const cam = this.cameras.main;
         const cx = cam.scrollX + cam.width / 2;
         const cy = cam.scrollY + cam.height / 2;
+        const player = this.localPlayer.sprite;
 
         const layer = this.add.container(0, 0).setDepth(980);
         this.moonStaffBlessingLayer = layer;
+        this.moonStaffBlessingTweens = [];
+        this.moonStaffBlessingTimers = [];
+        this.moonStaffBlessingLooseObjects = [];
 
-        const moon = this.add.circle(cx, cy - 150, 62, 0xfff4b5, 0.92)
+        const moon = this.add.circle(cx, cy - 145, 93, 0xfff4b5, 0.94)
             .setBlendMode('ADD')
-            .setStrokeStyle(4, 0xffffff, 0.75);
-        const rabbit = this.add.text(cx, cy - 157, '🐇', {
-            fontSize: '42px',
-            color: '#111111'
-        }).setOrigin(0.5);
+            .setStrokeStyle(7, 0xffffff, 0.82);
+        const moonGlow = this.add.circle(cx, cy - 145, 138, 0xffe082, 0.18)
+            .setBlendMode('ADD');
 
-        const title = this.add.text(cx, cy - 78, '月光祝福！', {
-            fontSize: '28px',
+        const title = this.add.text(cx, cy - 16, '月月有福，月來月美', {
+            fontSize: '30px',
             fontFamily: 'Georgia',
             fontStyle: 'bold',
             color: '#fff7c2',
             stroke: '#4a2e00',
-            strokeThickness: 5
+            strokeThickness: 6,
+            align: 'center'
         }).setOrigin(0.5);
 
-        layer.add([moon, rabbit, title]);
+        const cloudColors = [0xffffff, 0xb39ddb, 0x90caf9];
+        const clouds = [];
+        for (let i = 0; i < 3; i++) {
+            const baseX = cx + [-118, 0, 118][i];
+            const baseY = cy - 66 + (i % 2) * 16;
+            const c = this.add.container(baseX, baseY).setAlpha(0.86);
+            const puffs = [
+                this.add.ellipse(0, 0, 64, 28, cloudColors[i % cloudColors.length], 0.8),
+                this.add.ellipse(-28, 4, 48, 22, cloudColors[(i + 1) % cloudColors.length], 0.72),
+                this.add.ellipse(28, 5, 52, 23, cloudColors[(i + 2) % cloudColors.length], 0.72)
+            ];
+            puffs.forEach(p => p.setBlendMode('ADD'));
+            c.add(puffs);
+            clouds.push(c);
+        }
 
-        this.tweens.add({
-            targets: moon,
-            scale: 1.12,
-            alpha: 0.72,
-            duration: 900,
-            yoyo: true,
-            repeat: 15
-        });
+        layer.add([moonGlow, moon, title, ...clouds]);
 
-        this.tweens.add({
-            targets: rabbit,
-            x: cx + 34,
-            y: cy - 172,
-            duration: 520,
+        this.moonStaffBlessingTweens.push(this.tweens.add({
+            targets: [moon, moonGlow],
+            angle: 360,
+            duration: 15000,
+            ease: 'Linear'
+        }));
+
+        this.moonStaffBlessingTweens.push(this.tweens.add({
+            targets: moonGlow,
+            scale: 1.18,
+            alpha: 0.34,
+            duration: 1300,
             yoyo: true,
-            repeat: 28,
+            repeat: 10,
             ease: 'Sine.easeInOut'
+        }));
+
+        clouds.forEach((cloud, idx) => {
+            this.moonStaffBlessingTweens.push(this.tweens.add({
+                targets: cloud,
+                x: cloud.x + (idx === 1 ? 28 : (idx === 0 ? 36 : -36)),
+                y: cloud.y + (idx === 1 ? -8 : 8),
+                alpha: 0.62,
+                duration: 1450 + idx * 260,
+                yoyo: true,
+                repeat: 5,
+                ease: 'Sine.easeInOut'
+            }));
+
+            cloud.list.forEach((puff, pIdx) => {
+                this.moonStaffBlessingTweens.push(this.tweens.add({
+                    targets: puff,
+                    fillColor: cloudColors[(idx + pIdx + 1) % cloudColors.length],
+                    duration: 760 + pIdx * 180,
+                    yoyo: true,
+                    repeat: 12
+                }));
+            });
         });
 
-        this.moonStaffBlessingEmitter = this.add.particles(this.localPlayer.sprite.x, this.localPlayer.sprite.y - 24, 'fw-particle', {
-            speed: { min: 24, max: 130 },
-            angle: { min: 210, max: 330 },
-            scale: { start: 1.05, end: 0 },
+        // 角色全身：爆竹式大面積金光噴灑。
+        this.moonStaffBlessingEmitter = this.add.particles(player.x, player.y - 18, 'fw-particle', {
+            speed: { min: 120, max: 440 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 1.55, end: 0 },
             alpha: { start: 1, end: 0 },
-            tint: [0xffffff, 0xfff59d, 0xffd54f, 0xf8bbd0],
+            tint: [0xffffff, 0xfff59d, 0xffd54f, 0xff9800, 0xff7043],
             blendMode: 'ADD',
-            lifespan: { min: 900, max: 1700 },
-            quantity: 2,
-            frequency: 70
-        }).setDepth(979);
-        this.moonStaffBlessingEmitter.startFollow(this.localPlayer.sprite, 0, -24);
+            lifespan: { min: 650, max: 1450 },
+            quantity: 12,
+            frequency: 42
+        }).setDepth(989);
+        this.moonStaffBlessingEmitter.startFollow(player, 0, -18);
 
-        this.moonStaffRingEvent = this.time.addEvent({
-            delay: 760,
-            repeat: 18,
+        // 月球持續散發旋轉顆粒。
+        this.moonStaffMoonEmitter = this.add.particles(cx, cy - 145, 'fw-particle', {
+            speed: { min: 18, max: 86 },
+            angle: { min: 0, max: 360 },
+            rotate: { start: 0, end: 360 },
+            scale: { start: 1.15, end: 0 },
+            alpha: { start: 0.86, end: 0 },
+            tint: [0xffffff, 0xfff4b5, 0xffe082, 0xb39ddb, 0x90caf9],
+            blendMode: 'ADD',
+            lifespan: { min: 1200, max: 2400 },
+            quantity: 4,
+            frequency: 80,
+            emitZone: {
+                type: 'edge',
+                source: new Phaser.Geom.Circle(0, 0, 105),
+                quantity: 64
+            }
+        }).setDepth(982);
+
+        // 全域大量紅、橘、黃、白光球：閃爍、漸大、淡出。
+        this.moonStaffOrbEvent = this.time.addEvent({
+            delay: 135,
+            repeat: 112,
             callback: () => {
-                if (!this.localPlayer || !this.localPlayer.sprite || !this.localPlayer.sprite.active) return;
-                const ring = this.add.circle(this.localPlayer.sprite.x, this.localPlayer.sprite.y + 8, 22)
-                    .setStrokeStyle(4, 0xfff59d, 0.7)
-                    .setDepth(978)
-                    .setBlendMode('ADD');
-                this.tweens.add({
-                    targets: ring,
-                    scale: 3.2,
-                    alpha: 0,
-                    duration: 900,
-                    ease: 'Sine.easeOut',
-                    onComplete: () => ring.destroy()
-                });
+                const orbCount = Phaser.Math.Between(3, 6);
+                for (let i = 0; i < orbCount; i++) {
+                    const color = Phaser.Utils.Array.GetRandom([0xff1744, 0xff7043, 0xffb300, 0xfff176, 0xffffff]);
+                    const orb = this.add.circle(
+                        cam.scrollX + Phaser.Math.Between(18, cam.width - 18),
+                        cam.scrollY + Phaser.Math.Between(24, cam.height - 24),
+                        Phaser.Math.Between(7, 18),
+                        color,
+                        Phaser.Math.FloatBetween(0.18, 0.5)
+                    ).setBlendMode('ADD').setDepth(976);
+
+                    this.moonStaffBlessingLooseObjects.push(orb);
+                    this.moonStaffBlessingTweens.push(this.tweens.add({
+                        targets: orb,
+                        scale: Phaser.Math.FloatBetween(2.2, 5.2),
+                        alpha: 0,
+                        duration: Phaser.Math.Between(620, 1180),
+                        ease: 'Sine.easeOut',
+                        onComplete: () => {
+                            if (orb && orb.active) orb.destroy();
+                        }
+                    }));
+                }
             }
         });
 
-        this.time.delayedCall(15000, () => {
+        // 週期性光環，保留祝福感但不阻擋玩家視線。
+        this.moonStaffRingEvent = this.time.addEvent({
+            delay: 650,
+            repeat: 22,
+            callback: () => {
+                if (!this.localPlayer || !this.localPlayer.sprite || !this.localPlayer.sprite.active) return;
+                const ring = this.add.circle(this.localPlayer.sprite.x, this.localPlayer.sprite.y + 8, 24)
+                    .setStrokeStyle(5, 0xfff59d, 0.76)
+                    .setDepth(978)
+                    .setBlendMode('ADD');
+
+                this.moonStaffBlessingLooseObjects.push(ring);
+                this.moonStaffBlessingTweens.push(this.tweens.add({
+                    targets: ring,
+                    scale: 4.2,
+                    alpha: 0,
+                    duration: 950,
+                    ease: 'Sine.easeOut',
+                    onComplete: () => {
+                        if (ring && ring.active) ring.destroy();
+                    }
+                }));
+            }
+        });
+
+        const endTimer = this.time.delayedCall(15000, () => {
             this.clearMoonStaffBlessing();
         });
+        this.moonStaffBlessingTimers.push(endTimer);
     }
 
     clearMoonStaffBlessing() {
@@ -4450,9 +4554,40 @@ this.events.on('action_B', () => {
             this.moonStaffRingEvent = null;
         }
 
+        if (this.moonStaffOrbEvent) {
+            this.moonStaffOrbEvent.remove(false);
+            this.moonStaffOrbEvent = null;
+        }
+
+        if (Array.isArray(this.moonStaffBlessingTimers)) {
+            this.moonStaffBlessingTimers.forEach(timer => {
+                if (timer && timer.remove) timer.remove(false);
+            });
+            this.moonStaffBlessingTimers = null;
+        }
+
+        if (Array.isArray(this.moonStaffBlessingTweens)) {
+            this.moonStaffBlessingTweens.forEach(tween => {
+                if (tween && tween.stop) tween.stop();
+            });
+            this.moonStaffBlessingTweens = null;
+        }
+
         if (this.moonStaffBlessingEmitter) {
             this.moonStaffBlessingEmitter.destroy();
             this.moonStaffBlessingEmitter = null;
+        }
+
+        if (this.moonStaffMoonEmitter) {
+            this.moonStaffMoonEmitter.destroy();
+            this.moonStaffMoonEmitter = null;
+        }
+
+        if (Array.isArray(this.moonStaffBlessingLooseObjects)) {
+            this.moonStaffBlessingLooseObjects.forEach(obj => {
+                if (obj && obj.active && obj.destroy) obj.destroy();
+            });
+            this.moonStaffBlessingLooseObjects = null;
         }
 
         if (this.moonStaffBlessingLayer) {
