@@ -1276,22 +1276,44 @@ window.useMoonBun = function() {
 };
 
 window.useMoonStaff = function() {
-    if (window.GameLogic.currentScene !== 'cafe') {
-        sendBubble("月光法杖要在洋蔥大廳揮才夠閃。");
-        return;
-    }
-
-    if (!window.consumeMoonInventoryItem('月光法杖')) return;
-
-    window.playOptionalSFX('moon-staff-use');
+    if (!window.consumeMoonInventoryItem('月光法杖')) return false;
 
     const ms = window.getMainSceneSafe();
-    if (ms && ms.playMoonStaffBlessing) ms.playMoonStaffBlessing();
+    const actionTime = Date.now();
+    let fxX = null;
+    let fxY = null;
+    if (ms && ms.localPlayer && ms.localPlayer.sprite) {
+        fxX = ms.localPlayer.sprite.x;
+        fxY = ms.localPlayer.sprite.y;
+    }
+
+    if (ms && ms.playMoonStaffBlessing) {
+        ms.lastMoonStaffBlessingTime = actionTime;
+        ms.playMoonStaffBlessing({
+            casterUid: window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : 'local',
+            eventTime: actionTime,
+            x: fxX,
+            y: fxY,
+            isLocal: true
+        });
+    }
+
+    // 沿用既有 serverEvents 架構：同一張地圖中的玩家都會收到並播放，不新增複雜同步資料格式。
+    if (window.GameLogic.currentUser) {
+        update(ref(window.GameLogic.db, `serverEvents/moonStaffBlessings/${window.GameLogic.currentUser.uid}`), {
+            time: actionTime,
+            scene: window.GameLogic.currentScene || 'cafe',
+            casterName: window.GameLogic.myProfile ? (window.GameLogic.myProfile.name || '匿名') : '匿名',
+            x: fxX,
+            y: fxY
+        }).catch(err => console.warn('[月光法杖] 全域祝福事件寫入失敗：', err));
+    }
 
     const magicModal = document.getElementById('magic-modal');
     if (magicModal) magicModal.style.display = 'none';
 
-    sendBubble("你揮舞月光法杖，灑下月球祝福！");
+    sendBubble("月月有福，月來月美！");
+    return true;
 };
 
 window.useMoonItem = function(itemName) {
@@ -1304,8 +1326,25 @@ window.useMoonItem = function(itemName) {
 window.useItem = function(itemName) {
     let inv = window.GameLogic.myProfile.inventory || {};
 
-    if (itemName === '月光碎片' || itemName === '月光法杖' || itemName === '月光饅頭') {
-        window.useMoonItem(itemName);
+    if (itemName === '月光碎片') {
+        window.useMoonShard();
+        return;
+    }
+
+    if (itemName === '月光法杖' || itemName === '月光饅頭') {
+        if (inv[itemName] && inv[itemName] > 0) {
+            window.GameLogic.armedItemState = 'ready';
+            window.GameLogic.armedItemName = itemName;
+            const inventoryModal = document.getElementById('inventory-modal');
+            const magicModal = document.getElementById('magic-modal');
+            if (inventoryModal) inventoryModal.style.display = 'none';
+            if (magicModal) magicModal.style.display = 'none';
+            sendBubble(itemName === '月光法杖' ? '已裝填月光法杖，按A施放月光祝福。' : '已裝填月光饅頭，按A吃下。');
+        } else {
+            sendBubble(`${itemName}庫存不足！`);
+            window.GameLogic.armedItemState = null;
+            window.GameLogic.armedItemName = null;
+        }
         return;
     }
 
@@ -1351,8 +1390,8 @@ window.openMagicModal = function() {
         { name: '派對喇叭', icon: '<img src="tools-onion-party-trumpet.png" style="width:40px; height:40px; object-fit:contain;">', desc: '據說是埋在深山裡的洋蔥蔘淬煉製成的器具，吹奏他會自動調頻與洋蔥人們的腦波連結，「是時候開戰了」。按B緊握按A向全宇宙的洋蔥人發起械鬥號召。' },
         { name: '喵罐頭', icon: '<img src="shop-pet-cat-can.png" style="width:40px; height:40px; object-fit:contain;">', desc: '這世界上只有喵星人能撫慰洋蔥人的心。按B打開罐罐，靠近王子麵後按A餵食。每日前三次餵食可提升王子麵羈絆，之後王子麵會表示：夠了。' },
         { name: '月光碎片', icon: '<img src="solo-rocket-item-moon-shard.png" style="width:40px; height:40px; object-fit:contain;">', desc: '月亮掉下來的一小角。這是之後兌換物品用的代幣，目前只能收藏與累積。\n不會出現在長按B法寶選單，也不能在場景中使用。', action: 'token' },
-        { name: '月光法杖', icon: '<img src="solo-rocket-item-moon-staff.png" style="width:40px; height:40px; object-fit:contain;">', desc: '月球限定的小魔杖。可在洋蔥大廳揮舞，播放 15 秒月光祝福動畫。', action: 'use' },
-        { name: '月光饅頭', icon: '<img src="solo-rocket-item-moon-bun.png" style="width:40px; height:40px; object-fit:contain;">', desc: '玉兔手作的月球饅頭。可在洋蔥大廳使用，4 分鐘內掃洋蔥皮只需按兩下 A。效果期間不可疊加。', action: 'use' }
+        { name: '月光法杖', icon: '<img src="solo-rocket-item-moon-staff.png" style="width:40px; height:40px; object-fit:contain;">', desc: '月球限定的小魔杖。選定後等同按B裝填，接著按A施放。可在目前所在地圖全域播放月光祝福動畫。', action: 'use' },
+        { name: '月光饅頭', icon: '<img src="solo-rocket-item-moon-bun.png" style="width:40px; height:40px; object-fit:contain;">', desc: '玉兔手作的月球饅頭。選定後等同按B裝填，接著按A吃下。只能在洋蔥大廳生效，4 分鐘內掃洋蔥皮只需按兩下 A，效果期間不可疊加。', action: 'use' }
     ];
 
     const showMagicDesc = (m) => {
@@ -1363,7 +1402,7 @@ window.openMagicModal = function() {
         if (m.action === 'use') {
             const disabled = qty <= 0 ? 'disabled' : '';
             const opacity = qty <= 0 ? 'opacity:0.45;' : '';
-            btnHtml = `<br><br><button class="btn-primary" ${disabled} style="padding:8px 14px; border-radius:8px; font-weight:bold; ${opacity}" onclick="event.stopPropagation(); window.useMoonItem('${m.name}')">使用 ${m.name}</button>`;
+            btnHtml = `<br><br><button class="btn-primary" ${disabled} style="padding:8px 14px; border-radius:8px; font-weight:bold; ${opacity}" onclick="event.stopPropagation(); window.useItem('${m.name}')">裝填 ${m.name}</button>`;
         } else if (m.action === 'token') {
             btnHtml = `<br><br><button class="btn-secondary" style="padding:8px 14px; border-radius:8px; font-weight:bold;" onclick="event.stopPropagation(); window.useMoonItem('${m.name}')">查看用途</button>`;
         }
@@ -2138,6 +2177,8 @@ class BootScene extends Phaser.Scene {
         // 補丁 6-2：月球商品使用效果音效。若檔案不存在，播放前會檢查 cache，不讓遊戲黑頻。
         this.load.audio('moon-bun-use', 'onion-take-a-bite.mp3');
         this.load.audio('moon-staff-use', 'moon-staff-use.mp3');
+        // 補丁 6-2 後續：月光法杖五隻跳舞兔子。缺圖時 playMoonStaffBlessing() 會自動用文字兔子 fallback。
+        this.load.image('moon-staff-dance-rabbit', 'solo-rocket-item-moon-staff-dance-rabbits.png');
 
         // 在記憶體中畫一個簡單的白色發光點紋理給粒子使用
         let grd = this.make.graphics({x: 0, y: 0, add: false});
@@ -3211,6 +3252,24 @@ this.events.on('action_A_short', () => {
                     update(ref(window.GameLogic.db, `serverEvents/trumpetPlay/${window.GameLogic.currentUser.uid}`), { time: Date.now(), scene: this.sceneName });
                     return;
                 }
+
+                if (itemName === '月光法杖' || itemName === '月光饅頭') {
+                    const beforeQty = Number(inv[itemName] || 0);
+                    if (itemName === '月光法杖') window.useMoonStaff();
+                    else window.useMoonBun();
+
+                    const latestInv = window.GameLogic.myProfile.inventory || {};
+                    const afterQty = Number(latestInv[itemName] || 0);
+                    if (afterQty > 0 || (afterQty === beforeQty && beforeQty > 0)) {
+                        window.GameLogic.armedItemState = 'ready';
+                        window.GameLogic.armedItemName = itemName;
+                    } else {
+                        window.GameLogic.armedItemState = null;
+                        window.GameLogic.armedItemName = null;
+                    }
+                    return;
+                }
+
                 if (window.GameLogic.energyActive && !isPartyMode) {
                     let currentEnergy = window.GameLogic.myProfile.energy || 0;
                     if (currentEnergy >= 5) {
@@ -3558,17 +3617,16 @@ this.events.on('action_A_short', () => {
                 window.GameLogic.armedItemState = null;
                 window.GameLogic.armedItemName = null;
                 sendBubble('已收起法寶');
-            } else if (name === '月光法杖' || name === '月光饅頭') {
-                // 月球商品是即用型道具，不進入 A 鍵投擲流程，避免污染既有發射法寶邏輯。
-                window.GameLogic.armedItemState = null;
-                window.GameLogic.armedItemName = null;
-                if (window.useMoonItem) window.useMoonItem(name);
             } else {
                 let inv = window.GameLogic.myProfile.inventory || {};
                 if (inv[name] > 0) {
-                    window.GameLogic.armedItemState = 'ready'; // 直接裝填為發射狀態
+                    window.GameLogic.armedItemState = 'ready'; // 直接裝填為待施放狀態，按 A 才真正施放／消耗
                     window.GameLogic.armedItemName = name;
-                    sendBubble(name === '喵罐頭' ? '已拿出喵罐頭，靠近王子麵按A餵食。' : `已裝填法寶：${name}`);
+                    let msg = `已裝填法寶：${name}`;
+                    if (name === '喵罐頭') msg = '已拿出喵罐頭，靠近王子麵按A餵食。';
+                    else if (name === '月光法杖') msg = '已裝填月光法杖，按A施放月光祝福。';
+                    else if (name === '月光饅頭') msg = '已裝填月光饅頭，按A吃下。';
+                    sendBubble(msg);
                 } else {
                     sendBubble("法寶庫存不足！");
                     window.GameLogic.armedItemState = null;
@@ -3940,6 +3998,41 @@ this.events.on('action_B', () => {
         this.fwPlayersHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworksHits'), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { window.playSFX(this, 'bomb'); opSprite.isStunned = true; opSprite.play('fw-hit', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
         this.fwDummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworksDummyHits'), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { window.playSFX(this, 'bomb'); dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
         this.globalFwListener = onValue(ref(window.GameLogic.db, 'serverEvents/globalFireworks'), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 3000) && data.scene === this.sceneName) { if (this.lastGlobalFwTime !== data.time) { this.lastGlobalFwTime = data.time; this.playGlobalFireworks(); } } });
+
+        // 補丁 6-2 後續：月光法杖全域祝福，同一張地圖中的玩家都會播放特效與音效。
+        this.moonStaffBlessingListener = onValue(ref(window.GameLogic.db, 'serverEvents/moonStaffBlessings'), (snap) => {
+            const events = snap.val() || {};
+            this.moonStaffRemoteTimes = this.moonStaffRemoteTimes || {};
+
+            const playRemoteBlessing = (uid, data, retry = 0) => {
+                if (!data || !data.time || Date.now() - data.time >= 20000 || data.scene !== this.sceneName) return;
+                if (this.moonStaffRemoteTimes[uid] === data.time) return;
+
+                let targetX = Number(data.x || 0);
+                let targetY = Number(data.y || 0);
+                const op = this.otherPlayers && this.otherPlayers[uid] ? this.otherPlayers[uid] : null;
+                if (op && op.sprite && op.sprite.active) {
+                    targetX = op.sprite.x;
+                    targetY = op.sprite.y;
+                } else if ((!targetX || !targetY) && retry < 5) {
+                    this.time.delayedCall(120, () => playRemoteBlessing(uid, data, retry + 1));
+                    return;
+                } else if (!targetX || !targetY) {
+                    const cam = this.cameras.main;
+                    targetX = cam.scrollX + cam.width / 2;
+                    targetY = cam.scrollY + cam.height / 2;
+                }
+
+                this.moonStaffRemoteTimes[uid] = data.time;
+                this.playMoonStaffBlessing({ casterUid: uid, eventTime: data.time, x: targetX, y: targetY, isRemote: true });
+            };
+
+            for (let uid in events) {
+                if (window.GameLogic.currentUser && uid === window.GameLogic.currentUser.uid) continue;
+                playRemoteBlessing(uid, events[uid]);
+            }
+        });
+
         this.fwThrowsListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworkThrows'), (snap) => {
             let throws = snap.val() || {};
             for (let uid in throws) {
@@ -4157,6 +4250,7 @@ this.events.on('action_B', () => {
             if (this.fwPlayersHitListener) this.fwPlayersHitListener();
             if (this.fwDummyHitListener) this.fwDummyHitListener(); 
             if (this.globalFwListener) this.globalFwListener(); 
+            if (this.moonStaffBlessingListener) { this.moonStaffBlessingListener(); this.moonStaffBlessingListener = null; }
             if (this.playersHitListener) this.playersHitListener(); 
             if (this.dummyHitListener) this.dummyHitListener(); 
             if (this.fwThrowsListener) this.fwThrowsListener();
@@ -4363,21 +4457,42 @@ this.events.on('action_B', () => {
         this.time.delayedCall(650, () => { if (p) p.destroy(); });
     }
 
-    playMoonStaffBlessing() {
-        if (!this.localPlayer || !this.localPlayer.sprite) return;
-
+    playMoonStaffBlessing(options = {}) {
         this.clearMoonStaffBlessing();
 
         const cam = this.cameras.main;
         const cx = cam.scrollX + cam.width / 2;
         const cy = cam.scrollY + cam.height / 2;
-        const player = this.localPlayer.sprite;
+
+        let targetX = Number(options.x || 0);
+        let targetY = Number(options.y || 0);
+        let casterSprite = null;
+        if (options.casterUid && this.otherPlayers && this.otherPlayers[options.casterUid] && this.otherPlayers[options.casterUid].sprite) {
+            casterSprite = this.otherPlayers[options.casterUid].sprite;
+        } else if (this.localPlayer && this.localPlayer.sprite) {
+            casterSprite = this.localPlayer.sprite;
+        }
+
+        if ((!targetX || !targetY) && casterSprite) {
+            targetX = casterSprite.x;
+            targetY = casterSprite.y;
+        }
+        if (!targetX || !targetY) {
+            targetX = cx;
+            targetY = cy;
+        }
+
+        if (!window.GameLogic.muteSFX && this.cache && this.cache.audio && this.cache.audio.exists('moon-staff-use')) {
+            window.playSFX(this, 'moon-staff-use');
+        }
 
         const layer = this.add.container(0, 0).setDepth(980);
         this.moonStaffBlessingLayer = layer;
         this.moonStaffBlessingTweens = [];
         this.moonStaffBlessingTimers = [];
         this.moonStaffBlessingLooseObjects = [];
+        this.moonStaffBlessingEmitters = [];
+        this.moonStaffBlessingEvents = [];
 
         const moon = this.add.circle(cx, cy - 145, 93, 0xfff4b5, 0.94)
             .setBlendMode('ADD')
@@ -4416,7 +4531,7 @@ this.events.on('action_B', () => {
         this.moonStaffBlessingTweens.push(this.tweens.add({
             targets: [moon, moonGlow],
             angle: 360,
-            duration: 15000,
+            duration: 17000,
             ease: 'Linear'
         }));
 
@@ -4453,8 +4568,60 @@ this.events.on('action_B', () => {
             });
         });
 
+        // 五隻兔子：原地跳兩下後，順時針跳到下一個位置。
+        const rabbitContainers = [];
+        const rabbitRadius = 96;
+        for (let i = 0; i < 5; i++) {
+            const angle = Phaser.Math.DegToRad(-90 + i * 72);
+            const rx = targetX + Math.cos(angle) * rabbitRadius;
+            const ry = targetY + Math.sin(angle) * rabbitRadius - 10;
+            const rc = this.add.container(rx, ry).setDepth(988).setAlpha(0.95);
+            rc.rabbitIndex = i;
+
+            let rabbit;
+            if (this.textures.exists('moon-staff-dance-rabbit')) {
+                rabbit = this.add.image(0, 0, 'moon-staff-dance-rabbit').setDisplaySize(80, 80);
+            } else {
+                rabbit = this.add.text(0, 0, '🐇', { fontSize: '46px' }).setOrigin(0.5);
+            }
+            rabbit.setOrigin(0.5);
+            rc.add(rabbit);
+            rabbitContainers.push(rc);
+            this.moonStaffBlessingLooseObjects.push(rc);
+
+            this.moonStaffBlessingTweens.push(this.tweens.add({
+                targets: rabbit,
+                y: -18,
+                duration: 210,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeOut',
+                delay: i * 70
+            }));
+        }
+
+        this.moonStaffRabbitMoveEvent = this.time.addEvent({
+            delay: 920,
+            repeat: 15,
+            callback: () => {
+                rabbitContainers.forEach((rc) => {
+                    if (!rc || !rc.active) return;
+                    rc.rabbitIndex = (rc.rabbitIndex + 1) % 5;
+                    const angle = Phaser.Math.DegToRad(-90 + rc.rabbitIndex * 72);
+                    this.moonStaffBlessingTweens.push(this.tweens.add({
+                        targets: rc,
+                        x: targetX + Math.cos(angle) * rabbitRadius,
+                        y: targetY + Math.sin(angle) * rabbitRadius - 10,
+                        duration: 420,
+                        ease: 'Sine.easeInOut'
+                    }));
+                });
+            }
+        });
+        this.moonStaffBlessingEvents.push(this.moonStaffRabbitMoveEvent);
+
         // 角色全身：爆竹式大面積金光噴灑。
-        this.moonStaffBlessingEmitter = this.add.particles(player.x, player.y - 18, 'fw-particle', {
+        this.moonStaffBlessingEmitter = this.add.particles(targetX, targetY - 18, 'fw-particle', {
             speed: { min: 120, max: 440 },
             angle: { min: 0, max: 360 },
             scale: { start: 1.55, end: 0 },
@@ -4465,7 +4632,8 @@ this.events.on('action_B', () => {
             quantity: 12,
             frequency: 42
         }).setDepth(989);
-        this.moonStaffBlessingEmitter.startFollow(player, 0, -18);
+        if (casterSprite && casterSprite.active) this.moonStaffBlessingEmitter.startFollow(casterSprite, 0, -18);
+        this.moonStaffBlessingEmitters.push(this.moonStaffBlessingEmitter);
 
         // 月球持續散發旋轉顆粒。
         this.moonStaffMoonEmitter = this.add.particles(cx, cy - 145, 'fw-particle', {
@@ -4485,6 +4653,7 @@ this.events.on('action_B', () => {
                 quantity: 64
             }
         }).setDepth(982);
+        this.moonStaffBlessingEmitters.push(this.moonStaffMoonEmitter);
 
         // 全域大量紅、橘、黃、白光球：閃爍、漸大、淡出。
         this.moonStaffOrbEvent = this.time.addEvent({
@@ -4516,14 +4685,16 @@ this.events.on('action_B', () => {
                 }
             }
         });
+        this.moonStaffBlessingEvents.push(this.moonStaffOrbEvent);
 
         // 週期性光環，保留祝福感但不阻擋玩家視線。
         this.moonStaffRingEvent = this.time.addEvent({
             delay: 650,
             repeat: 22,
             callback: () => {
-                if (!this.localPlayer || !this.localPlayer.sprite || !this.localPlayer.sprite.active) return;
-                const ring = this.add.circle(this.localPlayer.sprite.x, this.localPlayer.sprite.y + 8, 24)
+                const ringX = casterSprite && casterSprite.active ? casterSprite.x : targetX;
+                const ringY = casterSprite && casterSprite.active ? casterSprite.y + 8 : targetY + 8;
+                const ring = this.add.circle(ringX, ringY, 24)
                     .setStrokeStyle(5, 0xfff59d, 0.76)
                     .setDepth(978)
                     .setBlendMode('ADD');
@@ -4541,11 +4712,56 @@ this.events.on('action_B', () => {
                 }));
             }
         });
+        this.moonStaffBlessingEvents.push(this.moonStaffRingEvent);
 
-        const endTimer = this.time.delayedCall(15000, () => {
+        const fadeTimer = this.time.delayedCall(15000, () => {
+            this.fadeOutMoonStaffBlessing();
+        });
+        const endTimer = this.time.delayedCall(17000, () => {
             this.clearMoonStaffBlessing();
         });
-        this.moonStaffBlessingTimers.push(endTimer);
+        this.moonStaffBlessingTimers.push(fadeTimer, endTimer);
+    }
+
+    fadeOutMoonStaffBlessing() {
+        if (Array.isArray(this.moonStaffBlessingEvents)) {
+            this.moonStaffBlessingEvents.forEach(ev => {
+                if (ev && ev.remove) ev.remove(false);
+            });
+            this.moonStaffBlessingEvents = [];
+        }
+
+        if (Array.isArray(this.moonStaffBlessingEmitters)) {
+            this.moonStaffBlessingEmitters.forEach(em => {
+                if (em && em.stop) em.stop();
+            });
+        }
+
+        if (this.moonStaffBlessingLayer) {
+            this.moonStaffBlessingTweens = this.moonStaffBlessingTweens || [];
+            this.moonStaffBlessingTweens.push(this.tweens.add({
+                targets: this.moonStaffBlessingLayer,
+                alpha: 0,
+                scale: 1.06,
+                duration: 1900,
+                ease: 'Sine.easeOut'
+            }));
+        }
+
+        if (Array.isArray(this.moonStaffBlessingLooseObjects)) {
+            this.moonStaffBlessingLooseObjects.forEach(obj => {
+                if (obj && obj.active) {
+                    this.moonStaffBlessingTweens.push(this.tweens.add({
+                        targets: obj,
+                        alpha: 0,
+                        scaleX: (obj.scaleX || 1) * 1.18,
+                        scaleY: (obj.scaleY || 1) * 1.18,
+                        duration: 1800,
+                        ease: 'Sine.easeOut'
+                    }));
+                }
+            });
+        }
     }
 
     clearMoonStaffBlessing() {
@@ -4557,6 +4773,18 @@ this.events.on('action_B', () => {
         if (this.moonStaffOrbEvent) {
             this.moonStaffOrbEvent.remove(false);
             this.moonStaffOrbEvent = null;
+        }
+
+        if (this.moonStaffRabbitMoveEvent) {
+            this.moonStaffRabbitMoveEvent.remove(false);
+            this.moonStaffRabbitMoveEvent = null;
+        }
+
+        if (Array.isArray(this.moonStaffBlessingEvents)) {
+            this.moonStaffBlessingEvents.forEach(ev => {
+                if (ev && ev.remove) ev.remove(false);
+            });
+            this.moonStaffBlessingEvents = null;
         }
 
         if (Array.isArray(this.moonStaffBlessingTimers)) {
@@ -4571,6 +4799,13 @@ this.events.on('action_B', () => {
                 if (tween && tween.stop) tween.stop();
             });
             this.moonStaffBlessingTweens = null;
+        }
+
+        if (Array.isArray(this.moonStaffBlessingEmitters)) {
+            this.moonStaffBlessingEmitters.forEach(em => {
+                if (em && em.destroy) em.destroy();
+            });
+            this.moonStaffBlessingEmitters = null;
         }
 
         if (this.moonStaffBlessingEmitter) {
