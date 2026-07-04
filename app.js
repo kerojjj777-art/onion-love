@@ -13,16 +13,94 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);         
 
+// ====== 入口房間設定：良之友天地公開，洋蔥五告派團體白名單 ======
+const DEFAULT_SERVER_ROOM = "ryoFriends";
+
+const SERVER_ROOMS = {
+    onionGang: {
+        name: "洋蔥五告派團體",
+        access: "whitelist"
+    },
+    ryoFriends: {
+        name: "良之友天地",
+        access: "public"
+    }
+};
+
+const ONION_GANG_WHITELIST = {
+    "GkVVzRWAlzenkAUan95q7QfznVb2": true, // onion@gmail.com
+    "Qp7eNdE9xJNd8u8U2Tm4NLHTeGW2": true, // doraemon0224pa@gmail.com
+    "19yrd3VO1BfcrDWuTudVywoVxbX2": true, // k786zx@gmail.com
+    "OhBtu72GvgRa3zHUny2vS8SPTDB2": true, // dorababy1016@gmail.com
+    "LeuuapizXVOstM0ppfZ4RR53DvH2": true, // anna626845@gmail.com
+    "8vpv8neN7dRFVgQ0YA07Xy5Aj4C3": true  // kerojjj777@gmail.com
+};
+// ====== 入口房間設定結束 ======
+
 window.GameLogic = {
     currentUser: null, currentScene: "doghouse",
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0, inventoryOrder: [], princeBond: 0, princePetCountToday: 0, princeLastPetDate: "", princeRewardsClaimed: {}, princeFeedCountToday: 0, princeLastFeedDate: "" },
     cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, placingFurnitureKey: null, 
     phaserGame: null, phaserLoaded: false, pendingScene: null, db: db,
-    armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false, moonBunBuffUntil: 0, moonBunSweepPressCount: 0, moonBunBuffEndNotified: false
+    armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false, moonBunBuffUntil: 0, moonBunSweepPressCount: 0, moonBunBuffEndNotified: false,
+    selectedServerRoom: DEFAULT_SERVER_ROOM, currentServerRoom: DEFAULT_SERVER_ROOM, serverRooms: SERVER_ROOMS, authGuardSigningOut: false
 };
 
-let cafeUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, profileViewingUid = null;
+let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, profileViewingUid = null;
 window.switchScene = switchScene; window.showProfileModal = showProfileModal; window.leaveCafe = leaveCafe; window.signOut = signOut; window.auth = auth;
+
+// ====== 入口房間共用工具 ======
+window.getCurrentServerRoomId = function() {
+    const roomId = window.GameLogic.currentServerRoom || DEFAULT_SERVER_ROOM;
+    return SERVER_ROOMS[roomId] ? roomId : DEFAULT_SERVER_ROOM;
+};
+
+window.getCurrentServerRoomName = function() {
+    const roomId = window.getCurrentServerRoomId();
+    return SERVER_ROOMS[roomId] ? SERVER_ROOMS[roomId].name : SERVER_ROOMS[DEFAULT_SERVER_ROOM].name;
+};
+
+window.getServerRoomPath = function(path) {
+    const roomId = window.getCurrentServerRoomId();
+    return `serverRooms/${roomId}/${path}`;
+};
+
+window.canEnterServerRoom = function(uid, roomId) {
+    const safeRoomId = SERVER_ROOMS[roomId] ? roomId : DEFAULT_SERVER_ROOM;
+    const room = SERVER_ROOMS[safeRoomId];
+
+    if (!room) return false;
+    if (room.access === "public") return true;
+    if (safeRoomId === "onionGang") return !!ONION_GANG_WHITELIST[uid];
+
+    return false;
+};
+
+window.cleanupCurrentServerPresence = async function(uid) {
+    if (!uid) return;
+
+    const jobs = [];
+
+    Object.keys(SERVER_ROOMS).forEach(roomId => {
+        jobs.push(remove(ref(db, `serverRooms/${roomId}/onlinePlayers/${uid}`)));
+        jobs.push(remove(ref(db, `serverRooms/${roomId}/cafePlayers/${uid}`)));
+    });
+
+    // 清掉舊版全域在線殘留，只清自己的 uid，不刪整個節點。
+    jobs.push(remove(ref(db, `onlinePlayers/${uid}`)));
+    jobs.push(remove(ref(db, `cafePlayers/${uid}`)));
+
+    await Promise.allSettled(jobs);
+};
+
+window.updateCurrentRoomLabel = function() {
+    const roomName = window.getCurrentServerRoomName();
+    const topBar = document.getElementById('top-notification-bar');
+    if (topBar && window.GameLogic.currentUser) {
+        topBar.innerText = `系統通知：目前房間：${roomName}`;
+    }
+};
+// ====== 入口房間共用工具結束 ======
 
 window.openFullscreen = function(src) {
     if (!src || src.endsWith('null') || src === '') return;
@@ -128,8 +206,12 @@ function createSystemUI() {
             .action-menu { display: none; position: absolute; background: var(--mucha-paper); border: 2px solid var(--mucha-gold); border-radius: 8px; z-index: 200; padding: 5px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); flex-direction: column; }
             .action-menu button { background: none; border: none; cursor: pointer; font-family: inherit; font-size: 14px; color: var(--mucha-brown); padding: 8px 12px; }
             .action-menu button:hover { background: rgba(197, 160, 89, 0.2); }
-            #login-screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--mucha-paper); padding: 30px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 300; text-align: center; width: 80%; max-width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
-            #login-screen input { padding: 10px; border: 1px solid var(--mucha-gold); border-radius: 4px; background: #fffdf5; margin-bottom: 15px; width: 85%; font-size: 16px; }
+            body.login-bg-active::before { content: ""; position: fixed; inset: 0; background-image: url('cover_pc_2880x1864.png'); background-size: cover; background-position: center; background-repeat: no-repeat; z-index: 0; pointer-events: none; }
+            @media (max-width: 768px), (orientation: portrait) { body.login-bg-active::before { background-image: url('cover_phone_1080x1920.png'); } }
+            body.login-bg-active #app-container { position: relative; z-index: 1; }
+            #login-screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(244, 236, 216, 0.9); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); padding: 30px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 300; text-align: center; width: 80%; max-width: 340px; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
+            #login-screen input, #login-screen select { padding: 10px; border: 1px solid var(--mucha-gold); border-radius: 4px; background: #fffdf5; margin-bottom: 15px; width: 85%; font-size: 16px; box-sizing: border-box; font-family: inherit; color: var(--mucha-brown); }
+            .login-room-label { display:block; width:85%; margin: 0 auto 6px auto; text-align:left; color:var(--mucha-brown); font-size:13px; font-weight:bold; }
             #join-btn { background: var(--mucha-gold); color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; width: 95%; }
             .modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--mucha-paper); padding: 20px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 250; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8); width: 85%; max-width: 320px; max-height: 80vh; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
             .modal h3 { color: var(--mucha-green); margin-top: 0; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 8px; }
@@ -296,7 +378,17 @@ function createSystemUI() {
         <div id="action-menu" class="action-menu"><button id="view-profile-btn">洋蔥身分證</button></div>
         <div id="online-players-container"><button id="online-toggle-btn">👥</button><div id="online-list-wrapper"><div id="online-players-list"></div></div></div>
         <div id="purchase-success-msg" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:#ffcc00; font-size:48px; z-index:400; font-weight:bold; text-align:center; pointer-events:none; -webkit-text-stroke: 2px #d4af37;">你大撒幣！</div>
-        <div id="login-screen"><h2 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">入館登記</h2><input type="email" id="user-email" placeholder="信箱 Email"><br><input type="password" id="user-pwd" placeholder="密碼"><br><button id="join-btn">推開洋蔥世界之門</button></div>
+        <div id="login-screen">
+            <h2 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">入館登記</h2>
+            <label class="login-room-label" for="server-room-select">選擇入口房間</label>
+            <select id="server-room-select">
+                <option value="ryoFriends" selected>良之友天地</option>
+                <option value="onionGang">洋蔥五告派團體</option>
+            </select><br>
+            <input type="email" id="user-email" placeholder="信箱 Email"><br>
+            <input type="password" id="user-pwd" placeholder="密碼"><br>
+            <button id="join-btn">推開洋蔥世界之門</button>
+        </div>
 
         <div id="view-profile-modal" class="modal" style="z-index: 270;">
             <h3 id="vp-title">洋蔥身分證</h3>
@@ -647,6 +739,8 @@ function createSystemUI() {
 }
 createSystemUI();
 
+document.body.classList.add('login-bg-active');
+
 window.getPrinceLocalDateKey = function() {
     const d = new Date();
     const y = d.getFullYear();
@@ -975,7 +1069,7 @@ window.updateOnlinePlayersUI = function() {
         html += `<div style="background: rgba(217, 83, 79, 0.9); color: white; font-weight: bold; padding: 6px; border-radius: 4px; margin-bottom: 8px; text-align: center; font-size: 12px; animation: purpleFire 1s infinite alternate;">🚨 儀式即將開始: ${window.GameLogic.globalSummonCountdown}秒</div>`;
     }
     
-    html += '<div style="color:var(--mucha-gold); font-weight:bold; margin-bottom:5px; text-align:center; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 3px;">誰在線上</div>';
+    html += `<div style="color:var(--mucha-gold); font-weight:bold; margin-bottom:5px; text-align:center; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 3px;">誰在線上<br><span style="font-size:11px; color:#fff;">目前房間：${window.getCurrentServerRoomName()}</span></div>`;
 
     let now = Date.now();
     let players = Object.assign({}, window.GameLogic.onlinePlayers || {});
@@ -1377,7 +1471,7 @@ window.stopUsingItem = function(itemName) {
 window.toggleInventoryEdit = function() { window.GameLogic.inventoryEditMode = !window.GameLogic.inventoryEditMode; let btn = document.getElementById('inventory-edit-btn'); if (btn) { btn.innerText = window.GameLogic.inventoryEditMode ? '完成' : '編輯排序'; btn.className = window.GameLogic.inventoryEditMode ? 'btn-primary' : 'btn-edit'; } window.openInventoryModal(); };
 window.moveInvItem = function(index, dir) { let order = window.GameLogic.myProfile.inventoryOrder || []; if (index + dir >= 0 && index + dir < order.length) { let temp = order[index]; order[index] = order[index + dir]; order[index + dir] = temp; window.GameLogic.myProfile.inventoryOrder = order; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventoryOrder: order }); window.openInventoryModal(); } };
 
-window.clickSysItem = function(key) { document.getElementById('inventory-modal').style.display = 'none'; if (key === 'magic_items') { window.openMagicModal(); } else if (key === 'phone') { window.openPhoneModal(); } else if (key === 'portal') { window.openPortalModal(); } else if (key === 'energy') { window.openEnergyModal(); } else if (key === 'profile') { window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); } else if (key === 'music') { document.getElementById('settings-modal').style.display = 'block'; } else if (key === 'manual') { window.openManualModal(); } else if (key === 'dev') { document.getElementById('dev-modal').style.display = 'block'; } else if (key === 'logout') { window.leaveCafe(); if (window.GameLogic.currentUser) { remove(ref(window.GameLogic.db, 'onlinePlayers/' + window.GameLogic.currentUser.uid)); } window.signOut(window.auth); } };
+window.clickSysItem = function(key) { document.getElementById('inventory-modal').style.display = 'none'; if (key === 'magic_items') { window.openMagicModal(); } else if (key === 'phone') { window.openPhoneModal(); } else if (key === 'portal') { window.openPortalModal(); } else if (key === 'energy') { window.openEnergyModal(); } else if (key === 'profile') { window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); } else if (key === 'music') { document.getElementById('settings-modal').style.display = 'block'; } else if (key === 'manual') { window.openManualModal(); } else if (key === 'dev') { document.getElementById('dev-modal').style.display = 'block'; } else if (key === 'logout') { window.leaveCafe(); if (window.GameLogic.currentUser) { window.cleanupCurrentServerPresence(window.GameLogic.currentUser.uid); } window.signOut(window.auth); } };
 
 window.openMagicModal = function() {
     let inv = window.GameLogic.myProfile.inventory || {};
@@ -1604,11 +1698,58 @@ window.addEventListener('pointerdown', (e) => {
     } 
 });
 document.getElementById('chat-toggle-btn').addEventListener('click', function() { chatSection.classList.toggle('chat-collapsed'); this.innerText = chatSection.classList.contains('chat-collapsed') ? '展開對話 ▼' : '收起對話 ▲'; if (!chatSection.classList.contains('chat-collapsed')) { const chatBox = document.getElementById("chat-box"); chatBox.scrollTop = 0; } });
-document.getElementById("join-btn").addEventListener("click", () => { const email = document.getElementById("user-email").value; const pwd = document.getElementById("user-pwd").value; signInWithEmailAndPassword(auth, email, pwd).catch(error => alert("登入失敗: " + error.message)); });
+document.getElementById("join-btn").addEventListener("click", () => {
+    const roomSelect = document.getElementById("server-room-select");
+    const selectedRoom = roomSelect && SERVER_ROOMS[roomSelect.value] ? roomSelect.value : DEFAULT_SERVER_ROOM;
+
+    window.GameLogic.selectedServerRoom = selectedRoom;
+    window.GameLogic.currentServerRoom = selectedRoom;
+
+    const email = document.getElementById("user-email").value;
+    const pwd = document.getElementById("user-pwd").value;
+
+    signInWithEmailAndPassword(auth, email, pwd)
+        .catch(error => alert("登入失敗: " + error.message));
+});
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        window.GameLogic.currentUser = user; loginScreen.style.display = "none"; gameLayoutContainer.style.display = "block";
+        const requestedRoom = SERVER_ROOMS[window.GameLogic.selectedServerRoom]
+            ? window.GameLogic.selectedServerRoom
+            : DEFAULT_SERVER_ROOM;
+
+        window.GameLogic.currentServerRoom = requestedRoom;
+
+        if (!window.canEnterServerRoom(user.uid, requestedRoom)) {
+            window.GameLogic.authGuardSigningOut = true;
+            await window.cleanupCurrentServerPresence(user.uid);
+
+            alert("此房間僅限洋蔥五告派團體成員進入，請改選良之友天地。");
+
+            window.GameLogic.currentUser = null;
+            window.GameLogic.selectedServerRoom = DEFAULT_SERVER_ROOM;
+            window.GameLogic.currentServerRoom = DEFAULT_SERVER_ROOM;
+            window.GameLogic.onlinePlayers = {};
+            window.GameLogic.cafePlayers = {};
+
+            const roomSelect = document.getElementById("server-room-select");
+            if (roomSelect) roomSelect.value = DEFAULT_SERVER_ROOM;
+
+            loginScreen.style.display = "block";
+            gameLayoutContainer.style.display = "none";
+            document.body.classList.add('login-bg-active');
+
+            await signOut(auth);
+            window.GameLogic.authGuardSigningOut = false;
+            return;
+        }
+
+        window.GameLogic.currentUser = user;
+        loginScreen.style.display = "none";
+        gameLayoutContainer.style.display = "block";
+        document.body.classList.remove('login-bg-active');
+        window.updateCurrentRoomLabel();
+
         const profileSnap = await get(ref(db, `users/${user.uid}`));
         if (profileSnap.exists()) {
             window.GameLogic.myProfile = Object.assign({}, window.GameLogic.myProfile, profileSnap.val());
@@ -1640,24 +1781,30 @@ onAuthStateChanged(auth, async (user) => {
         if (window.checkPendingWeeklyRewardNotice) window.checkPendingWeeklyRewardNotice();
         }, 0);
 
-        onValue(ref(db, '.info/connected'), (snap) => {
+        if (connectedUnsubscribe) { connectedUnsubscribe(); connectedUnsubscribe = null; }
+        connectedUnsubscribe = onValue(ref(db, '.info/connected'), (snap) => {
             if (snap.val() === true && window.GameLogic.currentUser) {
-                const globalPlayerRef = ref(db, `onlinePlayers/${window.GameLogic.currentUser.uid}`);
+                const globalPlayerRef = ref(db, window.getServerRoomPath(`onlinePlayers/${window.GameLogic.currentUser.uid}`));
                 set(globalPlayerRef, {
                      name: window.GameLogic.myProfile.name || '匿名',
                      color: window.GameLogic.myProfile.color || '#fff',
                      lastActive: Date.now()
                  });
-         onDisconnect(globalPlayerRef).remove();
+                onDisconnect(globalPlayerRef).remove();
+
                 if (window.GameLogic.currentScene === 'cafe') {
-                    const cafeRef = ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`);
+                    const cafeRef = ref(db, window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`));
                     set(cafeRef, { x: window.GameLogic.myProfile.lastX || 1024, y: window.GameLogic.myProfile.lastY || 1024, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1, bubbleMsg: window.GameLogic.myProfile.bubbleMsg || "", bubbleTime: window.GameLogic.myProfile.bubbleTime || 0 });
                     onDisconnect(cafeRef).remove();
                 } else if (window.GameLogic.currentScene === 'shrine') { joinShrine(); }
             }
         });
         
-        onValue(ref(db, 'onlinePlayers'), (snapshot) => { window.GameLogic.onlinePlayers = snapshot.val() || {}; window.updateOnlinePlayersUI(); });
+        if (onlinePlayersUnsubscribe) { onlinePlayersUnsubscribe(); onlinePlayersUnsubscribe = null; }
+        onlinePlayersUnsubscribe = onValue(ref(db, window.getServerRoomPath('onlinePlayers')), (snapshot) => {
+            window.GameLogic.onlinePlayers = snapshot.val() || {};
+            window.updateOnlinePlayersUI();
+        });
         onValue(ref(db, `users/${user.uid}/unreadPMs`), snap => { window.GameLogic.unreadPMs = snap.val() || {}; window.updateUnreadGlow(); if (document.getElementById('inventory-modal').style.display === 'block') { window.openInventoryModal(); } });
         onValue(ref(db, 'manuals'), snap => { const data = snap.val(); window.manualPages = []; if (data) { Object.keys(data).forEach(key => { window.manualPages.push({ key: key, imgBase64: data[key].imgBase64, timestamp: data[key].timestamp }); }); window.manualPages.sort((a, b) => a.timestamp - b.timestamp); } window.renderManualPage(); });
         onValue(ref(db, 'cafeFurniture'), snap => window.GameLogic.cafeFurniture = snap.val() || {});
@@ -1708,8 +1855,20 @@ onAuthStateChanged(auth, async (user) => {
         if (!window.GameLogic.phaserGame) { window.GameLogic.pendingScene = window.GameLogic.myProfile.lastScene || "doghouse"; initPhaser(); } else { switchScene(window.GameLogic.myProfile.lastScene || "doghouse"); }
         listenToChat(); listenToMemories();
     } else {
-        window.GameLogic.currentUser = null; loginScreen.style.display = "block"; gameLayoutContainer.style.display = "none";
-        if (cafeUnsubscribe) cafeUnsubscribe(); if (shrineUnsubscribe) shrineUnsubscribe(); if (shrineEventUnsubscribe) shrineEventUnsubscribe(); window.updateOnlinePlayersUI();
+        window.GameLogic.currentUser = null;
+        window.GameLogic.onlinePlayers = {};
+        window.GameLogic.cafePlayers = {};
+        loginScreen.style.display = "block";
+        gameLayoutContainer.style.display = "none";
+        document.body.classList.add('login-bg-active');
+
+        if (connectedUnsubscribe) { connectedUnsubscribe(); connectedUnsubscribe = null; }
+        if (onlinePlayersUnsubscribe) { onlinePlayersUnsubscribe(); onlinePlayersUnsubscribe = null; }
+        if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; }
+        if (shrineUnsubscribe) { shrineUnsubscribe(); shrineUnsubscribe = null; }
+        if (shrineEventUnsubscribe) { shrineEventUnsubscribe(); shrineEventUnsubscribe = null; }
+
+        window.updateOnlinePlayersUI();
     }
 });
 
@@ -1975,7 +2134,7 @@ function leavePlayroom() {
     if (window.rpsUnsubscribe) { window.rpsUnsubscribe(); window.rpsUnsubscribe = null; }
 }
 function joinCafe() {
-    const playerRef = ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`);
+    const playerRef = ref(db, window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`));
     set(playerRef, {
         x: window.GameLogic.myProfile.lastX || 1024,
         y: window.GameLogic.myProfile.lastY || 1024,
@@ -1986,12 +2145,19 @@ function joinCafe() {
         bubbleTime: window.GameLogic.myProfile.bubbleTime
     });
     onDisconnect(playerRef).remove();
-    cafeUnsubscribe = onValue(ref(db, 'cafePlayers'), (snapshot) => {
+
+    if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; }
+    cafeUnsubscribe = onValue(ref(db, window.getServerRoomPath('cafePlayers')), (snapshot) => {
         window.GameLogic.cafePlayers = snapshot.val() || {};
         window.updateOnlinePlayersUI();
     });
 }
-function leaveCafe() { if (window.GameLogic.currentUser) set(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), null); if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; } }
+function leaveCafe() {
+    if (window.GameLogic.currentUser) {
+        set(ref(db, window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`)), null);
+    }
+    if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; }
+}
 
 function gainRewards(coins, exp) {
     let p = window.GameLogic.myProfile; p.coins = (p.coins || 0) + coins; p.exp = (p.exp || 0) + exp; p.sweeps = (p.sweeps || 0) + 1; 
@@ -2018,11 +2184,53 @@ class BootScene extends Phaser.Scene {
     constructor() { super('BootScene'); }
     preload() {
         let w = this.cameras.main.width, h = this.cameras.main.height;
+
+        // Loading 背景 fallback：即使封面圖缺檔，也不讓畫面黑掉。
+        this.add.rectangle(w / 2, h / 2, w, h, 0x1f140d).setDepth(-30);
+
+        const loadingCoverKey = (window.innerWidth <= 768 || window.innerHeight > window.innerWidth)
+            ? 'loading-cover-phone'
+            : 'loading-cover-pc';
+
+        const showLoadingCover = (key) => {
+            if (!this.textures.exists(key) || this.loadingCoverImage) return;
+
+            const cover = this.add.image(w / 2, h / 2, key).setDepth(-20);
+            const source = cover.texture.getSourceImage();
+            const imgW = source && source.width ? source.width : w;
+            const imgH = source && source.height ? source.height : h;
+            const scale = Math.max(w / imgW, h / imgH);
+
+            cover.setScale(scale);
+            this.loadingCoverImage = cover;
+        };
+
+        this.load.once(`filecomplete-image-${loadingCoverKey}`, () => {
+            showLoadingCover(loadingCoverKey);
+        });
+
+        this.load.image('loading-cover-pc', 'cover_pc_2880x1864.png');
+        this.load.image('loading-cover-phone', 'cover_phone_1080x1920.png');
+
         let progressBox = this.add.graphics().fillStyle(0x3e2723, 0.8).fillRoundedRect(w/2 - 160, h/2 - 25, 320, 50, 8).lineStyle(2, 0xc5a059, 1).strokeRoundedRect(w/2 - 160, h/2 - 25, 320, 50, 8);
+        progressBox.setDepth(10);
+
         let progressBar = this.add.graphics();
+        progressBar.setDepth(11);
+
         let pt = this.make.text({ x: w/2, y: h/2, text: '0%', style: { font: 'bold 18px Georgia', fill: '#ffffff' } }).setOrigin(0.5, 0.5);
-        this.load.on('progress', val => { pt.setText(parseInt(val * 100) + '%'); progressBar.clear().fillStyle(0xc5a059, 1).fillRoundedRect(w/2 - 150, h/2 - 15, 300 * val, 30, 6); });
-        this.load.on('complete', () => { progressBar.destroy(); progressBox.destroy(); pt.destroy(); });
+        pt.setDepth(12);
+
+        this.load.on('progress', val => {
+            pt.setText(parseInt(val * 100) + '%');
+            progressBar.clear().fillStyle(0xc5a059, 1).fillRoundedRect(w/2 - 150, h/2 - 15, 300 * val, 30, 6);
+        });
+
+        this.load.on('complete', () => {
+            progressBar.destroy();
+            progressBox.destroy();
+            pt.destroy();
+        });
 
         this.load.plugin('rexvirtualjoystickplugin', 'https://cdn.jsdelivr.net/gh/rexrainbow/phaser3-rex-notes@master/dist/rexvirtualjoystickplugin.min.js', true);
         this.load.image('bgCafe', 'cafe-bg.jpg'); this.load.image('bgDoghouse', 'doghouse-bg.jpg'); this.load.image('bgFarm', 'farm-bg.jpg'); this.load.image('bgShrine', 'shrine-bg.jpg'); 
@@ -2812,7 +3020,7 @@ class MainScene extends Phaser.Scene {
         if (this.sound.get('brooming1')) this.sound.stopByKey('brooming1'); 
 
         if (this.isCafe && window.GameLogic.currentUser) {
-            update(ref(window.GameLogic.db, `cafePlayers/${window.GameLogic.currentUser.uid}`), {
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`)), {
                 isSweeping: false,
                 x: this.localPlayer.sprite.x,
                 y: this.localPlayer.sprite.y
@@ -3426,7 +3634,7 @@ this.events.on('action_A_short', () => {
                             targetUid: targetUid || 'none'
                         });
                     } else if (this.sceneName === 'cafe') {
-                        update(ref(window.GameLogic.db, `cafePlayers/${window.GameLogic.currentUser.uid}`), {
+                        update(ref(window.GameLogic.db, window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`)), {
                             action: 'throwWater',
                             actionTime: waterActionTime,
                             targetUid: targetUid || 'none'
@@ -3890,7 +4098,7 @@ this.events.on('action_B', () => {
     this.qteContainer.setVisible(true); 
 
     if (this.isCafe && window.GameLogic.currentUser) {
-        update(ref(window.GameLogic.db, `cafePlayers/${window.GameLogic.currentUser.uid}`), {
+        update(ref(window.GameLogic.db, window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`)), {
             isSweeping: true,
             x: this.localPlayer.sprite.x,
             y: this.localPlayer.sprite.y
@@ -11558,7 +11766,7 @@ this.events.on('action_B', () => {
     getCurrentPlayerPathForAction() {
         if (!window.GameLogic.currentUser) return null;
         const uid = window.GameLogic.currentUser.uid;
-        if (this.isCafe) return `cafePlayers/${uid}`;
+        if (this.isCafe) return window.getServerRoomPath(`cafePlayers/${uid}`);
         if (this.sceneName === 'shrine') return `shrinePlayers/${uid}`;
         if (this.sceneName === 'playroom' && window.GameLogic.currentRoomId) return `playroomPlayers/${window.GameLogic.currentRoomId}/${uid}`;
         if (this.sceneName === 'partyroom' && window.PartyLogic && window.PartyLogic.roomId) return `partyRooms/${window.PartyLogic.roomId}/players/${uid}`;
@@ -12378,7 +12586,7 @@ finishPrinceCatFeeding(uid, catRef, feedingToken = null) {
         }
     }
 
-    update(ref(window.GameLogic.db, `cafePlayers/${uid}`), {
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`cafePlayers/${uid}`)), {
         action: null,
         actionTime: null
     }).catch(err => console.warn('[王子麵餵食] 清除玩家餵食 action 失敗：', err));
@@ -12489,7 +12697,7 @@ async startPrinceCatFeeding() {
             this.localPlayer.sprite.setTexture('onion-feeding');
         }
 
-        update(ref(window.GameLogic.db, `cafePlayers/${uid}`), {
+        update(ref(window.GameLogic.db, window.getServerRoomPath(`cafePlayers/${uid}`)), {
             action: 'feedPrinceCat',
             actionTime: now,
             x: this.localPlayer.sprite.x,
@@ -12685,7 +12893,7 @@ tryPrinceCatSweepBonus(x, y) {
             lockedUntil: lockUntil
         });
 
-        update(ref(window.GameLogic.db, `cafePlayers/${uid}`), {
+        update(ref(window.GameLogic.db, window.getServerRoomPath(`cafePlayers/${uid}`)), {
             action: 'petPrinceCat',
             actionTime: now,
             x: this.localPlayer.sprite.x,
@@ -12703,7 +12911,7 @@ tryPrinceCatSweepBonus(x, y) {
             }
             this.princePettingLockUntil = 0;
 
-            update(ref(window.GameLogic.db, `cafePlayers/${uid}`), {
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`cafePlayers/${uid}`)), {
                 action: null,
                 actionTime: null
             });
@@ -12917,7 +13125,7 @@ if (activeBubbleMsg) {
         window.GameLogic.moonBunSweepPressCount = 0;
 
         if (this.isCafe && window.GameLogic.currentUser) {
-            update(ref(window.GameLogic.db, `cafePlayers/${window.GameLogic.currentUser.uid}`), {
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`)), {
                 isSweeping: false,
                 x: this.localPlayer.sprite.x,
                 y: this.localPlayer.sprite.y
@@ -13450,7 +13658,7 @@ if (activeBubbleMsg) {
         // 修正4：心跳機制更新，每 5 秒上傳一次當前時間戳，用於徹底過濾斷線與幽靈人口
         if (!this.lastHeartbeatSync || time - this.lastHeartbeatSync > 5000) {
             this.lastHeartbeatSync = time;
-            update(ref(window.GameLogic.db, `onlinePlayers/${window.GameLogic.currentUser.uid}`), {
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`onlinePlayers/${window.GameLogic.currentUser.uid}`)), {
                 lastActive: Date.now(),
                 name: window.GameLogic.myProfile.name || '匿名',
                 color: window.GameLogic.myProfile.color || '#fff'
@@ -13615,7 +13823,7 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
                 }
                 if ((this.isCafe || this.sceneName === 'shrine' || this.sceneName === 'playroom' || this.sceneName === 'partyroom') && (vx !== 0 || vy !== 0)) { 
                     if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) { 
-                        let path = this.isCafe ? `cafePlayers/${window.GameLogic.currentUser.uid}` : (this.sceneName === 'shrine' ? `shrinePlayers/${window.GameLogic.currentUser.uid}` : (this.sceneName === 'playroom' ? `playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}` : `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`)); 
+                        let path = this.isCafe ? window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`) : (this.sceneName === 'shrine' ? `shrinePlayers/${window.GameLogic.currentUser.uid}` : (this.sceneName === 'playroom' ? `playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}` : `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`)); 
                         update(ref(window.GameLogic.db, path), { x: this.localPlayer.sprite.x, y: this.localPlayer.sprite.y }); this.lastSyncTime = Date.now(); 
                     } 
                 }
@@ -14044,7 +14252,7 @@ function showProfileModal(p, uid) {
     viewProfileModal.style.display = "block"; 
 }
 document.getElementById("start-edit-btn").addEventListener("click", () => { document.getElementById("start-edit-btn").style.display = "none"; document.getElementById("save-edit-btn").style.display = "inline-block"; ['name', 'color', 'birth', 'food', 'motto'].forEach(k => { let t = document.getElementById(`vp-${k}`); let i = document.getElementById(`edit-${k}`); if (k === 'color') { i.value = window.GameLogic.myProfile.color || '#c5a059'; } else if (k === 'name') { i.value = window.GameLogic.myProfile.name || '匿名'; } else { i.value = t.innerText === '未知' || t.innerText === '無' ? '' : t.innerText; } t.style.display = 'none'; i.style.display = 'inline-block'; }); });
-document.getElementById("save-edit-btn").addEventListener("click", () => { let newData = { name: document.getElementById("edit-name").value.trim() || '匿名', color: document.getElementById("edit-color").value || '#c5a059', birth: document.getElementById("edit-birth").value.trim() || '未知', food: document.getElementById("edit-food").value.trim() || '無', motto: document.getElementById("edit-motto").value.trim() || '無' }; update(ref(db, `users/${window.GameLogic.currentUser.uid}`), newData).then(() => { window.GameLogic.myProfile = Object.assign({}, window.GameLogic.myProfile, newData); if (window.GameLogic.currentScene === "cafe") { update(ref(db, `cafePlayers/${window.GameLogic.currentUser.uid}`), { name: newData.name, color: newData.color }); } update(ref(db, `onlinePlayers/${window.GameLogic.currentUser.uid}`), { name: newData.name, color: newData.color }); showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); }); });
+document.getElementById("save-edit-btn").addEventListener("click", () => { let newData = { name: document.getElementById("edit-name").value.trim() || '匿名', color: document.getElementById("edit-color").value || '#c5a059', birth: document.getElementById("edit-birth").value.trim() || '未知', food: document.getElementById("edit-food").value.trim() || '無', motto: document.getElementById("edit-motto").value.trim() || '無' }; update(ref(db, `users/${window.GameLogic.currentUser.uid}`), newData).then(() => { window.GameLogic.myProfile = Object.assign({}, window.GameLogic.myProfile, newData); if (window.GameLogic.currentScene === "cafe") { update(ref(db, window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`)), { name: newData.name, color: newData.color }); } update(ref(db, window.getServerRoomPath(`onlinePlayers/${window.GameLogic.currentUser.uid}`)), { name: newData.name, color: newData.color }); showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); }); });
 
 document.getElementById("send-btn").addEventListener("click", sendChat);
 window.addEventListener("keydown", (e) => { if (e.key === "Enter") { if (document.activeElement === chatInput) sendChat(); else if (document.activeElement === document.getElementById("pm-input")) window.sendPM(); } });
@@ -14070,7 +14278,7 @@ function sendBubble(msg, options = {}) {
         window.GameLogic.myProfile.bubbleYOffset = bubbleYOffset;
 
         let path = "";
-        if (window.GameLogic.currentScene === "cafe") path = `cafePlayers/${window.GameLogic.currentUser.uid}`;
+        if (window.GameLogic.currentScene === "cafe") path = window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`);
         else if (window.GameLogic.currentScene === "shrine") path = `shrinePlayers/${window.GameLogic.currentUser.uid}`;
         else if (window.GameLogic.currentScene === "playroom" && window.GameLogic.currentRoomId) path = `playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`;
         
