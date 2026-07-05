@@ -3020,7 +3020,7 @@ class BootScene extends Phaser.Scene {
         // 補丁 6-1：玉兔伴手禮店 placeholder 素材。缺檔時商店會使用 Phaser fallback，不讓副本黑頻。
         this.load.image('solo-rocket-rabbit-shop-bg', 'solo-rocket-rabbit-shop-bg.png');
         this.load.image('solo-rocket-rabbit-shopkeeper', 'solo-rocket-rabbit-shopkeeper.png');
-        this.load.spritesheet('solo-rocket-rabbit-shopkeeper-sheet', 'solo-rocket-rabbit-shopkeeper-sheet.png', { frameWidth: 100, frameHeight: 100 });
+        this.load.spritesheet('solo-rocket-rabbit-shopkeeper-sheet', 'solo-rocket-rabbit-shopkeeper-sheet.png', { frameWidth: 300, frameHeight: 300 });
         this.load.image('solo-rocket-item-moon-shard', 'solo-rocket-item-moon-shard.png');
         this.load.image('solo-rocket-item-moon-staff', 'solo-rocket-item-moon-staff.png');
         this.load.image('solo-rocket-item-moon-bun', 'solo-rocket-item-moon-bun.png');
