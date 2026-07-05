@@ -222,8 +222,31 @@ window.changeTrack = function(dir) {
 window.prevTrack = () => window.changeTrack(-1); window.nextTrack = () => window.changeTrack(1);
 
 window.closeProfileModal = function() {
-    document.getElementById('view-profile-modal').style.display = 'none';
-    if (profileViewingUid && profileViewingUid !== window.GameLogic.currentUser.uid) document.getElementById('phone-modal').style.display = 'block';
+    const profileModal = document.getElementById('view-profile-modal');
+    const shouldReturnToPhone = !!(
+        profileViewingUid &&
+        window.GameLogic.currentUser &&
+        profileViewingUid !== window.GameLogic.currentUser.uid
+    );
+
+    const afterClose = () => {
+        if (shouldReturnToPhone) {
+            const phoneModal = document.getElementById('phone-modal');
+            if (phoneModal) {
+                phoneModal.style.display = 'block';
+                if (window.prepareModalSwitchAnimation) {
+                    window.prepareModalSwitchAnimation(phoneModal, 'enter');
+                }
+            }
+        }
+    };
+
+    if (window.closeInventoryChildModal) {
+        window.closeInventoryChildModal(profileModal, { afterClose });
+    } else {
+        if (profileModal) profileModal.style.display = 'none';
+        afterClose();
+    }
 };
 window.openPortalModal = function() { document.getElementById('inventory-modal').style.display = 'none'; document.getElementById('portal-modal').style.display = 'block'; };
 
@@ -968,7 +991,7 @@ function createSystemUI() {
                 z-index:2;
             }
             #inventory-modal.inventory-opening {
-                animation:inventory-forest-open 1s cubic-bezier(0.16, 0.9, 0.18, 1) forwards;
+                animation:inventory-forest-open 0.5s cubic-bezier(0.16, 0.9, 0.18, 1) forwards;
             }
             #inventory-modal.inventory-closing {
                 animation:inventory-forest-close 1s cubic-bezier(0.72, 0, 0.84, 0.1) forwards;
@@ -1047,7 +1070,7 @@ function createSystemUI() {
                 opacity:0;
             }
             #inventory-modal.inventory-opening .inventory-burst-particle-field span {
-                animation:inventory-coffee-particle-pop 1s ease-out forwards;
+                animation:inventory-coffee-particle-pop 0.5s ease-out forwards;
                 animation-delay:var(--inv-p-delay, 0s);
             }
             #inventory-modal.inventory-closing .inventory-burst-particle-field span {
@@ -1232,22 +1255,22 @@ function createSystemUI() {
             #inventory-modal.inventory-opening #inventory-list,
             #inventory-modal.inventory-opening #inventory-x-close {
                 opacity:0;
-                animation:inventory-content-drop-bounce 0.3s cubic-bezier(0.2, 1.4, 0.34, 1) forwards;
-                animation-delay:0.58s;
+                animation:inventory-content-drop-bounce 0.22s cubic-bezier(0.2, 1.4, 0.34, 1) forwards;
+                animation-delay:0.18s;
             }
             #inventory-modal.inventory-opening #inventory-list .catalog-item {
                 opacity:0;
-                animation:inventory-item-fast-pop 0.26s cubic-bezier(0.2, 1.35, 0.35, 1) forwards;
+                animation:inventory-item-fast-pop 0.16s cubic-bezier(0.2, 1.35, 0.35, 1) forwards;
             }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(1) { animation-delay:0.66s; }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(2) { animation-delay:0.69s; }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(3) { animation-delay:0.72s; }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(4) { animation-delay:0.75s; }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(5) { animation-delay:0.78s; }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(6) { animation-delay:0.81s; }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(7) { animation-delay:0.84s; }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(8) { animation-delay:0.87s; }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(n+9) { animation-delay:0.9s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(1) { animation-delay:0.21s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(2) { animation-delay:0.23s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(3) { animation-delay:0.25s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(4) { animation-delay:0.27s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(5) { animation-delay:0.29s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(6) { animation-delay:0.31s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(7) { animation-delay:0.33s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(8) { animation-delay:0.35s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(n+9) { animation-delay:0.37s; }
             #inventory-modal.inventory-closing #inventory-header,
             #inventory-modal.inventory-closing #inventory-list,
             #inventory-modal.inventory-closing #inventory-x-close {
@@ -1303,6 +1326,11 @@ function createSystemUI() {
             }
             .modal.modal-switch-exit {
                 animation:modal-switch-exit 0.25s ease-in forwards !important;
+                pointer-events:none !important;
+                transform-origin:center center !important;
+            }
+            .modal.inventory-child-closing {
+                animation:modal-switch-exit 0.2s ease-in forwards !important;
                 pointer-events:none !important;
                 transform-origin:center center !important;
             }
@@ -3118,7 +3146,7 @@ window.showInventoryModalWithFx = function() {
             modal.classList.add('inventory-opened');
         }
         window.__inventoryOpenTimer = null;
-    }, 1050);
+    }, 550);
 };
 
 window.closeInventoryModal = function(options = {}) {
@@ -3175,7 +3203,7 @@ window.prepareModalSwitchAnimation = function(modal, mode) {
         : 'translate(0, 0)';
 
     modal.style.setProperty('--modal-switch-base-transform', baseTransform);
-    modal.classList.remove('modal-switch-enter', 'modal-switch-exit');
+    modal.classList.remove('modal-switch-enter', 'modal-switch-exit', 'inventory-child-closing');
 
     void modal.offsetWidth;
 
@@ -3186,6 +3214,99 @@ window.prepareModalSwitchAnimation = function(modal, mode) {
         modal.style.removeProperty('--modal-switch-base-transform');
     }, 270);
 };
+
+window.closeInventoryChildModal = function(modalOrId, options = {}) {
+    const modal = typeof modalOrId === 'string'
+        ? document.getElementById(modalOrId)
+        : modalOrId;
+
+    if (!modal) return;
+
+    const immediate = !!options.immediate;
+    const afterClose = typeof options.afterClose === 'function' ? options.afterClose : null;
+
+    if (modal.__inventoryChildCloseTimer) {
+        clearTimeout(modal.__inventoryChildCloseTimer);
+        modal.__inventoryChildCloseTimer = null;
+    }
+
+    modal.classList.remove('modal-switch-enter', 'modal-switch-exit', 'inventory-child-closing');
+
+    if (immediate || modal.style.display === 'none') {
+        modal.style.display = 'none';
+        modal.style.pointerEvents = '';
+        modal.style.removeProperty('--modal-switch-base-transform');
+        if (afterClose) afterClose();
+        return;
+    }
+
+    const computed = window.getComputedStyle(modal);
+    const baseTransform = computed.transform && computed.transform !== 'none'
+        ? computed.transform
+        : 'translate(0, 0)';
+
+    modal.style.setProperty('--modal-switch-base-transform', baseTransform);
+    modal.style.pointerEvents = 'none';
+
+    void modal.offsetWidth;
+
+    modal.classList.add('inventory-child-closing');
+
+    modal.__inventoryChildCloseTimer = setTimeout(() => {
+        modal.style.display = 'none';
+        modal.classList.remove('inventory-child-closing', 'modal-switch-enter', 'modal-switch-exit');
+        modal.style.removeProperty('--modal-switch-base-transform');
+        modal.style.pointerEvents = '';
+        modal.__inventoryChildCloseTimer = null;
+
+        if (afterClose) afterClose();
+        if (window.clearUiBlockersAfterModal) window.clearUiBlockersAfterModal();
+    }, 210);
+};
+
+window.installInventoryChildModalCloseGuard = function() {
+    if (window.__inventoryChildModalCloseGuardInstalled) return;
+    window.__inventoryChildModalCloseGuardInstalled = true;
+
+    const childModalIds = {
+        'energy-modal': true,
+        'phone-modal': true,
+        'portal-modal': true,
+        'settings-modal': true,
+        'magic-modal': true,
+        'manual-modal': true,
+        'view-profile-modal': true,
+        'dev-modal': true
+    };
+
+    document.addEventListener('click', function(e) {
+        const btn = e.target && e.target.closest ? e.target.closest('.close-modal-btn') : null;
+        if (!btn) return;
+
+        const modal = btn.closest ? btn.closest('.modal') : null;
+        if (!modal || !childModalIds[modal.id]) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+
+        if (modal.id === 'view-profile-modal' && typeof window.closeProfileModal === 'function') {
+            window.closeProfileModal();
+            return;
+        }
+
+        if (modal.id === 'dev-modal') {
+            window.closeInventoryChildModal(modal, {
+                afterClose: () => window.openInventoryModal({ noFx: true })
+            });
+            return;
+        }
+
+        window.closeInventoryChildModal(modal);
+    }, true);
+};
+
+window.installInventoryChildModalCloseGuard();
 
 window.getInventoryLinkedModalElement = function(key) {
     const map = {
@@ -3788,8 +3909,12 @@ window.hasValidUnreadPM = function(uid) {
 
 window.closePhoneModal = function() {
     const phoneModal = document.getElementById('phone-modal');
-    if (phoneModal) phoneModal.style.display = 'none';
-    window.clearUiBlockersAfterModal();
+    if (window.closeInventoryChildModal) {
+        window.closeInventoryChildModal(phoneModal);
+    } else {
+        if (phoneModal) phoneModal.style.display = 'none';
+        window.clearUiBlockersAfterModal();
+    }
 };
 
 window.safePhoneColor = function(val) {
@@ -5516,8 +5641,54 @@ this.btnB.on('pointerout', () => {
     }
 
     setStandardActionButtonsVisible(visible) {
-        [this.btnA, this.txtA, this.btnB, this.txtB, this.furnBtn, this.furnText, this.itemBtn, this.itemText].forEach(obj => {
+        [this.btnA, this.txtA, this.btnB, this.txtB, this.itemBtn, this.itemText].forEach(obj => {
             if (obj && obj.setVisible) obj.setVisible(visible);
+        });
+        this.setFurnitureActionButtonVisible(visible);
+    }
+
+    setFurnitureActionButtonVisible(visible) {
+        const targets = [this.furnBtn, this.furnText];
+        if (this.furnBtn && this.furnBtn.__onionUiSkin) targets.push(this.furnBtn.__onionUiSkin);
+
+        const safeTargets = targets.filter(obj => obj && obj.setVisible && obj.setAlpha);
+        const currentVisible = !!(this.furnBtn && this.furnBtn.visible);
+
+        if (this.furnitureButtonVisibleState === visible && currentVisible === visible) return;
+        this.furnitureButtonVisibleState = visible;
+
+        if (this.furnitureButtonFadeTween) {
+            this.furnitureButtonFadeTween.stop();
+            this.furnitureButtonFadeTween = null;
+        }
+
+        if (visible) {
+            safeTargets.forEach(obj => {
+                obj.setVisible(true);
+                obj.setAlpha(0);
+            });
+
+            this.furnitureButtonFadeTween = this.tweens.add({
+                targets: safeTargets,
+                alpha: 1,
+                duration: 250,
+                ease: 'Sine.easeOut',
+                onComplete: () => {
+                    this.furnitureButtonFadeTween = null;
+                }
+            });
+            return;
+        }
+
+        this.furnitureButtonFadeTween = this.tweens.add({
+            targets: safeTargets,
+            alpha: 0,
+            duration: 250,
+            ease: 'Sine.easeIn',
+            onComplete: () => {
+                safeTargets.forEach(obj => obj.setVisible(false));
+                this.furnitureButtonFadeTween = null;
+            }
         });
     }
 
@@ -14145,9 +14316,9 @@ if (!data.scoreHandled && data.attacker) {
         const hasButton = !!options.buttonLabel;
         const isProductCard = !!options.productCard;
         const safeMargin = 14;
-        const bubbleW = Math.min(rect.w - safeMargin * 2, isProductCard ? 430 : (hasButton ? 360 : 340));
+        const bubbleW = Math.min(rect.w - safeMargin * 2, isProductCard ? 440 : (hasButton ? 360 : 340));
         const bubbleH = isProductCard
-            ? Phaser.Math.Clamp(Math.floor(rect.h * 0.24), 154, 194)
+            ? Phaser.Math.Clamp(Math.floor(rect.h * 0.27), 178, 220)
             : (hasButton ? Phaser.Math.Clamp(Math.floor(rect.h * 0.16), 94, 118) : 68);
 
         const minBubbleY = rect.y + bubbleH / 2 + 76;
@@ -14211,8 +14382,8 @@ if (!data.scoreHandled && data.attacker) {
         let txt = null;
 
         if (isProductCard) {
-            const titleText = this.add.text(bubbleLeft + 18, bubbleTop + 13, options.cardTitle || '', {
-                fontSize: rect.w < 420 ? '14px' : '16px',
+            const titleText = this.add.text(bubbleLeft + 18, bubbleTop + 14, options.cardTitle || '', {
+                fontSize: rect.w < 420 ? '16px' : '18px',
                 fontFamily: 'Arial, sans-serif',
                 fontStyle: 'bold',
                 color: '#ffffff',
@@ -14222,8 +14393,8 @@ if (!data.scoreHandled && data.attacker) {
             }).setOrigin(0, 0);
             titleText.setShadow(0, 0, '#f2a6ff', 8, true, true);
 
-            const statsText = this.add.text(bubbleLeft + 18, bubbleTop + 42, options.cardStats || '', {
-                fontSize: rect.w < 420 ? '12px' : '13px',
+            const statsText = this.add.text(bubbleLeft + 18, bubbleTop + 49, options.cardStats || '', {
+                fontSize: rect.w < 420 ? '14px' : '15px',
                 fontFamily: 'Arial, sans-serif',
                 fontStyle: 'bold',
                 color: '#9dffca',
@@ -14232,13 +14403,13 @@ if (!data.scoreHandled && data.attacker) {
                 wordWrap: { width: bubbleW - 36, useAdvancedWrap: true }
             }).setOrigin(0, 0);
 
-            const descText = this.add.text(bubbleLeft + 18, bubbleTop + 70, options.cardDesc || '', {
-                fontSize: bubbleH < 170 ? '11px' : '13px',
+            const descText = this.add.text(bubbleLeft + 18, bubbleTop + 82, options.cardDesc || '', {
+                fontSize: bubbleH < 190 ? '14px' : '15px',
                 fontFamily: 'Arial, sans-serif',
                 color: '#fff7ff',
                 stroke: '#180024',
                 strokeThickness: 2,
-                lineSpacing: bubbleH < 170 ? 2 : 4,
+                lineSpacing: bubbleH < 190 ? 5 : 7,
                 wordWrap: { width: bubbleW - 36, useAdvancedWrap: true }
             }).setOrigin(0, 0);
 
@@ -17257,10 +17428,11 @@ tryPrinceCatSweepBonus(x, y) {
             if (entity.localAura) { entity.localAura.setVisible(false); }
         }
         let forcedBubbleMsg = (pData.action === 'showOff' || (entity === this.localPlayer && entity.isShowingOff)) ? '這個洋蔥正在炫耀' : '';
-let activeBubbleMsg = forcedBubbleMsg || ((pData.bubbleMsg && (Date.now() - (pData.bubbleTime || 0) < 10000)) ? pData.bubbleMsg : '');
+let bubbleType = pData.bubbleType || pData.bubbleKind || 'system';
+let bubbleDuration = bubbleType === 'chat' ? 10000 : 3000;
+let activeBubbleMsg = forcedBubbleMsg || ((pData.bubbleMsg && (Date.now() - (pData.bubbleTime || 0) < bubbleDuration)) ? pData.bubbleMsg : '');
 let activeBubbleAnchor = activeBubbleMsg ? (pData.bubbleAnchor || '') : '';
 let activeBubbleYOffset = Number(pData.bubbleYOffset);
-
 if (activeBubbleMsg) { 
     entity.bubbleContainer.setVisible(true);
     if (entity.lastBubbleData !== activeBubbleMsg) { 
@@ -19278,11 +19450,13 @@ function sendBubble(msg, options = {}) {
         const bubbleAnchor = options.bubbleAnchor || null;
         const parsedYOffset = Number(options.yOffset);
         const bubbleYOffset = Number.isFinite(parsedYOffset) ? parsedYOffset : null;
+        const bubbleType = options.bubbleType === 'chat' ? 'chat' : 'system';
 
         window.GameLogic.myProfile.bubbleMsg = msg; 
         window.GameLogic.myProfile.bubbleTime = bubbleTime; 
         window.GameLogic.myProfile.bubbleAnchor = bubbleAnchor;
         window.GameLogic.myProfile.bubbleYOffset = bubbleYOffset;
+        window.GameLogic.myProfile.bubbleType = bubbleType;
 
         let path = "";
         if (window.GameLogic.currentScene === "cafe") path = window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`);
@@ -19294,7 +19468,8 @@ function sendBubble(msg, options = {}) {
                 bubbleMsg: msg, 
                 bubbleTime: bubbleTime,
                 bubbleAnchor: bubbleAnchor,
-                bubbleYOffset: bubbleYOffset
+                bubbleYOffset: bubbleYOffset,
+                bubbleType: bubbleType
             }); 
         }
     } 
@@ -19317,7 +19492,7 @@ function sendChat() {
             time: now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute:'2-digit' })
         });
 
-        sendBubble(msg);
+        sendBubble(msg, { bubbleType: 'chat' });
         chatInput.value = "";
 
         if (window.isMobileTouchViewport && window.isMobileTouchViewport()) {
