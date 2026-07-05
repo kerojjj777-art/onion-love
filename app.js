@@ -3251,11 +3251,49 @@ class UIScene extends Phaser.Scene {
         this.furnBtn = this.add.circle(0, 0, 30, 0x8b5a2b).setStrokeStyle(3, 0xc5a059).setInteractive(); this.furnText = this.add.text(0, 0, '家俱', { fontSize: '16px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
         this.itemBtn = this.add.circle(0, 0, 30, 0x607d8b).setStrokeStyle(3, 0xc5a059).setInteractive(); this.itemText = this.add.text(0, 0, '給西', { fontSize: '16px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
 
+        this.sweepBtnGlow = this.add.circle(0, 0, 62, 0xfff176, 0.18).setStrokeStyle(2, 0xffffff, 0.35).setDepth(208).setVisible(false);
+        this.sweepBtn = this.add.circle(0, 0, 50, 0xffcc00).setStrokeStyle(4, 0xffffff, 1).setInteractive({ useHandCursor: true }).setDepth(209).setVisible(false);
+        this.sweepText = this.add.text(0, 0, '掃！', {
+            fontSize: '30px',
+            color: '#5d3300',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(210).setVisible(false).setShadow(0, 0, '#ffffff', 4, true, true);
+
         this.itemBtn.on('pointerdown', () => { window.openInventoryModal(); });
         this.furnBtn.on('pointerdown', () => { if (this.furnText.text === '農具') return alert("農具選單尚未開放！"); openFurnitureCatalog(); });
         this.aPressTime = 0;
         this.btnA.on('pointerdown', () => { this.btnA.setFillStyle(0xb52b27); this.aPressTime = Date.now(); });
         this.btnA.on('pointerup', () => { this.btnA.setFillStyle(0xd9534f); let duration = Date.now() - this.aPressTime; const mainScene = this.scene.manager.getScene('MainScene'); if(mainScene) { if (window.GameLogic.placingFurnitureKey) mainScene.events.emit('action_A_place'); else if (duration > 500) mainScene.events.emit('action_A_long'); else mainScene.events.emit('action_A_short'); } });
+
+        this.sweepBtn.on('pointerdown', () => {
+            const mainScene = this.scene.manager.getScene('MainScene');
+            if (!mainScene || !mainScene.localPlayer || !mainScene.localPlayer.isSweeping) return;
+
+            this.sweepBtn.setFillStyle(0xffe066);
+            this.sweepBtnGlow.setVisible(true).setAlpha(0.45);
+
+            this.tweens.add({
+                targets: [this.sweepBtn, this.sweepText],
+                scaleX: 1.08,
+                scaleY: 1.08,
+                yoyo: true,
+                duration: 80
+            });
+
+            this.tweens.add({
+                targets: this.sweepBtnGlow,
+                alpha: 0.12,
+                yoyo: true,
+                duration: 120,
+                onComplete: () => {
+                    if (!this.sweepBtn || !this.sweepBtn.visible) this.sweepBtnGlow.setVisible(false);
+                }
+            });
+
+            mainScene.events.emit('action_A_short');
+        });
+        this.sweepBtn.on('pointerup', () => { this.sweepBtn.setFillStyle(0xffcc00); });
+        this.sweepBtn.on('pointerout', () => { this.sweepBtn.setFillStyle(0xffcc00); });
         
         // 建立法寶選單的華麗粒子背景 (修正偏移與外框範圍)
         this.magicMenuEmitter = this.add.particles(0, 0, 'particle_flare', {
@@ -3292,7 +3330,7 @@ class UIScene extends Phaser.Scene {
         this.expLiquid.tilePositionX -= 0.5;
 
         if (window.GameLogic.soloRocketCruiseActive) {
-            [this.furnBtn, this.furnText, this.itemBtn, this.itemText, this.btnA, this.txtA, this.btnB, this.txtB, this.statusContainer].forEach(obj => {
+            [this.furnBtn, this.furnText, this.itemBtn, this.itemText, this.btnA, this.txtA, this.btnB, this.txtB, this.statusContainer, this.sweepBtn, this.sweepText, this.sweepBtnGlow].forEach(obj => {
                 if (obj && obj.setVisible) obj.setVisible(false);
             });
 
@@ -3315,6 +3353,7 @@ class UIScene extends Phaser.Scene {
             this.furnBtn.setVisible(false); this.furnText.setVisible(false);
             this.itemBtn.setVisible(false); this.itemText.setVisible(false);
             this.statusContainer.setVisible(false);
+            this.setSweepButtonVisible(false);
             
             if (!this.partyDash) {
                 this.partyDash = this.add.container(20, this.cameras.main.height - 100).setDepth(200).setScrollFactor(0);
@@ -3333,8 +3372,16 @@ class UIScene extends Phaser.Scene {
             }
             this.partyDashText.setText(`x${ammo} | ⏱️${timeTxt}`);
         } else {
-            this.furnBtn.setVisible(true); this.furnText.setVisible(true);
-            this.itemBtn.setVisible(true); this.itemText.setVisible(true);
+            const mainScene = this.scene.manager.getScene('MainScene');
+            const isSweepingNow = !!(
+                window.GameLogic.currentScene === 'cafe' &&
+                mainScene &&
+                mainScene.localPlayer &&
+                mainScene.localPlayer.isSweeping
+            );
+
+            this.setStandardActionButtonsVisible(!isSweepingNow);
+            this.setSweepButtonVisible(isSweepingNow);
             this.statusContainer.setVisible(true);
             if (this.partyDash) this.partyDash.setVisible(false);
         }
@@ -3356,6 +3403,32 @@ class UIScene extends Phaser.Scene {
         if (isStatusActive) { if (!this.statusBlinkTween) { this.statusText.setColor('#ff0000'); this.statusText.setShadow(0, 0, '#ffffff', 8, true, true); this.statusBlinkTween = this.tweens.add({ targets: this.statusText, alpha: 0.3, yoyo: true, repeat: -1, duration: 500 }); } } else { if (this.statusBlinkTween) { this.statusBlinkTween.stop(); this.statusBlinkTween = null; this.statusText.setAlpha(1); this.statusText.setColor('#3e2723'); this.statusText.setShadow(0, 0, '#000', 0, false, false); } }
     }
 
+    setStandardActionButtonsVisible(visible) {
+        [this.btnA, this.txtA, this.btnB, this.txtB, this.furnBtn, this.furnText, this.itemBtn, this.itemText].forEach(obj => {
+            if (obj && obj.setVisible) obj.setVisible(visible);
+        });
+    }
+
+    setSweepButtonVisible(visible) {
+        const changed = this.sweepButtonVisibleState !== visible;
+        this.sweepButtonVisibleState = visible;
+
+        [this.sweepBtn, this.sweepText].forEach(obj => {
+            if (obj && obj.setVisible) obj.setVisible(visible);
+        });
+
+        if (this.sweepBtnGlow && this.sweepBtnGlow.setVisible) {
+            this.sweepBtnGlow.setVisible(visible);
+            if (visible && changed) this.sweepBtnGlow.setAlpha(0.18);
+        }
+
+        if (!visible && this.sweepBtn) {
+            this.sweepBtn.setFillStyle(0xffcc00);
+            this.sweepBtn.setScale(1);
+            if (this.sweepText) this.sweepText.setScale(1);
+        }
+    }
+  
     disableLegacyVirtualJoystick() {
         if (!this.joyStick) return;
 
@@ -3418,6 +3491,12 @@ class UIScene extends Phaser.Scene {
         this.btnB.setPosition(clusterX, clusterY + d); this.txtB.setPosition(this.btnB.x, this.btnB.y);
         this.itemBtn.setPosition(clusterX, clusterY - d); this.itemText.setPosition(this.itemBtn.x, this.itemBtn.y);
         this.furnBtn.setPosition(clusterX - d, clusterY); this.furnText.setPosition(this.furnBtn.x, this.furnBtn.y);
+
+        const sweepX = Math.min(gameSize.width - 64, clusterX + d - 12);
+        const sweepY = clusterY;
+        if (this.sweepBtn) this.sweepBtn.setPosition(sweepX, sweepY);
+        if (this.sweepText) this.sweepText.setPosition(sweepX, sweepY);
+        if (this.sweepBtnGlow) this.sweepBtnGlow.setPosition(sweepX, sweepY);
         
         if (this.magicMenuEmitter) {
     const quickMenu = document.getElementById('quick-select-menu');
@@ -4057,7 +4136,21 @@ class MainScene extends Phaser.Scene {
             if (!this.shiftLongPressTriggered) this.events.emit('action_B');
         });
 
-        this.qteContainer = this.add.container(0, 0).setVisible(false).setDepth(300); const qteBg = this.add.graphics().fillStyle(0x3e2723, 0.8).fillRoundedRect(-52, -10, 104, 20, 10).lineStyle(2, 0xc5a059).strokeRoundedRect(-52, -10, 104, 20, 10); this.qteBar = this.add.graphics(); const qteLabel = this.add.text(0, -25, '打掃進度', { fontSize: '14px', color: '#c5a059', fontStyle: 'bold' }).setOrigin(0.5); this.qteContainer.add([qteBg, this.qteBar, qteLabel]); if (this.minimap) this.minimap.ignore([qteBg, this.qteBar, qteLabel, this.qteContainer]);
+        this.qteContainer = this.add.container(0, 0).setVisible(false).setDepth(300);
+        const qteBg = this.add.graphics()
+            .fillStyle(0x000000, 0.35)
+            .fillRoundedRect(-54, -12, 108, 24, 12)
+            .lineStyle(2, 0xffffff, 1)
+            .strokeRoundedRect(-54, -12, 108, 24, 12);
+        this.qteGlow = this.add.graphics();
+        this.qteBar = this.add.graphics();
+        const qteLabel = this.add.text(0, -28, '打掃進度', {
+            fontSize: '14px',
+            color: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setShadow(0, 0, '#000000', 4, true, true);
+        this.qteContainer.add([qteBg, this.qteGlow, this.qteBar, qteLabel]);
+        if (this.minimap) this.minimap.ignore([qteBg, this.qteGlow, this.qteBar, qteLabel, this.qteContainer]);
 
         this.sleepTopBg = this.add.graphics().setDepth(150).setVisible(false); this.sleepTopText = this.add.text(0, 0, '按A起床', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#fff', backgroundColor: 'rgba(74, 93, 78, 0.8)', padding: {x:8, y:4} }).setOrigin(0.5).setDepth(151).setVisible(false); this.sleepBotBg = this.add.graphics().setDepth(150).setVisible(false); this.sleepBotText = this.add.text(0, 0, 'zzZ', { fontSize: '16px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#3e2723' }).setOrigin(0.5).setDepth(151).setVisible(false); this.sleepZzzArray = ['zzZ', 'Zzz', 'zZz']; this.sleepZzzIdx = 0; this.time.addEvent({ delay: 1000, callback: () => { if (this.localPlayer && this.localPlayer.isSleeping) { this.sleepZzzIdx = (this.sleepZzzIdx + 1) % 3; this.sleepBotText.setText(this.sleepZzzArray[this.sleepZzzIdx]); let bounds = this.sleepBotText.getBounds(); let w = bounds.width + 16, h = bounds.height + 12; let x = this.sleepBotText.x - w/2, y = this.sleepBotText.y - h/2; this.sleepBotBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(x, y, w, h, 8).strokeRoundedRect(x, y, w, h, 8); } }, loop: true });
 
@@ -12847,7 +12940,37 @@ entity.showOffRainbowTween = this.tweens.add({
     }); 
 }
     }
-    updateQTEBar(progress) { this.qteBar.clear(); let width = Math.min(100, (progress / 100) * 100); this.qteBar.fillStyle(0xd9534f, 1); this.qteBar.fillRoundedRect(-50, -8, width, 16, 8); }
+    updateQTEBar(progress) {
+        if (!this.qteBar) return;
+
+        const safeProgress = Phaser.Math.Clamp(Number(progress || 0), 0, 100);
+        const width = Math.min(100, (safeProgress / 100) * 100);
+
+        if (this.qteGlow) {
+            this.qteGlow.clear();
+            if (width > 0) {
+                this.qteGlow
+                    .fillStyle(0xff3333, 0.32)
+                    .fillRoundedRect(-54, -12, Math.max(10, width + 8), 24, 12);
+            }
+        }
+
+        this.qteBar.clear();
+        if (width > 0) {
+            this.qteBar
+                .fillStyle(0xd9534f, 1)
+                .fillRoundedRect(-50, -8, width, 16, 8)
+                .lineStyle(1, 0xffb3b3, 0.7)
+                .strokeRoundedRect(-50, -8, width, 16, 8);
+        }
+    }
+
+    updateSweepQTEPosition() {
+        if (!this.qteContainer || !this.localPlayer || !this.localPlayer.sprite) return;
+
+        const sprite = this.localPlayer.sprite;
+        this.qteContainer.setPosition(sprite.x, sprite.y + 58);
+    }
 
     startMimiWalkSFX() {
         if (this.sceneName === 'cafe' && (!this.mimiSprite || !this.mimiSprite.active)) {
@@ -14102,6 +14225,8 @@ if (activeBubbleMsg) {
     finishSweeping(success) { 
         this.localPlayer.isSweeping = false; 
         this.qteContainer.setVisible(false); 
+        if (this.qteGlow) this.qteGlow.clear();
+        if (this.qteBar) this.qteBar.clear();
         if (this.sound.get('brooming1')) this.sound.stopByKey('brooming1'); 
         window.GameLogic.moonBunSweepPressCount = 0;
 
@@ -14838,8 +14963,9 @@ if (activeBubbleMsg) {
         this.qteProgress = 0;
         window.GameLogic.moonBunSweepPressCount = 0;
         this.qteTotalClicks = (this.isCafe && this.isMoonBunBuffActive && this.isMoonBunBuffActive()) ? 2 : Phaser.Math.Between(5, 10);
+        this.updateQTEBar(0);
         this.qteContainer.setVisible(true);
-        this.qteContainer.setPosition(trash.x, trash.y + 40);
+        this.updateSweepQTEPosition();
 
         if (window.GameLogic.currentUser) {
             update(ref(window.GameLogic.db, window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`)), {
@@ -15005,7 +15131,8 @@ if (activeBubbleMsg) {
             circleHit(uiScene.btnA) ||
             circleHit(uiScene.btnB) ||
             circleHit(uiScene.itemBtn) ||
-            circleHit(uiScene.furnBtn)
+            circleHit(uiScene.furnBtn) ||
+            circleHit(uiScene.sweepBtn, 70)
         ) {
             return true;
         }
@@ -15392,7 +15519,7 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
         } else if (this.localPlayer.isSweeping) {
             this.localPlayer.sprite.setVelocity(0, 0); this.localPlayer.sprite.play('clean', true); 
             if (!(this.isCafe && this.isMoonBunBuffActive && this.isMoonBunBuffActive())) this.qteProgress -= (delta * 0.02); if (this.qteProgress < 0) this.qteProgress = 0; this.updateQTEBar(this.qteProgress);
-            if (this.closestTrash) this.qteContainer.setPosition(this.closestTrash.x, this.closestTrash.y + 40);
+            this.updateSweepQTEPosition();
             this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
         } else if (this.localPlayer.isSleeping) {
             this.localPlayer.sprite.setVelocity(0, 0); this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
