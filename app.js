@@ -12865,6 +12865,15 @@ if (!data.scoreHandled && data.attacker) {
         } catch (_) {}
         this.soloRocketRabbitShopBudgetFxTweens = [];
 
+        try {
+            (this.soloRocketRabbitShopLeaveButtonTweens || []).forEach(function(tween) {
+                try {
+                    if (tween && tween.remove) tween.remove();
+                } catch (_) {}
+            });
+        } catch (_) {}
+        this.soloRocketRabbitShopLeaveButtonTweens = [];
+
         if (this.stopSoloRocketRabbitShopkeeperHop) this.stopSoloRocketRabbitShopkeeperHop();
         if (this.clearSoloRocketRabbitSpeechBubble) this.clearSoloRocketRabbitSpeechBubble();
         if (this.stopSoloRocketRabbitShopMeteors) this.stopSoloRocketRabbitShopMeteors();
@@ -13147,29 +13156,96 @@ if (!data.scoreHandled && data.attacker) {
             objects.push(hint);
         }
 
-        const leaveW = Math.min(190, rect.w - 36);
-        const leaveH = 38;
+        const leaveW = Math.min(204, rect.w - 36);
+        const leaveH = 30;
         const leaveX = rect.x + 20 + leaveW / 2;
-        const leaveY = rect.y + rect.h - 36;
+        const leaveY = rect.y + rect.h - 34;
 
+        const leaveBtnLayer = this.add.container(0, 0).setScrollFactor(0);
         const leaveBg = this.add.graphics();
-        leaveBg.fillStyle(0xff8a1c, 1);
-        leaveBg.fillRoundedRect(leaveX - leaveW / 2, leaveY - leaveH / 2, leaveW, leaveH, 13);
-        leaveBg.lineStyle(3, 0xffe082, 1);
-        leaveBg.strokeRoundedRect(leaveX - leaveW / 2, leaveY - leaveH / 2, leaveW, leaveH, 13);
+
+        leaveBg.fillStyle(0x7b00d8, 0.50);
+        leaveBg.fillRoundedRect(leaveX - leaveW / 2, leaveY - leaveH / 2, leaveW, leaveH, 10);
+        leaveBg.lineStyle(2, 0xf2a6ff, 0.95);
+        leaveBg.strokeRoundedRect(leaveX - leaveW / 2, leaveY - leaveH / 2, leaveW, leaveH, 10);
+        leaveBg.lineStyle(1, 0x58f6ff, 0.82);
+        leaveBg.strokeRoundedRect(leaveX - leaveW / 2 + 4, leaveY - leaveH / 2 + 4, leaveW - 8, leaveH - 8, 7);
+
+        leaveBg.lineStyle(1, 0xb85cff, 0.22);
+        for (let y = leaveY - leaveH / 2 + 8; y < leaveY + leaveH / 2 - 4; y += 6) {
+            leaveBg.lineBetween(leaveX - leaveW / 2 + 12, y, leaveX + leaveW / 2 - 12, y);
+        }
+
+        const leaveScan = this.add.rectangle(leaveX, leaveY - leaveH / 2 + 8, leaveW - 26, 2, 0x58f6ff, 0.34)
+            .setOrigin(0.5)
+            .setBlendMode(Phaser.BlendModes.ADD);
 
         const leaveText = this.add.text(leaveX, leaveY, '離開月球，帶錢回家', {
-            fontSize: '13px',
+            fontSize: rect.w < 420 ? '11px' : '12px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
-            color: '#2b1200',
-            stroke: '#fff0b8',
-            strokeThickness: 2
+            color: '#ffffff',
+            stroke: '#430063',
+            strokeThickness: 3
         }).setOrigin(0.5);
+        leaveText.setShadow(0, 0, '#f2a6ff', 8, true, true);
 
-        this.soloRocketRabbitShopHitAreas.leave = { x: leaveX, y: leaveY, w: leaveW + 34, h: leaveH + 28 };
+        leaveBtnLayer.add([leaveBg, leaveScan, leaveText]);
 
-        objects.push(leaveBg, leaveText);
+        this.soloRocketRabbitShopLeaveButtonTweens = this.soloRocketRabbitShopLeaveButtonTweens || [];
+
+        for (let i = 0; i < 7; i++) {
+            const noise = this.add.rectangle(
+                leaveX + Phaser.Math.Between(-Math.floor(leaveW * 0.42), Math.floor(leaveW * 0.42)),
+                leaveY + Phaser.Math.Between(-Math.floor(leaveH * 0.34), Math.floor(leaveH * 0.34)),
+                Phaser.Math.Between(8, 22),
+                1,
+                i % 2 === 0 ? 0x58f6ff : 0xf2a6ff,
+                0.16
+            ).setBlendMode(Phaser.BlendModes.ADD);
+
+            leaveBtnLayer.add(noise);
+
+            if (this.tweens) {
+                this.soloRocketRabbitShopLeaveButtonTweens.push(this.tweens.add({
+                    targets: noise,
+                    x: noise.x + Phaser.Math.Between(-8, 8),
+                    alpha: Phaser.Math.FloatBetween(0.04, 0.38),
+                    duration: Phaser.Math.Between(180, 420),
+                    yoyo: true,
+                    repeat: -1,
+                    delay: Phaser.Math.Between(0, 480),
+                    ease: 'Stepped'
+                }));
+            }
+        }
+
+        if (this.tweens) {
+            this.soloRocketRabbitShopLeaveButtonTweens.push(this.tweens.add({
+                targets: leaveScan,
+                y: leaveY + leaveH / 2 - 7,
+                alpha: 0.08,
+                duration: 740,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            }));
+
+            this.soloRocketRabbitShopLeaveButtonTweens.push(this.tweens.add({
+                targets: leaveBtnLayer,
+                x: 1.4,
+                y: -0.6,
+                duration: 48,
+                yoyo: true,
+                repeat: -1,
+                repeatDelay: 1100,
+                ease: 'Stepped'
+            }));
+        }
+
+        this.soloRocketRabbitShopHitAreas.leave = { x: leaveX, y: leaveY, w: leaveW + 34, h: leaveH + 30 };
+
+        objects.push(leaveBtnLayer);
         shop.add(objects);
 
         if (this.startSoloRocketRabbitShopkeeperHop) {
@@ -13366,12 +13442,11 @@ if (!data.scoreHandled && data.attacker) {
         runCycle();
 
         this.soloRocketRabbitShopkeeperHopTimer = this.time.addEvent({
-            delay: 2000,
+            delay: 4000,
             loop: true,
             callback: runCycle,
             callbackScope: this
         });
-    }
 
     bounceSoloRocketRabbitShopkeeper() {
         const rabbit = this.soloRocketRabbitShopKeeperObj;
