@@ -3697,9 +3697,13 @@ this.btnB.on('pointerout', () => {
             
             let ammo = window.PartyLogic.ammo || 0;
             let timeTxt = "等待中";
-            if (window.PartyLogic.state === 'gaming') {
-                let elapsed = Date.now() - (window.PartyLogic.gameData.gamingStartTime || 0);
-                timeTxt = Math.max(0, 60 - Math.floor(elapsed / 1000)) + "s";
+            if (window.PartyLogic.state === 'starting') {
+                const data = window.PartyLogic.gameData || {};
+                const startAt = Number(data.gameStartTime || data.startAt || Date.now());
+                const startRemain = Math.max(0, Math.ceil(((startAt + window.PARTY_START_COUNTDOWN_MS) - Date.now()) / 1000));
+                timeTxt = `開場${startRemain}s`;
+            } else if (window.PartyLogic.state === 'gaming') {
+                timeTxt = Math.max(0, Math.ceil(window.getPartyRemainingMs(window.PartyLogic.gameData || {}) / 1000)) + "s";
             }
             this.partyDashText.setText(`x${ammo} | ⏱️${timeTxt}`);
         } else {
@@ -4691,7 +4695,8 @@ if (itemName === '月光饅頭') {
 
                 if (isPartyMode) {
                     let partyThrowNow = Date.now();
-                    if (this.lastPartyWaterThrowTime && partyThrowNow - this.lastPartyWaterThrowTime < 180) {
+                    const partyThrowCooldown = window.PARTY_WATER_THROW_COOLDOWN_MS || 420;
+                    if (this.lastPartyWaterThrowTime && partyThrowNow - this.lastPartyWaterThrowTime < partyThrowCooldown) {
                         return;
                     }
                     this.lastPartyWaterThrowTime = partyThrowNow;
@@ -4700,7 +4705,10 @@ if (itemName === '月光饅頭') {
                         sendBubble("派對還沒開始，先不要丟水球！");
                         return;
                     }
-                    if (targetUid && !(window.PartyLogic.players || {})[targetUid]) {
+
+                    const liveTarget = targetUid ? (window.PartyLogic.players || {})[targetUid] : null;
+                    if (targetUid && (!liveTarget || liveTarget.left === true || liveTarget.online === false)) {
+                      
                         sendBubble("目標已離開派對，鎖定解除！");
                         window.GameLogic.currentTargetUid = null;
                         window.GameLogic.currentTargetSprite = null;
@@ -16698,9 +16706,17 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
                     if (vx === 0 && vy === 0) { this.localPlayer.sprite.play('idle', true); } else if (absX >= absY) { this.localPlayer.sprite.setFlipX(vx < 0); this.localPlayer.sprite.play('walk', true); } else { if (vy < 0) { this.localPlayer.sprite.play('walk-up', true); } else { this.localPlayer.sprite.play('walk-down', true); } }
                 }
                 if ((this.isCafe || this.sceneName === 'shrine' || this.sceneName === 'playroom' || this.sceneName === 'partyroom') && (vx !== 0 || vy !== 0)) { 
-                    if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) { 
+                    const syncInterval = this.sceneName === 'partyroom' ? (window.PARTY_MOVE_SYNC_MS || 220) : 100;
+                    if(!this.lastSyncTime || Date.now() - this.lastSyncTime > syncInterval) { 
                         let path = this.isCafe ? window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`) : (this.sceneName === 'shrine' ? window.getServerRoomPath(`shrinePlayers/${window.GameLogic.currentUser.uid}`) : (this.sceneName === 'playroom' ? window.getServerRoomPath(`playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`) : window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`))); 
-                        update(ref(window.GameLogic.db, path), { x: this.localPlayer.sprite.x, y: this.localPlayer.sprite.y }); this.lastSyncTime = Date.now(); 
+                        const payload = { x: this.localPlayer.sprite.x, y: this.localPlayer.sprite.y };
+                        if (this.sceneName === 'partyroom') {
+                            payload.online = true;
+                            payload.left = false;
+                            payload.lastActive = Date.now();
+                        }
+                        update(ref(window.GameLogic.db, path), payload);
+                        this.lastSyncTime = Date.now(); 
                     } 
                 }
             }
@@ -18146,8 +18162,85 @@ window.syncRpsState = function(roomId) {
 };
 
 // ==================== 派對系統全域邏輯 ====================
-window.PartyLogic = { roomId: null, ammo: 666, state: 'none', scores: {}, players: {}, mySlotIndex: 0, speedBoost: false, selectedGame: '水球礁谷', playPhase: 0, lastInviteTime: 0, seenInviteKeys: {}, localHitCooldowns: {} };
+window.PartyLogic = {
+    roomId: null,
+    ammo: 666,
+    state: 'none',
+    scores: {},
+    players: {},
+    roster: {},
+    mySlotIndex: 0,
+    speedBoost: false,
+    selectedGame: '水球礁谷',
+    playPhase: 0,
+    lastInviteTime: 0,
+    seenInviteKeys: {},
+    localHitCooldowns: {},
+    rewardClaimed: false
+};
 let partyUnsubscribe = null; let partyInvitesUnsubscribe = null;
+
+// ====== 水球礁谷多人穩定化：節流、名冊、同步時間工具 ======
+window.PARTY_MOVE_SYNC_MS = 220;
+window.PARTY_WATER_THROW_COOLDOWN_MS = 420;
+window.PARTY_START_COUNTDOWN_MS = 3000;
+window.PARTY_GAME_DURATION_MS = 60000;
+
+window.buildPartyRosterFromPlayers = function(players = {}, oldRoster = {}) {
+    const roster = Object.assign({}, oldRoster || {});
+    Object.keys(players || {}).forEach(uid => {
+        const p = players[uid] || {};
+        roster[uid] = Object.assign({}, roster[uid] || {}, {
+            uid: uid,
+            name: p.name || (roster[uid] && roster[uid].name) || '匿名洋蔥',
+            color: p.color || (roster[uid] && roster[uid].color) || '#c5a059',
+            level: p.level || (roster[uid] && roster[uid].level) || 1,
+            joinedAt: (roster[uid] && roster[uid].joinedAt) || p.joinedAt || Date.now(),
+            online: p.online !== false,
+            left: p.left === true ? true : !!(roster[uid] && roster[uid].left)
+        });
+    });
+    return roster;
+};
+
+window.getPartyRoster = function(data = null) {
+    const roomData = data || (window.PartyLogic && window.PartyLogic.gameData) || {};
+    const roster = roomData.roster || (window.PartyLogic && window.PartyLogic.roster) || {};
+    if (roster && Object.keys(roster).length > 0) return roster;
+    return window.buildPartyRosterFromPlayers(roomData.players || (window.PartyLogic && window.PartyLogic.players) || {});
+};
+
+window.getPartyActiveUids = function(data = null) {
+    const roomData = data || (window.PartyLogic && window.PartyLogic.gameData) || {};
+    const players = roomData.players || (window.PartyLogic && window.PartyLogic.players) || {};
+    return Object.keys(players).filter(uid => {
+        const p = players[uid] || {};
+        return p.left !== true && p.online !== false;
+    }).sort();
+};
+
+window.getPartyCoordinatorUid = function(data = null) {
+    const roomData = data || (window.PartyLogic && window.PartyLogic.gameData) || {};
+    const activeUids = window.getPartyActiveUids(roomData);
+    if (activeUids.length > 0) return activeUids[0];
+
+    const roster = window.getPartyRoster(roomData);
+    const rosterUids = Object.keys(roster || {}).sort();
+    return rosterUids[0] || roomData.host || null;
+};
+
+window.getPartyRemainingMs = function(data = null) {
+    const roomData = data || (window.PartyLogic && window.PartyLogic.gameData) || {};
+    const now = Date.now();
+
+    if (roomData.endAt) return Math.max(0, Number(roomData.endAt) - now);
+
+    const start = Number(roomData.gamingStartTime || 0);
+    if (!start) return window.PARTY_GAME_DURATION_MS;
+
+    return Math.max(0, window.PARTY_GAME_DURATION_MS - (now - start));
+};
+// ====== 水球礁谷多人穩定化工具結束 ======
 
 // 派對水球計分補丁：由攻擊端在命中成立時負責寫分，避免被擊中端監聽失效造成單邊不計分。
 window.incrementPartyScoreField = function(roomId, uid, fieldName) {
@@ -18248,12 +18341,19 @@ window.createPartyRoom = function() {
 };
 
 window.joinPartyroom = function(roomId) {
+    if (partyUnsubscribe) { partyUnsubscribe(); partyUnsubscribe = null; }
+
     // 將 playPhase 初始化為 -1 解決 0 秒階段 START 音效被跳過的問題
-    window.PartyLogic.roomId = roomId; window.PartyLogic.ammo = 666; window.PartyLogic.speedBoost = false; window.PartyLogic.playPhase = -1;
+    window.PartyLogic.roomId = roomId;
+    window.PartyLogic.ammo = 666;
+    window.PartyLogic.speedBoost = false;
+    window.PartyLogic.playPhase = -1;
     window.PartyLogic.localHitCooldowns = {};
-    window.PartyLogic.gameData = null; window.PartyLogic.rewardClaimed = false; // 徹底清空舊局資料防干擾
+    window.PartyLogic.gameData = null;
+    window.PartyLogic.rewardClaimed = false; // 徹底清空舊局資料防干擾
     window.PartyLogic.state = 'waiting';
     window.PartyLogic.players = {};
+    window.PartyLogic.roster = {};
     window.PartyLogic.scores = {};
     window.PartyLogic.host = null;
     window.PartyLogic.mySlotIndex = 0;
@@ -18270,7 +18370,8 @@ window.joinPartyroom = function(roomId) {
     if (waitGrid) waitGrid.innerHTML = '';
     
     // 自動裝備水球並隱藏聊天室
-    window.GameLogic.armedItemState = 'ready'; window.GameLogic.armedItemName = '水球';
+    window.GameLogic.armedItemState = 'ready';
+    window.GameLogic.armedItemName = '水球';
     document.getElementById('chat-section').style.display = 'none';
     
     let pModal = document.getElementById('party-waiting-modal');
@@ -18289,38 +18390,78 @@ window.joinPartyroom = function(roomId) {
         }
         pModal.insertBefore(container, pModal.firstChild);
     }
-    document.getElementById('party-red-flash').style.display = 'none'; document.getElementById('party-red-flash').style.opacity = 0;
+    document.getElementById('party-red-flash').style.display = 'none';
+    document.getElementById('party-red-flash').style.opacity = 0;
     
-    const playerRef = ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${roomId}/players/${window.GameLogic.currentUser.uid}`));
-    set(playerRef, { x: 1920/2, y: 1080/2, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1, ready: false });
-    onDisconnect(playerRef).remove();
+    const myUid = window.GameLogic.currentUser.uid;
+    const now = Date.now();
+    const playerRef = ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${roomId}/players/${myUid}`));
+
+    set(playerRef, {
+        x: 1920 / 2,
+        y: 1080 / 2,
+        name: window.GameLogic.myProfile.name,
+        color: window.GameLogic.myProfile.color,
+        level: window.GameLogic.myProfile.level || 1,
+        ready: false,
+        online: true,
+        left: false,
+        joinedAt: now,
+        lastActive: now
+    });
+
+    // 比賽資料不能因刷新或手機暫時斷線被直接刪除，否則結算會 undefined。
+    // 等候室 UI 會過濾 online:false；遊戲中則保留名冊與分數。
+    onDisconnect(playerRef).update({
+        online: false,
+        left: true,
+        disconnectedAt: now
+    });
     
     partyUnsubscribe = onValue(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${roomId}`)), snap => {
-        let data = snap.val(); if(!data) { window.leavePartyroom(); return; }
+        let data = snap.val();
+        if(!data) { window.leavePartyroom(); return; }
+
         window.PartyLogic.state = data.state;
         window.PartyLogic.players = data.players || {};
+        window.PartyLogic.roster = data.roster || window.PartyLogic.roster || {};
         window.PartyLogic.scores = data.scores || {};
         window.PartyLogic.host = data.host;
         window.PartyLogic.gameData = data;
         
-        let pUids = Object.keys(window.PartyLogic.players);
-        if (pUids.length >= 10 && data.state === 'waiting') update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${roomId}`)), { closed: true });
+        let activeUids = window.getPartyActiveUids(data);
+        let rosterUids = Object.keys(window.getPartyRoster(data) || {});
+        let displayUids = data.state === 'waiting' ? activeUids : (rosterUids.length ? rosterUids : activeUids);
+
+        if (activeUids.length >= 10 && data.state === 'waiting') {
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${roomId}`)), { closed: true });
+        }
         
         if (data.state === 'waiting') {
             document.getElementById('party-waiting-modal').style.display = 'flex';
-            let grid = document.getElementById('party-wait-grid'); grid.innerHTML = '';
-            pUids.sort().forEach((uid, idx) => {
-                if (uid === window.GameLogic.currentUser.uid) window.PartyLogic.mySlotIndex = idx;
-                let pd = window.PartyLogic.players[uid];
+            let grid = document.getElementById('party-wait-grid');
+            grid.innerHTML = '';
+
+            displayUids.sort().forEach((uid, idx) => {
+                if (uid === myUid) window.PartyLogic.mySlotIndex = idx;
+
+                let pd = window.PartyLogic.players[uid] || {};
+                let rosterData = window.PartyLogic.roster[uid] || {};
                 let hostLabel = uid === data.host ? '<div class="party-slot-host">房主</div>' : '';
                 let readyCls = pd.ready ? 'ready' : '';
-                grid.innerHTML += `<div class="party-slot ${readyCls}">${hostLabel}<img src="onion-sprite.png"><span>${pd.name}</span></div>`;
+                let name = pd.name || rosterData.name || '匿名洋蔥';
+                let offlineText = pd.online === false ? '<span style="font-size:11px; color:#aaa;">暫離</span>' : '';
+
+                grid.innerHTML += `<div class="party-slot ${readyCls}">${hostLabel}<img src="onion-sprite.png"><span>${name}</span>${offlineText}</div>`;
             });
-            for(let i=pUids.length; i<10; i++) { grid.innerHTML += `<div class="party-slot" style="opacity:0.3;">等待加入...</div>`; }
+
+            for(let i=displayUids.length; i<10; i++) {
+                grid.innerHTML += `<div class="party-slot" style="opacity:0.3;">等待加入...</div>`;
+            }
             
-            let isHost = data.host === window.GameLogic.currentUser.uid;
-            let allReady = pUids.every(u => window.PartyLogic.players[u].ready);
-            document.getElementById('party-start-btn').style.display = (isHost && allReady && pUids.length > 1) ? 'block' : 'none';
+            let isHost = data.host === myUid;
+            let allReady = activeUids.length > 0 && activeUids.every(u => window.PartyLogic.players[u] && window.PartyLogic.players[u].ready);
+            document.getElementById('party-start-btn').style.display = (isHost && allReady && activeUids.length > 1) ? 'block' : 'none';
         } else {
             document.getElementById('party-waiting-modal').style.display = 'none';
         }
@@ -18329,22 +18470,30 @@ window.joinPartyroom = function(roomId) {
 
 window.leavePartyroom = function(skipSceneSwitch = false) {
     if (partyUnsubscribe) { partyUnsubscribe(); partyUnsubscribe = null; }
+
     const leavingRoomId = window.PartyLogic.roomId;
     const leavingUid = window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : null;
+    const cachedGameData = window.PartyLogic.gameData || {};
+    const leavingState = window.PartyLogic.state || cachedGameData.state || 'none';
+    const shouldKeepMatchData = leavingState === 'starting' || leavingState === 'gaming' || leavingState === 'finished';
+
     window.PartyLogic.gameData = null; // 離開時清空快取
     window.PartyLogic.state = 'none';
     window.PartyLogic.players = {};
+    window.PartyLogic.roster = {};
     window.PartyLogic.scores = {};
     window.PartyLogic.host = null;
     window.PartyLogic.speedBoost = false;
     window.PartyLogic.playPhase = -1;
     document.getElementById('party-waiting-modal').style.display = 'none';
     document.getElementById('party-result-modal').style.display = 'none';
-    let rFlash = document.getElementById('party-red-flash'); if (rFlash) { rFlash.style.display = 'none'; rFlash.style.opacity = 0; }
+    let rFlash = document.getElementById('party-red-flash');
+    if (rFlash) { rFlash.style.display = 'none'; rFlash.style.opacity = 0; }
     
     // 離開時恢復聊天室與卸下裝備
     document.getElementById('chat-section').style.display = 'flex';
-    window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null;
+    window.GameLogic.armedItemState = null;
+    window.GameLogic.armedItemName = null;
 
     // 新增：離開時也把本機準備按鈕重設，避免下一場殘留「取消準備」
     let readyBtn = document.getElementById('party-ready-btn');
@@ -18359,28 +18508,55 @@ window.leavePartyroom = function(skipSceneSwitch = false) {
         const roomRef = ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${leavingRoomId}`));
         const playerRef = ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${leavingRoomId}/players/${leavingUid}`));
 
-        set(playerRef, null)
-            .then(() => get(roomRef))
-            .then(snap => {
-                let roomData = snap.val();
-                if (!roomData) {
-                    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${leavingRoomId}`)), { closed: true }).catch(err => console.warn('Firebase 關閉不存在派對邀請失敗:', err));
-                    return;
-                }
+        if (shouldKeepMatchData) {
+            const updates = {};
+            updates[window.getServerRoomPath(`partyRooms/${leavingRoomId}/players/${leavingUid}/online`)] = false;
+            updates[window.getServerRoomPath(`partyRooms/${leavingRoomId}/players/${leavingUid}/left`)] = true;
+            updates[window.getServerRoomPath(`partyRooms/${leavingRoomId}/players/${leavingUid}/leftAt`)] = Date.now();
+            updates[window.getServerRoomPath(`partyRooms/${leavingRoomId}/roster/${leavingUid}/online`)] = false;
+            updates[window.getServerRoomPath(`partyRooms/${leavingRoomId}/roster/${leavingUid}/left`)] = true;
+            updates[window.getServerRoomPath(`partyRooms/${leavingRoomId}/roster/${leavingUid}/leftAt`)] = Date.now();
 
-                let remainingPlayers = roomData.players || {};
-                let remainingUids = Object.keys(remainingPlayers).filter(uid => uid !== leavingUid).sort();
+            update(ref(window.GameLogic.db), updates)
+                .then(() => get(roomRef))
+                .then(snap => {
+                    const roomData = snap.val();
+                    if (!roomData) return;
 
-                if (remainingUids.length === 0) {
-                    // 所有人都離開等候室或派對房間：關閉右側邀請，並刪除空房間
-                    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${leavingRoomId}`)), { closed: true }).catch(err => console.warn('Firebase 關閉空派對邀請失敗:', err));
-                    set(roomRef, null).catch(err => console.warn('Firebase 清除空派對房間失敗:', err));
-                } else if (roomData.host === leavingUid) {
-                    // 房主離開但房內還有人：由 UID 排序第一位接手房主
-                    update(roomRef, { host: remainingUids[0] }).catch(err => console.warn('Firebase 轉移派對房主失敗:', err));
-                }
-            })
-            .catch(err => console.warn('Firebase 離開派對房間失敗:', err));
+                    if (roomData.host === leavingUid) {
+                        const activeUids = window.getPartyActiveUids(roomData);
+                        if (activeUids.length > 0) {
+                            update(roomRef, { host: activeUids[0] }).catch(err => console.warn('Firebase 轉移派對房主失敗:', err));
+                        }
+                    }
+                })
+                .catch(err => console.warn('Firebase 標記派對玩家離線失敗:', err));
+        } else {
+            set(playerRef, null)
+                .then(() => get(roomRef))
+                .then(snap => {
+                    let roomData = snap.val();
+                    if (!roomData) {
+                        update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${leavingRoomId}`)), { closed: true }).catch(err => console.warn('Firebase 關閉不存在派對邀請失敗:', err));
+                        return;
+                    }
+
+                    let remainingPlayers = roomData.players || {};
+                    let remainingUids = Object.keys(remainingPlayers)
+                        .filter(uid => uid !== leavingUid && remainingPlayers[uid] && remainingPlayers[uid].online !== false && remainingPlayers[uid].left !== true)
+                        .sort();
+
+                    if (remainingUids.length === 0) {
+                        // 所有人都離開等候室或派對房間：關閉右側邀請，並刪除空房間
+                        update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${leavingRoomId}`)), { closed: true }).catch(err => console.warn('Firebase 關閉空派對邀請失敗:', err));
+                        set(roomRef, null).catch(err => console.warn('Firebase 清除空派對房間失敗:', err));
+                    } else if (roomData.host === leavingUid) {
+                        // 房主離開但房內還有人：由 UID 排序第一位接手房主
+                        update(roomRef, { host: remainingUids[0] }).catch(err => console.warn('Firebase 轉移派對房主失敗:', err));
+                    }
+                })
+                .catch(err => console.warn('Firebase 離開派對房間失敗:', err));
+        }
     }
 
     window.PartyLogic.roomId = null;
@@ -18411,22 +18587,63 @@ window.startPartyGame = function() {
     for(let i=0; i<28; i++) {
         let maxTries = 50;
         while(maxTries-- > 0) {
-            let x = Phaser.Math.Between(100, 1820); let y = Phaser.Math.Between(100, 980);
-            let ok = true; for(let s of stones) { if(Phaser.Math.Distance.Between(x,y, s.x, s.y) < 120) { ok = false; break; } }
+            let x = Phaser.Math.Between(100, 1820);
+            let y = Phaser.Math.Between(100, 980);
+            let ok = true;
+            for(let s of stones) {
+                if(Phaser.Math.Distance.Between(x,y, s.x, s.y) < 120) { ok = false; break; }
+            }
             if(ok) { stones.push({x,y}); break; }
         }
     }
-    // 修正：移除動態 import
-    update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}`)), { state: 'starting', stones: stones, gameStartTime: Date.now() });
-    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${window.PartyLogic.roomId}`)), { closed: true });
-    
-    let pUids = Object.keys(window.PartyLogic.players);
-    pUids.forEach(uid => {
+
+    const roomId = window.PartyLogic.roomId;
+    const roomPath = window.getServerRoomPath(`partyRooms/${roomId}`);
+    const players = window.PartyLogic.players || {};
+    const activeUids = window.getPartyActiveUids(window.PartyLogic.gameData || { players: players });
+
+    if (activeUids.length <= 1) {
+        alert("至少需要 2 位在線玩家才能開始派對。");
+        return;
+    }
+
+    const roster = window.buildPartyRosterFromPlayers(
+        activeUids.reduce((acc, uid) => {
+            acc[uid] = players[uid] || {};
+            return acc;
+        }, {}),
+        window.PartyLogic.roster || {}
+    );
+
+    const startAt = Date.now();
+    const gamingStartTime = startAt + window.PARTY_START_COUNTDOWN_MS;
+    const endAt = gamingStartTime + window.PARTY_GAME_DURATION_MS;
+
+    const updates = {};
+    updates[`${roomPath}/state`] = 'starting';
+    updates[`${roomPath}/stones`] = stones;
+    updates[`${roomPath}/roster`] = roster;
+    updates[`${roomPath}/gameStartTime`] = startAt;
+    updates[`${roomPath}/startAt`] = startAt;
+    updates[`${roomPath}/gamingStartTime`] = gamingStartTime;
+    updates[`${roomPath}/endAt`] = endAt;
+    updates[`${roomPath}/aborted`] = false;
+
+    activeUids.forEach(uid => {
         let rx = Phaser.Math.Between(0,1) ? Phaser.Math.Between(100, 300) : Phaser.Math.Between(1620, 1820);
         let ry = Phaser.Math.Between(0,1) ? Phaser.Math.Between(100, 300) : Phaser.Math.Between(780, 980);
-        update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${uid}`)), { x: rx, y: ry });
-        set(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${uid}`)), { hitCount: 0, gotHitCount: 0, ammo: 666 });
+
+        updates[`${roomPath}/players/${uid}/x`] = rx;
+        updates[`${roomPath}/players/${uid}/y`] = ry;
+        updates[`${roomPath}/players/${uid}/online`] = true;
+        updates[`${roomPath}/players/${uid}/left`] = false;
+        updates[`${roomPath}/scores/${uid}`] = { hitCount: 0, gotHitCount: 0, ammo: 666 };
     });
+
+    update(ref(window.GameLogic.db), updates)
+        .catch(err => console.warn('Firebase 啟動派對遊戲失敗:', err));
+
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${roomId}`)), { closed: true });
 };
 
 window.replyPartyInvite = function(reply) {
@@ -18469,10 +18686,15 @@ window.replyPartyInvite = function(reply) {
 };
 
 window.processPartyEventLogic = function(scene) {
-    let data = window.PartyLogic.gameData; if(!data) return;
+    let data = window.PartyLogic.gameData;
+    if(!data) return;
+
     let state = data.state;
-    let pUids = Object.keys(window.PartyLogic.players || {}).sort();
-    let coordinatorUid = pUids[0] || data.host;
+    const roster = window.getPartyRoster(data);
+    const rosterUids = Object.keys(roster || {}).sort();
+    const liveUids = Object.keys(window.PartyLogic.players || {}).sort();
+    let pUids = rosterUids.length ? rosterUids : liveUids;
+    let coordinatorUid = window.getPartyCoordinatorUid(data);
     let isCoordinator = coordinatorUid === window.GameLogic.currentUser.uid;
     
     if (state === 'starting') {
@@ -18481,8 +18703,10 @@ window.processPartyEventLogic = function(scene) {
             return;
         }
 
-        let elapsed = Date.now() - data.gameStartTime;
-        let phase = Math.floor(elapsed / 1000); 
+        let startAt = Number(data.gameStartTime || data.startAt || Date.now());
+        let elapsed = Date.now() - startAt;
+        let phase = Math.floor(elapsed / 1000);
+
         if (phase !== window.PartyLogic.playPhase && phase < 3) {
             window.PartyLogic.playPhase = phase;
             let texts = ["START", "READY", "GO"];
@@ -18497,13 +18721,21 @@ window.processPartyEventLogic = function(scene) {
         } else if (phase >= 3 && window.PartyLogic.playPhase < 3) {
             window.PartyLogic.playPhase = 3;
             scene.partyAnnounceText.setVisible(false);
-            if (isCoordinator) update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}`)), { state: 'gaming', gamingStartTime: Date.now() });
+
+            if (isCoordinator) {
+                const now = Date.now();
+                update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}`)), {
+                    state: 'gaming',
+                    gamingStartTime: data.gamingStartTime || now,
+                    endAt: data.endAt || (now + window.PARTY_GAME_DURATION_MS)
+                });
+            }
         }
     } else if (state === 'gaming') {
-        let elapsed = Date.now() - data.gamingStartTime;
-        let remain = 60 - Math.floor(elapsed / 1000);
+        let remainMs = window.getPartyRemainingMs(data);
+        let remain = Math.ceil(remainMs / 1000);
         
-        // 若遊戲途中玩家不足2人，改由目前房內排序第一位玩家負責強制結束，避免房主消失時卡在0秒
+        // 遊戲中不再因有人退出就強制中止；roster 會保留參賽者，避免結算 undefined。
         if (pUids.length <= 1 && isCoordinator) {
             update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}`)), { state: 'finished', finishTime: Date.now(), aborted: true }); 
             return;
@@ -18511,21 +18743,24 @@ window.processPartyEventLogic = function(scene) {
 
         if (remain <= 20) {
             window.PartyLogic.speedBoost = true;
-            let bgm = scene.sound.get('bgm-party'); if(bgm) bgm.setRate(1.5);
+            let bgm = scene.sound.get('bgm-party');
+            if(bgm) bgm.setRate(1.5);
             let rFlash = document.getElementById('party-red-flash');
             if (rFlash) { rFlash.style.opacity = (Math.floor(Date.now() / 250) % 2 === 0) ? 0.3 : 0; }
         }
         
-        if (remain <= 0 && isCoordinator) {
+        if (remainMs <= 0 && isCoordinator) {
             update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`)), { ammo: window.PartyLogic.ammo });
             update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}`)), { state: 'finished', finishTime: Date.now() }); 
         }
     } else if (state === 'finished') {
         window.PartyLogic.speedBoost = false;
-        let bgm = scene.sound.get('bgm-party'); if(bgm) bgm.setRate(1);
-        let rFlash = document.getElementById('party-red-flash'); if (rFlash) { rFlash.style.display = 'none'; }
+        let bgm = scene.sound.get('bgm-party');
+        if(bgm) bgm.setRate(1);
+        let rFlash = document.getElementById('party-red-flash');
+        if (rFlash) { rFlash.style.display = 'none'; }
         
-        if (data.aborted || Object.keys(window.PartyLogic.players || {}).length <= 1) {
+        if (data.aborted || pUids.length <= 1) {
             if (window.PartyLogic.playPhase < 4) {
                 window.PartyLogic.playPhase = 4;
                 let cx = scene.cameras.main.width / 2;
@@ -18557,12 +18792,27 @@ window.processPartyEventLogic = function(scene) {
             setTimeout(() => {
                 scene.partyAnnounceText.setVisible(false);
                 let scoresObj = window.PartyLogic.scores || {};
-                let pUids = Object.keys(window.PartyLogic.players || {});
-                let results = pUids.map(uid => {
+                const resultRoster = window.getPartyRoster(data);
+                const resultUids = Object.keys(resultRoster || {}).length
+                    ? Object.keys(resultRoster).sort()
+                    : Object.keys(window.PartyLogic.players || {}).sort();
+
+                let results = resultUids.map(uid => {
                     let s = scoresObj[uid] || {hitCount:0, gotHitCount:0, ammo:0};
-                    let score = (s.hitCount * 10) - (s.gotHitCount * 5) + (s.ammo * 0.1);
-                    return { uid: uid, name: window.PartyLogic.players[uid].name, hitCount: s.hitCount, gotHitCount: s.gotHitCount, ammo: s.ammo, score: score };
+                    let rInfo = resultRoster[uid] || {};
+                    let pInfo = (window.PartyLogic.players && window.PartyLogic.players[uid]) || {};
+                    let score = (Number(s.hitCount || 0) * 10) - (Number(s.gotHitCount || 0) * 5) + (Number(s.ammo || 0) * 0.1);
+                    return {
+                        uid: uid,
+                        name: rInfo.name || pInfo.name || '匿名洋蔥',
+                        left: rInfo.left === true || pInfo.left === true || pInfo.online === false,
+                        hitCount: Number(s.hitCount || 0),
+                        gotHitCount: Number(s.gotHitCount || 0),
+                        ammo: Number(s.ammo || 0),
+                        score: score
+                    };
                 });
+
                 results.sort((a, b) => {
                     if (b.score !== a.score) return b.score - a.score;
                     if (a.gotHitCount !== b.gotHitCount) return a.gotHitCount - b.gotHitCount;
@@ -18583,8 +18833,9 @@ window.processPartyEventLogic = function(scene) {
                         else if (idx === 1) reward = 250;
                         else if (idx === 2) reward = 150;
                     }
+                    let leftText = r.left ? '<br><span style="font-size:11px; color:#999;">中途離線</span>' : '';
                     html += `<div style="display:flex; justify-content:space-between; padding:8px 5px; border-bottom:1px solid #ccc; font-size:14px;">
-                        <span style="font-weight:bold; color:var(--mucha-brown); width:35%;">${medal} ${r.name}</span>
+                        <span style="font-weight:bold; color:var(--mucha-brown); width:35%;">${medal} ${r.name}${leftText}</span>
                         <span style="color:#005599; width:45%; font-size:12px;">擊中:${r.hitCount} / 被擊:${r.gotHitCount} / 餘彈:${r.ammo}<br>評分: ${r.score.toFixed(1)}</span>
                         <span style="color:var(--mucha-green); font-weight:bold; width:20%; text-align:right;">💰 ${reward}</span>
                     </div>`;
@@ -18592,7 +18843,8 @@ window.processPartyEventLogic = function(scene) {
                     if (r.uid === window.GameLogic.currentUser.uid && !window.PartyLogic.rewardClaimed) {
                         window.PartyLogic.rewardClaimed = true;
                         window.GameLogic.myProfile.coins = (window.GameLogic.myProfile.coins || 0) + reward;
-                        let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
+                        let coinsEl = document.getElementById("vp-coins");
+                        if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
                         update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: window.GameLogic.myProfile.coins });
                     }
                 });
