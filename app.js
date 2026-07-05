@@ -3937,6 +3937,7 @@ class MainScene extends Phaser.Scene {
 
                     if (!this.mimiSprite) {
                         this.mimiSprite = this.physics.add.sprite(data.x, data.y, 'mimi-thief-walk').setDepth(11);
+                        this.bindDirectSceneTap(this.mimiSprite, 'mimi');
                         this.mimiNameBg = this.add.graphics().setDepth(12);
                         this.mimiNameText = this.add.text(0, 0, '鼠偷米米', { fontSize: '12px', color: '#ffcc00', fontStyle: 'bold' }).setOrigin(0.5).setDepth(12);
                         this.mimiHpText = this.add.text(0, 0, '', { fontSize: '14px', color: '#ff0000', fontStyle: 'bold', stroke: '#fff', strokeThickness: 2 }).setOrigin(0.5).setDepth(12);
@@ -14132,23 +14133,34 @@ tryPrinceCatSweepBonus(x, y) {
 
         this.princeCatPetBlocker.on('pointerdown', stopOnly);
         this.princeCatPetBlocker.on('pointermove', stopOnly);
-        this.princeCatPetBlocker.on('pointerup', stopOnly);
+        this.princeCatPetBlocker.on('pointerup', (pointer, localX, localY, event) => {
+            this.handlePrinceCatPetPointerUp(pointer, event);
+        });
 
         this.princeCatPetHitZone.on('pointerdown', (pointer, localX, localY, event) => {
             this.handlePrinceCatPetPointerDown(pointer, event);
         });
 
-        this.princeCatPetHitZone.on('pointermove', (pointer, localX, localY, event) => {
-            this.handlePrinceCatPetPointerMove(pointer, event);
-        });
+        this.princeCatPetHitZone.on('pointermove', stopOnly);
 
         this.princeCatPetHitZone.on('pointerup', (pointer, localX, localY, event) => {
             this.handlePrinceCatPetPointerUp(pointer, event);
         });
 
+        // 不在 pointerout 取消本次摸摸，避免手指滑出 hitZone 後必須重新點擊。
         this.princeCatPetHitZone.on('pointerout', (pointer, event) => {
-            this.handlePrinceCatPetPointerUp(pointer, event);
+            this.stopPrinceCatPetPointerEvent(event);
         });
+
+        this.princeCatPetGlobalPointerMove = (pointer) => {
+            this.handlePrinceCatPetPointerMove(pointer, null, true);
+        };
+        this.princeCatPetGlobalPointerUp = (pointer) => {
+            this.handlePrinceCatPetPointerUp(pointer, null);
+        };
+        this.input.on('pointermove', this.princeCatPetGlobalPointerMove);
+        this.input.on('pointerup', this.princeCatPetGlobalPointerUp);
+        this.input.on('pointerupoutside', this.princeCatPetGlobalPointerUp);
 
         this.princeCatPetCloseBg.on('pointerdown', (pointer, localX, localY, event) => {
             this.stopPrinceCatPetPointerEvent(event);
@@ -14239,6 +14251,84 @@ tryPrinceCatSweepBonus(x, y) {
         }
     }
 
+    isPrinceCatPetPointerInsideActiveArea(pointer) {
+        if (!pointer || !this.princeCatPetCatSprite) return false;
+
+        const dx = pointer.x - this.princeCatPetCatSprite.x;
+        const dy = pointer.y - this.princeCatPetCatSprite.y;
+
+        // 使用比顯示圖略大的安全範圍，讓手機手指滑動不會因為短暫離開 hitZone 就中斷。
+        return Math.abs(dx) <= 122 && Math.abs(dy) <= 112;
+    }
+
+    handlePrinceCatPetPointerDown(pointer, event) {
+        this.stopPrinceCatPetPointerEvent(event);
+        if (!this.princeCatPetGameActive || this.princeCatPetCompleteWriting || !pointer) return;
+
+        if (pointer.event && pointer.event.preventDefault) pointer.event.preventDefault();
+        if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+
+        this.princeCatPetPointerId = pointer.id;
+        this.princeCatPetLastX = pointer.x;
+        this.princeCatPetLastY = pointer.y;
+        this.princeCatPetLastDir = 0;
+        this.princeCatPetStrokeDist = 0;
+        this.princeCatPetLastMoveAt = Date.now();
+    }
+
+    handlePrinceCatPetPointerMove(pointer, event, allowGraceArea = false) {
+        this.stopPrinceCatPetPointerEvent(event);
+        if (!this.princeCatPetGameActive || this.princeCatPetCompleteWriting) return;
+        if (!pointer || pointer.id !== this.princeCatPetPointerId) return;
+
+        if (pointer.event && pointer.event.preventDefault) pointer.event.preventDefault();
+        if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+
+        if (allowGraceArea && !this.isPrinceCatPetPointerInsideActiveArea(pointer)) {
+            return;
+        }
+
+        const dx = pointer.x - this.princeCatPetLastX;
+        const dy = pointer.y - this.princeCatPetLastY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 2.5) return;
+
+        const axisDelta = Math.abs(dx) >= Math.abs(dy) ? dx : dy;
+        const dir = axisDelta > 0 ? 1 : -1;
+
+        this.princeCatPetStrokeDist += dist;
+        this.princeCatPetLastX = pointer.x;
+        this.princeCatPetLastY = pointer.y;
+        this.princeCatPetLastMoveAt = Date.now();
+
+        if (!this.princeCatPetLastDir) {
+            this.princeCatPetLastDir = dir;
+            return;
+        }
+
+        if (dir !== this.princeCatPetLastDir && this.princeCatPetStrokeDist >= 30) {
+            this.princeCatPetLastDir = dir;
+            this.princeCatPetStrokeDist = 0;
+            this.princeCatPetProgress = Phaser.Math.Clamp((this.princeCatPetProgress || 0) + 10, 0, 100);
+            this.drawPrinceCatPetProgressBar();
+
+            if (this.princeCatPetCatSprite) {
+                this.tweens.add({
+                    targets: this.princeCatPetCatSprite,
+                    scaleX: 2.06,
+                    scaleY: 2.06,
+                    yoyo: true,
+                    duration: 70
+                });
+            }
+
+            if (this.princeCatPetProgress >= 100) {
+                this.completePrinceCatPetMiniGame();
+            }
+        }
+    }
+
     handlePrinceCatPetPointerUp(pointer, event) {
         this.stopPrinceCatPetPointerEvent(event);
         if (!pointer || pointer.id !== this.princeCatPetPointerId) return;
@@ -14279,6 +14369,18 @@ tryPrinceCatSweepBonus(x, y) {
 
         if (!this.princeCatPetCompleteWriting) {
             this.princePettingLockUntil = 0;
+        }
+
+        if (this.input) {
+            if (this.princeCatPetGlobalPointerMove) {
+                this.input.off('pointermove', this.princeCatPetGlobalPointerMove);
+                this.princeCatPetGlobalPointerMove = null;
+            }
+            if (this.princeCatPetGlobalPointerUp) {
+                this.input.off('pointerup', this.princeCatPetGlobalPointerUp);
+                this.input.off('pointerupoutside', this.princeCatPetGlobalPointerUp);
+                this.princeCatPetGlobalPointerUp = null;
+            }
         }
 
         (this.princeCatPetUiObjects || []).forEach(obj => {
@@ -15435,6 +15537,24 @@ if (activeBubbleMsg) {
         if (!this.canUseDirectSceneTap()) return false;
 
         if (type === 'trash') return this.startSweepingFromTrash(sprite);
+
+        if (type === 'mimi') {
+            const itemName = window.GameLogic ? window.GameLogic.armedItemName : null;
+            const directTargetItems = { '水球': true, '煙火': true, '蔥友機': true };
+            const data = window.GameLogic ? window.GameLogic.cafeMimiData : null;
+
+            if (!this.isCafe || !this.mimiSprite || !this.mimiSprite.active || !data || !data.active || data.hp <= 0) return false;
+
+            if (window.GameLogic && window.GameLogic.armedItemState === 'ready' && directTargetItems[itemName]) {
+                if (!this.tryUseArmedItemOnDirectTarget('mimi', this.mimiSprite, 'mimi')) {
+                    sendBubble('目標尚未鎖定，靠近一點再點擊。');
+                }
+                return true;
+            }
+
+            sendBubble('先裝填水球、煙火或蔥友機，靠近鎖定後再點鼠偷米米。');
+            return true;
+        }
 
         if (type === 'princeCat') {
             if (this.isCafe && this.princeCatSprite) {
