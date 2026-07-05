@@ -3713,7 +3713,7 @@ class MainScene extends Phaser.Scene {
             const mapSize = 120; const marginX = 20; const marginY = 60;
             this.minimap = this.cameras.add(this.cameras.main.width - mapSize - marginX, marginY, mapSize, mapSize).setZoom(mapSize / 2048).setName('minimap'); this.minimap.setBackgroundColor('rgba(26, 16, 8, 0.7)'); this.minimap.centerOn(1024, 1024);
             this.scale.on('resize', (gameSize) => { if (this.minimap) this.minimap.setPosition(gameSize.width - mapSize - marginX, marginY); });
-            this.trashListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('cafeTrashes')), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.trashes.find(t => t.key === key)) { let tData = data[key]; let isOld = tData.type === 'old'; let spriteKey = isOld ? 'onion-skin-old' : 'onion-skin'; let animKey = isOld ? 'skin-old-anim' : 'skin-anim'; let skin = this.physics.add.sprite(tData.x, tData.y, spriteKey).setDepth(4); skin.play(animKey); skin.type = isOld ? 'onion-skin-old' : 'onion-skin'; skin.key = key; this.trashes.push(skin); } } this.trashes = this.trashes.filter(t => { if (!data[t.key]) { t.destroy(); if (this.closestTrash === t) { 
+            this.trashListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('cafeTrashes')), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.trashes.find(t => t.key === key)) { let tData = data[key]; let isOld = tData.type === 'old'; let spriteKey = isOld ? 'onion-skin-old' : 'onion-skin'; let animKey = isOld ? 'skin-old-anim' : 'skin-anim'; let skin = this.physics.add.sprite(tData.x, tData.y, spriteKey).setDepth(4); skin.play(animKey); skin.type = isOld ? 'onion-skin-old' : 'onion-skin'; skin.key = key; this.bindDirectSceneTap(skin, 'trash'); this.trashes.push(skin); } } this.trashes = this.trashes.filter(t => { if (!data[t.key]) { t.destroy(); if (this.closestTrash === t) { 
     this.closestTrash = null; 
 
     if (this.localPlayer && this.localPlayer.isSweeping) { 
@@ -3743,12 +3743,13 @@ class MainScene extends Phaser.Scene {
             this.purifyBarBg = this.add.graphics().setDepth(200).setVisible(false); this.purifyBar = this.add.graphics().setDepth(201).setVisible(false);
             this.countdownText = this.add.text(mapW/2, mapH/2, '', { fontSize: '72px', fontStyle: 'bold', color: '#fff', stroke: '#8a2be2', strokeThickness: 8 }).setOrigin(0.5).setDepth(300).setVisible(false);
         } else if (this.sceneName === "7eonion") {
-            this.add.image(mapW/2, mapH/2, 'bg7Eonion').setDisplaySize(mapW, mapH); this.storeManager = this.physics.add.staticSprite(mapW/2, mapH/2, 'storeManager').setDepth(5); let imgW = this.storeManager.width; let imgH = this.storeManager.height; this.storeManager.body.setSize(120, 120); this.storeManager.body.setOffset((imgW - 120) / 2, (imgH - 120) / 2); 
+            this.add.image(mapW/2, mapH/2, 'bg7Eonion').setDisplaySize(mapW, mapH); this.storeManager = this.physics.add.staticSprite(mapW/2, mapH/2, 'storeManager').setDepth(5); let imgW = this.storeManager.width; let imgH = this.storeManager.height; this.storeManager.body.setSize(120, 120); this.storeManager.body.setOffset((imgW - 120) / 2, (imgH - 120) / 2); this.bindDirectSceneTap(this.storeManager, 'storeManager'); 
             this.smBubbleBg = this.add.graphics().setDepth(6); this.smBubbleText = this.add.text(mapW/2, mapH/2 - 90, '好想離職......', { fontSize: '14px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(7);
             const smPhrases = ["好想離職......", "這裡怎麼還沒倒......", "洋蔥好臭啊......"]; let phraseIdx = 0; const updateSMBubble = () => { this.smBubbleText.setText(smPhrases[phraseIdx]); const bounds = this.smBubbleText.getBounds(); const boxWidth = bounds.width + 16, boxHeight = bounds.height + 12; const boxX = this.smBubbleText.x - boxWidth / 2, boxY = this.smBubbleText.y - boxHeight / 2; this.smBubbleBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(boxX, boxY, boxWidth, boxHeight, 8).strokeRoundedRect(boxX, boxY, boxWidth, boxHeight, 8); phraseIdx = (phraseIdx + 1) % smPhrases.length; }; updateSMBubble(); this.time.addEvent({ delay: 4000, callback: updateSMBubble, callbackScope: this, loop: true });
         } else if (this.sceneName === "playroom") {
             this.add.image(mapW/2, mapH/2, 'bgPlayroom').setDisplaySize(mapW, mapH);
             this.rpsMachine = this.physics.add.staticSprite(mapW/2, mapH/2, 'rps-machine').setDepth(5);
+            this.bindDirectSceneTap(this.rpsMachine, 'rpsMachine');
         } else if (this.sceneName === "partyroom") {
             this.add.image(mapW/2, mapH/2, 'bgPartyroom').setDisplaySize(mapW, mapH);
             this.partyStonesGroup = this.physics.add.staticGroup();
@@ -4794,23 +4795,11 @@ this.events.on('action_B', () => {
                 } 
             }
             
-            if (!this.localPlayer.isSweeping && this.closestTrash) { 
-    this.localPlayer.isSweeping = true; 
-    this.qteProgress = 0; 
-    window.GameLogic.moonBunSweepPressCount = 0;
-    this.qteTotalClicks = (this.isCafe && this.isMoonBunBuffActive && this.isMoonBunBuffActive()) ? 2 : Phaser.Math.Between(5, 10); 
-    this.qteContainer.setVisible(true); 
-
-    if (this.isCafe && window.GameLogic.currentUser) {
-        update(ref(window.GameLogic.db, window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`)), {
-            isSweeping: true,
-            x: this.localPlayer.sprite.x,
-            y: this.localPlayer.sprite.y
-        });
-    }
-} else if (!this.localPlayer.isSweeping) { 
-    sendBubble("使用了 B 技能!"); 
-}
+            if (!this.localPlayer.isSweeping && this.closestTrash) {
+                this.startSweepingFromTrash(this.closestTrash);
+            } else if (!this.localPlayer.isSweeping) { 
+                sendBubble("使用了 B 技能!"); 
+            }
         });
 
         this.placePrompt = this.add.text(0, 0, '洋蔥精靈: 按A確定擺放', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#fff', backgroundColor: 'rgba(74, 93, 78, 0.8)', padding: {x:8, y:4} }).setOrigin(0.5).setDepth(20).setVisible(false); if (this.minimap) this.minimap.ignore(this.placePrompt);
@@ -12704,6 +12693,7 @@ entity.showOffRainbowTween = this.tweens.add({
         if (!this.isCafe || this.princeCatListener) return;
 
         this.princeCatSprite = this.physics.add.sprite(1024, 1024, 'prince-cat-stand-sheet').setDepth(9).setScale(1.35);
+        this.bindDirectSceneTap(this.princeCatSprite, 'princeCat');
         this.princeCatSprite.setCollideWorldBounds(true);
         if (this.princeCatSprite.body) this.princeCatSprite.body.setAllowGravity(false);
 
@@ -13822,7 +13812,8 @@ if (activeBubbleMsg) {
         });
     }
 
-    f.sprite.isLocked = data.locked;  
+    f.sprite.isLocked = data.locked;
+    this.bindDirectSceneTap(f.sprite, 'furniture', () => ({ key, f }));  
         if (imgKey === 'hall-screen') {
             f.sprite.setOrigin(0.5, 0.5); // 靜態圖不需播放動畫
 
@@ -14256,6 +14247,232 @@ if (activeBubbleMsg) {
         });
     }
 
+    canUseDirectSceneTap() {
+        if (!window.GameLogic || !window.GameLogic.currentUser) return false;
+        if (!this.localPlayer || !this.localPlayer.sprite) return false;
+        if (window.GameLogic.placingFurnitureKey) return false;
+        if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished || window.GameLogic.soloRocketCruiseActive) return false;
+        if (this.soloChickenMenuOpen || this.soloChickenMenuContainer) return false;
+        if (this.isDomUiBlockingCanvasInput && this.isDomUiBlockingCanvasInput()) return false;
+        return true;
+    }
+
+    markDirectSceneTapConsumed(pointer) {
+        this.lastDirectSceneTapAt = Date.now();
+        this.suppressCanvasDirectionUntil = Date.now() + 180;
+        if (pointer && pointer.event && pointer.event.stopPropagation) pointer.event.stopPropagation();
+        if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+    }
+
+    bindDirectSceneTap(sprite, type, getPayload = null) {
+        if (!sprite || !sprite.setInteractive || sprite._onionDirectTapBound) return;
+        sprite._onionDirectTapBound = true;
+        sprite._onionDirectTapType = type;
+
+        try {
+            sprite.setInteractive({ useHandCursor: true });
+        } catch (err) {
+            try { sprite.setInteractive(); } catch (_) { return; }
+        }
+
+        const dragThreshold = 12;
+        const cooldownMs = 380;
+
+        sprite.on('pointerdown', (pointer) => {
+            if (!this.canUseDirectSceneTap()) {
+                sprite._onionDirectTapState = null;
+                return;
+            }
+
+            sprite._onionDirectTapState = {
+                pointerId: pointer.id,
+                startX: pointer.x,
+                startY: pointer.y,
+                moved: false
+            };
+            this.pendingDirectObjectTap = sprite._onionDirectTapState;
+        });
+
+        sprite.on('pointermove', (pointer) => {
+            const state = sprite._onionDirectTapState;
+            if (!state || state.pointerId !== pointer.id) return;
+
+            const dx = pointer.x - state.startX;
+            const dy = pointer.y - state.startY;
+            const movedDist = Math.sqrt(dx * dx + dy * dy);
+
+            if (movedDist > dragThreshold) {
+                state.moved = true;
+                if (!this.canvasDirectionalInput || this.canvasDirectionalInput.pointerId !== pointer.id) {
+                    this.startCanvasDirectionalInput(pointer);
+                }
+            }
+        });
+
+        sprite.on('pointerout', (pointer) => {
+            const state = sprite._onionDirectTapState;
+            if (!state || state.pointerId !== pointer.id) return;
+
+            const dx = pointer.x - state.startX;
+            const dy = pointer.y - state.startY;
+            const movedDist = Math.sqrt(dx * dx + dy * dy);
+            if (movedDist > dragThreshold) {
+                state.moved = true;
+                if (!this.canvasDirectionalInput || this.canvasDirectionalInput.pointerId !== pointer.id) {
+                    this.startCanvasDirectionalInput(pointer);
+                }
+            }
+        });
+
+        sprite.on('pointerup', (pointer) => {
+            const state = sprite._onionDirectTapState;
+            sprite._onionDirectTapState = null;
+            if (!state || state.pointerId !== pointer.id) return;
+
+            const dx = pointer.x - state.startX;
+            const dy = pointer.y - state.startY;
+            const movedDist = Math.sqrt(dx * dx + dy * dy);
+
+            if (state.moved || movedDist > dragThreshold) return;
+            if (!this.canUseDirectSceneTap()) return;
+            if (this.lastDirectSceneTapAt && Date.now() - this.lastDirectSceneTapAt < cooldownMs) return;
+
+            this.markDirectSceneTapConsumed(pointer);
+            const payload = typeof getPayload === 'function' ? (getPayload() || {}) : {};
+            this.handleDirectSceneObjectTap(type, payload, sprite);
+        });
+    }
+
+    openStoreManagerByInteraction() {
+        if (this.sceneName !== '7eonion' || !this.storeManager) return false;
+        window.GameLogic.isShopping = true;
+        const storeCoinsEl = document.getElementById('store-current-coins');
+        if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins || 0}`;
+        const storeModal = document.getElementById('store-modal');
+        if (storeModal) storeModal.style.display = 'block';
+        return true;
+    }
+
+    openRpsMachineByInteraction() {
+        if (this.sceneName !== 'playroom' || !this.rpsMachine) return false;
+        window.openRpsBetting(window.GameLogic.currentRoomId);
+        return true;
+    }
+
+    openGiftBoxByInteraction(f) {
+        if (!f || !f.sprite || !f.sprite.active) return false;
+        window.GameLogic.activeGiftBox = f;
+        f.sprite.setTexture('gift-box-open');
+        window.playSFX(this, 'reward-open-box');
+
+        if (!f.glow) {
+            f.glow = this.add.pointlight(f.sprite.x, f.sprite.y, 0xffd700, 180, 0.6).setDepth(4);
+            this.tweens.add({
+                targets: f.glow,
+                radius: 220,
+                yoyo: true,
+                repeat: -1,
+                duration: 800
+            });
+        }
+
+        f.glow.setVisible(true);
+        window.openRewardModal(f);
+        return true;
+    }
+
+    handleFurnitureDirectInteraction(key, f) {
+        if (!key || !f || !f.sprite || !f.sprite.active || !f.sprite.isLocked) return false;
+
+        if (this.sceneName === 'shrine' && key === 'altar') {
+            const modal = document.getElementById('summon-confirm-modal');
+            if (modal) modal.style.display = 'block';
+            return true;
+        }
+
+        if (!this.isCafe) return false;
+
+        if (key.includes('solochicken')) {
+            this.openSoloChickenMenu();
+            return true;
+        }
+
+        if (key.includes('giftbox')) return this.openGiftBoxByInteraction(f);
+
+        if (key === 'fridge' || key.includes('fridge')) {
+            const modal = document.getElementById('fridge-modal');
+            if (modal) modal.style.display = 'block';
+            return true;
+        }
+
+        if (key.startsWith('memory')) {
+            const modal = document.getElementById('memory-modal');
+            if (modal) modal.style.display = 'block';
+            return true;
+        }
+
+        if (key.includes('scoreboard')) {
+            window.openLeaderboardModal();
+            return true;
+        }
+
+        if (key === 'shrine' || key.includes('shrine')) {
+            window.attemptJoinShrine();
+            return true;
+        }
+
+        return false;
+    }
+
+    startSweepingFromTrash(trash) {
+        if (!this.isCafe || !trash || !trash.active || !this.localPlayer || !this.localPlayer.sprite) return false;
+        if (this.localPlayer.isSleeping || this.localPlayer.isSeated) return false;
+        if (this.localPlayer.isSweeping) return true;
+
+        this.closestTrash = trash;
+        this.localPlayer.isSweeping = true;
+        this.qteProgress = 0;
+        window.GameLogic.moonBunSweepPressCount = 0;
+        this.qteTotalClicks = (this.isCafe && this.isMoonBunBuffActive && this.isMoonBunBuffActive()) ? 2 : Phaser.Math.Between(5, 10);
+        this.qteContainer.setVisible(true);
+        this.qteContainer.setPosition(trash.x, trash.y + 40);
+
+        if (window.GameLogic.currentUser) {
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`)), {
+                isSweeping: true,
+                x: this.localPlayer.sprite.x,
+                y: this.localPlayer.sprite.y
+            });
+        }
+
+        return true;
+    }
+
+    handleDirectSceneObjectTap(type, payload = {}, sprite = null) {
+        if (!this.canUseDirectSceneTap()) return false;
+
+        if (type === 'trash') return this.startSweepingFromTrash(sprite);
+
+        if (type === 'princeCat') {
+            if (this.isCafe && this.princeCatSprite) {
+                this.openPrinceCatMenu();
+                return true;
+            }
+            return false;
+        }
+
+        if (type === 'storeManager') return this.openStoreManagerByInteraction();
+        if (type === 'rpsMachine') return this.openRpsMachineByInteraction();
+
+        if (type === 'furniture') {
+            const key = payload.key;
+            const f = payload.f || (key && this.furnitureSprites ? this.furnitureSprites[key] : null);
+            return this.handleFurnitureDirectInteraction(key, f);
+        }
+
+        return false;
+    }
+  
     setupCanvasDirectionalInput() {
         this.canvasDirectionalInput = {
             active: false,
@@ -14280,12 +14497,26 @@ if (activeBubbleMsg) {
         };
 
         const onMove = (pointer) => {
+            const pendingTap = this.pendingDirectObjectTap;
+            if (pendingTap && pendingTap.pointerId === pointer.id && (!this.canvasDirectionalInput || !this.canvasDirectionalInput.active)) {
+                const dx = pointer.x - pendingTap.startX;
+                const dy = pointer.y - pendingTap.startY;
+                if (Math.sqrt(dx * dx + dy * dy) > 12) {
+                    pendingTap.moved = true;
+                    this.pendingDirectObjectTap = null;
+                    this.startCanvasDirectionalInput(pointer);
+                }
+            }
+
             if (!this.canvasDirectionalInput || !this.canvasDirectionalInput.active) return;
             if (pointer.id !== this.canvasDirectionalInput.pointerId) return;
             this.updateCanvasDirectionalPointer(pointer);
         };
 
         const onUp = (pointer) => {
+            if (this.pendingDirectObjectTap && this.pendingDirectObjectTap.pointerId === pointer.id) {
+                this.pendingDirectObjectTap = null;
+            }
             if (!this.canvasDirectionalInput || pointer.id !== this.canvasDirectionalInput.pointerId) return;
             this.clearCanvasDirectionalInput();
         };
@@ -14380,6 +14611,7 @@ if (activeBubbleMsg) {
         if (!target || target.tagName !== 'CANVAS') return true;
 
         if (rawEvent.type && rawEvent.type.includes('mouse') && rawEvent.button !== 0) return true;
+        if (this.suppressCanvasDirectionUntil && Date.now() < this.suppressCanvasDirectionUntil) return true;
 
         if (
             this.soloRocketCruiseActive ||
