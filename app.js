@@ -3239,6 +3239,7 @@ class UIScene extends Phaser.Scene {
         // 修正4：確實將體力條的元件加入狀態容器中
         this.statusContainer.add([ this.statusBg, this.portrait, this.nameLevelText, this.energyBg, this.energyLiquid, this.energyZone, this.energyText, this.expBarBg, this.expLiquid, this.expText, this.statusText, this.equipText, this.statusToggleBtn ]);
         this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, { radius: 40, base: this.add.circle(0, 0, 40, 0xc5a059, 0.2).setStrokeStyle(2, 0xc5a059), thumb: this.add.circle(0, 0, 20, 0xc5a059, 0.8) });
+        this.disableLegacyVirtualJoystick();
         this.btnA = this.add.circle(0, 0, 30, 0xd9534f).setStrokeStyle(3, 0xffffff).setInteractive(); this.txtA = this.add.text(0, 0, 'A', { fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
         this.btnB = this.add.circle(0, 0, 30, 0x0077cc).setStrokeStyle(3, 0xffffff).setInteractive(); this.txtB = this.add.text(0, 0, 'B', { fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
         this.furnBtn = this.add.circle(0, 0, 30, 0x8b5a2b).setStrokeStyle(3, 0xc5a059).setInteractive(); this.furnText = this.add.text(0, 0, '家俱', { fontSize: '16px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
@@ -3298,15 +3299,8 @@ class UIScene extends Phaser.Scene {
                 mainScene.soloRocketRabbitShopContainer.active !== false
             );
 
-            if (this.joyStick) {
-                const showJoystick = !isRabbitShopOpen;
-                if (this.joyStick.base && this.joyStick.base.setVisible) {
-                    this.joyStick.base.setVisible(showJoystick);
-                }
-                if (this.joyStick.thumb && this.joyStick.thumb.setVisible) {
-                    this.joyStick.thumb.setVisible(showJoystick);
-                }
-            }
+            // 階段1：手機版已改用「以角色為中心」的觸控方向輸入，舊虛擬搖桿保持停用。
+            if (this.joyStick) this.disableLegacyVirtualJoystick();
 
             return;
         }
@@ -3355,7 +3349,29 @@ class UIScene extends Phaser.Scene {
         this.statusText.setText(currentStatus);
         if (isStatusActive) { if (!this.statusBlinkTween) { this.statusText.setColor('#ff0000'); this.statusText.setShadow(0, 0, '#ffffff', 8, true, true); this.statusBlinkTween = this.tweens.add({ targets: this.statusText, alpha: 0.3, yoyo: true, repeat: -1, duration: 500 }); } } else { if (this.statusBlinkTween) { this.statusBlinkTween.stop(); this.statusBlinkTween = null; this.statusText.setAlpha(1); this.statusText.setColor('#3e2723'); this.statusText.setShadow(0, 0, '#000', 0, false, false); } }
     }
-    resizeUI(gameSize) {
+
+    disableLegacyVirtualJoystick() {
+        if (!this.joyStick) return;
+
+        try {
+            if (this.joyStick.setEnable) this.joyStick.setEnable(false);
+            if (this.joyStick.base) {
+                this.joyStick.base.setVisible(false);
+                this.joyStick.base.disableInteractive();
+                this.joyStick.base.setPosition(-9999, -9999);
+            }
+            if (this.joyStick.thumb) {
+                this.joyStick.thumb.setVisible(false);
+                this.joyStick.thumb.disableInteractive();
+                this.joyStick.thumb.setPosition(-9999, -9999);
+            }
+        } catch (err) {
+            console.warn('[手機觸控] 停用舊虛擬搖桿失敗，已略過：', err);
+        }
+    }
+
+  
+  resizeUI(gameSize) {
         if (!this.joyStick) return;
 
         const isPortrait = gameSize.height > gameSize.width;
@@ -3366,11 +3382,19 @@ class UIScene extends Phaser.Scene {
         const joystickX = 90;
         const joystickY = gameSize.height - 90 - (isPortrait ? portraitLift : 0);
 
-        this.joyStick.setPosition(joystickX, joystickY); if (this.joyStick.base) this.joyStick.base.setDepth(10); if (this.joyStick.thumb) this.joyStick.thumb.setDepth(10);
+        this.joyStick.setPosition(joystickX, joystickY);
+        this.disableLegacyVirtualJoystick();
+
         const targetWidth = Math.min(gameSize.width * 0.45, 320); const scaleRatio = targetWidth / this.statusBg.width; this.statusBg.setScale(scaleRatio); 
         // 修正3：手機版頭像縮小
         this.portrait.setScale(isPortrait ? 0.8 : 1);
-        const bgW = this.statusBg.displayWidth; const bgH = this.statusBg.displayHeight; const statusX = 20; const statusY = joystickY - 60; const targetX = this.isStatusCollapsed ? statusX - bgW + 10 : statusX;
+        const bgW = this.statusBg.displayWidth; const bgH = this.statusBg.displayHeight;
+        const statusX = 20;
+        const statusBottomMargin = isPortrait ? 22 : 18;
+        const statusMinY = Math.min(gameSize.height - 12, bgH + 12);
+        const statusMaxY = Math.max(statusMinY, gameSize.height - 12);
+        const statusY = Phaser.Math.Clamp(gameSize.height - statusBottomMargin, statusMinY, statusMaxY);
+        const targetX = this.isStatusCollapsed ? statusX - bgW + 10 : statusX;
         this.statusContainer.setPosition(targetX, statusY); this.portrait.setPosition(bgW * 0.5, -bgH * 0.62); this.nameLevelText.setPosition(bgW * 0.5, -bgH * 0.16); this.nameLevelText.setFontSize(`${Math.max(14, 18 * scaleRatio)}px`);
         
         // 蔥電飽能量條位置 (修正7：再拉長計量條並向下對齊，並配置文字)
@@ -3938,6 +3962,7 @@ class MainScene extends Phaser.Scene {
         this.initPrinceCatSync();
 
         this.cursors = this.input.keyboard.createCursorKeys(); this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE); this.shiftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT); this.altKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ALT); this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+        this.setupCanvasDirectionalInput();
         this.spaceKey.on('down', (e) => {
             if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
 
@@ -14231,6 +14256,214 @@ if (activeBubbleMsg) {
         });
     }
 
+    setupCanvasDirectionalInput() {
+        this.canvasDirectionalInput = {
+            active: false,
+            pointerId: null,
+            pointerX: 0,
+            pointerY: 0,
+            vx: 0,
+            vy: 0,
+            deadZone: 24
+        };
+
+        window.stopOnionCanvasDirectionalInput = () => {
+            if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+        };
+
+        const onDown = (pointer, currentlyOver = []) => {
+            if (this.shouldBlockCanvasDirectionalInput(pointer, currentlyOver)) {
+                this.clearCanvasDirectionalInput();
+                return;
+            }
+            this.startCanvasDirectionalInput(pointer);
+        };
+
+        const onMove = (pointer) => {
+            if (!this.canvasDirectionalInput || !this.canvasDirectionalInput.active) return;
+            if (pointer.id !== this.canvasDirectionalInput.pointerId) return;
+            this.updateCanvasDirectionalPointer(pointer);
+        };
+
+        const onUp = (pointer) => {
+            if (!this.canvasDirectionalInput || pointer.id !== this.canvasDirectionalInput.pointerId) return;
+            this.clearCanvasDirectionalInput();
+        };
+
+        this.input.on('pointerdown', onDown);
+        this.input.on('pointermove', onMove);
+        this.input.on('pointerup', onUp);
+        this.input.on('pointerupoutside', onUp);
+        const onGameOut = () => this.clearCanvasDirectionalInput();
+        this.input.on('gameout', onGameOut);
+
+        const onWindowBlur = () => this.clearCanvasDirectionalInput();
+        window.addEventListener('blur', onWindowBlur);
+
+        this.events.once('shutdown', () => {
+            this.input.off('pointerdown', onDown);
+            this.input.off('pointermove', onMove);
+            this.input.off('pointerup', onUp);
+            this.input.off('pointerupoutside', onUp);
+            this.input.off('gameout', onGameOut);
+            window.removeEventListener('blur', onWindowBlur);
+            if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput = null;
+        });
+    }
+
+    isDomUiBlockingCanvasInput() {
+        const activeTag = document.activeElement && document.activeElement.tagName;
+        if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') return true;
+
+        const isVisible = (el) => {
+            if (!el) return false;
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) !== 0;
+        };
+
+        const blockingSelectors = [
+            '.modal',
+            '#quick-select-menu',
+            '#prince-cat-menu',
+            '#action-menu',
+            '#magic-menu-blocker',
+            '#party-waiting-modal',
+            '#rps-modal'
+        ];
+
+        return blockingSelectors.some(selector => {
+            return Array.from(document.querySelectorAll(selector)).some(isVisible);
+        });
+    }
+
+    isPointerOverPhaserUi(pointer, currentlyOver = []) {
+        if (Array.isArray(currentlyOver) && currentlyOver.length > 0) return true;
+
+        const uiScene = this.scene.manager.getScene('UIScene');
+        if (!uiScene) return false;
+
+        const px = pointer.x;
+        const py = pointer.y;
+        const circleHit = (obj, radius = 46) => {
+            return !!(
+                obj &&
+                obj.visible !== false &&
+                Phaser.Math.Distance.Between(px, py, obj.x, obj.y) <= radius
+            );
+        };
+
+        if (
+            circleHit(uiScene.btnA) ||
+            circleHit(uiScene.btnB) ||
+            circleHit(uiScene.itemBtn) ||
+            circleHit(uiScene.furnBtn)
+        ) {
+            return true;
+        }
+
+        if (uiScene.statusContainer && uiScene.statusContainer.visible !== false && uiScene.statusBg) {
+            const bgW = uiScene.statusBg.displayWidth || 0;
+            const bgH = uiScene.statusBg.displayHeight || 0;
+            const sx = uiScene.statusContainer.x;
+            const sy = uiScene.statusContainer.y;
+            if (px >= sx && px <= sx + bgW && py >= sy - bgH && py <= sy + 20) return true;
+        }
+
+        return false;
+    }
+
+    shouldBlockCanvasDirectionalInput(pointer, currentlyOver = []) {
+        if (!pointer || !pointer.event) return true;
+
+        const rawEvent = pointer.event;
+        const target = rawEvent.target;
+        if (!target || target.tagName !== 'CANVAS') return true;
+
+        if (rawEvent.type && rawEvent.type.includes('mouse') && rawEvent.button !== 0) return true;
+
+        if (
+            this.soloRocketCruiseActive ||
+            this.soloRocketCruiseFinished ||
+            window.GameLogic.soloRocketCruiseActive ||
+            this.soloChickenMenuOpen ||
+            this.soloChickenMenuContainer
+        ) {
+            return true;
+        }
+
+        if (this.isDomUiBlockingCanvasInput()) return true;
+        if (this.isPointerOverPhaserUi(pointer, currentlyOver)) return true;
+
+        return false;
+    }
+
+    startCanvasDirectionalInput(pointer) {
+        if (!this.canvasDirectionalInput) return;
+        this.canvasDirectionalInput.active = true;
+        this.canvasDirectionalInput.pointerId = pointer.id;
+        this.updateCanvasDirectionalPointer(pointer);
+    }
+
+    updateCanvasDirectionalPointer(pointer) {
+        if (!this.canvasDirectionalInput) return;
+        this.canvasDirectionalInput.pointerX = pointer.x;
+        this.canvasDirectionalInput.pointerY = pointer.y;
+        this.refreshCanvasDirectionalVector();
+    }
+
+    clearCanvasDirectionalInput() {
+        if (!this.canvasDirectionalInput) return;
+        this.canvasDirectionalInput.active = false;
+        this.canvasDirectionalInput.pointerId = null;
+        this.canvasDirectionalInput.vx = 0;
+        this.canvasDirectionalInput.vy = 0;
+    }
+
+    refreshCanvasDirectionalVector() {
+        const input = this.canvasDirectionalInput;
+        if (!input || !input.active || !this.localPlayer || !this.localPlayer.sprite) return;
+
+        if (this.isDomUiBlockingCanvasInput()) {
+            this.clearCanvasDirectionalInput();
+            return;
+        }
+
+        const cam = this.cameras.main;
+        const playerScreenX = (this.localPlayer.sprite.x - cam.scrollX) * cam.zoom + cam.x;
+        const playerScreenY = (this.localPlayer.sprite.y - cam.scrollY) * cam.zoom + cam.y;
+        const dx = input.pointerX - playerScreenX;
+        const dy = input.pointerY - playerScreenY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < input.deadZone) {
+            input.vx = 0;
+            input.vy = 0;
+            return;
+        }
+
+        input.vx = dx / dist;
+        input.vy = dy / dist;
+    }
+
+    getCanvasDirectionalVelocity(speed) {
+        const input = this.canvasDirectionalInput;
+        if (!input || !input.active) return null;
+
+        this.refreshCanvasDirectionalVector();
+        return {
+            active: true,
+            vx: input.vx * speed,
+            vy: input.vy * speed
+        };
+    }
+
+    hasCanvasDirectionalMovement() {
+        const input = this.canvasDirectionalInput;
+        if (!input || !input.active) return false;
+        this.refreshCanvasDirectionalVector();
+        return Math.abs(input.vx) > 0.01 || Math.abs(input.vy) > 0.01;
+    }
+
     update(time, delta) {
         if (!window.GameLogic.currentUser) return;
         if (this.updateMoonBunBuffUi) this.updateMoonBunBuffUi(time);
@@ -14435,7 +14668,7 @@ if (activeBubbleMsg) {
         }
 
         if (this.localPlayer.isShowingOff) {
-            if (document.activeElement.tagName !== 'INPUT' && (this.cursors.left.isDown || this.cursors.right.isDown || this.cursors.up.isDown || this.cursors.down.isDown || (uiScene && uiScene.joyStick && uiScene.joyStick.force > 0))) {
+            if (document.activeElement.tagName !== 'INPUT' && (this.cursors.left.isDown || this.cursors.right.isDown || this.cursors.up.isDown || this.cursors.down.isDown || this.hasCanvasDirectionalMovement())) {
                 this.localPlayer.isShowingOff = false;
                 this.clearShowOffFx(this.localPlayer);
                 const playerPath = this.getCurrentPlayerPathForAction();
@@ -14517,8 +14750,10 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
                 this.localPlayer.lastBubbleState = 'idle';
             }
         } else {
-            if (uiScene && uiScene.joyStick && uiScene.joyStick.force > 0) {
-                vx = Math.cos(uiScene.joyStick.angle * Math.PI / 180) * speed; vy = Math.sin(uiScene.joyStick.angle * Math.PI / 180) * speed;
+            const canvasMove = this.getCanvasDirectionalVelocity(speed);
+            if (canvasMove && canvasMove.active) {
+                vx = canvasMove.vx;
+                vy = canvasMove.vy;
             } else {
                 if (document.activeElement.tagName !== 'INPUT') { if (this.cursors.left.isDown) vx = -speed; else if (this.cursors.right.isDown) vx = speed; if (this.cursors.up.isDown) vy = -speed; else if (this.cursors.down.isDown) vy = speed; }
                 if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; } 
