@@ -35,6 +35,51 @@ const ONION_GANG_WHITELIST = {
     "LeuuapizXVOstM0ppfZ4RR53DvH2": true, // anna626845@gmail.com
     "8vpv8neN7dRFVgQ0YA07Xy5Aj4C3": true  // kerojjj777@gmail.com
 };
+const SERVER_ROOM_STORAGE_KEY = "onion_last_server_room";
+
+window.getSafeServerRoomId = function(roomId) {
+    return SERVER_ROOMS[roomId] ? roomId : DEFAULT_SERVER_ROOM;
+};
+
+window.getRememberedServerRoom = function() {
+    try {
+        const rememberedRoom = localStorage.getItem(SERVER_ROOM_STORAGE_KEY);
+        return window.getSafeServerRoomId(rememberedRoom);
+    } catch (err) {
+        console.warn("讀取入口房間記憶失敗：", err);
+        return DEFAULT_SERVER_ROOM;
+    }
+};
+
+window.rememberServerRoom = function(roomId) {
+    const safeRoomId = window.getSafeServerRoomId(roomId);
+    try {
+        localStorage.setItem(SERVER_ROOM_STORAGE_KEY, safeRoomId);
+    } catch (err) {
+        console.warn("寫入入口房間記憶失敗：", err);
+    }
+    return safeRoomId;
+};
+
+window.syncLoginRoomSelect = function(roomId = null) {
+    const safeRoomId = window.getSafeServerRoomId(
+        roomId ||
+        (window.GameLogic && window.GameLogic.selectedServerRoom) ||
+        window.getRememberedServerRoom()
+    );
+
+    if (window.GameLogic) {
+        window.GameLogic.selectedServerRoom = safeRoomId;
+        window.GameLogic.currentServerRoom = safeRoomId;
+    }
+
+    const roomSelect = document.getElementById("server-room-select");
+    if (roomSelect) roomSelect.value = safeRoomId;
+
+    return safeRoomId;
+};
+
+const initialServerRoom = window.getRememberedServerRoom();
 // ====== 入口房間設定結束 ======
 
 window.GameLogic = {
@@ -43,7 +88,7 @@ window.GameLogic = {
     cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, placingFurnitureKey: null, 
     phaserGame: null, phaserLoaded: false, pendingScene: null, db: db,
     armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false, moonBunBuffUntil: 0, moonBunSweepPressCount: 0, moonBunBuffEndNotified: false,
-    selectedServerRoom: DEFAULT_SERVER_ROOM, currentServerRoom: DEFAULT_SERVER_ROOM, serverRooms: SERVER_ROOMS, authGuardSigningOut: false
+    selectedServerRoom: initialServerRoom, currentServerRoom: initialServerRoom, serverRooms: SERVER_ROOMS, authGuardSigningOut: false
 };
 
 let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, profileViewingUid = null;
@@ -382,8 +427,8 @@ function createSystemUI() {
             <h2 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">入館登記</h2>
             <label class="login-room-label" for="server-room-select">選擇入口房間</label>
             <select id="server-room-select">
-                <option value="ryoFriends" selected>良之友天地</option>
                 <option value="onionGang">洋蔥五告派團體</option>
+                <option value="ryoFriends">良之友天地</option>
             </select><br>
             <input type="email" id="user-email" placeholder="信箱 Email"><br>
             <input type="password" id="user-pwd" placeholder="密碼"><br>
@@ -738,6 +783,7 @@ function createSystemUI() {
     }, 500);
 }
 createSystemUI();
+window.syncLoginRoomSelect(window.getRememberedServerRoom());
 
 document.body.classList.add('login-bg-active');
 
@@ -1700,10 +1746,13 @@ window.addEventListener('pointerdown', (e) => {
 document.getElementById('chat-toggle-btn').addEventListener('click', function() { chatSection.classList.toggle('chat-collapsed'); this.innerText = chatSection.classList.contains('chat-collapsed') ? '展開對話 ▼' : '收起對話 ▲'; if (!chatSection.classList.contains('chat-collapsed')) { const chatBox = document.getElementById("chat-box"); chatBox.scrollTop = 0; } });
 document.getElementById("join-btn").addEventListener("click", () => {
     const roomSelect = document.getElementById("server-room-select");
-    const selectedRoom = roomSelect && SERVER_ROOMS[roomSelect.value] ? roomSelect.value : DEFAULT_SERVER_ROOM;
+    const selectedRoom = window.rememberServerRoom(
+        roomSelect && SERVER_ROOMS[roomSelect.value] ? roomSelect.value : DEFAULT_SERVER_ROOM
+    );
 
     window.GameLogic.selectedServerRoom = selectedRoom;
     window.GameLogic.currentServerRoom = selectedRoom;
+    window.syncLoginRoomSelect(selectedRoom);
 
     const email = document.getElementById("user-email").value;
     const pwd = document.getElementById("user-pwd").value;
@@ -1714,11 +1763,11 @@ document.getElementById("join-btn").addEventListener("click", () => {
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        const requestedRoom = SERVER_ROOMS[window.GameLogic.selectedServerRoom]
-            ? window.GameLogic.selectedServerRoom
-            : DEFAULT_SERVER_ROOM;
+        const requestedRoom = window.getRememberedServerRoom();
 
+        window.GameLogic.selectedServerRoom = requestedRoom;
         window.GameLogic.currentServerRoom = requestedRoom;
+        window.syncLoginRoomSelect(requestedRoom);
 
         if (!window.canEnterServerRoom(user.uid, requestedRoom)) {
             window.GameLogic.authGuardSigningOut = true;
@@ -1726,14 +1775,15 @@ onAuthStateChanged(auth, async (user) => {
 
             alert("此房間僅限洋蔥五告派團體成員進入，請改選良之友天地。");
 
+            const fallbackRoom = window.rememberServerRoom(DEFAULT_SERVER_ROOM);
+
             window.GameLogic.currentUser = null;
-            window.GameLogic.selectedServerRoom = DEFAULT_SERVER_ROOM;
-            window.GameLogic.currentServerRoom = DEFAULT_SERVER_ROOM;
+            window.GameLogic.selectedServerRoom = fallbackRoom;
+            window.GameLogic.currentServerRoom = fallbackRoom;
             window.GameLogic.onlinePlayers = {};
             window.GameLogic.cafePlayers = {};
 
-            const roomSelect = document.getElementById("server-room-select");
-            if (roomSelect) roomSelect.value = DEFAULT_SERVER_ROOM;
+            window.syncLoginRoomSelect(fallbackRoom);
 
             loginScreen.style.display = "block";
             gameLayoutContainer.style.display = "none";
@@ -1743,6 +1793,8 @@ onAuthStateChanged(auth, async (user) => {
             window.GameLogic.authGuardSigningOut = false;
             return;
         }
+
+        window.rememberServerRoom(requestedRoom);
 
         window.GameLogic.currentUser = user;
         loginScreen.style.display = "none";
@@ -1855,6 +1907,12 @@ onAuthStateChanged(auth, async (user) => {
             }
         });
 
+        });
+
+        setTimeout(() => {
+            if (window.startPartyInviteListener) window.startPartyInviteListener();
+        }, 0);
+
         if (!window.GameLogic.phaserGame) { window.GameLogic.pendingScene = window.GameLogic.myProfile.lastScene || "doghouse"; initPhaser(); } else { switchScene(window.GameLogic.myProfile.lastScene || "doghouse"); }
         listenToChat(); listenToMemories();
     } else {
@@ -1874,8 +1932,16 @@ onAuthStateChanged(auth, async (user) => {
         if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; }
         if (shrineUnsubscribe) { shrineUnsubscribe(); shrineUnsubscribe = null; }
         if (shrineEventUnsubscribe) { shrineEventUnsubscribe(); shrineEventUnsubscribe = null; }
+        if (partyInvitesUnsubscribe) { partyInvitesUnsubscribe(); partyInvitesUnsubscribe = null; }
 
-        window.updateOnlinePlayersUI();
+        window.GameLogic.partyInvitesData = {};
+        if (window.PartyLogic) {
+            window.PartyLogic.pendingInviteId = null;
+            window.PartyLogic.lastInviteTime = 0;
+            window.PartyLogic.seenInviteKeys = {};
+        }
+
+window.updateOnlinePlayersUI();
     }
 });
 
@@ -15268,7 +15334,7 @@ window.syncRpsState = function(roomId) {
 };
 
 // ==================== 派對系統全域邏輯 ====================
-window.PartyLogic = { roomId: null, ammo: 666, state: 'none', scores: {}, players: {}, mySlotIndex: 0, speedBoost: false, selectedGame: '水球礁谷', playPhase: 0 };
+window.PartyLogic = { roomId: null, ammo: 666, state: 'none', scores: {}, players: {}, mySlotIndex: 0, speedBoost: false, selectedGame: '水球礁谷', playPhase: 0, lastInviteTime: 0, seenInviteKeys: {} };
 let partyUnsubscribe = null; let partyInvitesUnsubscribe = null;
 
 window.createPartyRoom = function() {
@@ -15300,7 +15366,13 @@ window.createPartyRoom = function() {
     // 延遲跳轉場景，讓動畫播完
     setTimeout(() => {
         set(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}`)), { state: 'waiting', host: window.GameLogic.currentUser.uid, game: window.PartyLogic.selectedGame, startTime: Date.now() });
-        set(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${window.PartyLogic.roomId}`)), { time: Date.now(), inviterUid: window.GameLogic.currentUser.uid, inviterName: window.GameLogic.myProfile.name, game: window.PartyLogic.selectedGame });
+        set(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${window.PartyLogic.roomId}`)), {
+    time: Date.now(),
+    inviterUid: window.GameLogic.currentUser.uid,
+    inviterName: window.GameLogic.myProfile.name,
+    game: window.PartyLogic.selectedGame,
+    serverRoomId: window.getCurrentServerRoomId()
+});
         window.switchScene('partyroom', { roomId: window.PartyLogic.roomId });
     }, 1500);
 };
@@ -15694,28 +15766,79 @@ window.partyInviteTimer = setInterval(() => {
 }, 1000);
 
 // Global Listener for Party Invites
-partyInvitesUnsubscribe = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/partyInvites')), snap => {
-    let invites = snap.val() || {};
-    window.GameLogic.partyInvitesData = invites; // 更新快取供計時器使用，避免登入狀態剛切換時漏接
+// 修補：不要在檔案載入時固定監聽預設房間；登入成功後依目前 currentServerRoom 重掛。
+window.showPartyInviteNotice = function(inviteId, inv) {
+    if (!window.GameLogic.currentUser || !inv) return;
+    if (inv.closed || !inv.time || Date.now() - inv.time >= 60000) return;
+    if (inv.inviterUid === window.GameLogic.currentUser.uid) return;
+    if (inv.serverRoomId && inv.serverRoomId !== window.getCurrentServerRoomId()) return;
+
+    window.PartyLogic.pendingInviteId = inviteId;
+    window.PartyLogic.lastInviteTime = Math.max(
+        Number(window.PartyLogic.lastInviteTime || 0),
+        Number(inv.time || 0)
+    );
+
+    const nameEl = document.getElementById('party-inviter-name');
+    if (nameEl) nameEl.innerText = inv.inviterName || '某位洋蔥';
+
+    if (window.GameLogic.currentScene !== 'partyroom') {
+        const inviteModal = document.getElementById('party-invite-modal');
+        if (inviteModal) inviteModal.style.display = 'block';
+    }
+};
+
+window.startPartyInviteListener = function() {
+    if (partyInvitesUnsubscribe) {
+        partyInvitesUnsubscribe();
+        partyInvitesUnsubscribe = null;
+    }
+
     if (!window.GameLogic.currentUser) return;
-    
-    let activeInvites = Object.keys(invites).filter(k => invites[k] && !invites[k].closed && invites[k].time && (Date.now() - invites[k].time < 60000));
-    
-    activeInvites.forEach(k => {
-        let inv = invites[k];
-        if (inv.inviterUid !== window.GameLogic.currentUser.uid) {
-            if (inv.time > (window.PartyLogic.lastInviteTime || 0)) {
-                window.PartyLogic.lastInviteTime = inv.time;
-                document.getElementById('party-inviter-name').innerText = inv.inviterName || '某位洋蔥';
-                window.PartyLogic.pendingInviteId = k;
-                if (window.GameLogic.currentScene !== 'partyroom') {
-                    let inviteModal = document.getElementById('party-invite-modal');
-                    if (inviteModal) inviteModal.style.display = 'block';
-                }
+
+    const listeningRoomId = window.getCurrentServerRoomId();
+    window.GameLogic.partyInvitesData = {};
+    window.PartyLogic.seenInviteKeys = window.PartyLogic.seenInviteKeys || {};
+
+    partyInvitesUnsubscribe = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/partyInvites')), snap => {
+        // 若房間在監聽期間被切換，安全重掛，避免繼續聽舊房。
+        if (listeningRoomId !== window.getCurrentServerRoomId()) {
+            if (partyInvitesUnsubscribe) {
+                partyInvitesUnsubscribe();
+                partyInvitesUnsubscribe = null;
             }
+            setTimeout(() => {
+                if (window.startPartyInviteListener) window.startPartyInviteListener();
+            }, 0);
+            return;
         }
+
+        const invites = snap.val() || {};
+        window.GameLogic.partyInvitesData = invites;
+
+        if (!window.GameLogic.currentUser) return;
+
+        const activeInvites = Object.keys(invites).filter(k => {
+            const inv = invites[k];
+            return inv &&
+                !inv.closed &&
+                inv.time &&
+                Date.now() - inv.time < 60000 &&
+                inv.inviterUid !== window.GameLogic.currentUser.uid &&
+                (!inv.serverRoomId || inv.serverRoomId === listeningRoomId);
+        });
+
+        activeInvites.forEach(k => {
+            const inv = invites[k];
+            const seenKey = `${listeningRoomId}_${k}_${inv.time || 0}`;
+
+            if (window.PartyLogic.seenInviteKeys[seenKey]) return;
+
+            window.PartyLogic.seenInviteKeys[seenKey] = true;
+            window.showPartyInviteNotice(k, inv);
+        });
     });
-});
+};
 
 // ====== 新增：領獎系統與勳章展示 UI ======
 const rewardStyles = `
