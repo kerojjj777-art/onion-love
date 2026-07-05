@@ -14681,6 +14681,7 @@ tryPrinceCatSweepBonus(x, y) {
         this.princeCatPetLastDir = 0;
         this.princeCatPetStrokeDist = 0;
         this.princeCatPetLastMoveAt = 0;
+        this.lastPrinceCatPettingTouchSfxAt = 0;
 
         if (!this.princeCatPetCompleteWriting) {
             this.princePettingLockUntil = 0;
