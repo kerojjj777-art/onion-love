@@ -1907,8 +1907,6 @@ onAuthStateChanged(auth, async (user) => {
             }
         });
 
-        });
-
         setTimeout(() => {
             if (window.startPartyInviteListener) window.startPartyInviteListener();
         }, 0);
