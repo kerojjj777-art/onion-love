@@ -903,7 +903,7 @@ function createSystemUI() {
                     opacity:1;
                 }
             }
-            /* 給西選單：紅色金屬展開動畫＋倒帶關閉動畫 */
+            /* 給西選單：深咖啡魔法木質展開動畫＋葉子精靈粒子 */
             #inventory-close-blocker {
                 display:none;
                 position:fixed;
@@ -919,62 +919,77 @@ function createSystemUI() {
                 max-height:min(82vh, calc(var(--onion-vh, 1vh) * 82));
                 overflow:hidden !important;
                 background:
-                    radial-gradient(circle at 50% 18%, rgba(255,255,255,0.32) 0 7%, transparent 20%),
-                    linear-gradient(135deg, #4a0202 0%, #a30a0a 18%, #f55252 34%, #640505 52%, #d71919 74%, #350101 100%) !important;
-                border:3px solid rgba(255,230,230,0.92) !important;
+                    radial-gradient(circle at 50% 24%, rgba(255,236,205,0.16) 0 8%, transparent 26%),
+                    linear-gradient(145deg, #160b05 0%, #3a1b0d 22%, #6b3b1c 44%, #241008 68%, #4b2411 100%) !important;
+                border:3px solid rgba(226,183,124,0.92) !important;
                 border-radius:18px !important;
-                box-shadow:0 0 24px rgba(255,0,0,0.78), 0 0 38px rgba(255,255,255,0.36), inset 0 0 22px rgba(0,0,0,0.72), inset 0 2px 0 rgba(255,255,255,0.45) !important;
-                color:#fff4f4 !important;
+                box-shadow:0 12px 28px rgba(0,0,0,0.62), 0 0 20px rgba(120,74,36,0.72), 0 0 28px rgba(255,244,220,0.24), inset 0 0 24px rgba(28,12,5,0.82), inset 0 2px 0 rgba(255,236,205,0.28) !important;
+                color:#fff2dc !important;
                 transform-origin:center center;
             }
             #inventory-modal.inventory-red-metal-ui::before {
                 content:"";
                 position:absolute;
-                inset:-55% -45%;
-                background:linear-gradient(115deg, transparent 32%, rgba(255,255,255,0.58) 43%, transparent 53%, transparent 62%, rgba(255,120,120,0.34) 70%, transparent 78%);
-                transform:translateX(-55%);
-                animation:inventory-red-metal-sheen 3.4s ease-in-out infinite;
+                inset:-14%;
+                background:
+                    radial-gradient(circle at 20% 28%, rgba(255,236,205,0.18) 0 2px, transparent 5px),
+                    radial-gradient(circle at 74% 62%, rgba(169,112,56,0.24) 0 3px, transparent 8px),
+                    repeating-linear-gradient(112deg, rgba(255,230,180,0.065) 0 5px, transparent 6px 20px),
+                    linear-gradient(90deg, rgba(42,17,7,0.42), transparent 42%, rgba(112,61,29,0.22), transparent 72%, rgba(24,10,4,0.36));
                 pointer-events:none;
                 z-index:0;
+                animation:inventory-wood-core-drift 6.4s ease-in-out infinite alternate;
             }
             #inventory-modal.inventory-red-metal-ui::after {
                 content:"";
                 position:absolute;
                 inset:0;
                 background:
-                    repeating-linear-gradient(0deg, rgba(255,255,255,0.08) 0 1px, transparent 1px 5px),
-                    radial-gradient(circle at 28% 22%, rgba(255,255,255,0.35) 0 2px, transparent 4px),
-                    radial-gradient(circle at 80% 72%, rgba(255,255,255,0.32) 0 2px, transparent 4px);
+                    linear-gradient(120deg, transparent 0 34%, rgba(255,236,205,0.16) 43%, transparent 54%),
+                    radial-gradient(circle at 50% 48%, rgba(255,244,220,0.08) 0 18%, transparent 48%);
                 pointer-events:none;
                 z-index:0;
                 opacity:0.72;
+                animation:inventory-wood-glow-drift 7.2s ease-in-out infinite alternate;
+            }
+            @keyframes inventory-wood-core-drift {
+                0% { transform:translate(-2px, 1px) rotate(-0.35deg) scale(1.01); opacity:0.8; }
+                37% { transform:translate(2px, -1px) rotate(0.22deg) scale(1.015); opacity:0.92; }
+                72% { transform:translate(-1px, -2px) rotate(-0.16deg) scale(1.008); opacity:0.86; }
+                100% { transform:translate(1px, 2px) rotate(0.28deg) scale(1.012); opacity:0.94; }
+            }
+            @keyframes inventory-wood-glow-drift {
+                0% { transform:translate(1px, -1px) scale(1); opacity:0.54; }
+                50% { transform:translate(-2px, 1px) scale(1.01); opacity:0.74; }
+                100% { transform:translate(2px, 2px) scale(1.006); opacity:0.62; }
             }
             #inventory-modal.inventory-red-metal-ui > * {
                 position:relative;
                 z-index:2;
             }
             #inventory-modal.inventory-opening {
-                animation:inventory-red-open 2s cubic-bezier(0.16, 0.9, 0.18, 1) forwards;
+                animation:inventory-forest-open 1s cubic-bezier(0.16, 0.9, 0.18, 1) forwards;
             }
             #inventory-modal.inventory-closing {
-                animation:inventory-red-close 2s cubic-bezier(0.72, 0, 0.84, 0.1) forwards;
+                animation:inventory-forest-close 1s cubic-bezier(0.72, 0, 0.84, 0.1) forwards;
             }
-            @keyframes inventory-red-open {
+            @keyframes inventory-forest-open {
                 0% {
                     opacity:0;
                     border-radius:50% !important;
-                    transform:translate(-50%, -50%) scale(0.06);
-                    filter:brightness(1.4) blur(0.4px);
+                    transform:translate(-50%, -50%) scale(0.08);
+                    filter:brightness(1.18) blur(0.4px);
                 }
-                45% {
+                42% {
+                    opacity:0.92;
+                    border-radius:50% !important;
+                    transform:translate(-50%, -50%) scale(0.5);
+                    filter:brightness(1.3) blur(0);
+                }
+                76% {
                     opacity:1;
-                    border-radius:48% !important;
-                    transform:translate(-50%, -50%) scale(0.46);
-                    filter:brightness(1.65) blur(0);
-                }
-                74% {
-                    border-radius:26px !important;
-                    transform:translate(-50%, -50%) scale(1.04);
+                    border-radius:30px !important;
+                    transform:translate(-50%, -50%) scale(1.035);
                 }
                 100% {
                     opacity:1;
@@ -983,7 +998,7 @@ function createSystemUI() {
                     filter:brightness(1) blur(0);
                 }
             }
-            @keyframes inventory-red-close {
+            @keyframes inventory-forest-close {
                 0% {
                     opacity:1;
                     border-radius:18px !important;
@@ -991,159 +1006,261 @@ function createSystemUI() {
                     filter:brightness(1) blur(0);
                 }
                 28% {
-                    border-radius:26px !important;
-                    transform:translate(-50%, -50%) scale(1.04);
+                    border-radius:30px !important;
+                    transform:translate(-50%, -50%) scale(1.03);
                 }
-                62% {
-                    opacity:1;
-                    border-radius:48% !important;
-                    transform:translate(-50%, -50%) scale(0.46);
-                    filter:brightness(1.6) blur(0);
+                66% {
+                    opacity:0.9;
+                    border-radius:50% !important;
+                    transform:translate(-50%, -50%) scale(0.5);
+                    filter:brightness(1.25) blur(0);
                 }
                 100% {
                     opacity:0;
                     border-radius:50% !important;
-                    transform:translate(-50%, -50%) scale(0.06);
-                    filter:brightness(1.4) blur(0.6px);
+                    transform:translate(-50%, -50%) scale(0.08);
+                    filter:brightness(1.16) blur(0.5px);
                 }
             }
-            @keyframes inventory-red-metal-sheen {
-                0%, 42% { transform:translateX(-55%); opacity:0; }
-                58% { opacity:0.92; }
-                100% { transform:translateX(55%); opacity:0; }
-            }
-            .inventory-red-particle-field {
+            .inventory-burst-particle-field,
+            .inventory-ambient-field {
                 position:absolute !important;
-                inset:-28px !important;
-                overflow:visible !important;
+                inset:0 !important;
+                overflow:hidden !important;
                 pointer-events:none !important;
                 z-index:1 !important;
+                border-radius:inherit;
             }
-            .inventory-red-particle-field span {
+            .inventory-burst-particle-field {
+                overflow:visible !important;
+                inset:-28px !important;
+            }
+            .inventory-burst-particle-field span {
                 position:absolute;
                 left:var(--inv-p-left, 50%);
                 top:var(--inv-p-top, 50%);
                 width:var(--inv-p-size, 14px);
                 height:var(--inv-p-size, 14px);
                 border-radius:50%;
-                background:radial-gradient(circle, #ffffff 0 24%, var(--inv-p-color, #ff2b2b) 36% 62%, rgba(255,255,255,0) 74%);
-                box-shadow:0 0 10px #fff, 0 0 22px var(--inv-p-color, #ff2b2b), 0 0 34px rgba(255,0,0,0.72);
+                background:radial-gradient(circle, #ffffff 0 24%, var(--inv-p-color, #d8b890) 38% 64%, rgba(255,255,255,0) 76%);
+                box-shadow:0 0 10px #fff, 0 0 20px var(--inv-p-color, #d8b890), 0 0 32px rgba(216,184,144,0.62);
                 opacity:0;
             }
-            #inventory-modal.inventory-opening .inventory-red-particle-field span {
-                animation:inventory-red-particle-pop 2s ease-out forwards;
+            #inventory-modal.inventory-opening .inventory-burst-particle-field span {
+                animation:inventory-coffee-particle-pop 1s ease-out forwards;
                 animation-delay:var(--inv-p-delay, 0s);
             }
-            #inventory-modal.inventory-closing .inventory-red-particle-field span {
-                animation:inventory-red-particle-pop-reverse 2s ease-in forwards;
+            #inventory-modal.inventory-closing .inventory-burst-particle-field span {
+                animation:inventory-coffee-particle-pop-reverse 1s ease-in forwards;
                 animation-delay:var(--inv-p-delay, 0s);
             }
-            @keyframes inventory-red-particle-pop {
+            @keyframes inventory-coffee-particle-pop {
                 0% {
-                    transform:translate(0,0) scale(0.2);
+                    transform:translate(0,0) scale(0.16);
                     opacity:0;
                 }
                 18% {
                     opacity:1;
                 }
-                78% {
-                    opacity:0.95;
-                }
                 100% {
-                    transform:translate(var(--inv-p-x, 70px), var(--inv-p-y, -70px)) scale(1.15);
+                    transform:translate(var(--inv-p-x, 70px), var(--inv-p-y, -70px)) scale(1.05);
                     opacity:0;
                 }
             }
-            @keyframes inventory-red-particle-pop-reverse {
+            @keyframes inventory-coffee-particle-pop-reverse {
                 0% {
-                    transform:translate(var(--inv-p-x, 70px), var(--inv-p-y, -70px)) scale(1.15);
+                    transform:translate(var(--inv-p-x, 70px), var(--inv-p-y, -70px)) scale(1.05);
                     opacity:0;
                 }
-                24% {
-                    opacity:0.95;
+                30% {
+                    opacity:0.92;
                 }
-                82% {
+                100% {
+                    transform:translate(0,0) scale(0.16);
+                    opacity:0;
+                }
+            }
+            .inventory-ambient-field span {
+                position:absolute;
+                display:block;
+                pointer-events:none;
+                opacity:0;
+            }
+            .inventory-ambient-field .inv-leaf {
+                top:-34px;
+                left:var(--inv-left, 50%);
+                font-size:var(--inv-size, 20px);
+                color:#91ff8a;
+                text-shadow:0 0 7px #ccffbd, 0 0 15px rgba(80,255,120,0.8), 0 0 24px rgba(37,180,70,0.48);
+                filter:drop-shadow(0 0 7px rgba(126,255,126,0.86));
+                animation:inventory-leaf-fall var(--inv-speed, 7s) ease-in-out infinite;
+                animation-delay:var(--inv-delay, 0s);
+            }
+            .inventory-ambient-field .inv-fairy {
+                bottom:-34px;
+                left:var(--inv-left, 50%);
+                width:var(--inv-size, 12px);
+                height:var(--inv-size, 12px);
+                border-radius:50%;
+                background:radial-gradient(circle, #ffffff 0 18%, var(--inv-color, #ff9cda) 40%, rgba(255,255,255,0) 72%);
+                box-shadow:0 0 10px #fff, 0 0 18px var(--inv-color, #ff9cda), 0 0 30px var(--inv-color, #ff9cda);
+                animation:inventory-fairy-rise var(--inv-speed, 6s) ease-in-out infinite;
+                animation-delay:var(--inv-delay, 0s);
+            }
+            .inventory-ambient-field .inv-fairy::after {
+                content:"✦";
+                position:absolute;
+                left:-4px;
+                top:-13px;
+                font-size:17px;
+                color:var(--inv-color, #ff9cda);
+                text-shadow:0 0 6px #fff, 0 0 14px var(--inv-color, #ff9cda);
+                animation:inventory-fairy-twinkle 0.86s ease-in-out infinite alternate;
+            }
+            @keyframes inventory-leaf-fall {
+                0% {
+                    transform:translate(0, 0) rotate(-18deg) scale(0.82);
+                    opacity:0;
+                }
+                12% {
+                    opacity:0.92;
+                }
+                48% {
+                    transform:translate(var(--inv-mid-x, 24px), 168px) rotate(26deg) scale(1.02);
+                    opacity:0.9;
+                }
+                100% {
+                    transform:translate(var(--inv-end-x, -30px), 410px) rotate(-42deg) scale(0.78);
+                    opacity:0;
+                }
+            }
+            @keyframes inventory-fairy-rise {
+                0% {
+                    transform:translate(0, 0) scale(0.56);
+                    opacity:0;
+                }
+                15% {
+                    opacity:0.96;
+                }
+                58% {
+                    transform:translate(var(--inv-mid-x, 20px), -180px) scale(1.08);
                     opacity:1;
                 }
                 100% {
-                    transform:translate(0,0) scale(0.2);
+                    transform:translate(var(--inv-end-x, -24px), -390px) scale(0.42);
                     opacity:0;
                 }
             }
-            #inventory-modal.inventory-red-metal-ui #inventory-header {
-                border-bottom:2px solid rgba(255,255,255,0.78) !important;
-                padding-bottom:8px !important;
-            }
-            #inventory-modal.inventory-red-metal-ui h3 {
-                color:#ffffff !important;
-                text-shadow:0 0 6px rgba(255,255,255,0.92), 0 0 14px rgba(255,80,80,0.88), 0 2px 2px rgba(0,0,0,0.75) !important;
-                animation:inventory-title-white-breathe 1.65s ease-in-out infinite alternate;
-            }
-            @keyframes inventory-title-white-breathe {
+            @keyframes inventory-fairy-twinkle {
                 0% {
-                    text-shadow:0 0 5px rgba(255,255,255,0.82), 0 0 12px rgba(255,70,70,0.7), 0 2px 2px rgba(0,0,0,0.75);
-                    filter:brightness(0.96);
+                    transform:scale(0.72) rotate(-10deg);
+                    opacity:0.52;
                 }
                 100% {
-                    text-shadow:0 0 12px #ffffff, 0 0 22px rgba(255,255,255,0.82), 0 0 32px rgba(255,40,40,0.95), 0 2px 2px rgba(0,0,0,0.75);
-                    filter:brightness(1.18);
+                    transform:scale(1.24) rotate(18deg);
+                    opacity:1;
+                }
+            }
+            #inventory-modal.inventory-red-metal-ui #inventory-header {
+                border-bottom:2px solid rgba(226,183,124,0.7) !important;
+                padding:0 34px 8px 0 !important;
+            }
+            #inventory-modal.inventory-red-metal-ui h3 {
+                color:#fff7e8 !important;
+                text-shadow:0 0 7px rgba(255,244,220,0.86), 0 0 14px rgba(164,97,42,0.7), 0 2px 2px rgba(0,0,0,0.8) !important;
+                animation:inventory-title-cream-breathe 1.85s ease-in-out infinite alternate;
+            }
+            @keyframes inventory-title-cream-breathe {
+                0% {
+                    text-shadow:0 0 5px rgba(255,244,220,0.7), 0 0 12px rgba(164,97,42,0.55), 0 2px 2px rgba(0,0,0,0.75);
+                    filter:brightness(0.98);
+                }
+                100% {
+                    text-shadow:0 0 12px #fff7e8, 0 0 22px rgba(255,244,220,0.8), 0 0 28px rgba(176,110,54,0.9), 0 2px 2px rgba(0,0,0,0.75);
+                    filter:brightness(1.16);
                 }
             }
             #inventory-modal.inventory-red-metal-ui button,
             #inventory-modal.inventory-red-metal-ui .catalog-item {
-                background:linear-gradient(145deg, #ff5a5a 0%, #a40707 28%, #3d0101 52%, #c01010 76%, #ff9a9a 100%) !important;
-                color:#fff7f7 !important;
-                border:1px solid rgba(255,235,235,0.9) !important;
+                background:linear-gradient(145deg, #8b5a2b 0%, #4b2310 31%, #201007 55%, #70421f 78%, #d0a064 100%) !important;
+                color:#fff5e6 !important;
+                border:1px solid rgba(241,204,151,0.88) !important;
                 border-radius:12px !important;
-                box-shadow:0 5px 12px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -10px 16px rgba(45,0,0,0.5), 0 0 12px rgba(255,40,40,0.55) !important;
-                text-shadow:0 1px 2px rgba(0,0,0,0.8), 0 0 6px rgba(255,255,255,0.32);
+                box-shadow:0 5px 12px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,236,205,0.42), inset 0 -10px 16px rgba(34,12,4,0.52), 0 0 11px rgba(169,112,56,0.45) !important;
+                text-shadow:0 1px 2px rgba(0,0,0,0.82), 0 0 6px rgba(255,236,205,0.28);
                 font-weight:bold;
             }
             #inventory-modal.inventory-red-metal-ui button:active,
             #inventory-modal.inventory-red-metal-ui .catalog-item:active {
                 transform:scale(0.96);
-                box-shadow:0 2px 8px rgba(0,0,0,0.55), inset 0 2px 8px rgba(0,0,0,0.55), 0 0 18px rgba(255,70,70,0.72) !important;
+                box-shadow:0 2px 8px rgba(0,0,0,0.55), inset 0 2px 8px rgba(0,0,0,0.55), 0 0 16px rgba(210,160,100,0.62) !important;
             }
             #inventory-modal.inventory-red-metal-ui #inventory-list {
                 scrollbar-width:thin;
-                scrollbar-color:rgba(255,230,230,0.9) rgba(70,0,0,0.4);
+                scrollbar-color:rgba(226,183,124,0.95) rgba(42,17,7,0.48);
+                position:relative;
+                z-index:3;
             }
             #inventory-modal.inventory-red-metal-ui #inventory-list .catalog-item span {
-                color:#fff7f7 !important;
+                color:#fff5e6 !important;
+            }
+            #inventory-x-close {
+                position:absolute !important;
+                top:10px !important;
+                right:10px !important;
+                width:34px !important;
+                height:34px !important;
+                min-width:34px !important;
+                min-height:34px !important;
+                padding:0 !important;
+                margin:0 !important;
+                border-radius:50% !important;
+                background:radial-gradient(circle at 35% 28%, #fff8ea 0%, #d8b890 45%, #7a431f 100%) !important;
+                color:#111 !important;
+                border:2px solid rgba(255,244,220,0.92) !important;
+                box-shadow:0 0 10px rgba(255,244,220,0.72), 0 4px 10px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.66) !important;
+                font-size:20px !important;
+                line-height:30px !important;
+                font-weight:900 !important;
+                text-shadow:none !important;
+                z-index:5 !important;
+            }
+            #inventory-x-close:active {
+                transform:scale(0.92);
             }
             #inventory-modal.inventory-opening #inventory-header,
             #inventory-modal.inventory-opening #inventory-list,
-            #inventory-modal.inventory-opening .inventory-metal-close-btn {
+            #inventory-modal.inventory-opening #inventory-x-close {
                 opacity:0;
-                animation:inventory-content-drop-bounce 0.48s cubic-bezier(0.2, 1.4, 0.34, 1) forwards;
-                animation-delay:1.38s;
+                animation:inventory-content-drop-bounce 0.3s cubic-bezier(0.2, 1.4, 0.34, 1) forwards;
+                animation-delay:0.58s;
             }
             #inventory-modal.inventory-opening #inventory-list .catalog-item {
                 opacity:0;
-                animation:inventory-item-fast-pop 0.38s cubic-bezier(0.2, 1.35, 0.35, 1) forwards;
+                animation:inventory-item-fast-pop 0.26s cubic-bezier(0.2, 1.35, 0.35, 1) forwards;
             }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(1) { animation-delay:1.48s; }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(2) { animation-delay:1.53s; }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(3) { animation-delay:1.58s; }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(4) { animation-delay:1.63s; }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(5) { animation-delay:1.68s; }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(6) { animation-delay:1.73s; }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(7) { animation-delay:1.78s; }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(8) { animation-delay:1.83s; }
-            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(n+9) { animation-delay:1.88s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(1) { animation-delay:0.66s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(2) { animation-delay:0.69s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(3) { animation-delay:0.72s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(4) { animation-delay:0.75s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(5) { animation-delay:0.78s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(6) { animation-delay:0.81s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(7) { animation-delay:0.84s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(8) { animation-delay:0.87s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(n+9) { animation-delay:0.9s; }
             #inventory-modal.inventory-closing #inventory-header,
             #inventory-modal.inventory-closing #inventory-list,
-            #inventory-modal.inventory-closing .inventory-metal-close-btn {
-                animation:inventory-content-rewind 0.42s ease-in forwards;
+            #inventory-modal.inventory-closing #inventory-x-close {
+                animation:inventory-content-rewind 0.22s ease-in forwards;
             }
             @keyframes inventory-content-drop-bounce {
                 0% {
                     opacity:0;
-                    transform:translateY(-18px) scale(0.98);
+                    transform:translateY(-13px) scale(0.98);
                 }
-                70% {
+                72% {
                     opacity:1;
-                    transform:translateY(7px) scale(1.01);
+                    transform:translateY(5px) scale(1.01);
                 }
                 100% {
                     opacity:1;
@@ -1153,11 +1270,11 @@ function createSystemUI() {
             @keyframes inventory-item-fast-pop {
                 0% {
                     opacity:0;
-                    transform:translateY(-14px) scale(0.94);
+                    transform:translateY(-10px) scale(0.96);
                 }
                 72% {
                     opacity:1;
-                    transform:translateY(5px) scale(1.03);
+                    transform:translateY(4px) scale(1.025);
                 }
                 100% {
                     opacity:1;
@@ -1171,7 +1288,7 @@ function createSystemUI() {
                 }
                 100% {
                     opacity:0;
-                    transform:translateY(-18px) scale(0.96);
+                    transform:translateY(-12px) scale(0.97);
                 }
             }
 
@@ -1523,24 +1640,36 @@ function createSystemUI() {
 
         <div id="inventory-close-blocker" onclick="window.closeInventoryModal && window.closeInventoryModal()"></div>
         <div id="inventory-modal" class="modal inventory-red-metal-ui">
-            <div class="inventory-red-particle-field" aria-hidden="true">
-                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:18px; --inv-p-color:#ffffff; --inv-p-x:-135px; --inv-p-y:-105px; --inv-p-delay:0s;"></span>
-                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:16px; --inv-p-color:#ff3333; --inv-p-x:132px; --inv-p-y:-96px; --inv-p-delay:0.05s;"></span>
-                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:20px; --inv-p-color:#ffffff; --inv-p-x:-122px; --inv-p-y:92px; --inv-p-delay:0.1s;"></span>
-                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:17px; --inv-p-color:#ff5555; --inv-p-x:138px; --inv-p-y:86px; --inv-p-delay:0.15s;"></span>
-                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:15px; --inv-p-color:#ffffff; --inv-p-x:0px; --inv-p-y:-145px; --inv-p-delay:0.2s;"></span>
-                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:19px; --inv-p-color:#ff2020; --inv-p-x:0px; --inv-p-y:132px; --inv-p-delay:0.25s;"></span>
-                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:14px; --inv-p-color:#ffffff; --inv-p-x:-168px; --inv-p-y:0px; --inv-p-delay:0.3s;"></span>
-                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:18px; --inv-p-color:#ff4444; --inv-p-x:168px; --inv-p-y:0px; --inv-p-delay:0.35s;"></span>
-                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:16px; --inv-p-color:#ffffff; --inv-p-x:-82px; --inv-p-y:-142px; --inv-p-delay:0.4s;"></span>
-                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:16px; --inv-p-color:#ff2222; --inv-p-x:88px; --inv-p-y:140px; --inv-p-delay:0.45s;"></span>
+            <div class="inventory-burst-particle-field" aria-hidden="true">
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:18px; --inv-p-color:#ffffff; --inv-p-x:-130px; --inv-p-y:-100px; --inv-p-delay:0s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:16px; --inv-p-color:#d8b890; --inv-p-x:128px; --inv-p-y:-92px; --inv-p-delay:0.03s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:20px; --inv-p-color:#fff8ea; --inv-p-x:-120px; --inv-p-y:88px; --inv-p-delay:0.06s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:17px; --inv-p-color:#caa174; --inv-p-x:134px; --inv-p-y:84px; --inv-p-delay:0.09s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:15px; --inv-p-color:#ffffff; --inv-p-x:0px; --inv-p-y:-138px; --inv-p-delay:0.12s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:19px; --inv-p-color:#d8b890; --inv-p-x:0px; --inv-p-y:128px; --inv-p-delay:0.15s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:14px; --inv-p-color:#fff8ea; --inv-p-x:-160px; --inv-p-y:0px; --inv-p-delay:0.18s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:18px; --inv-p-color:#c79b64; --inv-p-x:160px; --inv-p-y:0px; --inv-p-delay:0.21s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:16px; --inv-p-color:#ffffff; --inv-p-x:-80px; --inv-p-y:-136px; --inv-p-delay:0.24s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:16px; --inv-p-color:#d8b890; --inv-p-x:84px; --inv-p-y:136px; --inv-p-delay:0.27s;"></span>
             </div>
+            <div class="inventory-ambient-field" aria-hidden="true">
+                <span class="inv-leaf" style="--inv-left:8%; --inv-size:18px; --inv-speed:6.4s; --inv-delay:0s; --inv-mid-x:38px; --inv-end-x:-20px;">🍃</span>
+                <span class="inv-leaf" style="--inv-left:24%; --inv-size:16px; --inv-speed:7.2s; --inv-delay:0.8s; --inv-mid-x:-34px; --inv-end-x:28px;">🍃</span>
+                <span class="inv-leaf" style="--inv-left:42%; --inv-size:19px; --inv-speed:6.9s; --inv-delay:1.5s; --inv-mid-x:28px; --inv-end-x:-32px;">🍃</span>
+                <span class="inv-leaf" style="--inv-left:62%; --inv-size:17px; --inv-speed:7.6s; --inv-delay:2.2s; --inv-mid-x:-40px; --inv-end-x:30px;">🍃</span>
+                <span class="inv-leaf" style="--inv-left:82%; --inv-size:18px; --inv-speed:6.8s; --inv-delay:3s; --inv-mid-x:32px; --inv-end-x:-26px;">🍃</span>
+                <span class="inv-fairy" style="--inv-left:14%; --inv-size:12px; --inv-color:#ff9cda; --inv-speed:6.2s; --inv-delay:0.25s; --inv-mid-x:44px; --inv-end-x:-28px;"></span>
+                <span class="inv-fairy" style="--inv-left:34%; --inv-size:11px; --inv-color:#8fd4ff; --inv-speed:6.9s; --inv-delay:1.1s; --inv-mid-x:-38px; --inv-end-x:24px;"></span>
+                <span class="inv-fairy" style="--inv-left:55%; --inv-size:13px; --inv-color:#ff9cda; --inv-speed:7.4s; --inv-delay:1.9s; --inv-mid-x:26px; --inv-end-x:-34px;"></span>
+                <span class="inv-fairy" style="--inv-left:76%; --inv-size:12px; --inv-color:#8fd4ff; --inv-speed:6.5s; --inv-delay:2.7s; --inv-mid-x:-30px; --inv-end-x:32px;"></span>
+                <span class="inv-fairy" style="--inv-left:90%; --inv-size:10px; --inv-color:#ffb8e6; --inv-speed:7.8s; --inv-delay:3.45s; --inv-mid-x:-46px; --inv-end-x:18px;"></span>
+            </div>
+            <button id="inventory-x-close" type="button" aria-label="關閉給西" onclick="window.closeInventoryModal()">×</button>
             <div id="inventory-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--mucha-gold); padding-bottom: 5px; margin-bottom: 15px;">
                 <h3 style="margin:0; border:none; color: var(--mucha-brown);">🎒 我的給西</h3>
-                <button id="inventory-edit-btn" class="btn-edit" onclick="window.toggleInventoryEdit()" style="padding:4px 8px; font-size:12px;">編輯排序</button>
+                <button id="inventory-edit-btn" class="btn-edit" onclick="window.toggleInventoryEdit()" style="padding:4px 8px; font-size:12px;">編排順序</button>
             </div>
             <div id="inventory-list" class="catalog-grid" style="max-height: 50vh; overflow-y: auto; padding-right: 5px;"></div>
-            <button class="close-modal-btn btn-secondary inventory-metal-close-btn" style="margin-top: 15px;" onclick="window.closeInventoryModal()">關閉</button>
         </div>
         <div id="phone-modal" class="modal phone-pink-ui">
             <div class="phone-pink-emoji-field" aria-hidden="true">
@@ -2844,8 +2973,29 @@ window.stopUsingItem = function(itemName) {
     window.GameLogic.armedItemState = null; 
     window.GameLogic.armedItemName = null; 
 };
-window.toggleInventoryEdit = function() { window.GameLogic.inventoryEditMode = !window.GameLogic.inventoryEditMode; let btn = document.getElementById('inventory-edit-btn'); if (btn) { btn.innerText = window.GameLogic.inventoryEditMode ? '完成' : '編輯排序'; btn.className = window.GameLogic.inventoryEditMode ? 'btn-primary' : 'btn-edit'; } window.openInventoryModal(); };
-window.moveInvItem = function(index, dir) { let order = window.GameLogic.myProfile.inventoryOrder || []; if (index + dir >= 0 && index + dir < order.length) { let temp = order[index]; order[index] = order[index + dir]; order[index + dir] = temp; window.GameLogic.myProfile.inventoryOrder = order; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventoryOrder: order }); window.openInventoryModal(); } };
+window.toggleInventoryEdit = function() {
+    window.GameLogic.inventoryEditMode = !window.GameLogic.inventoryEditMode;
+
+    let btn = document.getElementById('inventory-edit-btn');
+    if (btn) {
+        btn.innerText = window.GameLogic.inventoryEditMode ? '完成' : '編排順序';
+        btn.className = window.GameLogic.inventoryEditMode ? 'btn-primary' : 'btn-edit';
+    }
+
+    window.openInventoryModal({ noFx: true });
+};
+
+window.moveInvItem = function(index, dir) {
+    let order = window.GameLogic.myProfile.inventoryOrder || [];
+    if (index + dir >= 0 && index + dir < order.length) {
+        let temp = order[index];
+        order[index] = order[index + dir];
+        order[index + dir] = temp;
+        window.GameLogic.myProfile.inventoryOrder = order;
+        update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventoryOrder: order });
+        window.openInventoryModal({ noFx: true });
+    }
+};
 
 window.installInventoryModalDisplayGuard = function() {
     const modal = document.getElementById('inventory-modal');
@@ -2871,12 +3021,42 @@ window.installInventoryModalDisplayGuard = function() {
     syncBlocker();
 };
 
+window.showInventoryModalWithoutFx = function() {
+    const modal = document.getElementById('inventory-modal');
+    const blocker = document.getElementById('inventory-close-blocker');
+    if (!modal) return;
+
+    window.installInventoryModalDisplayGuard();
+
+    if (window.__inventoryOpenTimer) {
+        clearTimeout(window.__inventoryOpenTimer);
+        window.__inventoryOpenTimer = null;
+    }
+
+    if (window.__inventoryCloseTimer) {
+        clearTimeout(window.__inventoryCloseTimer);
+        window.__inventoryCloseTimer = null;
+    }
+
+    modal.classList.add('inventory-red-metal-ui');
+    modal.classList.remove('inventory-opening', 'inventory-closing');
+    modal.classList.add('inventory-opened');
+    modal.style.display = 'block';
+
+    if (blocker) blocker.style.display = 'block';
+};
+
 window.showInventoryModalWithFx = function() {
     const modal = document.getElementById('inventory-modal');
     const blocker = document.getElementById('inventory-close-blocker');
     if (!modal) return;
 
     window.installInventoryModalDisplayGuard();
+
+    if (window.__inventoryOpenTimer) {
+        clearTimeout(window.__inventoryOpenTimer);
+        window.__inventoryOpenTimer = null;
+    }
 
     if (window.__inventoryCloseTimer) {
         clearTimeout(window.__inventoryCloseTimer);
@@ -2893,12 +3073,13 @@ window.showInventoryModalWithFx = function() {
 
     modal.classList.add('inventory-opening');
 
-    setTimeout(() => {
+    window.__inventoryOpenTimer = setTimeout(() => {
         if (modal.style.display !== 'none' && !modal.classList.contains('inventory-closing')) {
             modal.classList.remove('inventory-opening');
             modal.classList.add('inventory-opened');
         }
-    }, 2050);
+        window.__inventoryOpenTimer = null;
+    }, 1050);
 };
 
 window.closeInventoryModal = function(options = {}) {
@@ -2907,6 +3088,11 @@ window.closeInventoryModal = function(options = {}) {
     if (!modal) return;
 
     const immediate = !!options.immediate;
+
+    if (window.__inventoryOpenTimer) {
+        clearTimeout(window.__inventoryOpenTimer);
+        window.__inventoryOpenTimer = null;
+    }
 
     if (window.__inventoryCloseTimer) {
         clearTimeout(window.__inventoryCloseTimer);
@@ -2936,7 +3122,7 @@ window.closeInventoryModal = function(options = {}) {
         modal.classList.remove('inventory-closing', 'inventory-opening', 'inventory-opened');
         if (blocker) blocker.style.display = 'none';
         window.__inventoryCloseTimer = null;
-    }, 2000);
+    }, 1000);
 };
 
 window.installInventoryModalDisplayGuard();
@@ -3262,7 +3448,7 @@ window.devAddCoins = function() {
     });
 };
 
-window.openInventoryModal = function() {
+window.openInventoryModal = function(options = {}) {
     const list = document.getElementById('inventory-list');
     const hasUnread = Object.keys(window.GameLogic.validUnreadPMs || {}).length > 0;
     const dotHtml = hasUnread ? '<div style="position:absolute; top:5px; right:5px; width:12px; height:12px; background:red; border-radius:50%; box-shadow:0 0 5px red; z-index:10;"></div>' : '';
@@ -3294,7 +3480,9 @@ window.openInventoryModal = function() {
     list.style.alignItems = 'start';
     list.innerHTML = invHTML;
 
-    if (window.showInventoryModalWithFx) {
+    if (options && options.noFx && window.showInventoryModalWithoutFx) {
+        window.showInventoryModalWithoutFx();
+    } else if (window.showInventoryModalWithFx) {
         window.showInventoryModalWithFx();
     } else {
         document.getElementById('inventory-modal').style.display = 'block';
