@@ -91,7 +91,7 @@ window.GameLogic = {
     selectedServerRoom: initialServerRoom, currentServerRoom: initialServerRoom, serverRooms: SERVER_ROOMS, authGuardSigningOut: false
 };
 
-let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, profileViewingUid = null;
+let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, pmUnreadUnsubscribe = null, profileViewingUid = null;
 window.switchScene = switchScene; window.showProfileModal = showProfileModal; window.leaveCafe = leaveCafe; window.signOut = signOut; window.auth = auth;
 
 // ====== 入口房間共用工具 ======
@@ -258,10 +258,10 @@ function createSystemUI() {
             #login-screen input, #login-screen select { padding: 10px; border: 1px solid var(--mucha-gold); border-radius: 4px; background: #fffdf5; margin-bottom: 15px; width: 85%; font-size: 16px; box-sizing: border-box; font-family: inherit; color: var(--mucha-brown); }
             .login-room-label { display:block; width:85%; margin: 0 auto 6px auto; text-align:left; color:var(--mucha-brown); font-size:13px; font-weight:bold; }
             #join-btn { background: var(--mucha-gold); color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; width: 95%; }
-            .modal { display: none; position: fixed !important; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--mucha-paper); padding: 20px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 250; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8); width: 85%; max-width: 320px; max-height: min(80vh, calc(var(--onion-vh, 1vh) * 82)); overflow-y: auto; overflow-x: hidden; box-sizing: border-box; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; } background: var(--mucha-paper); padding: 20px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 250; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8); width: 85%; max-width: 320px; max-height: 80vh; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
+            .modal { display: none; position: fixed !important; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--mucha-paper); padding: 20px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 250; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8); width: 85%; max-width: 320px; max-height: min(80vh, calc(var(--onion-vh, 1vh) * 82)); overflow-y: auto; overflow-x: hidden; box-sizing: border-box; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
             .modal h3 { color: var(--mucha-green); margin-top: 0; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 8px; }
             html, body { width: 100%; min-height: calc(var(--onion-vh, 1vh) * 100); overflow: hidden; overscroll-behavior: none; }
-#app-container, #game-layout-container, #phaser-app { width: 100%; height: calc(var(--onion-vh, 1vh) * 100); min-height: calc(var(--onion-vh, 1vh) * 100); overflow: hidden; }
+            #app-container, #game-layout-container, #phaser-app { width: 100%; height: calc(var(--onion-vh, 1vh) * 100); min-height: calc(var(--onion-vh, 1vh) * 100); overflow: hidden; }
             .modal-btns { display: flex; justify-content: space-around; margin-top: 15px; }
             .modal-btns button, .close-modal-btn { padding: 10px 15px; border-radius: 4px; border: none; cursor: pointer; font-family: inherit; font-size: 15px; margin: 5px;}
             .btn-primary { background: var(--mucha-gold); color: white; } .btn-secondary { background: #ccc; color: #333; } .btn-edit { background: var(--mucha-green); color: white; } .btn-danger { background: #d9534f; color: white; }
@@ -324,15 +324,31 @@ function createSystemUI() {
             .magic-qty { position: absolute; bottom: 2px; right: 5px; font-size: 12px; font-weight: bold; color: var(--mucha-brown); }
             #quick-select-menu { display: none; position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); width: 300px; background: rgba(0, 15, 30, 0.4); border: 1px solid rgba(135,206,235,0.3); border-radius: 20px; padding: 15px 5px; z-index: 300; flex-direction: column; align-items: center; box-shadow: 0 0 20px rgba(0, 191, 255, 0.3); pointer-events: auto; touch-action: pan-x; }
             #quick-items-container { display: flex; flex-direction: row; overflow-x: auto; scroll-snap-type: x mandatory; gap: 15px; width: 100%; padding: 15px 10px; box-sizing: border-box; scrollbar-width: none; align-items: center; cursor: grab; -webkit-overflow-scrolling: touch; }
-#quick-items-container.dragging { cursor: grabbing; scroll-snap-type: none; }
+            #quick-items-container.dragging { cursor: grabbing; scroll-snap-type: none; }
             #quick-items-container::-webkit-scrollbar { display: none; }
             .quick-item { flex: 0 0 60px; height: 60px; border: none; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; background: rgba(255,255,255,0.8); position: relative; transition: 0.3s; scroll-snap-align: center; box-shadow: 0 0 10px rgba(135,206,235,0.5); }
             .quick-item.staged { transform: scale(1.35); box-shadow: 0 0 20px rgba(255,255,255,1), 0 0 15px rgba(0,191,255,0.8); background: #fff; z-index: 10; }
             
-            /* 新增：洋蔥手機 Modal 特效 */
+            /* 新增：洋蔥手機 Modal 特效＋手機版可讀性穩定 */
             #phone-modal { background: #b8860b !important; border: 4px solid #885500 !important; box-shadow: inset 0 0 30px #553300 !important; }
-            .phone-contact { background: #222 !important; color: #fff !important; border: 2px solid #555 !important; border-radius: 8px; animation: screen-breathe 2.5s infinite alternate; }
+            #phone-contacts { display:flex; flex-direction:column; gap:8px; max-height:min(58vh, calc(var(--onion-vh, 1vh) * 58)); overflow-y:auto; overflow-x:hidden; padding:4px; box-sizing:border-box; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+            .phone-contact { background:#222 !important; color:#fff !important; border:2px solid #555 !important; border-radius:10px; animation:screen-breathe 2.5s infinite alternate; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px; width:100%; box-sizing:border-box; }
+            .phone-contact-main { min-width:0; flex:1; text-align:left; }
+            .phone-contact-title { font-weight:bold; text-shadow:1px 1px 2px #000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+            .phone-contact-sub { font-size:11px; color:#bbb; margin-top:3px; font-weight:normal; line-height:1.35; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; word-break:break-word; }
+            .phone-contact-actions { display:flex; gap:6px; flex-shrink:0; }
+            .phone-contact-actions button { min-height:34px; border-radius:8px; touch-action:manipulation; }
             @keyframes screen-breathe { 0% { box-shadow: inset 0 0 5px #fff, 0 0 5px #fff; } 100% { box-shadow: inset 0 0 15px #aaa, 0 0 20px #fff; } }
+            @media (max-width: 768px), (orientation: portrait) {
+               #phone-modal { width:min(92vw, 430px) !important; max-width:430px !important; padding:16px !important; max-height:min(84vh, calc(var(--onion-vh, 1vh) * 84)) !important; }
+               #phone-contacts { max-height:min(62vh, calc(var(--onion-vh, 1vh) * 62)); gap:10px; }
+               .phone-contact { flex-direction:column; align-items:stretch; padding:12px !important; }
+               .phone-contact-actions { display:grid; grid-template-columns:1fr 1fr; width:100%; gap:8px; }
+               .phone-contact-actions button { width:100%; min-height:40px; font-size:14px !important; padding:8px 10px !important; }
+               #pm-modal { width:min(92vw, 430px) !important; max-width:430px !important; padding:16px !important; }
+               #pm-chat-box { height:min(48vh, 320px); }
+               #pm-input { min-height:40px; font-size:16px; }
+            }
 
             /* 新增：空間傳送門 Modal 特效 */
             #portal-modal { background: #1a0033 !important; border-radius: 140px / 200px !important; border: 4px solid #4b0082 !important; box-shadow: inset 0 0 50px #000, 0 0 20px #8a2be2 !important; overflow: hidden; }
@@ -597,7 +613,12 @@ function createSystemUI() {
         </div>
 
         <div id="inventory-modal" class="modal"><div id="inventory-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--mucha-gold); padding-bottom: 5px; margin-bottom: 15px;"><h3 style="margin:0; border:none; color: var(--mucha-brown);">🎒 我的給西</h3><button id="inventory-edit-btn" class="btn-edit" onclick="window.toggleInventoryEdit()" style="padding:4px 8px; font-size:12px;">編輯排序</button></div><div id="inventory-list" class="catalog-grid" style="max-height: 50vh; overflow-y: auto; padding-right: 5px;"></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('inventory-modal').style.display='none'">關閉</button></div>
-        <div id="phone-modal" class="modal"><h3 style="color: var(--mucha-green);">📱 洋蔥手機</h3><p style="font-size: 12px; color: #666; margin-top: 0;">點擊聯絡人發送私訊</p><div id="phone-contacts" class="catalog-grid" style="display: flex; flex-direction: column; gap: 5px;"></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('phone-modal').style.display='none'">收起手機</button></div>
+        <div id="phone-modal" class="modal">
+    <h3 style="color: var(--mucha-green);">📱 洋蔥手機</h3>
+    <p style="font-size: 12px; color: #fff; text-shadow:1px 1px 2px #000; margin-top: 0;">點擊聯絡人發送私訊</p>
+    <div id="phone-contacts"></div>
+    <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width:100%; min-height:40px;" onclick="window.closePhoneModal()">收起手機</button>
+</div>
         <div id="pm-modal" class="modal" style="z-index: 260;"><h3 id="pm-title" style="color: var(--mucha-green);">私訊</h3><div id="pm-chat-box"></div><div style="display:flex; gap: 5px;"><input type="text" id="pm-input" style="flex-grow:1; padding:5px; border: 1px solid var(--mucha-gold); border-radius: 4px;" placeholder="輸入訊息..."><button class="btn-primary" onclick="window.sendPM()">發送</button></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="window.closePM()">返回聯絡人</button></div>
         
         <div id="store-modal" class="modal" style="padding:0; overflow:hidden; z-index: 250;">
@@ -1276,7 +1297,36 @@ window.uploadManualPage = function() { const fileInput = document.getElementById
 window.deleteManualPage = function() { if (window.manualPages.length === 0) return; if (confirm("確定要刪除當前顯示的說明書頁面嗎？")) { let pageKey = window.manualPages[window.currentManualIndex].key; remove(ref(window.GameLogic.db, `manuals/${pageKey}`)).then(() => { alert('已刪除！'); window.currentManualIndex = 0; }); } };
 window.moveManualPage = function(dir) { if (window.manualPages.length < 2) return; let idx1 = window.currentManualIndex; let idx2 = idx1 + dir; if (idx2 < 0 || idx2 >= window.manualPages.length) return; let p1 = window.manualPages[idx1]; let p2 = window.manualPages[idx2]; let tempTime = p1.timestamp; p1.timestamp = p2.timestamp; p2.timestamp = tempTime; let updates = {}; updates[`manuals/${p1.key}/timestamp`] = p1.timestamp; updates[`manuals/${p2.key}/timestamp`] = p2.timestamp; update(ref(window.GameLogic.db), updates).then(() => { window.currentManualIndex = idx2; }); };
 
-window.updateUnreadGlow = function() { if (!window.GameLogic.phaserGame) return; const uiScene = window.GameLogic.phaserGame.scene.getScene('UIScene'); if (!uiScene || !uiScene.itemBtn) return; const hasUnread = Object.keys(window.GameLogic.unreadPMs || {}).length > 0; if (hasUnread) { if (!uiScene.itemGlowTween) { uiScene.itemGlowTween = uiScene.tweens.add({ targets: uiScene.itemBtn, scaleX: 1.1, scaleY: 1.1, yoyo: true, repeat: -1, duration: 600 }); } uiScene.itemBtn.setStrokeStyle(4, 0xff0000); } else { if (uiScene.itemGlowTween) { uiScene.itemGlowTween.stop(); uiScene.itemGlowTween = null; uiScene.itemBtn.setScale(1); } uiScene.itemBtn.setStrokeStyle(3, 0xc5a059); } };
+window.updateUnreadGlow = function() {
+    const validUnread = window.GameLogic.validUnreadPMs || {};
+    const hasUnread = Object.keys(validUnread).length > 0;
+
+    if (!window.GameLogic.phaserGame) return;
+
+    const uiScene = window.GameLogic.phaserGame.scene.getScene('UIScene');
+    if (!uiScene || !uiScene.itemBtn) return;
+
+    if (hasUnread) {
+        if (!uiScene.itemGlowTween) {
+            uiScene.itemGlowTween = uiScene.tweens.add({
+                targets: uiScene.itemBtn,
+                scaleX: 1.1,
+                scaleY: 1.1,
+                yoyo: true,
+                repeat: -1,
+                duration: 600
+            });
+        }
+        uiScene.itemBtn.setStrokeStyle(4, 0xff0000);
+    } else {
+        if (uiScene.itemGlowTween) {
+            uiScene.itemGlowTween.stop();
+            uiScene.itemGlowTween = null;
+            uiScene.itemBtn.setScale(1);
+        }
+        uiScene.itemBtn.setStrokeStyle(3, 0xc5a059);
+    }
+};
 window.updateOnlinePlayersUI = function() {
     const listEl = document.getElementById('online-players-list');
     const containerEl = document.getElementById('online-players-container');
@@ -2137,7 +2187,9 @@ window.devAddCoins = function() {
 };
 
 window.openInventoryModal = function() {
-    const list = document.getElementById('inventory-list'); let hasUnread = Object.keys(window.GameLogic.unreadPMs || {}).length > 0; let dotHtml = hasUnread ? '<div style="position:absolute; top:5px; right:5px; width:12px; height:12px; background:red; border-radius:50%; box-shadow:0 0 5px red; z-index:10;"></div>' : '';
+    const list = document.getElementById('inventory-list');
+    const hasUnread = Object.keys(window.GameLogic.validUnreadPMs || {}).length > 0;
+    const dotHtml = hasUnread ? '<div style="position:absolute; top:5px; right:5px; width:12px; height:12px; background:red; border-radius:50%; box-shadow:0 0 5px red; z-index:10;"></div>' : '';
     let rawItems = {}; let isEdit = window.GameLogic.inventoryEditMode; let inv = window.GameLogic.myProfile.inventory || {}; let sysKeys = ['phone', 'portal', 'profile', 'music', 'manual', 'logout', 'dev', 'magic_items']; let magicOnlyKeys = ['水球', '煙火', '蔥友機', '派對喇叭', '喵罐頭', '月光碎片', '月光法杖', '月光饅頭']; let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥' && !sysKeys.includes(k) && !magicOnlyKeys.includes(k));
     keys.forEach(k => {
         let iconHtml = (k === '水球') ? '<div class="sprite-waterball"></div>' : (k === '煙火' ? '<img src="shop-fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">' : '<span style="font-size:24px; margin-bottom:5px;">📦</span>');
@@ -2173,6 +2225,146 @@ window.phoneEscapeHtml = function(val) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+};
+
+window.isMobileTouchViewport = function() {
+    try {
+        return window.matchMedia('(max-width: 768px), (orientation: portrait), (pointer: coarse)').matches;
+    } catch (_) {
+        return window.innerWidth <= 768;
+    }
+};
+
+window.clearUiBlockersAfterModal = function(options = {}) {
+    try {
+        if (typeof window.closeQuickMenu === 'function') {
+            window.closeQuickMenu();
+        } else {
+            ['magic-menu-blocker', 'quick-select-menu'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+        }
+
+        ['prince-cat-menu', 'action-menu'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+
+        if (options.blur !== false) {
+            const active = document.activeElement;
+            if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) {
+                active.blur();
+            }
+        }
+
+        if (window.scheduleMobileViewportRefresh) {
+            window.scheduleMobileViewportRefresh();
+            setTimeout(() => window.scheduleMobileViewportRefresh(), 260);
+        }
+    } catch (err) {
+        console.warn('[手機版 UI] 清理殘留攔截層失敗，已略過：', err);
+    }
+};
+
+window.isValidPMContactRecord = function(contact) {
+    if (!contact || typeof contact !== 'object') return false;
+
+    const lastMessage = String(contact.lastMessage || '').trim();
+    const lastTime = Number(contact.lastTime || 0);
+
+    return lastMessage.length > 0 && lastTime > 0;
+};
+
+window.applyValidUnreadPMs = function(rawUnread = {}, recentContacts = null) {
+    rawUnread = (rawUnread && typeof rawUnread === 'object') ? rawUnread : {};
+
+    const contacts = (recentContacts && typeof recentContacts === 'object')
+        ? recentContacts
+        : (window.GameLogic.pmContacts || {});
+
+    const myUid = window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : null;
+    const currentRoomId = window.getCurrentServerRoomId ? window.getCurrentServerRoomId() : (window.GameLogic.currentServerRoom || '');
+    const validUnread = {};
+    const cleanupUpdates = {};
+
+    Object.keys(rawUnread).forEach(uid => {
+        if (!uid || uid === myUid) return;
+
+        const unreadVal = rawUnread[uid];
+        const unreadRoomId = (unreadVal && typeof unreadVal === 'object') ? unreadVal.roomId : null;
+
+        if (unreadRoomId && unreadRoomId !== currentRoomId) {
+            return;
+        }
+
+        const contact = contacts[uid] || {};
+        if (window.isValidPMContactRecord(contact)) {
+            validUnread[uid] = unreadVal || true;
+            return;
+        }
+
+        // 只有新格式且明確屬於目前房間的髒資料才安全清掉；舊格式 true 只忽略，不冒險刪除。
+        if (myUid && unreadRoomId === currentRoomId) {
+            cleanupUpdates[`users/${myUid}/unreadPMs/${uid}`] = null;
+        }
+    });
+
+    window.GameLogic.unreadPMs = rawUnread;
+    window.GameLogic.validUnreadPMs = validUnread;
+
+    if (Object.keys(cleanupUpdates).length > 0 && window.GameLogic.db) {
+        update(ref(window.GameLogic.db), cleanupUpdates)
+            .catch(err => console.warn('[私訊紅點] 清理目前房間髒未讀資料失敗，已改用忽略處理：', err));
+    }
+
+    window.updateUnreadGlow();
+
+    const inventoryModal = document.getElementById('inventory-modal');
+    if (inventoryModal && inventoryModal.style.display === 'block') {
+        window.openInventoryModal();
+    }
+
+    return validUnread;
+};
+
+window.normalizeUnreadPMs = async function(rawUnread = {}) {
+    const myUid = window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : null;
+    if (!myUid) {
+        window.GameLogic.unreadPMs = {};
+        window.GameLogic.validUnreadPMs = {};
+        window.updateUnreadGlow();
+        return {};
+    }
+
+    const seq = (window.__unreadNormalizeSeq || 0) + 1;
+    window.__unreadNormalizeSeq = seq;
+
+    try {
+        const recentSnap = await get(ref(window.GameLogic.db, window.getServerRoomPath(`pmContacts/${myUid}`)));
+        if (seq !== window.__unreadNormalizeSeq) return window.GameLogic.validUnreadPMs || {};
+
+        const recentContacts = recentSnap.val() || {};
+        window.GameLogic.pmContacts = recentContacts;
+
+        return window.applyValidUnreadPMs(rawUnread, recentContacts);
+    } catch (err) {
+        console.warn('[私訊紅點] 驗證未讀資料失敗，暫時不亮紅點避免誤判：', err);
+        window.GameLogic.unreadPMs = rawUnread || {};
+        window.GameLogic.validUnreadPMs = {};
+        window.updateUnreadGlow();
+        return {};
+    }
+};
+
+window.hasValidUnreadPM = function(uid) {
+    return !!(window.GameLogic.validUnreadPMs && window.GameLogic.validUnreadPMs[uid]);
+};
+
+window.closePhoneModal = function() {
+    const phoneModal = document.getElementById('phone-modal');
+    if (phoneModal) phoneModal.style.display = 'none';
+    window.clearUiBlockersAfterModal();
 };
 
 window.safePhoneColor = function(val) {
@@ -2212,28 +2404,30 @@ window.makePhoneContactCard = function(uid, data, options = {}) {
     const color = window.safePhoneColor(data.color || '#fff');
     const isRecent = !!options.isRecent;
     const levelText = (!isRecent && data.level !== undefined && data.level !== null)
-        ? ` (Lv.${window.phoneEscapeHtml(data.level)})`
-        : (!isRecent ? ' (Lv.?)' : '');
+        ? `Lv.${window.phoneEscapeHtml(data.level)}`
+        : (!isRecent ? 'Lv.?' : '');
 
-    const unreadDot = (window.GameLogic.unreadPMs && window.GameLogic.unreadPMs[uid])
-        ? ' <span style="color:red; font-size:10px;">🔴</span>'
+    const unreadDot = window.hasValidUnreadPM(uid)
+        ? '<span style="color:red; font-size:10px; margin-left:4px;">🔴</span>'
         : '';
 
     let subText = '';
     if (isRecent) {
-        const lastMsg = data.lastMessage ? window.phoneEscapeHtml(String(data.lastMessage).slice(0, 28)) : '尚無訊息摘要';
+        const lastMsg = data.lastMessage ? window.phoneEscapeHtml(String(data.lastMessage).slice(0, 60)) : '尚無訊息摘要';
         const timeText = window.formatPMContactTime(data.lastTime);
-        subText = `<div style="font-size:11px; color:#bbb; margin-top:3px; font-weight:normal; max-width:145px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">${lastMsg}${timeText ? `｜${timeText}` : ''}</div>`;
+        subText = `<div class="phone-contact-sub">${lastMsg}${timeText ? `｜${timeText}` : ''}</div>`;
+    } else {
+        subText = `<div class="phone-contact-sub">目前在線${levelText ? `｜${levelText}` : ''}</div>`;
     }
 
-    return `<div class="catalog-item phone-contact" style="flex-direction:row; justify-content:space-between; padding: 10px;">
-        <span style="font-weight:bold; color:${color}; text-shadow: 1px 1px 2px #000; text-align:left;">
-            ${window.phoneEscapeHtml(name)}${levelText}${unreadDot}
+    return `<div class="catalog-item phone-contact" data-contact-uid="${window.phoneEscapeHtml(uid)}">
+        <div class="phone-contact-main">
+            <div class="phone-contact-title" style="color:${color};">${window.phoneEscapeHtml(name)}${unreadDot}</div>
             ${subText}
-        </span>
-        <div style="display:flex; gap:5px; flex-shrink:0;">
-            <button class="btn-secondary" style="padding: 4px 12px; font-size:12px; color:#333;" data-phone-action="profile" data-uid="${window.phoneEscapeHtml(uid)}">查看</button>
-            <button class="btn-primary" style="padding: 4px 12px; font-size:12px;" data-phone-action="pm" data-uid="${window.phoneEscapeHtml(uid)}">私訊</button>
+        </div>
+        <div class="phone-contact-actions">
+            <button class="btn-secondary" style="color:#333;" data-phone-action="profile" data-uid="${window.phoneEscapeHtml(uid)}">查看</button>
+            <button class="btn-primary" data-phone-action="pm" data-uid="${window.phoneEscapeHtml(uid)}">私訊</button>
         </div>
     </div>`;
 };
@@ -2263,26 +2457,31 @@ window.bindPhoneContactButtons = function(contactsEl) {
 };
 
 window.openPhoneModal = async function() {
+    if (window.__phoneRendering) return;
+    window.__phoneRendering = true;
+
     const inventoryModal = document.getElementById('inventory-modal');
     const phoneModal = document.getElementById('phone-modal');
     const contactsEl = document.getElementById('phone-contacts');
 
-    if (inventoryModal) inventoryModal.style.display = 'none';
-    if (phoneModal) phoneModal.style.display = 'block';
-    if (!contactsEl) return;
-
-    contactsEl.innerHTML = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">讀取洋蔥手機中...</div>';
-
-    if (!window.GameLogic.currentUser) {
-        contactsEl.innerHTML = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">請先登入後再使用洋蔥手機</div>';
-        return;
-    }
-
-    const myUid = window.GameLogic.currentUser.uid;
-    const roomName = window.getCurrentServerRoomName();
-    const phoneContactMeta = {};
-
     try {
+        window.clearUiBlockersAfterModal({ blur: false });
+
+        if (inventoryModal) inventoryModal.style.display = 'none';
+        if (phoneModal) phoneModal.style.display = 'block';
+        if (!contactsEl) return;
+
+        contactsEl.innerHTML = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">讀取洋蔥手機中...</div>';
+
+        if (!window.GameLogic.currentUser) {
+            contactsEl.innerHTML = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">請先登入後再使用洋蔥手機</div>';
+            return;
+        }
+
+        const myUid = window.GameLogic.currentUser.uid;
+        const roomName = window.getCurrentServerRoomName();
+        const phoneContactMeta = {};
+
         const [onlineSnap, recentSnap] = await Promise.all([
             get(ref(window.GameLogic.db, window.getServerRoomPath('onlinePlayers'))),
             get(ref(window.GameLogic.db, window.getServerRoomPath(`pmContacts/${myUid}`)))
@@ -2297,6 +2496,8 @@ window.openPhoneModal = async function() {
         window.GameLogic.onlinePlayers = onlinePlayers;
 
         const recentContacts = recentSnap.val() || {};
+        window.GameLogic.pmContacts = recentContacts;
+        window.applyValidUnreadPMs(window.GameLogic.unreadPMs || {}, recentContacts);
 
         const onlineUids = Object.keys(onlinePlayers)
             .filter(uid => uid !== myUid && window.isFreshPhoneOnlinePlayer(onlinePlayers[uid]))
@@ -2304,7 +2505,8 @@ window.openPhoneModal = async function() {
                 const nameA = (onlinePlayers[a] && onlinePlayers[a].name) || '匿名';
                 const nameB = (onlinePlayers[b] && onlinePlayers[b].name) || '匿名';
                 return nameA.localeCompare(nameB, 'zh-Hant');
-            });
+            })
+            .slice(0, 80);
 
         const onlineUidSet = {};
         onlineUids.forEach(uid => { onlineUidSet[uid] = true; });
@@ -2347,7 +2549,9 @@ window.openPhoneModal = async function() {
                     lastTime: Number(c.lastTime || 0)
                 };
             })
-            .sort((a, b) => Number(b.lastTime || 0) - Number(a.lastTime || 0));
+            .filter(c => window.isValidPMContactRecord(c))
+            .sort((a, b) => Number(b.lastTime || 0) - Number(a.lastTime || 0))
+            .slice(0, 50);
 
         html += `
             <div style="color:#ffcc00; font-weight:bold; text-align:left; margin:10px 0 4px 0; border-bottom:1px solid rgba(255,255,255,0.25); padding-bottom:3px;">
@@ -2370,14 +2574,23 @@ window.openPhoneModal = async function() {
         window.bindPhoneContactButtons(contactsEl);
     } catch (err) {
         console.warn('[洋蔥手機] 讀取目前在線與最近私訊失敗：', err);
-        contactsEl.innerHTML = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">洋蔥手機讀取失敗，請稍後再試</div>';
+        if (contactsEl) {
+            contactsEl.innerHTML = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">洋蔥手機讀取失敗，請稍後再試</div>';
+        }
+    } finally {
+        window.__phoneRendering = false;
+        if (window.scheduleMobileViewportRefresh) window.scheduleMobileViewportRefresh();
     }
 };
 
-window.openPM = function(targetUid, targetName, targetColor = '#fff') {
+window.openPM = async function(targetUid, targetName, targetColor = '#fff') {
+    if (!targetUid || !window.GameLogic.currentUser) return;
+
     const meta = (window.GameLogic.phoneContactMeta && window.GameLogic.phoneContactMeta[targetUid]) || {};
     const safeTargetName = targetName || meta.name || '匿名';
     const safeTargetColor = window.safePhoneColor(targetColor || meta.color || '#fff');
+
+    window.clearUiBlockersAfterModal({ blur: false });
 
     document.getElementById('phone-modal').style.display = 'none';
     document.getElementById('pm-modal').style.display = 'block';
@@ -2391,36 +2604,40 @@ window.openPM = function(targetUid, targetName, targetColor = '#fff') {
     let chatId = window.getPMChatId(myUid, targetUid);
     let pmPath = window.getServerRoomPath(`privateChats/${chatId}`);
 
-    // 保留原本 unreadPMs 清除機制，避免擴大修改 users 個人資料結構。
-    remove(ref(window.GameLogic.db, `users/${myUid}/unreadPMs/${targetUid}`));
+    // 開啟該對象私訊時，立即清掉本地與 Firebase 未讀，紅點不要等下一次監聽才消失。
+    if (window.GameLogic.unreadPMs) delete window.GameLogic.unreadPMs[targetUid];
+    if (window.GameLogic.validUnreadPMs) delete window.GameLogic.validUnreadPMs[targetUid];
+    window.updateUnreadGlow();
 
-    if (window.GameLogic.unreadPMs && window.GameLogic.unreadPMs[targetUid]) {
-        delete window.GameLogic.unreadPMs[targetUid];
-        window.updateUnreadGlow();
-    }
+    remove(ref(window.GameLogic.db, `users/${myUid}/unreadPMs/${targetUid}`))
+        .catch(err => console.warn('[私訊] 清除未讀狀態失敗，已先更新本地紅點：', err));
 
     if (window.pmUnsubscribe) window.pmUnsubscribe();
 
     window.pmUnsubscribe = onValue(ref(window.GameLogic.db, pmPath), snap => {
-        let msgs = snap.val() || {};
-        let box = document.getElementById('pm-chat-box');
-        box.innerHTML = '';
+        const msgs = snap.val() || {};
+        const box = document.getElementById('pm-chat-box');
+        if (!box) return;
 
-        Object.values(msgs)
+        const msgList = Object.values(msgs)
             .sort((a, b) => Number(a.time || 0) - Number(b.time || 0))
-            .forEach(m => {
-                const msgText = window.phoneEscapeHtml(m.msg || '');
-                const nameText = window.phoneEscapeHtml(m.name || '匿名');
+            .slice(-80);
 
-                if (m.uid === myUid) {
-                    box.innerHTML += `<div style="text-align:right; margin-bottom: 8px;"><div class="pm-bubble-me">${msgText}</div></div>`;
-                } else {
-                    box.innerHTML += `<div style="text-align:left; margin-bottom: 8px;"><div class="pm-bubble-other"><div style="font-size:11px; color:#558b2f; font-weight:bold; margin-bottom:2px;">${nameText}</div>${msgText}</div></div>`;
-                }
-            });
+        box.innerHTML = msgList.map(m => {
+            const msgText = window.phoneEscapeHtml(m.msg || '');
+            const nameText = window.phoneEscapeHtml(m.name || '匿名');
+
+            if (m.uid === myUid) {
+                return `<div style="text-align:right; margin-bottom: 8px;"><div class="pm-bubble-me">${msgText}</div></div>`;
+            }
+
+            return `<div style="text-align:left; margin-bottom: 8px;"><div class="pm-bubble-other"><div style="font-size:11px; color:#558b2f; font-weight:bold; margin-bottom:2px;">${nameText}</div>${msgText}</div></div>`;
+        }).join('');
 
         box.scrollTop = box.scrollHeight;
     });
+
+    if (window.scheduleMobileViewportRefresh) window.scheduleMobileViewportRefresh();
 };
 
 window.closePM = function() {
@@ -2429,7 +2646,12 @@ window.closePM = function() {
         window.pmUnsubscribe = null;
     }
 
+    const input = document.getElementById('pm-input');
+    if (input) input.blur();
+
     document.getElementById('pm-modal').style.display = 'none';
+
+    window.clearUiBlockersAfterModal();
 
     // 返回聯絡人時順手重新整理，讓最近私訊區即時更新。
     window.openPhoneModal();
@@ -2437,7 +2659,7 @@ window.closePM = function() {
 
 window.sendPM = async function() {
     let input = document.getElementById('pm-input');
-    let msg = input.value.trim();
+    let msg = input ? input.value.trim() : '';
     if (!msg || !window.currentPMUid || !window.GameLogic.currentUser) return;
 
     let myUid = window.GameLogic.currentUser.uid;
@@ -2446,6 +2668,7 @@ window.sendPM = async function() {
     let pmPath = window.getServerRoomPath(`privateChats/${chatId}`);
 
     const sendTime = Date.now();
+    const roomId = window.getCurrentServerRoomId ? window.getCurrentServerRoomId() : (window.GameLogic.currentServerRoom || '');
     const myName = (window.GameLogic.myProfile && window.GameLogic.myProfile.name) || '匿名';
     const myColor = window.safePhoneColor((window.GameLogic.myProfile && window.GameLogic.myProfile.color) || '#fff');
 
@@ -2462,10 +2685,16 @@ window.sendPM = async function() {
 
         const updates = {};
 
-        // 沿用既有未讀紅點位置，不改 users/{uid}/unreadPMs 結構。
-        updates[`users/${targetUid}/unreadPMs/${myUid}`] = true;
+        // 新格式：保留原本 users/{uid}/unreadPMs/{fromUid} 位置，但加入房間與訊息資訊供紅點驗證。
+        updates[`users/${targetUid}/unreadPMs/${myUid}`] = {
+            roomId: roomId,
+            chatId: chatId,
+            fromUid: myUid,
+            time: sendTime,
+            lastMessage: msg
+        };
 
-        // 新增：目前入口房間內的最近私訊清單。
+        // 目前入口房間內的最近私訊清單。
         updates[window.getServerRoomPath(`pmContacts/${myUid}/${targetUid}`)] = {
             uid: targetUid,
             name: targetName,
@@ -2485,6 +2714,9 @@ window.sendPM = async function() {
         await update(ref(db), updates);
 
         input.value = '';
+
+        if (window.isMobileTouchViewport()) input.blur();
+        window.clearUiBlockersAfterModal({ blur: false });
     } catch (err) {
         console.warn('[私訊] 發送或更新最近私訊失敗：', err);
         alert('私訊發送失敗，請打開 F12 Console 查看錯誤。');
@@ -2673,7 +2905,10 @@ onAuthStateChanged(auth, async (user) => {
             window.GameLogic.onlinePlayers = snapshot.val() || {};
             window.updateOnlinePlayersUI();
         });
-        onValue(ref(db, `users/${user.uid}/unreadPMs`), snap => { window.GameLogic.unreadPMs = snap.val() || {}; window.updateUnreadGlow(); if (document.getElementById('inventory-modal').style.display === 'block') { window.openInventoryModal(); } });
+        if (pmUnreadUnsubscribe) { pmUnreadUnsubscribe(); pmUnreadUnsubscribe = null; }
+        pmUnreadUnsubscribe = onValue(ref(db, `users/${user.uid}/unreadPMs`), snap => {
+        window.normalizeUnreadPMs(snap.val() || {});
+        });
         onValue(ref(db, 'manuals'), snap => { const data = snap.val(); window.manualPages = []; if (data) { Object.keys(data).forEach(key => { window.manualPages.push({ key: key, imgBase64: data[key].imgBase64, timestamp: data[key].timestamp }); }); window.manualPages.sort((a, b) => a.timestamp - b.timestamp); } window.renderManualPage(); });
         if (cafeFurnitureUnsubscribe) { cafeFurnitureUnsubscribe(); cafeFurnitureUnsubscribe = null; }
         cafeFurnitureUnsubscribe = onValue(ref(db, window.getServerRoomPath('cafeFurniture')), snap => {
@@ -2739,6 +2974,7 @@ onAuthStateChanged(auth, async (user) => {
 
         if (connectedUnsubscribe) { connectedUnsubscribe(); connectedUnsubscribe = null; }
         if (onlinePlayersUnsubscribe) { onlinePlayersUnsubscribe(); onlinePlayersUnsubscribe = null; }
+        if (pmUnreadUnsubscribe) { pmUnreadUnsubscribe(); pmUnreadUnsubscribe = null; }
         if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
         if (memoryUnsubscribe) { memoryUnsubscribe(); memoryUnsubscribe = null; }
         if (cafeFurnitureUnsubscribe) { cafeFurnitureUnsubscribe(); cafeFurnitureUnsubscribe = null; }
@@ -17205,15 +17441,25 @@ function sendPrinceCatBubble(msg) {
 function sendChat() {
     const msg = chatInput.value.trim();
     if (msg !== "" && window.GameLogic.currentUser) {
-        const now = new Date();
+        const nowMs = Date.now();
+        const now = new Date(nowMs);
+
         push(ref(db, window.getServerRoomPath('chats')), {
             name: window.GameLogic.myProfile.name,
             msg: msg,
+            ts: nowMs,
             date: now.toLocaleDateString('zh-TW', {month: '2-digit', day: '2-digit'}),
             time: now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute:'2-digit' })
         });
+
         sendBubble(msg);
         chatInput.value = "";
+
+        if (window.isMobileTouchViewport && window.isMobileTouchViewport()) {
+            chatInput.blur();
+        }
+
+        if (window.scheduleMobileViewportRefresh) window.scheduleMobileViewportRefresh();
     }
 }
 
@@ -17228,17 +17474,23 @@ function listenToChat() {
         const chats = snapshot.val();
 
         if (chats) {
+            const esc = window.phoneEscapeHtml || ((v) => String(v ?? ''));
             let lastMsg = "";
             let html = "";
-            let chatArray = Object.values(chats);
+            let chatArray = Object.values(chats).slice(-80);
 
             if (chatArray.length > 0) {
                 let latest = chatArray[chatArray.length - 1];
-                lastMsg = `${latest.name}：${latest.msg}`;
+                lastMsg = `${latest.name || '匿名'}：${latest.msg || ''}`;
             }
 
             chatArray.reverse().forEach(c => {
-                html += `<div style="margin-bottom: 4px;"><strong style="color:var(--mucha-gold);">${c.name}</strong>: ${c.msg} <span style="font-size:10px; color:#bbb; margin-left:8px;">${c.date||''} ${c.time||''}</span></div>`;
+                const name = esc(c.name || '匿名');
+                const msg = esc(c.msg || '');
+                const date = esc(c.date || '');
+                const time = esc(c.time || '');
+
+                html += `<div style="margin-bottom: 4px;"><strong style="color:var(--mucha-gold);">${name}</strong>: ${msg} <span style="font-size:10px; color:#bbb; margin-left:8px;">${date} ${time}</span></div>`;
             });
 
             chatBox.innerHTML = html;
