@@ -12733,7 +12733,6 @@ if (!data.scoreHandled && data.attacker) {
         let selectedShopButtonOptions = null;
 
         if (selectedItem) {
-        if (selectedItem) {
             const qty = (this.soloRocketMoonShopPurchases && this.soloRocketMoonShopPurchases[selectedItem.name]) || 0;
             const alreadyLimited = !!(selectedItem.limitOne && qty >= 1);
             const canAfford = (this.soloRocketMoonBudgetLeft || 0) >= selectedItem.price;
