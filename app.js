@@ -903,6 +903,278 @@ function createSystemUI() {
                     opacity:1;
                 }
             }
+            /* 給西選單：紅色金屬展開動畫＋倒帶關閉動畫 */
+            #inventory-close-blocker {
+                display:none;
+                position:fixed;
+                inset:0;
+                z-index:245;
+                background:rgba(0,0,0,0.08);
+                pointer-events:auto;
+                touch-action:none;
+            }
+            #inventory-modal.inventory-red-metal-ui {
+                width:85%;
+                max-width:340px;
+                max-height:min(82vh, calc(var(--onion-vh, 1vh) * 82));
+                overflow:hidden !important;
+                background:
+                    radial-gradient(circle at 50% 18%, rgba(255,255,255,0.32) 0 7%, transparent 20%),
+                    linear-gradient(135deg, #4a0202 0%, #a30a0a 18%, #f55252 34%, #640505 52%, #d71919 74%, #350101 100%) !important;
+                border:3px solid rgba(255,230,230,0.92) !important;
+                border-radius:18px !important;
+                box-shadow:0 0 24px rgba(255,0,0,0.78), 0 0 38px rgba(255,255,255,0.36), inset 0 0 22px rgba(0,0,0,0.72), inset 0 2px 0 rgba(255,255,255,0.45) !important;
+                color:#fff4f4 !important;
+                transform-origin:center center;
+            }
+            #inventory-modal.inventory-red-metal-ui::before {
+                content:"";
+                position:absolute;
+                inset:-55% -45%;
+                background:linear-gradient(115deg, transparent 32%, rgba(255,255,255,0.58) 43%, transparent 53%, transparent 62%, rgba(255,120,120,0.34) 70%, transparent 78%);
+                transform:translateX(-55%);
+                animation:inventory-red-metal-sheen 3.4s ease-in-out infinite;
+                pointer-events:none;
+                z-index:0;
+            }
+            #inventory-modal.inventory-red-metal-ui::after {
+                content:"";
+                position:absolute;
+                inset:0;
+                background:
+                    repeating-linear-gradient(0deg, rgba(255,255,255,0.08) 0 1px, transparent 1px 5px),
+                    radial-gradient(circle at 28% 22%, rgba(255,255,255,0.35) 0 2px, transparent 4px),
+                    radial-gradient(circle at 80% 72%, rgba(255,255,255,0.32) 0 2px, transparent 4px);
+                pointer-events:none;
+                z-index:0;
+                opacity:0.72;
+            }
+            #inventory-modal.inventory-red-metal-ui > * {
+                position:relative;
+                z-index:2;
+            }
+            #inventory-modal.inventory-opening {
+                animation:inventory-red-open 2s cubic-bezier(0.16, 0.9, 0.18, 1) forwards;
+            }
+            #inventory-modal.inventory-closing {
+                animation:inventory-red-close 2s cubic-bezier(0.72, 0, 0.84, 0.1) forwards;
+            }
+            @keyframes inventory-red-open {
+                0% {
+                    opacity:0;
+                    border-radius:50% !important;
+                    transform:translate(-50%, -50%) scale(0.06);
+                    filter:brightness(1.4) blur(0.4px);
+                }
+                45% {
+                    opacity:1;
+                    border-radius:48% !important;
+                    transform:translate(-50%, -50%) scale(0.46);
+                    filter:brightness(1.65) blur(0);
+                }
+                74% {
+                    border-radius:26px !important;
+                    transform:translate(-50%, -50%) scale(1.04);
+                }
+                100% {
+                    opacity:1;
+                    border-radius:18px !important;
+                    transform:translate(-50%, -50%) scale(1);
+                    filter:brightness(1) blur(0);
+                }
+            }
+            @keyframes inventory-red-close {
+                0% {
+                    opacity:1;
+                    border-radius:18px !important;
+                    transform:translate(-50%, -50%) scale(1);
+                    filter:brightness(1) blur(0);
+                }
+                28% {
+                    border-radius:26px !important;
+                    transform:translate(-50%, -50%) scale(1.04);
+                }
+                62% {
+                    opacity:1;
+                    border-radius:48% !important;
+                    transform:translate(-50%, -50%) scale(0.46);
+                    filter:brightness(1.6) blur(0);
+                }
+                100% {
+                    opacity:0;
+                    border-radius:50% !important;
+                    transform:translate(-50%, -50%) scale(0.06);
+                    filter:brightness(1.4) blur(0.6px);
+                }
+            }
+            @keyframes inventory-red-metal-sheen {
+                0%, 42% { transform:translateX(-55%); opacity:0; }
+                58% { opacity:0.92; }
+                100% { transform:translateX(55%); opacity:0; }
+            }
+            .inventory-red-particle-field {
+                position:absolute !important;
+                inset:-28px !important;
+                overflow:visible !important;
+                pointer-events:none !important;
+                z-index:1 !important;
+            }
+            .inventory-red-particle-field span {
+                position:absolute;
+                left:var(--inv-p-left, 50%);
+                top:var(--inv-p-top, 50%);
+                width:var(--inv-p-size, 14px);
+                height:var(--inv-p-size, 14px);
+                border-radius:50%;
+                background:radial-gradient(circle, #ffffff 0 24%, var(--inv-p-color, #ff2b2b) 36% 62%, rgba(255,255,255,0) 74%);
+                box-shadow:0 0 10px #fff, 0 0 22px var(--inv-p-color, #ff2b2b), 0 0 34px rgba(255,0,0,0.72);
+                opacity:0;
+            }
+            #inventory-modal.inventory-opening .inventory-red-particle-field span {
+                animation:inventory-red-particle-pop 2s ease-out forwards;
+                animation-delay:var(--inv-p-delay, 0s);
+            }
+            #inventory-modal.inventory-closing .inventory-red-particle-field span {
+                animation:inventory-red-particle-pop-reverse 2s ease-in forwards;
+                animation-delay:var(--inv-p-delay, 0s);
+            }
+            @keyframes inventory-red-particle-pop {
+                0% {
+                    transform:translate(0,0) scale(0.2);
+                    opacity:0;
+                }
+                18% {
+                    opacity:1;
+                }
+                78% {
+                    opacity:0.95;
+                }
+                100% {
+                    transform:translate(var(--inv-p-x, 70px), var(--inv-p-y, -70px)) scale(1.15);
+                    opacity:0;
+                }
+            }
+            @keyframes inventory-red-particle-pop-reverse {
+                0% {
+                    transform:translate(var(--inv-p-x, 70px), var(--inv-p-y, -70px)) scale(1.15);
+                    opacity:0;
+                }
+                24% {
+                    opacity:0.95;
+                }
+                82% {
+                    opacity:1;
+                }
+                100% {
+                    transform:translate(0,0) scale(0.2);
+                    opacity:0;
+                }
+            }
+            #inventory-modal.inventory-red-metal-ui #inventory-header {
+                border-bottom:2px solid rgba(255,255,255,0.78) !important;
+                padding-bottom:8px !important;
+            }
+            #inventory-modal.inventory-red-metal-ui h3 {
+                color:#ffffff !important;
+                text-shadow:0 0 6px rgba(255,255,255,0.92), 0 0 14px rgba(255,80,80,0.88), 0 2px 2px rgba(0,0,0,0.75) !important;
+                animation:inventory-title-white-breathe 1.65s ease-in-out infinite alternate;
+            }
+            @keyframes inventory-title-white-breathe {
+                0% {
+                    text-shadow:0 0 5px rgba(255,255,255,0.82), 0 0 12px rgba(255,70,70,0.7), 0 2px 2px rgba(0,0,0,0.75);
+                    filter:brightness(0.96);
+                }
+                100% {
+                    text-shadow:0 0 12px #ffffff, 0 0 22px rgba(255,255,255,0.82), 0 0 32px rgba(255,40,40,0.95), 0 2px 2px rgba(0,0,0,0.75);
+                    filter:brightness(1.18);
+                }
+            }
+            #inventory-modal.inventory-red-metal-ui button,
+            #inventory-modal.inventory-red-metal-ui .catalog-item {
+                background:linear-gradient(145deg, #ff5a5a 0%, #a40707 28%, #3d0101 52%, #c01010 76%, #ff9a9a 100%) !important;
+                color:#fff7f7 !important;
+                border:1px solid rgba(255,235,235,0.9) !important;
+                border-radius:12px !important;
+                box-shadow:0 5px 12px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -10px 16px rgba(45,0,0,0.5), 0 0 12px rgba(255,40,40,0.55) !important;
+                text-shadow:0 1px 2px rgba(0,0,0,0.8), 0 0 6px rgba(255,255,255,0.32);
+                font-weight:bold;
+            }
+            #inventory-modal.inventory-red-metal-ui button:active,
+            #inventory-modal.inventory-red-metal-ui .catalog-item:active {
+                transform:scale(0.96);
+                box-shadow:0 2px 8px rgba(0,0,0,0.55), inset 0 2px 8px rgba(0,0,0,0.55), 0 0 18px rgba(255,70,70,0.72) !important;
+            }
+            #inventory-modal.inventory-red-metal-ui #inventory-list {
+                scrollbar-width:thin;
+                scrollbar-color:rgba(255,230,230,0.9) rgba(70,0,0,0.4);
+            }
+            #inventory-modal.inventory-red-metal-ui #inventory-list .catalog-item span {
+                color:#fff7f7 !important;
+            }
+            #inventory-modal.inventory-opening #inventory-header,
+            #inventory-modal.inventory-opening #inventory-list,
+            #inventory-modal.inventory-opening .inventory-metal-close-btn {
+                opacity:0;
+                animation:inventory-content-drop-bounce 0.48s cubic-bezier(0.2, 1.4, 0.34, 1) forwards;
+                animation-delay:1.38s;
+            }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item {
+                opacity:0;
+                animation:inventory-item-fast-pop 0.38s cubic-bezier(0.2, 1.35, 0.35, 1) forwards;
+            }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(1) { animation-delay:1.48s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(2) { animation-delay:1.53s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(3) { animation-delay:1.58s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(4) { animation-delay:1.63s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(5) { animation-delay:1.68s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(6) { animation-delay:1.73s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(7) { animation-delay:1.78s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(8) { animation-delay:1.83s; }
+            #inventory-modal.inventory-opening #inventory-list .catalog-item:nth-child(n+9) { animation-delay:1.88s; }
+            #inventory-modal.inventory-closing #inventory-header,
+            #inventory-modal.inventory-closing #inventory-list,
+            #inventory-modal.inventory-closing .inventory-metal-close-btn {
+                animation:inventory-content-rewind 0.42s ease-in forwards;
+            }
+            @keyframes inventory-content-drop-bounce {
+                0% {
+                    opacity:0;
+                    transform:translateY(-18px) scale(0.98);
+                }
+                70% {
+                    opacity:1;
+                    transform:translateY(7px) scale(1.01);
+                }
+                100% {
+                    opacity:1;
+                    transform:translateY(0) scale(1);
+                }
+            }
+            @keyframes inventory-item-fast-pop {
+                0% {
+                    opacity:0;
+                    transform:translateY(-14px) scale(0.94);
+                }
+                72% {
+                    opacity:1;
+                    transform:translateY(5px) scale(1.03);
+                }
+                100% {
+                    opacity:1;
+                    transform:translateY(0) scale(1);
+                }
+            }
+            @keyframes inventory-content-rewind {
+                0% {
+                    opacity:1;
+                    transform:translateY(0) scale(1);
+                }
+                100% {
+                    opacity:0;
+                    transform:translateY(-18px) scale(0.96);
+                }
+            }
+
             #chat-section { display: flex; position: absolute; top: 60px; left: 10px; width: 190px; flex-direction: column; z-index: 100; pointer-events: none; }
             #chat-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 8px 8px 0 0; padding: 5px 12px; width: fit-content; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 -2px 5px rgba(0,0,0,0.2);}
             #chat-content { pointer-events: auto; transition: max-height 0.3s ease-in-out; overflow: hidden; display: flex; flex-direction: column; background: rgba(0, 0, 0, 0.6); border-radius: 0 8px 8px 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
@@ -1249,7 +1521,27 @@ function createSystemUI() {
             </div>
         </div>
 
-        <div id="inventory-modal" class="modal"><div id="inventory-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--mucha-gold); padding-bottom: 5px; margin-bottom: 15px;"><h3 style="margin:0; border:none; color: var(--mucha-brown);">🎒 我的給西</h3><button id="inventory-edit-btn" class="btn-edit" onclick="window.toggleInventoryEdit()" style="padding:4px 8px; font-size:12px;">編輯排序</button></div><div id="inventory-list" class="catalog-grid" style="max-height: 50vh; overflow-y: auto; padding-right: 5px;"></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('inventory-modal').style.display='none'">關閉</button></div>
+        <div id="inventory-close-blocker" onclick="window.closeInventoryModal && window.closeInventoryModal()"></div>
+        <div id="inventory-modal" class="modal inventory-red-metal-ui">
+            <div class="inventory-red-particle-field" aria-hidden="true">
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:18px; --inv-p-color:#ffffff; --inv-p-x:-135px; --inv-p-y:-105px; --inv-p-delay:0s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:16px; --inv-p-color:#ff3333; --inv-p-x:132px; --inv-p-y:-96px; --inv-p-delay:0.05s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:20px; --inv-p-color:#ffffff; --inv-p-x:-122px; --inv-p-y:92px; --inv-p-delay:0.1s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:17px; --inv-p-color:#ff5555; --inv-p-x:138px; --inv-p-y:86px; --inv-p-delay:0.15s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:15px; --inv-p-color:#ffffff; --inv-p-x:0px; --inv-p-y:-145px; --inv-p-delay:0.2s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:19px; --inv-p-color:#ff2020; --inv-p-x:0px; --inv-p-y:132px; --inv-p-delay:0.25s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:14px; --inv-p-color:#ffffff; --inv-p-x:-168px; --inv-p-y:0px; --inv-p-delay:0.3s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:18px; --inv-p-color:#ff4444; --inv-p-x:168px; --inv-p-y:0px; --inv-p-delay:0.35s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:16px; --inv-p-color:#ffffff; --inv-p-x:-82px; --inv-p-y:-142px; --inv-p-delay:0.4s;"></span>
+                <span style="--inv-p-left:50%; --inv-p-top:50%; --inv-p-size:16px; --inv-p-color:#ff2222; --inv-p-x:88px; --inv-p-y:140px; --inv-p-delay:0.45s;"></span>
+            </div>
+            <div id="inventory-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--mucha-gold); padding-bottom: 5px; margin-bottom: 15px;">
+                <h3 style="margin:0; border:none; color: var(--mucha-brown);">🎒 我的給西</h3>
+                <button id="inventory-edit-btn" class="btn-edit" onclick="window.toggleInventoryEdit()" style="padding:4px 8px; font-size:12px;">編輯排序</button>
+            </div>
+            <div id="inventory-list" class="catalog-grid" style="max-height: 50vh; overflow-y: auto; padding-right: 5px;"></div>
+            <button class="close-modal-btn btn-secondary inventory-metal-close-btn" style="margin-top: 15px;" onclick="window.closeInventoryModal()">關閉</button>
+        </div>
         <div id="phone-modal" class="modal phone-pink-ui">
             <div class="phone-pink-emoji-field" aria-hidden="true">
                 <span style="--emoji-left:8%; --emoji-dx:72px; --emoji-size:23px; --emoji-speed:5.2s; --emoji-delay:0s;">😍</span>
@@ -2555,7 +2847,109 @@ window.stopUsingItem = function(itemName) {
 window.toggleInventoryEdit = function() { window.GameLogic.inventoryEditMode = !window.GameLogic.inventoryEditMode; let btn = document.getElementById('inventory-edit-btn'); if (btn) { btn.innerText = window.GameLogic.inventoryEditMode ? '完成' : '編輯排序'; btn.className = window.GameLogic.inventoryEditMode ? 'btn-primary' : 'btn-edit'; } window.openInventoryModal(); };
 window.moveInvItem = function(index, dir) { let order = window.GameLogic.myProfile.inventoryOrder || []; if (index + dir >= 0 && index + dir < order.length) { let temp = order[index]; order[index] = order[index + dir]; order[index + dir] = temp; window.GameLogic.myProfile.inventoryOrder = order; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { inventoryOrder: order }); window.openInventoryModal(); } };
 
-window.clickSysItem = function(key) { document.getElementById('inventory-modal').style.display = 'none'; if (key === 'magic_items') { window.openMagicModal(); } else if (key === 'phone') { window.openPhoneModal(); } else if (key === 'portal') { window.openPortalModal(); } else if (key === 'energy') { window.openEnergyModal(); } else if (key === 'profile') { window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); } else if (key === 'music') { document.getElementById('settings-modal').style.display = 'block'; } else if (key === 'manual') { window.openManualModal(); } else if (key === 'dev') { document.getElementById('dev-modal').style.display = 'block'; } else if (key === 'logout') { window.leaveCafe(); if (window.GameLogic.currentUser) { window.cleanupCurrentServerPresence(window.GameLogic.currentUser.uid); } window.signOut(window.auth); } };
+window.installInventoryModalDisplayGuard = function() {
+    const modal = document.getElementById('inventory-modal');
+    const blocker = document.getElementById('inventory-close-blocker');
+    if (!modal || modal.__inventoryDisplayGuardInstalled) return;
+
+    modal.__inventoryDisplayGuardInstalled = true;
+
+    const syncBlocker = () => {
+        if (!blocker) return;
+        if (modal.style.display === 'none') {
+            blocker.style.display = 'none';
+        }
+    };
+
+    const observer = new MutationObserver(syncBlocker);
+    observer.observe(modal, {
+        attributes: true,
+        attributeFilter: ['style', 'class']
+    });
+
+    modal.__inventoryDisplayObserver = observer;
+    syncBlocker();
+};
+
+window.showInventoryModalWithFx = function() {
+    const modal = document.getElementById('inventory-modal');
+    const blocker = document.getElementById('inventory-close-blocker');
+    if (!modal) return;
+
+    window.installInventoryModalDisplayGuard();
+
+    if (window.__inventoryCloseTimer) {
+        clearTimeout(window.__inventoryCloseTimer);
+        window.__inventoryCloseTimer = null;
+    }
+
+    modal.classList.add('inventory-red-metal-ui');
+    modal.classList.remove('inventory-opening', 'inventory-closing', 'inventory-opened');
+    modal.style.display = 'block';
+
+    if (blocker) blocker.style.display = 'block';
+
+    void modal.offsetWidth;
+
+    modal.classList.add('inventory-opening');
+
+    setTimeout(() => {
+        if (modal.style.display !== 'none' && !modal.classList.contains('inventory-closing')) {
+            modal.classList.remove('inventory-opening');
+            modal.classList.add('inventory-opened');
+        }
+    }, 2050);
+};
+
+window.closeInventoryModal = function(options = {}) {
+    const modal = document.getElementById('inventory-modal');
+    const blocker = document.getElementById('inventory-close-blocker');
+    if (!modal) return;
+
+    const immediate = !!options.immediate;
+
+    if (window.__inventoryCloseTimer) {
+        clearTimeout(window.__inventoryCloseTimer);
+        window.__inventoryCloseTimer = null;
+    }
+
+    if (immediate) {
+        modal.classList.remove('inventory-opening', 'inventory-closing', 'inventory-opened');
+        modal.style.display = 'none';
+        if (blocker) blocker.style.display = 'none';
+        return;
+    }
+
+    if (modal.style.display === 'none') {
+        if (blocker) blocker.style.display = 'none';
+        return;
+    }
+
+    modal.classList.add('inventory-red-metal-ui');
+    modal.classList.remove('inventory-opening', 'inventory-opened');
+    modal.classList.add('inventory-closing');
+
+    if (blocker) blocker.style.display = 'block';
+
+    window.__inventoryCloseTimer = setTimeout(() => {
+        modal.style.display = 'none';
+        modal.classList.remove('inventory-closing', 'inventory-opening', 'inventory-opened');
+        if (blocker) blocker.style.display = 'none';
+        window.__inventoryCloseTimer = null;
+    }, 2000);
+};
+
+window.installInventoryModalDisplayGuard();
+
+window.clickSysItem = function(key) {
+    if (window.closeInventoryModal) {
+        window.closeInventoryModal({ immediate: true });
+    } else {
+        document.getElementById('inventory-modal').style.display = 'none';
+    }
+
+    if (key === 'magic_items') { window.openMagicModal(); } else if (key === 'phone') { window.openPhoneModal(); } else if (key === 'portal') { window.openPortalModal(); } else if (key === 'energy') { window.openEnergyModal(); } else if (key === 'profile') { window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); } else if (key === 'music') { document.getElementById('settings-modal').style.display = 'block'; } else if (key === 'manual') { window.openManualModal(); } else if (key === 'dev') { document.getElementById('dev-modal').style.display = 'block'; } else if (key === 'logout') { window.leaveCafe(); if (window.GameLogic.currentUser) { window.cleanupCurrentServerPresence(window.GameLogic.currentUser.uid); } window.signOut(window.auth); }
+};
 
 window.openMagicModal = function() {
     let inv = window.GameLogic.myProfile.inventory || {};
@@ -2891,7 +3285,20 @@ window.openInventoryModal = function() {
     }
     let activeKeys = Object.keys(rawItems); let order = Array.isArray(window.GameLogic.myProfile.inventoryOrder) ? window.GameLogic.myProfile.inventoryOrder.filter(k => k && typeof k === 'string') : []; let finalOrder = order.filter(k => activeKeys.includes(k)); activeKeys.forEach(k => { if (!finalOrder.includes(k)) finalOrder.push(k); }); window.GameLogic.myProfile.inventoryOrder = finalOrder;
     let invHTML = ''; finalOrder.forEach((k, i) => { let inner = rawItems[k]; if (window.GameLogic.inventoryEditMode) { invHTML += `<div style="display:flex; flex-direction:column; align-items:center; background: rgba(0,0,0,0.05); padding: 5px; border-radius: 8px;">${inner}<div style="display:flex; justify-content:space-around; width:100%; margin-top:5px;"><button class="btn-secondary" style="padding:2px 10px;" onclick="window.moveInvItem(${i}, -1)" ${i === 0 ? 'disabled' : ''}>◀</button><button class="btn-secondary" style="padding:2px 10px;" onclick="window.moveInvItem(${i}, 1)" ${i === finalOrder.length - 1 ? 'disabled' : ''}>▶</button></div></div>`; } else { invHTML += inner; } });
-    list.style.display = 'grid'; list.style.gridTemplateColumns = '1fr 1fr'; list.style.gap = '10px'; list.style.maxHeight = '60vh'; list.style.overflowY = 'auto'; list.style.padding = '5px'; list.style.alignItems = 'start'; list.innerHTML = invHTML; document.getElementById('inventory-modal').style.display = 'block';
+    list.style.display = 'grid';
+    list.style.gridTemplateColumns = '1fr 1fr';
+    list.style.gap = '10px';
+    list.style.maxHeight = '60vh';
+    list.style.overflowY = 'auto';
+    list.style.padding = '5px';
+    list.style.alignItems = 'start';
+    list.innerHTML = invHTML;
+
+    if (window.showInventoryModalWithFx) {
+        window.showInventoryModalWithFx();
+    } else {
+        document.getElementById('inventory-modal').style.display = 'block';
+    }
 };
 
 window.viewOtherProfile = function(uid) { get(ref(window.GameLogic.db, `users/${uid}`)).then(snap => { if (snap.exists()) { document.getElementById('phone-modal').style.display = 'none'; showProfileModal(snap.val(), uid); } }); };
