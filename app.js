@@ -4544,16 +4544,25 @@ this.events.on('action_A_short', () => {
                                     if (this.sceneName === 'partyroom') {
                                         const hitActionTime = Date.now();
 
-                                        update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/hits/${targetUid}`)), {
-                                            time: hitActionTime,
-                                            attacker: window.GameLogic.currentUser.uid
-                                        });
+                                        if (window.recordPartyWaterHit) {
+                                window.recordPartyWaterHit(
+                                window.PartyLogic.roomId,
+                                targetUid,
+                                window.GameLogic.currentUser.uid,
+                                hitActionTime
+                               );
+                               } else {
+                                       update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/hits/${targetUid}`)), {
+                                           time: hitActionTime,
+                                           attacker: window.GameLogic.currentUser.uid
+                                           });
 
-                                        update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${targetUid}`)), {
-                                            action: 'hitWater',
-                                            actionTime: hitActionTime,
-                                            targetUid: window.GameLogic.currentUser.uid
+                                       update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${targetUid}`)), {
+                                           action: 'hitWater',
+                                           actionTime: hitActionTime,
+                                           targetUid: window.GameLogic.currentUser.uid
                                         });
+                                       }
                                     } else {
                                         update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/waterHits/${targetUid}`)), {
                                             time: Date.now(),
@@ -5095,17 +5104,25 @@ this.events.on('action_B', () => {
                 this.localPlayer.isInvincible = true;
                 this.localPlayer.sprite.play('fw-hit', true);
                 
-                get(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}/gotHitCount`))).then(s => {
-                    update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`)), {
-                        gotHitCount: (s.val() || 0) + 1
-                    });
-                });
+                // 新版命中事件已由攻擊端計分；這裡只保留舊事件的相容補分，避免雙重計分。
+if (!data.scoreHandled && data.attacker) {
+    if (window.incrementPartyScoreField) {
+        window.incrementPartyScoreField(window.PartyLogic.roomId, window.GameLogic.currentUser.uid, 'gotHitCount');
+        window.incrementPartyScoreField(window.PartyLogic.roomId, data.attacker, 'hitCount');
+    } else {
+        get(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}/gotHitCount`))).then(function(s) {
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`)), {
+                gotHitCount: (s.val() || 0) + 1
+            });
+        });
 
-                get(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}/hitCount`))).then(s => {
-                    update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}`)), {
-                        hitCount: (s.val() || 0) + 1
-                    });
-                });
+        get(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}/hitCount`))).then(function(s) {
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}`)), {
+                hitCount: (s.val() || 0) + 1
+            });
+        });
+    }
+}
 
                 remove(ref(window.GameLogic.db, hitPath));
                 
@@ -17640,8 +17657,66 @@ window.syncRpsState = function(roomId) {
 };
 
 // ==================== 派對系統全域邏輯 ====================
-window.PartyLogic = { roomId: null, ammo: 666, state: 'none', scores: {}, players: {}, mySlotIndex: 0, speedBoost: false, selectedGame: '水球礁谷', playPhase: 0, lastInviteTime: 0, seenInviteKeys: {} };
+window.PartyLogic = { roomId: null, ammo: 666, state: 'none', scores: {}, players: {}, mySlotIndex: 0, speedBoost: false, selectedGame: '水球礁谷', playPhase: 0, lastInviteTime: 0, seenInviteKeys: {}, localHitCooldowns: {} };
 let partyUnsubscribe = null; let partyInvitesUnsubscribe = null;
+
+// 派對水球計分補丁：由攻擊端在命中成立時負責寫分，避免被擊中端監聽失效造成單邊不計分。
+window.incrementPartyScoreField = function(roomId, uid, fieldName) {
+    if (!roomId || !uid || !fieldName) return;
+
+    const scorePath = window.getServerRoomPath(`partyRooms/${roomId}/scores/${uid}`);
+    const fieldPath = window.getServerRoomPath(`partyRooms/${roomId}/scores/${uid}/${fieldName}`);
+
+    get(ref(window.GameLogic.db, fieldPath)).then(function(snap) {
+        let currentVal = Number(snap.val() || 0);
+        if (!isFinite(currentVal)) currentVal = 0;
+
+        let payload = {};
+        payload[fieldName] = currentVal + 1;
+
+        return update(ref(window.GameLogic.db, scorePath), payload);
+    }).catch(function(err) {
+        console.warn('[派對水球] 更新計分失敗：', roomId, uid, fieldName, err);
+    });
+};
+
+window.recordPartyWaterHit = function(roomId, targetUid, attackerUid, hitActionTime) {
+    if (!roomId || !targetUid || !attackerUid) return false;
+    if (targetUid === attackerUid) return false;
+
+    const safeTime = hitActionTime || Date.now();
+
+    window.PartyLogic.localHitCooldowns = window.PartyLogic.localHitCooldowns || {};
+
+    const cooldownKey = roomId + '_' + attackerUid + '_' + targetUid;
+    const lastHitTime = Number(window.PartyLogic.localHitCooldowns[cooldownKey] || 0);
+    const shouldScore = !lastHitTime || safeTime - lastHitTime >= 1400;
+
+    if (shouldScore) {
+        window.PartyLogic.localHitCooldowns[cooldownKey] = safeTime;
+        window.incrementPartyScoreField(roomId, targetUid, 'gotHitCount');
+        window.incrementPartyScoreField(roomId, attackerUid, 'hitCount');
+    }
+
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${roomId}/hits/${targetUid}`)), {
+        time: safeTime,
+        attacker: attackerUid,
+        scoreHandled: true,
+        scoreApplied: shouldScore
+    }).catch(function(err) {
+        console.warn('[派對水球] 寫入命中事件失敗：', err);
+    });
+
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${roomId}/players/${targetUid}`)), {
+        action: 'hitWater',
+        actionTime: safeTime,
+        targetUid: attackerUid
+    }).catch(function(err) {
+        console.warn('[派對水球] 寫入受擊動畫失敗：', err);
+    });
+
+    return shouldScore;
+};
 
 window.createPartyRoom = function() {
     let modal = document.getElementById('party-select-modal'); modal.style.display = 'none';
@@ -17686,6 +17761,7 @@ window.createPartyRoom = function() {
 window.joinPartyroom = function(roomId) {
     // 將 playPhase 初始化為 -1 解決 0 秒階段 START 音效被跳過的問題
     window.PartyLogic.roomId = roomId; window.PartyLogic.ammo = 666; window.PartyLogic.speedBoost = false; window.PartyLogic.playPhase = -1;
+    window.PartyLogic.localHitCooldowns = {};
     window.PartyLogic.gameData = null; window.PartyLogic.rewardClaimed = false; // 徹底清空舊局資料防干擾
     window.PartyLogic.state = 'waiting';
     window.PartyLogic.players = {};
