@@ -1855,7 +1855,110 @@ window.openInventoryModal = function() {
 };
 
 window.viewOtherProfile = function(uid) { get(ref(window.GameLogic.db, `users/${uid}`)).then(snap => { if (snap.exists()) { document.getElementById('phone-modal').style.display = 'none'; showProfileModal(snap.val(), uid); } }); };
-window.openPhoneModal = function() { document.getElementById('inventory-modal').style.display = 'none'; document.getElementById('phone-modal').style.display = 'block'; get(ref(window.GameLogic.db, 'users')).then(snap => { let users = snap.val() || {}; let html = ''; for (let uid in users) { if (uid === window.GameLogic.currentUser.uid) continue; let u = users[uid]; let unreadDot = (window.GameLogic.unreadPMs && window.GameLogic.unreadPMs[uid]) ? ' <span style="color:red; font-size:10px;">🔴</span>' : ''; html += `<div class="catalog-item phone-contact" style="flex-direction:row; justify-content:space-between; padding: 10px;"><span style="font-weight:bold; color: ${u.color || '#fff'}; text-shadow: 1px 1px 2px #000;">${u.name || '匿名'} (Lv.${u.level || 1})${unreadDot}</span><div><button class="btn-secondary" style="padding: 4px 12px; font-size:12px; margin-right: 5px; color:#333;" onclick="window.viewOtherProfile('${uid}')">查看</button><button class="btn-primary" style="padding: 4px 12px; font-size:12px;" onclick="window.openPM('${uid}', '${u.name || '匿名'}')">私訊</button></div></div>`; } if (html === '') html = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">目前沒有其他聯絡人</div>'; document.getElementById('phone-contacts').innerHTML = html; }); };
+window.openPhoneModal = async function() {
+    const inventoryModal = document.getElementById('inventory-modal');
+    const phoneModal = document.getElementById('phone-modal');
+    const contactsEl = document.getElementById('phone-contacts');
+
+    if (inventoryModal) inventoryModal.style.display = 'none';
+    if (phoneModal) phoneModal.style.display = 'block';
+    if (!contactsEl) return;
+
+    contactsEl.innerHTML = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">讀取同房在線玩家中...</div>';
+
+    if (!window.GameLogic.currentUser) {
+        contactsEl.innerHTML = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">請先登入後再使用洋蔥手機</div>';
+        return;
+    }
+
+    const myUid = window.GameLogic.currentUser.uid;
+    const now = Date.now();
+    const contactNames = {};
+
+    const escapeHtml = (val) => String(val ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const safeColor = (val) => {
+        const color = String(val || '#fff').trim();
+        return /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : '#fff';
+    };
+
+    const isFreshOnlinePlayer = (player) => {
+        if (!player || typeof player !== 'object') return false;
+        const lastActive = Number(player.lastActive || 0);
+        if (!lastActive) return false;
+        return now - lastActive <= 60000;
+    };
+
+    try {
+        let players = Object.assign({}, window.GameLogic.onlinePlayers || {});
+
+        // 若 onValue 監聽尚未回填到本機狀態，補讀目前房間的 onlinePlayers。
+        if (Object.keys(players).length === 0) {
+            const snap = await get(ref(window.GameLogic.db, window.getServerRoomPath('onlinePlayers')));
+            players = snap.val() || {};
+            window.GameLogic.onlinePlayers = players;
+        }
+
+        const uids = Object.keys(players)
+            .filter(uid => uid !== myUid && isFreshOnlinePlayer(players[uid]))
+            .sort((a, b) => {
+                const nameA = players[a].name || '匿名';
+                const nameB = players[b].name || '匿名';
+                return nameA.localeCompare(nameB, 'zh-Hant');
+            });
+
+        let html = '';
+
+        uids.forEach(uid => {
+            const p = players[uid] || {};
+            const name = p.name || '匿名';
+            const color = safeColor(p.color);
+            const levelText = (p.level !== undefined && p.level !== null) ? ` (Lv.${escapeHtml(p.level)})` : ' (Lv.?)';
+            const unreadDot = (window.GameLogic.unreadPMs && window.GameLogic.unreadPMs[uid]) ? ' <span style="color:red; font-size:10px;">🔴</span>' : '';
+
+            contactNames[uid] = name;
+
+            html += `<div class="catalog-item phone-contact" style="flex-direction:row; justify-content:space-between; padding: 10px;">
+                <span style="font-weight:bold; color:${color}; text-shadow: 1px 1px 2px #000;">${escapeHtml(name)}${levelText}${unreadDot}</span>
+                <div>
+                    <button class="btn-secondary" style="padding: 4px 12px; font-size:12px; margin-right: 5px; color:#333;" data-phone-action="profile" data-uid="${escapeHtml(uid)}">查看</button>
+                    <button class="btn-primary" style="padding: 4px 12px; font-size:12px;" data-phone-action="pm" data-uid="${escapeHtml(uid)}">私訊</button>
+                </div>
+            </div>`;
+        });
+
+        if (html === '') {
+            html = `<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">目前房間沒有其他在線玩家<br><span style="font-size:11px;">${escapeHtml(window.getCurrentServerRoomName())}</span></div>`;
+        }
+
+        contactsEl.innerHTML = html;
+        window.GameLogic.phoneContactNames = contactNames;
+
+        contactsEl.querySelectorAll('[data-phone-action="profile"]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.viewOtherProfile(btn.dataset.uid);
+            });
+        });
+
+        contactsEl.querySelectorAll('[data-phone-action="pm"]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const uid = btn.dataset.uid;
+                const name = (window.GameLogic.phoneContactNames && window.GameLogic.phoneContactNames[uid]) || '匿名';
+                window.openPM(uid, name);
+            });
+        });
+    } catch (err) {
+        console.warn('[洋蔥手機] 讀取同房在線玩家失敗：', err);
+        contactsEl.innerHTML = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">聯絡人讀取失敗，請稍後再試</div>';
+    }
+};
 window.openPM = function(targetUid, targetName) { 
     document.getElementById('phone-modal').style.display = 'none'; 
     document.getElementById('pm-modal').style.display = 'block'; 
