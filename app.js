@@ -284,6 +284,341 @@ function createSystemUI() {
             .catalog-item { padding: 8px 5px; border: 1px solid var(--mucha-gold); border-radius: 8px; background: #fff; cursor: pointer; font-weight: bold; display: flex; flex-direction: column; align-items: center; transition: all 0.3s; font-size: 13px; }
             .catalog-item:hover { background: rgba(197, 160, 89, 0.2); }
             .catalog-item img { width: 50px; height: 50px; margin-bottom: 5px; object-fit: contain;}
+
+            /* 7-EONION 黑綠黑洞商店＋購買拉條＋給西主題美化＋大廳家具木紋 */
+            #store-modal.store-blackhole-ui,
+            #purchase-modal.purchase-blackhole-ui {
+                background: #020806 !important;
+                border: 2px solid rgba(57, 255, 20, 0.85) !important;
+                box-shadow: 0 0 22px rgba(57, 255, 20, 0.45), inset 0 0 28px rgba(0, 80, 38, 0.85) !important;
+                color: #eaffea;
+                overflow: hidden !important;
+            }
+            #store-modal.store-blackhole-ui::before,
+            #purchase-modal.purchase-blackhole-ui::before {
+                content: "";
+                position: absolute;
+                inset: -45%;
+                background:
+                    radial-gradient(circle at center, rgba(0,0,0,0.9) 0 15%, rgba(0,50,20,0.38) 16% 27%, transparent 28%),
+                    conic-gradient(from 0deg, transparent 0deg, rgba(57,255,20,0.36) 60deg, rgba(0,0,0,0.92) 130deg, rgba(0,180,80,0.24) 220deg, transparent 320deg);
+                animation: store-blackhole-spin 18s linear infinite;
+                opacity: 0.55;
+                pointer-events: none;
+                z-index: 0;
+            }
+            #store-modal.store-blackhole-ui::after,
+            #purchase-modal.purchase-blackhole-ui::after {
+                content: "";
+                position: absolute;
+                inset: 0;
+                background:
+                    radial-gradient(circle at 18% 18%, rgba(120,255,160,0.72) 0 1px, transparent 2px),
+                    radial-gradient(circle at 82% 26%, rgba(57,255,20,0.55) 0 1px, transparent 2px),
+                    radial-gradient(circle at 30% 78%, rgba(180,255,210,0.55) 0 1px, transparent 2px),
+                    radial-gradient(circle at 72% 68%, rgba(57,255,20,0.48) 0 1px, transparent 2px);
+                animation: store-blackhole-pulse 3.8s ease-in-out infinite alternate;
+                pointer-events: none;
+                z-index: 0;
+            }
+            @keyframes store-blackhole-spin { 100% { transform: rotate(360deg); } }
+            @keyframes store-blackhole-pulse { 0% { opacity: 0.28; filter: blur(0); } 100% { opacity: 0.75; filter: blur(0.6px); } }
+            .store-blackhole-layer,
+            .purchase-blackhole-layer { position: relative; z-index: 1; }
+            .store-blackhole-hero {
+                background: linear-gradient(180deg, #000 0%, #031b0d 100%) !important;
+                text-align: center;
+                position: relative;
+                border-bottom: 2px solid rgba(57,255,20,0.78) !important;
+                padding-top: 45px;
+                overflow: hidden;
+            }
+            .store-blackhole-hero img { filter: drop-shadow(0 0 12px rgba(57,255,20,0.35)); }
+            #store-manager-bubble.store-blackhole-bubble {
+                background: rgba(1, 24, 12, 0.92) !important;
+                color: #d8ffdc !important;
+                border: 2px solid rgba(57,255,20,0.82) !important;
+                box-shadow: 0 0 12px rgba(57,255,20,0.45) !important;
+                text-shadow: 0 0 5px rgba(57,255,20,0.8);
+            }
+            .store-blackhole-coins {
+                background: rgba(0,0,0,0.72);
+                border: 1px solid rgba(57,255,20,0.62);
+                border-radius: 12px;
+                color: #d8ff65 !important;
+                text-shadow: 0 0 8px #39ff14, 0 0 12px #000 !important;
+            }
+            .store-blackhole-tag {
+                position:absolute;
+                bottom:5px;
+                right:5px;
+                background:rgba(0,0,0,0.82);
+                color:#9dffb0;
+                padding:4px 8px;
+                border-radius:4px;
+                font-size:12px;
+                border:1px solid rgba(57,255,20,0.72);
+                font-weight:bold;
+                z-index:2;
+                box-shadow: 0 0 8px rgba(57,255,20,0.35);
+            }
+            .store-blackhole-body { padding:15px; max-height:55vh; overflow-y:auto; position:relative; z-index:1; }
+            .store-blackhole-title,
+            .purchase-blackhole-ui h3 {
+                color: #caffca !important;
+                border-bottom: 1px solid rgba(57,255,20,0.62) !important;
+                text-shadow: 0 0 8px rgba(57,255,20,0.85);
+            }
+            .store-blackhole-list .catalog-item {
+                background: linear-gradient(180deg, rgba(7, 64, 35, 0.94), rgba(2, 32, 18, 0.96)) !important;
+                color: #f0fff0 !important;
+                border: 1px solid rgba(57,255,20,0.58) !important;
+                box-shadow: inset 0 0 12px rgba(57,255,20,0.16), 0 5px 14px rgba(0,0,0,0.38);
+                position: relative;
+                overflow: hidden;
+            }
+            .store-blackhole-list .catalog-item::after {
+                content:"";
+                position:absolute;
+                inset:0;
+                background: linear-gradient(120deg, transparent 0 38%, rgba(180,255,200,0.14) 45%, transparent 54%);
+                transform: translateX(-120%);
+                animation: store-blackhole-card-sheen 4.8s ease-in-out infinite;
+                pointer-events:none;
+            }
+            @keyframes store-blackhole-card-sheen { 0%, 65% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+            .store-blackhole-list .catalog-item span:last-child { color:#d8ff65 !important; text-shadow:0 0 6px rgba(57,255,20,0.75); }
+            .store-blackhole-list .catalog-item:hover { transform: translateY(-2px); box-shadow: 0 0 16px rgba(57,255,20,0.42); }
+
+            .purchase-blackhole-desc {
+                font-size:12px;
+                color:#d8ffdc;
+                background:rgba(0, 22, 11, 0.78);
+                padding:9px;
+                border-radius:8px;
+                border:1px dashed rgba(57,255,20,0.62);
+                margin-bottom:12px;
+                text-align:left;
+                line-height:1.45;
+                white-space:pre-line;
+                box-shadow: inset 0 0 12px rgba(57,255,20,0.12);
+            }
+            .purchase-blackhole-slider-wrap { margin: 14px 0 10px 0; color:#d8ffdc; }
+            .purchase-blackhole-row { display:flex; justify-content:space-between; align-items:center; font-size:13px; margin-bottom:6px; }
+            #purchase-qty { color:#d8ff65 !important; text-shadow:0 0 8px rgba(57,255,20,0.85); }
+            #purchase-slider { width:100%; accent-color:#39ff14; touch-action:pan-x; }
+            #purchase-slider::-webkit-slider-runnable-track {
+                height: 8px;
+                border-radius:999px;
+                background:linear-gradient(90deg,#062812,#39ff14);
+                box-shadow:0 0 8px rgba(57,255,20,0.65);
+            }
+            #purchase-slider::-webkit-slider-thumb {
+                -webkit-appearance:none;
+                appearance:none;
+                width:24px;
+                height:24px;
+                border-radius:50%;
+                margin-top:-8px;
+                background:#eaffea;
+                border:2px solid #39ff14;
+                box-shadow:0 0 12px #39ff14;
+            }
+            #purchase-slider::-moz-range-track {
+                height:8px;
+                border-radius:999px;
+                background:linear-gradient(90deg,#062812,#39ff14);
+                box-shadow:0 0 8px rgba(57,255,20,0.65);
+            }
+            #purchase-slider::-moz-range-thumb {
+                width:22px;
+                height:22px;
+                border-radius:50%;
+                background:#eaffea;
+                border:2px solid #39ff14;
+                box-shadow:0 0 12px #39ff14;
+            }
+            .purchase-total-box {
+                display:inline-flex;
+                align-items:center;
+                gap:5px;
+                padding:7px 10px;
+                border-radius:10px;
+                border:1px solid rgba(57,255,20,0.7);
+                background:rgba(0,0,0,0.55);
+                color:#d8ffdc;
+                box-shadow:0 0 10px rgba(57,255,20,0.25);
+            }
+            .purchase-total-value {
+                display:inline-block;
+                color:#d8ff65 !important;
+                font-size:20px;
+                font-weight:bold;
+                text-shadow:0 0 8px #39ff14, 0 0 12px #000;
+                animation: purchase-total-jitter var(--purchase-shake-speed, 0.6s) infinite steps(2, end);
+            }
+            @keyframes purchase-total-jitter {
+                0% { transform: translate(0,0) rotate(0deg); }
+                25% { transform: translate(var(--purchase-shake, 1px), calc(var(--purchase-shake, 1px) * -1)) rotate(0.3deg); }
+                50% { transform: translate(calc(var(--purchase-shake, 1px) * -1), var(--purchase-shake, 1px)) rotate(-0.3deg); }
+                75% { transform: translate(var(--purchase-shake, 1px), var(--purchase-shake, 1px)) rotate(0.2deg); }
+                100% { transform: translate(0,0) rotate(0deg); }
+            }
+
+            .id-metal-card,
+            #medal-list-modal,
+            #medal-detail-modal {
+                width: 90% !important;
+                max-width: 400px !important;
+                background: linear-gradient(135deg, #f7f7f7 0%, #aeb4ba 28%, #ffffff 45%, #8d969e 70%, #dfe3e6 100%) !important;
+                border: 2px solid rgba(255,255,255,0.9) !important;
+                box-shadow: 0 12px 26px rgba(0,0,0,0.55), inset 0 0 18px rgba(255,255,255,0.72) !important;
+                color: #25313a !important;
+                overflow: hidden !important;
+            }
+            .id-metal-card::before,
+            #medal-list-modal::before,
+            #medal-detail-modal::before {
+                content:"";
+                position:absolute;
+                inset:-35% -60%;
+                background: linear-gradient(45deg, transparent 35%, rgba(255,255,255,0.78) 44%, transparent 52%, transparent 58%, rgba(255,255,255,0.55) 64%, transparent 70%);
+                animation: id-metal-sheen 4.8s ease-in-out infinite;
+                pointer-events:none;
+                z-index:0;
+            }
+            .id-metal-card::after,
+            #medal-list-modal::after,
+            #medal-detail-modal::after {
+                content:"";
+                position:absolute;
+                inset:0;
+                background:
+                    radial-gradient(circle at 15% 78%, rgba(255,255,255,0.95) 0 1px, transparent 2px),
+                    radial-gradient(circle at 83% 20%, rgba(255,255,255,0.7) 0 1px, transparent 2px),
+                    radial-gradient(circle at 76% 86%, rgba(255,255,255,0.55) 0 1px, transparent 2px);
+                animation: id-metal-sparkle 3.6s ease-in-out infinite alternate;
+                pointer-events:none;
+                z-index:0;
+            }
+            @keyframes id-metal-sheen {
+                0%, 52% { transform: translateX(-45%); opacity:0; }
+                63% { opacity:1; }
+                100% { transform: translateX(45%); opacity:0; }
+            }
+            @keyframes id-metal-sparkle { 0% { opacity:0.24; } 100% { opacity:0.82; } }
+            .id-metal-card > *,
+            #medal-list-modal > *,
+            #medal-detail-modal > * { position:relative; z-index:1; }
+            .id-metal-card h3,
+            #medal-list-modal h3,
+            #medal-detail-modal h3 {
+                color:#263238 !important;
+                border-bottom:1px solid rgba(60,70,80,0.35) !important;
+                text-shadow:0 1px 0 rgba(255,255,255,0.9);
+            }
+            .id-metal-card .stats-container,
+            #medal-list-modal .medal-item {
+                background:rgba(255,255,255,0.55) !important;
+                border:1px solid rgba(120,130,140,0.45) !important;
+                box-shadow: inset 0 0 10px rgba(255,255,255,0.45);
+            }
+            .id-metal-card .profile-line { border-bottom:1px dashed rgba(70,80,90,0.45); }
+            .id-metal-card input {
+                background:rgba(255,255,255,0.82) !important;
+                color:#263238 !important;
+                border-color:#7d8790 !important;
+            }
+
+            #phone-modal.phone-pink-ui {
+                background: linear-gradient(180deg, #ff86bd 0%, #ffc1dc 100%) !important;
+                border: 4px solid #ffffff !important;
+                box-shadow: inset 0 0 25px rgba(255,255,255,0.55), 0 10px 24px rgba(184,39,116,0.45) !important;
+                overflow:hidden !important;
+            }
+            #phone-modal.phone-pink-ui::before {
+                content:"😍   🤩      🥰   🤣      😤   🥹      🤬   💋      🤡";
+                position:absolute;
+                inset:12px;
+                color:rgba(255,255,255,0.32);
+                font-size:24px;
+                line-height:2.4;
+                word-spacing:12px;
+                animation: phone-pink-emoji-bounce 5s ease-in-out infinite;
+                pointer-events:none;
+                z-index:0;
+            }
+            @keyframes phone-pink-emoji-bounce {
+                0%,100% { transform: translateY(0); }
+                50% { transform: translateY(-10px); }
+            }
+            #phone-modal.phone-pink-ui > * { position:relative; z-index:1; }
+            #phone-modal.phone-pink-ui h3 {
+                color:#fff !important;
+                font-weight:900 !important;
+                border-bottom:2px solid rgba(255,255,255,0.75) !important;
+                text-shadow:0 2px 4px rgba(158,20,90,0.65);
+            }
+            #phone-modal.phone-pink-ui .phone-contact {
+                background:rgba(255,255,255,0.88) !important;
+                color:#4a1230 !important;
+                border:2px solid rgba(255,255,255,0.95) !important;
+                box-shadow:0 4px 10px rgba(184,39,116,0.25) !important;
+                animation:none !important;
+            }
+            #phone-modal.phone-pink-ui .phone-contact-sub { color:#7d3657 !important; }
+            #phone-modal.phone-pink-ui .phone-contact-title { text-shadow:none !important; }
+
+            .furniture-wood-ui {
+                background: linear-gradient(180deg, #7a4a24 0%, #4d2b13 100%) !important;
+                border: 3px solid #d8a45f !important;
+                box-shadow: 0 10px 24px rgba(0,0,0,0.55), inset 0 0 28px rgba(68,32,10,0.9) !important;
+                color:#fff2da;
+                overflow:hidden !important;
+            }
+            .furniture-wood-ui::before {
+                content:"";
+                position:absolute;
+                inset:0;
+                background:
+                    repeating-linear-gradient(12deg, rgba(255,230,180,0.08) 0 5px, transparent 6px 18px),
+                    linear-gradient(90deg, rgba(70,35,12,0.36), transparent, rgba(30,14,6,0.32));
+                pointer-events:none;
+                z-index:0;
+            }
+            .furniture-wood-ui::after {
+                content:"";
+                position:absolute;
+                inset:0;
+                background:
+                    radial-gradient(circle at 18% 20%, rgba(140,255,220,0.78) 0 2px, transparent 3px),
+                    radial-gradient(circle at 78% 34%, rgba(160,220,255,0.7) 0 2px, transparent 3px),
+                    radial-gradient(circle at 55% 82%, rgba(165,255,185,0.65) 0 2px, transparent 3px);
+                animation: furniture-wood-fairy 7s ease-in-out infinite alternate;
+                pointer-events:none;
+                z-index:0;
+            }
+            @keyframes furniture-wood-fairy {
+                0% { transform: translate(0,0); opacity:0.35; }
+                100% { transform: translate(10px,-14px); opacity:0.8; }
+            }
+            .furniture-wood-ui > * { position:relative; z-index:1; }
+            .furniture-wood-ui h3 {
+                color:#fff2da !important;
+                border-bottom:1px solid rgba(255,226,170,0.65) !important;
+                text-shadow:0 2px 3px rgba(0,0,0,0.7);
+            }
+            .furniture-wood-ui .catalog-item {
+                background: linear-gradient(180deg, #a66a34, #6c3c19) !important;
+                border: 2px solid #e0b16f !important;
+                color:#fff7e8 !important;
+                box-shadow: inset 0 0 10px rgba(70,30,8,0.55), 0 4px 10px rgba(0,0,0,0.28);
+                text-shadow:0 1px 2px rgba(0,0,0,0.65);
+            }
+            .furniture-wood-ui .catalog-item:hover {
+                transform: translateY(-2px);
+                box-shadow:0 0 14px rgba(160,255,220,0.38), inset 0 0 10px rgba(70,30,8,0.55);
+            }
             #chat-section { display: flex; position: absolute; top: 60px; left: 10px; width: 190px; flex-direction: column; z-index: 100; pointer-events: none; }
             #chat-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 8px 8px 0 0; padding: 5px 12px; width: fit-content; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 -2px 5px rgba(0,0,0,0.2);}
             #chat-content { pointer-events: auto; transition: max-height 0.3s ease-in-out; overflow: hidden; display: flex; flex-direction: column; background: rgba(0, 0, 0, 0.6); border-radius: 0 8px 8px 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
@@ -453,7 +788,7 @@ function createSystemUI() {
             <button id="join-btn">推開洋蔥世界之門</button>
         </div>
 
-        <div id="view-profile-modal" class="modal" style="z-index: 270;">
+        <div id="view-profile-modal" class="modal id-metal-card" style="z-index: 270;">
             <h3 id="vp-title">洋蔥身分證</h3>
             <div class="stats-container"><div>等級 <strong id="vp-level" style="color:var(--mucha-green);">1</strong> (EXP: <span id="vp-exp">0</span>)</div><div>💰 <strong id="vp-coins" style="color:#d4af37;">0</strong> 馬德幣</div></div>
             <div class="profile-line"><span>🧹 掃皮王:</span> <strong id="vp-sweeps">0</strong> 次</div>
@@ -613,7 +948,7 @@ function createSystemUI() {
         </div>
 
         <div id="inventory-modal" class="modal"><div id="inventory-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--mucha-gold); padding-bottom: 5px; margin-bottom: 15px;"><h3 style="margin:0; border:none; color: var(--mucha-brown);">🎒 我的給西</h3><button id="inventory-edit-btn" class="btn-edit" onclick="window.toggleInventoryEdit()" style="padding:4px 8px; font-size:12px;">編輯排序</button></div><div id="inventory-list" class="catalog-grid" style="max-height: 50vh; overflow-y: auto; padding-right: 5px;"></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('inventory-modal').style.display='none'">關閉</button></div>
-        <div id="phone-modal" class="modal">
+        <div id="phone-modal" class="modal phone-pink-ui">
     <h3 style="color: var(--mucha-green);">📱 洋蔥手機</h3>
     <p style="font-size: 12px; color: #fff; text-shadow:1px 1px 2px #000; margin-top: 0;">點擊聯絡人發送私訊</p>
     <div id="phone-contacts"></div>
@@ -621,24 +956,50 @@ function createSystemUI() {
 </div>
         <div id="pm-modal" class="modal" style="z-index: 260;"><h3 id="pm-title" style="color: var(--mucha-green);">私訊</h3><div id="pm-chat-box"></div><div style="display:flex; gap: 5px;"><input type="text" id="pm-input" style="flex-grow:1; padding:5px; border: 1px solid var(--mucha-gold); border-radius: 4px;" placeholder="輸入訊息..."><button class="btn-primary" onclick="window.sendPM()">發送</button></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="window.closePM()">返回聯絡人</button></div>
         
-        <div id="store-modal" class="modal" style="padding:0; overflow:hidden; z-index: 250;">
-            <div style="background:#2a1b12; text-align:center; position:relative; border-bottom: 2px solid var(--mucha-gold); padding-top: 45px;"><div id="store-manager-bubble" style="position:absolute; top:8px; left:50%; transform:translateX(-50%); background:rgba(244, 236, 216, 0.95); color:#3e2723; padding:8px 12px; border-radius:8px; font-size:14px; border:2px solid var(--mucha-gold); font-weight:bold; white-space:nowrap; z-index:2; box-shadow: 0 2px 5px rgba(0,0,0,0.5);">這顆臭洋蔥打什麼主意啊</div><img src="store-manager-talking.png" style="width:100%; display:block;" alt="老闆"><div id="store-current-coins" class="shake-gold-text" style="position:absolute; bottom:5px; right:85px; color:#ffcc00; text-shadow:0 0 5px #ffaa00; padding:4px 8px; font-size:14px; font-weight:bold; z-index:2;">💰 0</div><div style="position:absolute; bottom:5px; right:5px; background:rgba(0,0,0,0.8); color:var(--mucha-gold); padding:4px 8px; border-radius:4px; font-size:12px; border:1px solid var(--mucha-gold); font-weight:bold; z-index:2;">德骨拉完叻</div></div>
-            <div style="padding:15px; max-height: 55vh; overflow-y: auto;">
-                <h3 style="margin-top:0; border:none; color:var(--mucha-brown);">🏪 7-EONION 便利商店</h3>
-                <div id="store-list" class="catalog-grid">
-                    <div class="catalog-item" onclick="window.openPurchaseModal('水球', 20)"><div class="sprite-waterball"></div><span style="margin-top:5px;">水球</span><span style="color:#d4af37; font-size:12px; font-weight:bold;">20 馬德幣</span></div>
-                    <div class="catalog-item" onclick="window.openPurchaseModal('煙火', 100)"><img src="shop-fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin-top:5px;">煙火</span><span style="color:#d4af37; font-size:12px; font-weight:bold;">100 馬德幣</span></div>
-                    <div class="catalog-item" onclick="window.openPurchaseModal('蔥友機', 20)"><img src="playroom-onion-friend-plane.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin-top:5px;">蔥友機</span><span style="color:#d4af37; font-size:12px; font-weight:bold;">20 馬德幣</span></div>
-                    <div class="catalog-item" onclick="window.openPurchaseModal('派對喇叭', 150)"><img src="tools-onion-party-trumpet.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin-top:5px;">派對喇叭</span><span style="color:#d4af37; font-size:12px; font-weight:bold;">150 馬德幣</span></div>
-                    <div class="catalog-item" onclick="window.openPurchaseModal('喵罐頭', 5000)">
-                  <img src="shop-pet-cat-can.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">
-                <span style="margin-top:5px;">喵罐頭</span>
-                <span style="color:#d4af37; font-size:12px; font-weight:bold;">5000 馬德幣</span>
+        <div id="store-modal" class="modal store-blackhole-ui" style="padding:0; overflow:hidden; z-index: 250;">
+            <div class="store-blackhole-hero store-blackhole-layer">
+                <div id="store-manager-bubble" class="store-blackhole-bubble" style="position:absolute; top:8px; left:50%; transform:translateX(-50%); padding:8px 12px; border-radius:8px; font-size:14px; font-weight:bold; white-space:nowrap; z-index:2;">這顆臭洋蔥打什麼主意啊</div>
+                <img src="store-manager-talking.png" style="width:100%; display:block; position:relative; z-index:1;" alt="老闆">
+                <div id="store-current-coins" class="shake-gold-text store-blackhole-coins" style="position:absolute; bottom:5px; right:85px; padding:4px 8px; font-size:14px; font-weight:bold; z-index:2;">💰 0</div>
+                <div class="store-blackhole-tag">德骨拉完叻</div>
             </div>
-                </div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('store-modal').style.display='none'; window.GameLogic.isShopping = false;">離開商店</button>
+            <div class="store-blackhole-body">
+                <h3 class="store-blackhole-title" style="margin-top:0;">🏪 7-EONION 便利商店</h3>
+                <div id="store-list" class="catalog-grid store-blackhole-list">
+                    <div class="catalog-item" onclick="window.openPurchaseModal('水球', 20)"><div class="sprite-waterball"></div><span style="margin-top:5px;">水球</span><span style="font-size:12px; font-weight:bold;">20 馬德幣</span></div>
+                    <div class="catalog-item" onclick="window.openPurchaseModal('煙火', 100)"><img src="shop-fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin-top:5px;">煙火</span><span style="font-size:12px; font-weight:bold;">100 馬德幣</span></div>
+                    <div class="catalog-item" onclick="window.openPurchaseModal('蔥友機', 20)"><img src="playroom-onion-friend-plane.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin-top:5px;">蔥友機</span><span style="font-size:12px; font-weight:bold;">20 馬德幣</span></div>
+                    <div class="catalog-item" onclick="window.openPurchaseModal('派對喇叭', 150)"><img src="tools-onion-party-trumpet.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin-top:5px;">派對喇叭</span><span style="font-size:12px; font-weight:bold;">150 馬德幣</span></div>
+                    <div class="catalog-item" onclick="window.openPurchaseModal('喵罐頭', 5000)">
+                        <img src="shop-pet-cat-can.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">
+                        <span style="margin-top:5px;">喵罐頭</span>
+                        <span style="font-size:12px; font-weight:bold;">5000 馬德幣</span>
+                    </div>
+                </div>
+                <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('store-modal').style.display='none'; window.GameLogic.isShopping = false;">離開商店</button>
             </div>
         </div>
-        <div id="purchase-modal" class="modal" style="z-index: 260;"><h3 id="purchase-title" style="color:var(--mucha-green);">購買</h3><div id="purchase-desc" style="font-size:12px; color:var(--mucha-brown); background:rgba(255,255,255,0.8); padding:8px; border-radius:4px; border:1px dashed var(--mucha-gold); margin-bottom:10px; text-align:left; line-height:1.4;"></div><div style="display:flex; justify-content:center; align-items:center; gap:20px; margin: 15px 0;"><button class="btn-secondary" style="font-size:18px; padding:5px 15px;" onclick="window.adjustPurchaseQty(-1)">-</button><span id="purchase-qty" style="font-size:24px; font-weight:bold; color:var(--mucha-brown);">1</span><button class="btn-secondary" style="font-size:18px; padding:5px 15px;" onclick="window.adjustPurchaseQty(1)">+</button></div><div style="margin-bottom:15px; font-size:16px;">總計: <strong id="purchase-total" style="color:#d4af37; font-size:18px;">20</strong> 馬德幣</div><div class="modal-btns"><button class="btn-primary" onclick="window.confirmPurchase()">結帳</button><button class="btn-secondary" onclick="document.getElementById('purchase-modal').style.display='none'">取消</button></div></div>
+        <div id="purchase-modal" class="modal purchase-blackhole-ui" style="z-index: 260;">
+            <div class="purchase-blackhole-layer">
+                <h3 id="purchase-title">購買</h3>
+                <div id="purchase-desc" class="purchase-blackhole-desc"></div>
+                <div class="purchase-blackhole-slider-wrap">
+                    <div class="purchase-blackhole-row">
+                        <span>購買數量</span>
+                        <strong id="purchase-qty">1</strong>
+                    </div>
+                    <input id="purchase-slider" type="range" min="1" max="1" value="1" oninput="window.updatePurchaseSlider(this.value)">
+                    <div id="purchase-max-hint" style="margin-top:6px; font-size:12px; color:#9dffb0; text-align:right;">最多可買 1 個</div>
+                </div>
+                <div style="margin-bottom:15px; font-size:16px;">
+                    <span class="purchase-total-box">總計：<strong id="purchase-total" class="purchase-total-value">20</strong> 馬德幣</span>
+                </div>
+                <div class="modal-btns">
+                    <button class="btn-primary" onclick="window.confirmPurchase()">結帳</button>
+                    <button class="btn-secondary" onclick="document.getElementById('purchase-modal').style.display='none'">取消</button>
+                </div>
+            </div>
+        </div>
 
         <div id="leaderboard-modal" class="modal" style="z-index: 260; width: 90%; max-width: 350px;">
             <h3 style="color:var(--mucha-green); margin-top:0;">🏆 洋蔥王排行榜</h3>
@@ -2735,6 +3096,7 @@ window.openPurchaseModal = function(name, price) {
     window.currentPurchaseItem = name;
     window.currentPurchasePrice = price;
     window.currentPurchaseQty = 1;
+    window.currentPurchaseMaxQty = Math.max(1, maxQty);
 
     document.getElementById('purchase-title').innerText = `購買 ${name}`;
 
@@ -2752,11 +3114,49 @@ window.openPurchaseModal = function(name, price) {
     }
 
     document.getElementById('purchase-desc').innerText = desc;
-    document.getElementById('purchase-qty').innerText = window.currentPurchaseQty;
-    document.getElementById('purchase-total').innerText = window.currentPurchasePrice;
+
+    const slider = document.getElementById('purchase-slider');
+    if (slider) {
+        slider.min = 1;
+        slider.max = window.currentPurchaseMaxQty;
+        slider.value = 1;
+    }
+
+    const maxHint = document.getElementById('purchase-max-hint');
+    if (maxHint) maxHint.innerText = `依目前馬德幣最多可買 ${window.currentPurchaseMaxQty} 個`;
+
+    window.updatePurchaseSlider(1);
     document.getElementById('purchase-modal').style.display = 'block';
 };
-window.adjustPurchaseQty = function(delta) { let maxQty = Math.floor((window.GameLogic.myProfile.coins || 0) / window.currentPurchasePrice); let newQty = window.currentPurchaseQty + delta; if (newQty >= 1 && newQty <= maxQty) { window.currentPurchaseQty = newQty; document.getElementById('purchase-qty').innerText = window.currentPurchaseQty; document.getElementById('purchase-total').innerText = window.currentPurchaseQty * window.currentPurchasePrice; } };
+
+window.updatePurchaseSlider = function(value) {
+    const maxQty = Math.max(1, Number(window.currentPurchaseMaxQty || Math.floor((window.GameLogic.myProfile.coins || 0) / window.currentPurchasePrice) || 1));
+    const qty = Math.min(maxQty, Math.max(1, Math.floor(Number(value) || 1)));
+
+    window.currentPurchaseQty = qty;
+
+    const slider = document.getElementById('purchase-slider');
+    if (slider && Number(slider.value) !== qty) slider.value = qty;
+
+    const qtyEl = document.getElementById('purchase-qty');
+    if (qtyEl) qtyEl.innerText = qty;
+
+    const total = qty * window.currentPurchasePrice;
+    const totalEl = document.getElementById('purchase-total');
+    if (totalEl) {
+        totalEl.innerText = total;
+        const ratio = maxQty <= 1 ? 0 : (qty - 1) / (maxQty - 1);
+        const shakePx = Math.min(4, 0.4 + ratio * 3.6);
+        const speed = Math.max(0.18, 0.62 - ratio * 0.36);
+        totalEl.style.setProperty('--purchase-shake', `${shakePx.toFixed(1)}px`);
+        totalEl.style.setProperty('--purchase-shake-speed', `${speed.toFixed(2)}s`);
+    }
+};
+
+window.adjustPurchaseQty = function(delta) {
+    window.updatePurchaseSlider((window.currentPurchaseQty || 1) + Number(delta || 0));
+};
+
 window.confirmPurchase = function() { let cost = window.currentPurchaseQty * window.currentPurchasePrice; if ((window.GameLogic.myProfile.coins || 0) >= cost) { window.GameLogic.myProfile.coins -= cost; window.GameLogic.myProfile.inventory = window.GameLogic.myProfile.inventory || {}; window.GameLogic.myProfile.inventory[window.currentPurchaseItem] = (window.GameLogic.myProfile.inventory[window.currentPurchaseItem] || 0) + window.currentPurchaseQty; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: window.GameLogic.myProfile.coins, inventory: window.GameLogic.myProfile.inventory }).catch(err => console.warn('Firebase 購買道具扣款失敗:', err)); document.getElementById('purchase-modal').style.display = 'none'; if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if (scene) { window.playSFX(scene, 'shop-boss-thank-you'); window.playSFX(scene, 'shop-check-buying'); } } let msgEl = document.getElementById('purchase-success-msg'); msgEl.style.display = 'block'; msgEl.classList.remove('flash-text'); void msgEl.offsetWidth; msgEl.classList.add('flash-text'); setTimeout(() => { msgEl.style.display = 'none'; }, 2000); let smBubble = document.getElementById('store-manager-bubble'); if (smBubble) { smBubble.innerText = "懂買的都是好蔥！"; setTimeout(() => { smBubble.innerText = "這顆臭洋蔥打什麼主意啊"; }, 3000); } let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins; let storeCoinsEl = document.getElementById("store-current-coins"); if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins}`; } };
 
 const loginScreen = document.getElementById("login-screen"); const gameLayoutContainer = document.getElementById("game-layout-container"); const chatSection = document.getElementById("chat-section"); const actionMenu = document.getElementById("action-menu"); const viewProfileModal = document.getElementById("view-profile-modal"); const chatInput = document.getElementById("chat-input");
@@ -17593,7 +17993,9 @@ if (dist < 30) {
 function initPhaser() { const config = { type: Phaser.AUTO, parent: 'phaser-app', width: '100%', height: '100%', backgroundColor: '#1a1008', scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH }, input: { activePointers: 3 }, physics: { default: 'arcade', arcade: { debug: false } }, scene: [ BootScene, MainScene, UIScene ] }; window.GameLogic.phaserGame = new Phaser.Game(config); }
 
 function openFurnitureCatalog() {
-    const modal = document.getElementById('furniture-catalog-modal'); const list = document.getElementById('catalog-list'); const title = document.getElementById('catalog-title'); list.innerHTML = "";
+    const modal = document.getElementById('furniture-catalog-modal'); const list = document.getElementById('catalog-list'); const title = document.getElementById('catalog-title');
+    if (modal) modal.classList.toggle('furniture-wood-ui', window.GameLogic.currentScene === "cafe");
+    list.innerHTML = "";
     let items = [];
     if (window.GameLogic.currentScene === "cafe") { 
         title.innerText = "📦 大廳家俱目錄"; 
