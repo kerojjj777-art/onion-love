@@ -771,6 +771,10 @@ function createSystemUI() {
                     <span>💬 搬移舊大廳對話到五告派</span>
                     <small style="margin-top:6px; color:#0077aa; font-size:11px;">只搬公開 chats，不搬私訊</small>
                 </div>
+                                <div class="catalog-item" onclick="window.devMigrateLegacyPrivateChatsToOnionGang()" style="flex-direction:column; justify-content:center; padding: 15px; font-weight:bold; background:rgba(138, 43, 226, 0.12); border-color:#8a2be2; width:100%; box-sizing:border-box;">
+                    <span>🔐 搬移舊私訊到五告派</span>
+                    <small style="margin-top:6px; color:#6a1b9a; font-size:11px;">只搬 privateChats，不寫入良之友天地</small>
+                </div>
             </div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('dev-modal').style.display='none'; document.getElementById('inventory-modal').style.display='block';">返回背包</button>
         </div>
@@ -1922,6 +1926,174 @@ window.devMigrateLegacyChatsToOnionGang = async function() {
 };
 // ====== 臨時一次性工具：舊全域 chats 遷移到洋蔥五告派結束 ======
 
+// ====== 臨時一次性工具：舊全域 privateChats 遷移到洋蔥五告派 ======
+// 注意：這只搬私訊內容 privateChats，不刪除舊資料，不寫入 ryoFriends。
+// 遷移成功並完成測試後，請移除此整段與 dev-modal 按鈕，避免正式版誤按。
+window.devMigrateLegacyPrivateChatsToOnionGang = async function() {
+    if (!window.GameLogic || !window.GameLogic.currentUser) {
+        alert("請先登入管理員帳號。");
+        return false;
+    }
+
+    const user = window.GameLogic.currentUser;
+    const email = (user.email || "").toLowerCase();
+
+    const isAdmin = (
+        (typeof window.isLegacyRoomMigrationAdmin === "function" && window.isLegacyRoomMigrationAdmin()) ||
+        email === "onion@gmail.com" ||
+        user.uid === "GkVVzRWAlzenkAUan95q7QfznVb2"
+    );
+
+    if (!isAdmin) {
+        alert("只有管理員可以執行舊私訊遷移。");
+        console.warn("[舊私訊遷移] 非管理員嘗試執行：", user.email, user.uid);
+        return false;
+    }
+
+    const firstConfirm = confirm(
+        "這是一次性舊私訊遷移工具。\n\n" +
+        "將只複製：\n" +
+        "privateChats → serverRooms/onionGang/privateChats\n\n" +
+        "不會刪除舊 privateChats。\n" +
+        "不會搬 users 內的個人資料、背包、金幣、manuals。\n" +
+        "不會寫入 ryoFriends。\n\n" +
+        "如果 onionGang/privateChats 已有資料，會保留現有資料，只補上尚未存在的舊私訊訊息 key。\n\n" +
+        "確定要開始檢查並準備遷移嗎？"
+    );
+
+    if (!firstConfirm) return false;
+
+    const sourcePath = "privateChats";
+    const targetPath = "serverRooms/onionGang/privateChats";
+
+    try {
+        const [legacySnap, targetSnap] = await Promise.all([
+            get(ref(window.GameLogic.db, sourcePath)),
+            get(ref(window.GameLogic.db, targetPath))
+        ]);
+
+        const legacyPrivateChats = legacySnap.val();
+        const targetPrivateChats = targetSnap.val() || {};
+
+        if (!legacyPrivateChats || typeof legacyPrivateChats !== "object" || Object.keys(legacyPrivateChats).length === 0) {
+            alert("舊全域 privateChats 沒有可遷移的資料。");
+            console.warn("[舊私訊遷移] 舊全域 privateChats 為空。");
+            return false;
+        }
+
+        const chatIds = Object.keys(legacyPrivateChats);
+        const targetHasData = targetPrivateChats && typeof targetPrivateChats === "object" && Object.keys(targetPrivateChats).length > 0;
+
+        if (targetHasData) {
+            const proceed = confirm(
+                "偵測到 serverRooms/onionGang/privateChats 已經有資料。\n\n" +
+                "本工具會採用安全補寫模式：\n" +
+                "1. 只寫入 onionGang 尚未存在的舊私訊訊息 key。\n" +
+                "2. 已存在的同名訊息 key 會略過，不覆蓋。\n" +
+                "3. onionGang 目前的新私訊會保留。\n\n" +
+                "是否繼續？"
+            );
+
+            if (!proceed) {
+                alert("已停止遷移；沒有寫入任何資料。");
+                return false;
+            }
+        }
+
+        const updates = {};
+        let messageCount = 0;
+        let chatRoomCount = 0;
+        let skippedExisting = 0;
+        let skippedInvalid = 0;
+
+        chatIds.forEach(chatId => {
+            const legacyMessages = legacyPrivateChats[chatId];
+
+            if (!legacyMessages || typeof legacyMessages !== "object") {
+                skippedInvalid++;
+                return;
+            }
+
+            const messageKeys = Object.keys(legacyMessages);
+            if (messageKeys.length === 0) {
+                skippedInvalid++;
+                return;
+            }
+
+            let thisChatHasWrite = false;
+
+            messageKeys.forEach(messageKey => {
+                const targetHasSameMessage = (
+                    targetPrivateChats &&
+                    targetPrivateChats[chatId] &&
+                    typeof targetPrivateChats[chatId] === "object" &&
+                    Object.prototype.hasOwnProperty.call(targetPrivateChats[chatId], messageKey)
+                );
+
+                if (targetHasSameMessage) {
+                    skippedExisting++;
+                    return;
+                }
+
+                updates[`${targetPath}/${chatId}/${messageKey}`] = legacyMessages[messageKey];
+                messageCount++;
+                thisChatHasWrite = true;
+            });
+
+            if (thisChatHasWrite) chatRoomCount++;
+        });
+
+        const writeCount = Object.keys(updates).length;
+
+        if (writeCount === 0) {
+            alert(
+                "沒有需要補寫的舊私訊。\n\n" +
+                `舊 privateChats 對話串數：約 ${chatIds.length}\n` +
+                `同名訊息已存在而略過：${skippedExisting}\n` +
+                `格式異常而略過：${skippedInvalid}\n\n` +
+                "可能先前已經搬過，或 onionGang/privateChats 已經有相同資料。"
+            );
+            console.warn("[舊私訊遷移] 沒有可寫入資料。", { chatIds, skippedExisting, skippedInvalid });
+            return false;
+        }
+
+        await update(ref(window.GameLogic.db), updates);
+
+        alert(
+            "舊私訊遷移完成！\n\n" +
+            `舊 privateChats 對話串數：約 ${chatIds.length}\n` +
+            `本次補寫對話串數：約 ${chatRoomCount}\n` +
+            `本次補寫訊息數：約 ${messageCount}\n` +
+            `同名訊息已存在而略過：${skippedExisting}\n` +
+            `格式異常而略過：${skippedInvalid}\n\n` +
+            "舊全域 privateChats 沒有被刪除。\n" +
+            "ryoFriends 沒有被寫入。\n\n" +
+            "接著請確認 openPM / sendPM 已改為房間路徑，否則畫面仍會讀舊全域 privateChats。"
+        );
+
+        console.log("[舊私訊遷移] 完成。", {
+            sourcePath,
+            targetPath,
+            legacyChatRoomCount: chatIds.length,
+            chatRoomCount,
+            messageCount,
+            skippedExisting,
+            skippedInvalid,
+            updates
+        });
+
+        const devModal = document.getElementById("dev-modal");
+        if (devModal) devModal.style.display = "none";
+
+        return true;
+    } catch (err) {
+        console.warn("[舊私訊遷移] 執行失敗：", err);
+        alert("舊私訊遷移失敗，請打開 F12 Console 查看錯誤。\n\n" + (err && err.message ? err.message : err));
+        return false;
+    }
+};
+// ====== 臨時一次性工具：舊全域 privateChats 遷移到洋蔥五告派結束 ======
+
 // ====== 臨時一次性工具結束 ======
 
 // 【新增】開發者一鍵測試：在交誼廳中央直接生成米米
@@ -2013,17 +2185,20 @@ window.openPM = function(targetUid, targetName) {
     document.getElementById('pm-modal').style.display = 'block'; 
     document.getElementById('pm-title').innerText = `💬 與 ${targetName} 密語`; 
     window.currentPMUid = targetUid; 
+
     let myUid = window.GameLogic.currentUser.uid; 
     let chatId = [myUid, targetUid].sort().join('_'); 
+    let pmPath = window.getServerRoomPath(`privateChats/${chatId}`);
     
-    // 系統健康修正：移除雙重動態 import，直接使用頂部已載入的 remove, onValue 與 ref
+    // 保留原本 unreadPMs 清除機制，避免擴大修改 users 個人資料結構。
     remove(ref(window.GameLogic.db, `users/${myUid}/unreadPMs/${targetUid}`)); 
     
     if (window.pmUnsubscribe) window.pmUnsubscribe(); 
-    window.pmUnsubscribe = onValue(ref(window.GameLogic.db, `privateChats/${chatId}`), snap => { 
+    window.pmUnsubscribe = onValue(ref(window.GameLogic.db, pmPath), snap => { 
         let msgs = snap.val() || {}; 
         let box = document.getElementById('pm-chat-box'); 
         box.innerHTML = ''; 
+
         Object.values(msgs).forEach(m => { 
             if (m.uid === myUid) { 
                 box.innerHTML += `<div style="text-align:right; margin-bottom: 8px;"><div class="pm-bubble-me">${m.msg}</div></div>`; 
@@ -2031,15 +2206,39 @@ window.openPM = function(targetUid, targetName) {
                 box.innerHTML += `<div style="text-align:left; margin-bottom: 8px;"><div class="pm-bubble-other"><div style="font-size:11px; color:#558b2f; font-weight:bold; margin-bottom:2px;">${m.name}</div>${m.msg}</div></div>`; 
             } 
         }); 
+
         box.scrollTop = box.scrollHeight; 
     }); 
 };
-window.closePM = function() { if (window.pmUnsubscribe) { window.pmUnsubscribe(); window.pmUnsubscribe = null; } document.getElementById('pm-modal').style.display = 'none'; document.getElementById('phone-modal').style.display = 'block'; };
+
+window.closePM = function() { 
+    if (window.pmUnsubscribe) { 
+        window.pmUnsubscribe(); 
+        window.pmUnsubscribe = null; 
+    } 
+    document.getElementById('pm-modal').style.display = 'none'; 
+    document.getElementById('phone-modal').style.display = 'block'; 
+};
+
 window.sendPM = function() { 
-    let input = document.getElementById('pm-input'); let msg = input.value.trim(); if (!msg || !window.currentPMUid) return; 
-    let myUid = window.GameLogic.currentUser.uid; let chatId = [myUid, window.currentPMUid].sort().join('_'); 
-    push(ref(db, `privateChats/${chatId}`), { uid: myUid, name: window.GameLogic.myProfile.name, msg: msg, time: Date.now() }); 
+    let input = document.getElementById('pm-input'); 
+    let msg = input.value.trim(); 
+    if (!msg || !window.currentPMUid) return; 
+
+    let myUid = window.GameLogic.currentUser.uid; 
+    let chatId = [myUid, window.currentPMUid].sort().join('_'); 
+    let pmPath = window.getServerRoomPath(`privateChats/${chatId}`);
+
+    push(ref(db, pmPath), { 
+        uid: myUid, 
+        name: window.GameLogic.myProfile.name, 
+        msg: msg, 
+        time: Date.now() 
+    }); 
+
+    // 先保留既有未讀紅點位置，避免這次補丁觸碰 users 裡太多個人資料欄位。
     update(ref(db, `users/${window.currentPMUid}/unreadPMs`), { [myUid]: true }); 
+
     input.value = ''; 
 };
 
