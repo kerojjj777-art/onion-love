@@ -2295,6 +2295,10 @@ window.confirmPurchase = function() { let cost = window.currentPurchaseQty * win
 const loginScreen = document.getElementById("login-screen"); const gameLayoutContainer = document.getElementById("game-layout-container"); const chatSection = document.getElementById("chat-section"); const actionMenu = document.getElementById("action-menu"); const viewProfileModal = document.getElementById("view-profile-modal"); const chatInput = document.getElementById("chat-input");
 if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 window.addEventListener('pointerdown', (e) => { 
+    if (window.GameLogic && window.GameLogic.soloRocketCruiseActive && e.target.tagName === 'CANVAS') {
+        return;
+    }
+
     if (!e.target.closest('#action-menu') && e.target.tagName !== 'CANVAS') { actionMenu.style.display = 'none'; } 
     if (e.target.tagName === 'CANVAS') { 
         // 修正2：點擊背景時，不要關閉投票介面與強制召喚介面
@@ -2690,7 +2694,9 @@ function switchScene(sceneName, extraData = null) {
     }
 
     const doSwitch = () => {
-        window.GameLogic.currentScene = sceneName; window.GameLogic.placingFurnitureKey = null; 
+        window.GameLogic.currentScene = sceneName;
+        window.GameLogic.placingFurnitureKey = null;
+        if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput(); 
         
         // 離開原本的房間
         leaveCafe(); leaveShrine(); leavePlayroom();
@@ -3525,6 +3531,11 @@ class MainScene extends Phaser.Scene {
         this.soloRocketBgm = null;
         this.soloRocketSafeRect = null;
         this.soloRocketWasd = null;
+        this.soloRocketWasd = null;
+        this.soloRocketJoystickState = null;
+        this.soloRocketJoystickOuter = null;
+        this.soloRocketJoystickInner = null;
+        this.soloRocketJoystickHandlers = null;
         this.soloRocketDomUiIds = ['chat-section', 'online-players-container', 'top-notification-bar', 'action-menu', 'quick-select-menu', 'prince-cat-menu', 'magic-menu-blocker', 'party-minimized-list'];
 
         // 階段3：教學介面、開場演出、結尾演出與輸入鎖定狀態
@@ -4056,7 +4067,27 @@ class MainScene extends Phaser.Scene {
         this.events.off('action_A_long');
         this.events.off('action_B');
 
-        this.events.on('action_A_place', () => { let key = window.GameLogic.placingFurnitureKey; if(key && this.furnitureSprites[key]) { let f = this.furnitureSprites[key]; f.sprite.setVelocity(0, 0); let path = this.isCafe ? window.getServerRoomPath(`cafeFurniture/${key}`) : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}` : window.getServerRoomPath(`shrineFurniture/${key}`)); update(ref(window.GameLogic.db, path), { locked: true, x: f.sprite.x, y: f.sprite.y, ownerUid: window.GameLogic.currentUser.uid }); window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); } });
+        this.events.on('action_A_place', () => {
+            let key = window.GameLogic.placingFurnitureKey;
+            if (key && this.furnitureSprites[key]) {
+                let f = this.furnitureSprites[key];
+                if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+                f.sprite.setVelocity(0, 0);
+                let path = this.isCafe
+                    ? window.getServerRoomPath(`cafeFurniture/${key}`)
+                    : (this.sceneName === 'doghouse'
+                        ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}`
+                        : window.getServerRoomPath(`shrineFurniture/${key}`));
+                update(ref(window.GameLogic.db, path), {
+                    locked: true,
+                    x: f.sprite.x,
+                    y: f.sprite.y,
+                    ownerUid: window.GameLogic.currentUser.uid
+                });
+                window.GameLogic.placingFurnitureKey = null;
+                this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
+            }
+        });
 
 this.events.on('action_A_short', () => {
     if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
@@ -6606,13 +6637,8 @@ this.events.on('action_B', () => {
             else this.minimap.visible = false;
         }
 
-        if (uiScene.joyStick) {
-            if (uiScene.joyStick.base && uiScene.joyStick.base.setVisible) {
-                uiScene.joyStick.base.setVisible(true);
-            }
-            if (uiScene.joyStick.thumb && uiScene.joyStick.thumb.setVisible) {
-                uiScene.joyStick.thumb.setVisible(true);
-            }
+        if (uiScene.joyStick && uiScene.disableLegacyVirtualJoystick) {
+            uiScene.disableLegacyVirtualJoystick();
         }
     }
 
@@ -6782,6 +6808,7 @@ this.events.on('action_B', () => {
             };
 
             window.GameLogic.placingFurnitureKey = null;
+            if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput();
             window.GameLogic.armedItemState = null;
             window.GameLogic.armedItemName = null;
 
@@ -10493,6 +10520,8 @@ this.events.on('action_B', () => {
         this.soloRocketBigAttackGlow = bigGlow;
         this.setSoloRocketBigAttackButtonVisible(false);
 
+        this.setupSoloRocketDynamicJoystick();
+
         const spinFillMaskShape = this.add.circle(btnX, spinBtnY, spinBtnRadius - 2, 0xffffff, 1)
             .setScrollFactor(0)
             .setVisible(false);
@@ -10845,6 +10874,198 @@ this.events.on('action_B', () => {
         });
     }
 
+    setupSoloRocketDynamicJoystick() {
+        this.destroySoloRocketDynamicJoystick(false);
+
+        const ui = this.soloRocketUiContainer;
+        if (!ui) return;
+
+        const state = {
+            active: false,
+            pointerId: null,
+            startX: 0,
+            startY: 0,
+            pointerX: 0,
+            pointerY: 0,
+            vx: 0,
+            vy: 0,
+            force: 0,
+            radius: 58,
+            deadZone: 5
+        };
+
+        const outer = this.add.circle(0, 0, state.radius, 0xffffff, 0.18)
+            .setStrokeStyle(3, 0xffffff, 0.80)
+            .setScrollFactor(0)
+            .setVisible(false)
+            .setDepth(9788);
+
+        const inner = this.add.circle(0, 0, 18, 0xffffff, 0.80)
+            .setStrokeStyle(2, 0xffffff, 0.95)
+            .setScrollFactor(0)
+            .setVisible(false)
+            .setDepth(9789);
+
+        ui.add([outer, inner]);
+
+        this.soloRocketJoystickState = state;
+        this.soloRocketJoystickOuter = outer;
+        this.soloRocketJoystickInner = inner;
+
+        const clear = () => this.clearSoloRocketDynamicJoystick();
+
+        const shouldIgnorePointer = (pointer, currentlyOver = []) => {
+            if (!pointer || !pointer.event) return true;
+            if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return true;
+            if (!this.soloRocketGameplayStarted || this.soloRocketTutorialActive) return true;
+            if (this.soloRocketInputLocked || this.soloRocketIntroActive || this.soloRocketEndingActive) return true;
+
+            const rawEvent = pointer.event;
+            const target = rawEvent.target;
+            if (!target || target.tagName !== 'CANVAS') return true;
+            if (rawEvent.type && rawEvent.type.includes('mouse') && rawEvent.button !== 0) return true;
+            if (Array.isArray(currentlyOver) && currentlyOver.length > 0) return true;
+
+            return false;
+        };
+
+        const onDown = (pointer, currentlyOver = []) => {
+            if (shouldIgnorePointer(pointer, currentlyOver)) return;
+            if (pointer.event && pointer.event.stopPropagation) pointer.event.stopPropagation();
+
+            state.active = true;
+            state.pointerId = pointer.id;
+            state.startX = pointer.x;
+            state.startY = pointer.y;
+            state.pointerX = pointer.x;
+            state.pointerY = pointer.y;
+            state.vx = 0;
+            state.vy = 0;
+            state.force = 0;
+
+            outer.setPosition(state.startX, state.startY).setVisible(true);
+            inner.setPosition(state.startX, state.startY).setVisible(true);
+        };
+
+        const onMove = (pointer) => {
+            if (!state.active || pointer.id !== state.pointerId) return;
+            if (pointer.event && pointer.event.stopPropagation) pointer.event.stopPropagation();
+
+            const dx = pointer.x - state.startX;
+            const dy = pointer.y - state.startY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const clampedDist = Math.min(dist, state.radius);
+            const nx = dist > 0 ? dx / dist : 0;
+            const ny = dist > 0 ? dy / dist : 0;
+
+            state.pointerX = pointer.x;
+            state.pointerY = pointer.y;
+
+            if (dist <= state.deadZone) {
+                state.vx = 0;
+                state.vy = 0;
+                state.force = 0;
+                inner.setPosition(state.startX, state.startY);
+                return;
+            }
+
+            state.vx = nx;
+            state.vy = ny;
+            state.force = clampedDist / state.radius;
+            inner.setPosition(
+                state.startX + nx * clampedDist,
+                state.startY + ny * clampedDist
+            );
+        };
+
+        const onUp = (pointer) => {
+            if (!state.active || pointer.id !== state.pointerId) return;
+            if (pointer.event && pointer.event.stopPropagation) pointer.event.stopPropagation();
+            clear();
+        };
+
+        const onGameOut = clear;
+        const onVisibilityChange = () => { if (document.hidden) clear(); };
+        const onPointerCancel = clear;
+        const canvas = this.game && this.game.canvas ? this.game.canvas : null;
+
+        this.input.on('pointerdown', onDown);
+        this.input.on('pointermove', onMove);
+        this.input.on('pointerup', onUp);
+        this.input.on('pointerupoutside', onUp);
+        this.input.on('gameout', onGameOut);
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        if (canvas && canvas.addEventListener) {
+            canvas.addEventListener('pointercancel', onPointerCancel, { passive: true });
+        }
+
+        this.soloRocketJoystickHandlers = {
+            onDown,
+            onMove,
+            onUp,
+            onGameOut,
+            onVisibilityChange,
+            onPointerCancel,
+            canvas
+        };
+    }
+
+    clearSoloRocketDynamicJoystick() {
+        const state = this.soloRocketJoystickState;
+        if (state) {
+            state.active = false;
+            state.pointerId = null;
+            state.vx = 0;
+            state.vy = 0;
+            state.force = 0;
+        }
+
+        if (this.soloRocketJoystickOuter && this.soloRocketJoystickOuter.setVisible) {
+            this.soloRocketJoystickOuter.setVisible(false);
+        }
+        if (this.soloRocketJoystickInner && this.soloRocketJoystickInner.setVisible) {
+            this.soloRocketJoystickInner.setVisible(false);
+        }
+    }
+
+    destroySoloRocketDynamicJoystick(destroyObjects = true) {
+        const h = this.soloRocketJoystickHandlers;
+        if (h && this.input) {
+            this.input.off('pointerdown', h.onDown);
+            this.input.off('pointermove', h.onMove);
+            this.input.off('pointerup', h.onUp);
+            this.input.off('pointerupoutside', h.onUp);
+            this.input.off('gameout', h.onGameOut);
+            document.removeEventListener('visibilitychange', h.onVisibilityChange);
+            if (h.canvas && h.canvas.removeEventListener) {
+                h.canvas.removeEventListener('pointercancel', h.onPointerCancel);
+            }
+        }
+
+        this.soloRocketJoystickHandlers = null;
+        this.clearSoloRocketDynamicJoystick();
+
+        if (destroyObjects) {
+            try { if (this.soloRocketJoystickOuter) this.soloRocketJoystickOuter.destroy(); } catch (_) {}
+            try { if (this.soloRocketJoystickInner) this.soloRocketJoystickInner.destroy(); } catch (_) {}
+            this.soloRocketJoystickOuter = null;
+            this.soloRocketJoystickInner = null;
+            this.soloRocketJoystickState = null;
+        }
+    }
+
+    getSoloRocketDynamicJoystickVector() {
+        const state = this.soloRocketJoystickState;
+        if (!state || !state.active) return null;
+
+        return {
+            active: true,
+            vx: state.vx || 0,
+            vy: state.vy || 0,
+            force: Phaser.Math.Clamp(state.force || 0, 0, 1)
+        };
+    }
+  
     updateSoloRocketCruise(time, delta) {
         if (!this.soloRocketCruiseActive) return;
 
@@ -10906,16 +11127,18 @@ this.events.on('action_B', () => {
             !this.soloRocketEndingActive;
 
         if (canControlRocket && this.soloRocketPlayer) {
-            const uiScene = this.scene.manager.getScene('UIScene');
             let ix = 0;
             let iy = 0;
             let usingJoystick = false;
 
-            if (uiScene && uiScene.joyStick && uiScene.joyStick.force > 3) {
+            const dynamicJoy = this.getSoloRocketDynamicJoystickVector
+                ? this.getSoloRocketDynamicJoystickVector()
+                : null;
+
+            if (dynamicJoy && dynamicJoy.active) {
                 usingJoystick = true;
-                const forceRate = Phaser.Math.Clamp(uiScene.joyStick.force / 40, 0, 1);
-                ix = Math.cos(uiScene.joyStick.angle * Math.PI / 180) * forceRate;
-                iy = Math.sin(uiScene.joyStick.angle * Math.PI / 180) * forceRate;
+                ix = dynamicJoy.vx * dynamicJoy.force;
+                iy = dynamicJoy.vy * dynamicJoy.force;
             } else if (document.activeElement.tagName !== 'INPUT') {
                 if (!this.soloRocketWasd) this.soloRocketWasd = this.input.keyboard.addKeys('W,A,S,D');
                 if (this.cursors.left.isDown || this.soloRocketWasd.A.isDown) ix -= 1;
@@ -12326,6 +12549,7 @@ this.events.on('action_B', () => {
         this.soloRocketTimer = null;
 
         this.stopSoloRocketBgm();
+        if (this.destroySoloRocketDynamicJoystick) this.destroySoloRocketDynamicJoystick(true);
         if (this.stopSoloRocketRabbitShopBgm) this.stopSoloRocketRabbitShopBgm();
         if (this.clearSoloRocketRabbitShopUi) this.clearSoloRocketRabbitShopUi();
 
@@ -12397,6 +12621,10 @@ this.events.on('action_B', () => {
         this.soloRocketWhiteFade = null;
         this.soloRocketSafeRect = null;
         this.soloRocketWasd = null;
+        this.soloRocketJoystickState = null;
+        this.soloRocketJoystickOuter = null;
+        this.soloRocketJoystickInner = null;
+        this.soloRocketJoystickHandlers = null;
         this.soloRocketRunSummary = null;
         this.soloRocketMoonBudget = 0;
         this.soloRocketMoonBudgetLeft = 0;
@@ -14529,7 +14757,17 @@ if (activeBubbleMsg) {
         this.input.on('gameout', onGameOut);
 
         const onWindowBlur = () => this.clearCanvasDirectionalInput();
+        const onVisibilityChange = () => {
+            if (document.hidden) this.clearCanvasDirectionalInput();
+        };
+        const onPointerCancel = () => this.clearCanvasDirectionalInput();
+        const canvas = this.game && this.game.canvas ? this.game.canvas : null;
+
         window.addEventListener('blur', onWindowBlur);
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        if (canvas && canvas.addEventListener) {
+            canvas.addEventListener('pointercancel', onPointerCancel, { passive: true });
+        }
 
         this.events.once('shutdown', () => {
             this.input.off('pointerdown', onDown);
@@ -14538,6 +14776,10 @@ if (activeBubbleMsg) {
             this.input.off('pointerupoutside', onUp);
             this.input.off('gameout', onGameOut);
             window.removeEventListener('blur', onWindowBlur);
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+            if (canvas && canvas.removeEventListener) {
+                canvas.removeEventListener('pointercancel', onPointerCancel);
+            }
             if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput = null;
         });
     }
@@ -14647,13 +14889,34 @@ if (activeBubbleMsg) {
         if (!this.canvasDirectionalInput) return;
         this.canvasDirectionalInput.active = false;
         this.canvasDirectionalInput.pointerId = null;
+        this.canvasDirectionalInput.pointerX = 0;
+        this.canvasDirectionalInput.pointerY = 0;
         this.canvasDirectionalInput.vx = 0;
         this.canvasDirectionalInput.vy = 0;
     }
 
+    getCanvasDirectionalAnchorSprite() {
+        const placingKey = window.GameLogic ? window.GameLogic.placingFurnitureKey : null;
+
+        if (placingKey) {
+            const f = this.furnitureSprites && this.furnitureSprites[placingKey]
+                ? this.furnitureSprites[placingKey]
+                : null;
+            if (f && f.sprite && f.sprite.active) return f.sprite;
+
+            if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+            return null;
+        }
+
+        return this.localPlayer && this.localPlayer.sprite && this.localPlayer.sprite.active
+            ? this.localPlayer.sprite
+            : null;
+    }
+
     refreshCanvasDirectionalVector() {
         const input = this.canvasDirectionalInput;
-        if (!input || !input.active || !this.localPlayer || !this.localPlayer.sprite) return;
+        const anchorSprite = this.getCanvasDirectionalAnchorSprite();
+        if (!input || !input.active || !anchorSprite) return;
 
         if (this.isDomUiBlockingCanvasInput()) {
             this.clearCanvasDirectionalInput();
@@ -14661,10 +14924,10 @@ if (activeBubbleMsg) {
         }
 
         const cam = this.cameras.main;
-        const playerScreenX = (this.localPlayer.sprite.x - cam.scrollX) * cam.zoom + cam.x;
-        const playerScreenY = (this.localPlayer.sprite.y - cam.scrollY) * cam.zoom + cam.y;
-        const dx = input.pointerX - playerScreenX;
-        const dy = input.pointerY - playerScreenY;
+        const anchorScreenX = (anchorSprite.x - cam.scrollX) * cam.zoom + cam.x;
+        const anchorScreenY = (anchorSprite.y - cam.scrollY) * cam.zoom + cam.y;
+        const dx = input.pointerX - anchorScreenX;
+        const dy = input.pointerY - anchorScreenY;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist < input.deadZone) {
@@ -15009,10 +15272,32 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
             let isPlacing = window.GameLogic.placingFurnitureKey !== null && (this.isCafe || this.sceneName === 'doghouse' || this.sceneName === 'shrine');
 
             if (isPlacing) {
-                this.localPlayer.sprite.setVelocity(0, 0).play('idle', true); let f = this.furnitureSprites[window.GameLogic.placingFurnitureKey];
+                this.localPlayer.sprite.setVelocity(0, 0).play('idle', true);
+
+                let placingKey = window.GameLogic.placingFurnitureKey;
+                let f = this.furnitureSprites[placingKey];
+
                 if (f && f.sprite && f.sprite.active) {
-                    f.sprite.setVelocity(vx, vy); this.cameras.main.startFollow(f.sprite, true, 0.1, 0.1); this.placePrompt.setPosition(f.sprite.x, f.sprite.y - 80).setVisible(true);
-                    if (vx !== 0 || vy !== 0) { if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) { let path = this.isCafe ? window.getServerRoomPath(`cafeFurniture/${window.GameLogic.placingFurnitureKey}`) : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${window.GameLogic.placingFurnitureKey}` : window.getServerRoomPath(`shrineFurniture/${window.GameLogic.placingFurnitureKey}`)); update(ref(window.GameLogic.db, path), { x: f.sprite.x, y: f.sprite.y }); this.lastSyncTime = Date.now(); } }
+                    f.sprite.setVelocity(vx, vy);
+                    this.cameras.main.startFollow(f.sprite, true, 0.1, 0.1);
+                    this.placePrompt.setPosition(f.sprite.x, f.sprite.y - 80).setVisible(true);
+
+                    if (vx !== 0 || vy !== 0) {
+                        if (!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) {
+                            let path = this.isCafe
+                                ? window.getServerRoomPath(`cafeFurniture/${placingKey}`)
+                                : (this.sceneName === 'doghouse'
+                                    ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${placingKey}`
+                                    : window.getServerRoomPath(`shrineFurniture/${placingKey}`));
+                            update(ref(window.GameLogic.db, path), { x: f.sprite.x, y: f.sprite.y });
+                            this.lastSyncTime = Date.now();
+                        }
+                    }
+                } else {
+                    if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+                    window.GameLogic.placingFurnitureKey = null;
+                    this.placePrompt.setVisible(false);
+                    this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
                 }
             } else {
                 this.placePrompt.setVisible(false); this.localPlayer.sprite.setVelocity(vx, vy); 
@@ -15220,7 +15505,11 @@ if (dist < 30) {
         }
         for (let key in this.furnitureSprites) {
             if (!furnData[key]) {
-                if (window.GameLogic.placingFurnitureKey === key) { window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); }
+                if (window.GameLogic.placingFurnitureKey === key) {
+                    if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+                    window.GameLogic.placingFurnitureKey = null;
+                    this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
+                }
                 if (this.furnitureSprites[key].particleEmitter) this.furnitureSprites[key].particleEmitter.destroy(); // [新增] 銷毀粒子
                 if (this.furnitureSprites[key].textContainer) this.furnitureSprites[key].textContainer.destroy();
                 if (this.furnitureSprites[key].rewardNoticeTween) this.furnitureSprites[key].rewardNoticeTween.stop();
@@ -15397,7 +15686,9 @@ function openFurnitureCatalog() {
             let fData = targetDict && targetDict[itemKey];
             if (fData && fData.locked && !item.infinite) {
                 remove(ref(window.GameLogic.db, pathPrefix + itemKey));
-                window.GameLogic.placingFurnitureKey = null; if(window.GameLogic.phaserGame) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if(scene && scene.localPlayer) { scene.cameras.main.startFollow(scene.localPlayer.sprite, true, 0.08, 0.08); } }
+                window.GameLogic.placingFurnitureKey = null;
+                if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput();
+                if(window.GameLogic.phaserGame) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if(scene && scene.localPlayer) { scene.cameras.main.startFollow(scene.localPlayer.sprite, true, 0.08, 0.08); } }
                 sendBubble("傢俱收起來了!");
             } else {
                 let pX = 1024, pY = 1024; if(window.GameLogic.phaserGame) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if(scene && scene.localPlayer) { pX = scene.localPlayer.sprite.x; pY = scene.localPlayer.sprite.y - 80; } }
@@ -15407,6 +15698,7 @@ function openFurnitureCatalog() {
                 // 修正：為神龕加入 || {} 的防護機制，避免資料庫為空時引發 null 取值報錯卡死
                 else if (isShrine) { window.GameLogic.shrineFurniture = window.GameLogic.shrineFurniture || {}; window.GameLogic.shrineFurniture[itemKey] = newData; }
                 update(ref(window.GameLogic.db, pathPrefix + itemKey), newData);
+                if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput();
                 window.GameLogic.placingFurnitureKey = itemKey;
             }
         }; list.appendChild(div);
