@@ -1248,8 +1248,29 @@ window.renderLeaderboard = function(offset) {
 window.manualPages = []; window.currentManualIndex = 0;
 window.openManualModal = function() { document.getElementById('manual-modal').style.display = 'block'; window.currentManualIndex = 0; if (window.GameLogic.currentUser && (window.GameLogic.currentUser.email === 'kerojjj777@gmail.com' || window.GameLogic.currentUser.email === 'kerojjj777@hotmail.com' || window.GameLogic.currentUser.email === 'onion@gmail.com')) { document.getElementById('manual-admin-area').style.display = 'block'; } else { document.getElementById('manual-admin-area').style.display = 'none'; } window.renderManualPage(); };
 window.renderManualPage = function() { const imgEl = document.getElementById('manual-img-display'); const indEl = document.getElementById('manual-page-indicator'); if (window.manualPages.length === 0) { imgEl.src = ''; imgEl.alt = '目前尚無說明書內容'; indEl.innerText = '0 / 0'; return; } if (window.currentManualIndex < 0) window.currentManualIndex = 0; if (window.currentManualIndex >= window.manualPages.length) window.currentManualIndex = window.manualPages.length - 1; let page = window.manualPages[window.currentManualIndex]; imgEl.src = page.imgBase64; indEl.innerText = `${window.currentManualIndex + 1} / ${window.manualPages.length}`; };
-document.getElementById('manual-prev-btn').addEventListener('click', () => { if (window.currentManualIndex > 0) { window.currentManualIndex--; window.renderManualPage(); } });
-document.getElementById('manual-next-btn').addEventListener('click', () => { if (window.currentManualIndex < window.manualPages.length - 1) { window.currentManualIndex++; window.renderManualPage(); } });
+document.getElementById('manual-prev-btn').addEventListener('click', () => {
+    const total = Array.isArray(window.manualPages) ? window.manualPages.length : 0;
+    if (total <= 1) {
+        window.currentManualIndex = 0;
+        window.renderManualPage();
+        return;
+    }
+
+    window.currentManualIndex = (Number(window.currentManualIndex || 0) - 1 + total) % total;
+    window.renderManualPage();
+});
+
+document.getElementById('manual-next-btn').addEventListener('click', () => {
+    const total = Array.isArray(window.manualPages) ? window.manualPages.length : 0;
+    if (total <= 1) {
+        window.currentManualIndex = 0;
+        window.renderManualPage();
+        return;
+    }
+
+    window.currentManualIndex = (Number(window.currentManualIndex || 0) + 1) % total;
+    window.renderManualPage();
+});
 
 window.uploadManualPage = function() { const fileInput = document.getElementById("manual-file"); const file = fileInput.files[0]; if (!file) return alert("請選擇圖片檔案！"); const reader = new FileReader(); reader.onload = e => { const img = new Image(); img.onload = () => { const cvs = document.createElement('canvas'); let w = img.width, h = img.height; if (w > 1200) { h *= 1200 / w; w = 1200; } cvs.width = w; cvs.height = h; cvs.getContext('2d').drawImage(img, 0, 0, w, h); push(ref(window.GameLogic.db, 'manuals'), { imgBase64: cvs.toDataURL('image/jpeg', 0.8), timestamp: Date.now() }).then(() => { alert('上傳成功！'); fileInput.value = ""; }); }; img.src = e.target.result; }; reader.readAsDataURL(file); };
 window.deleteManualPage = function() { if (window.manualPages.length === 0) return; if (confirm("確定要刪除當前顯示的說明書頁面嗎？")) { let pageKey = window.manualPages[window.currentManualIndex].key; remove(ref(window.GameLogic.db, `manuals/${pageKey}`)).then(() => { alert('已刪除！'); window.currentManualIndex = 0; }); } };
@@ -11860,7 +11881,7 @@ if (!data.scoreHandled && data.attacker) {
                 limitOne: true,
                 key: 'solo-rocket-item-moon-shard',
                 fallback: '🌙',
-                desc: '月亮掉下來的一小角。據說集滿 100 個，可以再找玉兔兌換神秘東西。'
+                desc: '月亮掉下來的一小角，據說集滿100個\n可以再來找玉兔兌換神秘物品。'
             },
             {
                 name: '月光法杖',
@@ -11868,7 +11889,7 @@ if (!data.scoreHandled && data.attacker) {
                 limitOne: false,
                 key: 'solo-rocket-item-moon-staff',
                 fallback: '🪄',
-                desc: '揮舞後可在大廳播放月光祝福動畫。本次先只入庫，不啟用效果。'
+                desc: '揮動喚醒魔法，召喚玉兔下凡共舞'
             },
             {
                 name: '月光饅頭',
@@ -11876,14 +11897,48 @@ if (!data.scoreHandled && data.attacker) {
                 limitOne: false,
                 key: 'solo-rocket-item-moon-bun',
                 fallback: '🥮',
-                desc: '玉兔手作的月球饅頭。本次先只入庫，不啟用掃地增益。'
+                desc: '玉兔親手揉製的在地美食\n食用後掃地會變輕鬆'
             }
         ];
+    }
+
+    getSoloRocketMoonItemOwnedCount(itemName) {
+        const profile = window.GameLogic && window.GameLogic.myProfile ? window.GameLogic.myProfile : {};
+        const inventory = profile.inventory || {};
+        const value = Number(inventory[itemName] || 0);
+        return Number.isFinite(value) ? Math.max(0, value) : 0;
+    }
+
+    makeSoloRocketMoonShopInfo(item) {
+        if (!item) {
+            return {
+                title: '',
+                stats: '',
+                desc: ''
+            };
+        }
+
+        const boughtThisRun = Number(
+            this.soloRocketMoonShopPurchases && this.soloRocketMoonShopPurchases[item.name]
+                ? this.soloRocketMoonShopPurchases[item.name]
+                : 0
+        );
+
+        return {
+            title: `${item.name}，＄${item.price}旅費`,
+            stats: `持有：${this.getSoloRocketMoonItemOwnedCount(item.name)}　本趟已購買：${Math.max(0, boughtThisRun)}`,
+            desc: item.desc || ''
+        };
     }
 
     openSoloRocketRabbitShop() {
         this.destroySoloRocketResultOverlay();
         this.stopSoloRocketBgm();
+
+        // 每次重新進入玉兔伴手禮店時，恢復預設歡迎氣泡。
+        this.soloRocketRabbitShopBubblesHidden = false;
+        this.soloRocketSelectedMoonShopItemName = null;
+
         this.renderSoloRocketRabbitShop();
 
         if (this.playSoloRocketRabbitShopBgm) {
@@ -12278,6 +12333,11 @@ if (!data.scoreHandled && data.attacker) {
             }
         } catch (_) {}
 
+        if (this.soloRocketRabbitShopHitAreas) {
+            this.soloRocketRabbitShopHitAreas.speech = null;
+            this.soloRocketRabbitShopHitAreas.buy = null;
+        }
+
         this.soloRocketRabbitShopSpeechBubble = null;
         this.soloRocketRabbitShopSpeechText = null;
         this.soloRocketRabbitShopMessage = null;
@@ -12291,8 +12351,9 @@ if (!data.scoreHandled && data.attacker) {
         this.clearSoloRocketRabbitSpeechBubble();
 
         const hasButton = !!options.buttonLabel;
-        const bubbleW = Math.min(rect.w - 32, hasButton ? 390 : 350);
-        const bubbleH = hasButton ? 166 : 82;
+        const isProductCard = !!options.productCard;
+        const bubbleW = Math.min(rect.w - 32, isProductCard ? 420 : (hasButton ? 360 : 330));
+        const bubbleH = isProductCard ? 194 : (hasButton ? 118 : 68);
 
         const rabbit = this.soloRocketRabbitShopKeeperObj;
         const rabbitX = rabbit && Number.isFinite(Number(rabbit.__soloRocketShopBaseX))
@@ -12309,7 +12370,7 @@ if (!data.scoreHandled && data.attacker) {
         );
 
         const bubbleY = Phaser.Math.Clamp(
-            rabbitY - bubbleH * 0.82,
+            rabbitY - bubbleH * 0.74,
             rect.y + 92,
             rect.y + rect.h - bubbleH / 2 - 96
         );
@@ -12320,9 +12381,9 @@ if (!data.scoreHandled && data.attacker) {
         const bubble = this.add.container(0, 0).setScrollFactor(0);
         const bg = this.add.graphics();
 
-        bg.fillStyle(0x12001f, 0.78);
+        bg.fillStyle(isProductCard ? 0xfffbdf : 0x12001f, isProductCard ? 0.94 : 0.78);
         bg.fillRoundedRect(bubbleLeft, bubbleTop, bubbleW, bubbleH, 15);
-        bg.lineStyle(2, 0xffd36a, 0.94);
+        bg.lineStyle(isProductCard ? 3 : 2, 0xffd36a, 0.94);
         bg.strokeRoundedRect(bubbleLeft, bubbleTop, bubbleW, bubbleH, 15);
 
         const triX = Phaser.Math.Clamp(
@@ -12331,35 +12392,80 @@ if (!data.scoreHandled && data.attacker) {
             bubbleLeft + bubbleW - 42
         );
 
-        bg.fillStyle(0x12001f, 0.78);
+        bg.fillStyle(isProductCard ? 0xfffbdf : 0x12001f, isProductCard ? 0.94 : 0.78);
         bg.fillTriangle(triX, bubbleTop + bubbleH, triX + 22, bubbleTop + bubbleH, triX + 10, bubbleTop + bubbleH + 18);
         bg.lineStyle(2, 0xffd36a, 0.7);
         bg.lineBetween(triX, bubbleTop + bubbleH, triX + 10, bubbleTop + bubbleH + 18);
         bg.lineBetween(triX + 22, bubbleTop + bubbleH, triX + 10, bubbleTop + bubbleH + 18);
 
-        const txt = this.add.text(bubbleLeft + 16, bubbleTop + 14, '', {
-            fontSize: hasButton ? '12px' : '13px',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold',
-            color: '#fff8d6',
-            stroke: '#000000',
-            strokeThickness: 3,
-            lineSpacing: 3,
-            wordWrap: { width: bubbleW - 32, useAdvancedWrap: true }
-        }).setOrigin(0, 0);
+        bubble.add(bg);
 
-        bubble.add([bg, txt]);
+        let txt = null;
+
+        if (isProductCard) {
+            const titleText = this.add.text(bubbleLeft + 16, bubbleTop + 14, options.cardTitle || '', {
+                fontSize: '16px',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold',
+                color: '#4a2b00',
+                stroke: '#ffffff',
+                strokeThickness: 2,
+                wordWrap: { width: bubbleW - 32, useAdvancedWrap: true }
+            }).setOrigin(0, 0);
+
+            const statsText = this.add.text(bubbleLeft + 16, bubbleTop + 43, options.cardStats || '', {
+                fontSize: '13px',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold',
+                color: '#1f8f3a',
+                stroke: '#ffffff',
+                strokeThickness: 2,
+                wordWrap: { width: bubbleW - 32, useAdvancedWrap: true }
+            }).setOrigin(0, 0);
+
+            const descText = this.add.text(bubbleLeft + 16, bubbleTop + 72, options.cardDesc || '', {
+                fontSize: '13px',
+                fontFamily: 'Arial, sans-serif',
+                color: '#3e2723',
+                stroke: '#ffffff',
+                strokeThickness: 1,
+                lineSpacing: 4,
+                wordWrap: { width: bubbleW - 32, useAdvancedWrap: true }
+            }).setOrigin(0, 0);
+
+            bubble.add([titleText, statsText, descText]);
+        } else {
+            txt = this.add.text(bubbleLeft + 16, bubbleTop + 14, '', {
+                fontSize: hasButton ? '12px' : '13px',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold',
+                color: '#fff8d6',
+                stroke: '#000000',
+                strokeThickness: 3,
+                lineSpacing: 3,
+                wordWrap: { width: bubbleW - 32, useAdvancedWrap: true }
+            }).setOrigin(0, 0);
+
+            bubble.add(txt);
+        }
 
         if (hasButton) {
-            const buyX = bubbleX;
-            const buyY = bubbleTop + bubbleH - 26;
+            const buyW = isProductCard ? 104 : 122;
+            const buyH = 34;
+            const buyX = isProductCard
+                ? bubbleLeft + 16 + buyW / 2
+                : bubbleX;
+            const buyY = bubbleTop + bubbleH - 25;
             const canBuy = !!options.canBuy;
 
-            const buyBg = this.add.rectangle(buyX, buyY, 132, 34, canBuy ? 0xffffff : 0x555555, 1)
-                .setStrokeStyle(2, canBuy ? 0xffd36a : 0x999999, 1);
+            const buyBg = this.add.graphics();
+            buyBg.fillStyle(canBuy ? 0xffffff : 0x666666, 1);
+            buyBg.fillRoundedRect(buyX - buyW / 2, buyY - buyH / 2, buyW, buyH, 11);
+            buyBg.lineStyle(2, canBuy ? 0xffd36a : 0x999999, 1);
+            buyBg.strokeRoundedRect(buyX - buyW / 2, buyY - buyH / 2, buyW, buyH, 11);
 
             const buyText = this.add.text(buyX, buyY, options.buttonLabel, {
-                fontSize: '15px',
+                fontSize: isProductCard ? '14px' : '15px',
                 fontFamily: 'Arial, sans-serif',
                 fontStyle: 'bold',
                 color: canBuy ? '#000000' : '#dddddd'
@@ -12371,8 +12477,8 @@ if (!data.scoreHandled && data.attacker) {
                 this.soloRocketRabbitShopHitAreas.buy = {
                     x: buyX,
                     y: buyY,
-                    w: 178,
-                    h: 58,
+                    w: Math.max(128, buyW + 28),
+                    h: 54,
                     itemName: options.itemName || null
                 };
             }
@@ -12380,11 +12486,22 @@ if (!data.scoreHandled && data.attacker) {
 
         shop.add(bubble);
 
+        if (this.soloRocketRabbitShopHitAreas) {
+            this.soloRocketRabbitShopHitAreas.speech = {
+                x: bubbleX,
+                y: bubbleY + 6,
+                w: bubbleW,
+                h: bubbleH + 32
+            };
+        }
+
         this.soloRocketRabbitShopSpeechBubble = bubble;
         this.soloRocketRabbitShopSpeechText = txt;
         this.soloRocketRabbitShopMessage = txt;
 
-        this.typeSoloRocketRabbitSpeech(text || '', hasButton ? 12 : 22);
+        if (!isProductCard && txt) {
+            this.typeSoloRocketRabbitSpeech(text || '', hasButton ? 12 : 22);
+        }
     }
 
     typeSoloRocketRabbitSpeech(fullText, speed) {
@@ -12426,6 +12543,13 @@ if (!data.scoreHandled && data.attacker) {
                 this.input.off('pointerdown', this.soloRocketRabbitShopInputHandler, this);
             }
         } catch (_) {}
+
+        try {
+            if (this.soloRocketRabbitShopBudgetGlowTween && this.soloRocketRabbitShopBudgetGlowTween.remove) {
+                this.soloRocketRabbitShopBudgetGlowTween.remove();
+            }
+        } catch (_) {}
+        this.soloRocketRabbitShopBudgetGlowTween = null;
 
         if (this.clearSoloRocketRabbitSpeechBubble) this.clearSoloRocketRabbitSpeechBubble();
         if (this.stopSoloRocketRabbitShopMeteors) this.stopSoloRocketRabbitShopMeteors();
@@ -12479,6 +12603,21 @@ if (!data.scoreHandled && data.attacker) {
             stroke: '#000000',
             strokeThickness: 4
         }).setOrigin(0.5);
+
+        this.soloRocketRabbitShopBudgetText.setShadow(0, 0, '#ffe680', 10, true, true);
+
+        if (this.tweens) {
+            this.soloRocketRabbitShopBudgetGlowTween = this.tweens.add({
+                targets: this.soloRocketRabbitShopBudgetText,
+                alpha: 0.78,
+                scaleX: 1.035,
+                scaleY: 1.035,
+                duration: 1250,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
 
         const subtitle = this.add.text(rect.centerX, rect.y + 62,
             '點選伴手禮查看資訊，沒花完的旅費會匯回馬德幣帳戶。', {
@@ -12541,6 +12680,7 @@ if (!data.scoreHandled && data.attacker) {
             products: [],
             buy: null,
             leave: null,
+            speech: null,
             screen: { x: rect.centerX, y: rect.centerY, w: rect.w, h: rect.h }
         };
 
@@ -12593,22 +12733,30 @@ if (!data.scoreHandled && data.attacker) {
         let selectedShopButtonOptions = null;
 
         if (selectedItem) {
+        if (selectedItem) {
             const qty = (this.soloRocketMoonShopPurchases && this.soloRocketMoonShopPurchases[selectedItem.name]) || 0;
             const alreadyLimited = !!(selectedItem.limitOne && qty >= 1);
             const canAfford = (this.soloRocketMoonBudgetLeft || 0) >= selectedItem.price;
             const canBuy = canAfford && !alreadyLimited && !this.soloRocketMoonShopFinalizing && !this.soloRocketMoonShopFinalized;
             const buttonLabel = alreadyLimited ? '本趟已購買' : (canAfford ? '購買' : '旅費不足');
+            const itemInfo = this.makeSoloRocketMoonShopInfo
+                ? this.makeSoloRocketMoonShopInfo(selectedItem)
+                : {
+                    title: `${selectedItem.name}，＄${selectedItem.price}旅費`,
+                    stats: `持有：0　本趟已購買：${qty}`,
+                    desc: selectedItem.desc || ''
+                };
 
-            selectedShopSpeech =
-                `玉兔：${selectedItem.name}\n` +
-                `價格：${selectedItem.price} 旅費\n` +
-                `本趟已購買：${qty}\n` +
-                `${selectedItem.desc}`;
+            selectedShopSpeech = itemInfo.desc;
 
             selectedShopButtonOptions = {
                 buttonLabel,
                 canBuy,
-                itemName: selectedItem.name
+                itemName: selectedItem.name,
+                productCard: true,
+                cardTitle: itemInfo.title,
+                cardStats: itemInfo.stats,
+                cardDesc: itemInfo.desc
             };
         } else {
             const hint = this.add.text(rect.centerX, Phaser.Math.Clamp(productY + iconSize + 58, rect.y + 186, rect.y + rect.h - 176),
@@ -12626,31 +12774,39 @@ if (!data.scoreHandled && data.attacker) {
             objects.push(hint);
         }
 
-        const leaveX = rect.centerX;
-        const leaveY = rect.y + rect.h - 38;
-        const leaveBg = this.add.rectangle(leaveX, leaveY, 230, 42, 0xffffff, 1)
-            .setStrokeStyle(3, 0xffd36a, 1);
+        const leaveW = Math.min(190, rect.w - 36);
+        const leaveH = 38;
+        const leaveX = rect.x + 20 + leaveW / 2;
+        const leaveY = rect.y + rect.h - 36;
+
+        const leaveBg = this.add.graphics();
+        leaveBg.fillStyle(0xff8a1c, 1);
+        leaveBg.fillRoundedRect(leaveX - leaveW / 2, leaveY - leaveH / 2, leaveW, leaveH, 13);
+        leaveBg.lineStyle(3, 0xffe082, 1);
+        leaveBg.strokeRoundedRect(leaveX - leaveW / 2, leaveY - leaveH / 2, leaveW, leaveH, 13);
 
         const leaveText = this.add.text(leaveX, leaveY, '離開月球，帶錢回家', {
-            fontSize: '16px',
+            fontSize: '13px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
-            color: '#000000'
+            color: '#2b1200',
+            stroke: '#fff0b8',
+            strokeThickness: 2
         }).setOrigin(0.5);
 
-        this.soloRocketRabbitShopHitAreas.leave = { x: leaveX, y: leaveY, w: 270, h: 66 };
+        this.soloRocketRabbitShopHitAreas.leave = { x: leaveX, y: leaveY, w: leaveW + 34, h: leaveH + 28 };
 
         objects.push(leaveBg, leaveText);
         shop.add(objects);
 
         if (this.createSoloRocketRabbitSpeechBubble) {
-            if (selectedItem && selectedShopSpeech) {
-                this.createSoloRocketRabbitSpeechBubble(selectedShopSpeech, selectedShopButtonOptions || {});
-            } else {
+            if (selectedItem && selectedShopButtonOptions) {
+                this.soloRocketRabbitShopBubblesHidden = false;
+                this.createSoloRocketRabbitSpeechBubble('', selectedShopButtonOptions);
+            } else if (!this.soloRocketRabbitShopBubblesHidden) {
                 this.createSoloRocketRabbitSpeechBubble('玉兔：遠道而來的洋蔥，點商品我再跟你介紹。');
             }
         }
-
         if (this.startSoloRocketRabbitShopMeteors) {
             this.startSoloRocketRabbitShopMeteors();
         }
@@ -12689,8 +12845,9 @@ if (!data.scoreHandled && data.attacker) {
         }
 
         if (hit.leave && this.isSoloRocketPointerInHitArea(pointer, hit.leave)) {
-            if (this.typeSoloRocketRabbitSpeech) {
-                this.typeSoloRocketRabbitSpeech('玉兔：正在把剩下的旅費匯回你家，請等我一下。', 18);
+            if (this.createSoloRocketRabbitSpeechBubble) {
+                this.soloRocketRabbitShopBubblesHidden = false;
+                this.createSoloRocketRabbitSpeechBubble('玉兔：正在把剩下的旅費匯回你家，請等我一下。');
             } else if (this.soloRocketRabbitShopMessage) {
                 this.soloRocketRabbitShopMessage.setText('玉兔：正在把剩下的旅費匯回你家，請等我一下。');
             }
@@ -12701,6 +12858,19 @@ if (!data.scoreHandled && data.attacker) {
         const product = (hit.products || []).find(area => this.isSoloRocketPointerInHitArea(pointer, area));
         if (product) {
             this.selectSoloRocketMoonItem(product.name);
+            return;
+        }
+
+        // 點擊商品牌卡、玉兔講話泡泡本體時，不關閉；只阻止穿透到背景關閉。
+        if (hit.speech && this.isSoloRocketPointerInHitArea(pointer, hit.speech)) {
+            return;
+        }
+
+        // 點擊商店 UI 以外的背景，只收起文字／商品泡泡，不離開商店。
+        if (hit.screen && this.isSoloRocketPointerInHitArea(pointer, hit.screen)) {
+            this.soloRocketRabbitShopBubblesHidden = true;
+            this.soloRocketSelectedMoonShopItemName = null;
+            this.renderSoloRocketRabbitShop();
         }
     }
 
@@ -12708,6 +12878,7 @@ if (!data.scoreHandled && data.attacker) {
         if (this.soloRocketMoonShopFinalizing || this.soloRocketMoonShopFinalized) return;
         const item = this.getSoloRocketShopItemByName(itemName);
         if (!item) return;
+        this.soloRocketRabbitShopBubblesHidden = false;
         this.soloRocketSelectedMoonShopItemName = item.name;
         this.renderSoloRocketRabbitShop();
         this.bounceSoloRocketRabbitShopkeeper();
@@ -12746,28 +12917,33 @@ if (!data.scoreHandled && data.attacker) {
         const item = this.getSoloRocketShopItemByName(itemName);
         if (!item) return;
 
+        const showRabbitSpeech = (message, speed = 24) => {
+            this.soloRocketRabbitShopBubblesHidden = false;
+            if (this.createSoloRocketRabbitSpeechBubble) {
+                this.createSoloRocketRabbitSpeechBubble(message);
+            } else if (this.soloRocketRabbitShopMessage) {
+                this.soloRocketRabbitShopMessage.setText(message);
+            }
+
+            if (this.typeSoloRocketRabbitSpeech && this.soloRocketRabbitShopSpeechText) {
+                this.typeSoloRocketRabbitSpeech(message, speed);
+            }
+        };
+
         this.soloRocketSelectedMoonShopItemName = item.name;
         this.soloRocketMoonShopPurchases = this.soloRocketMoonShopPurchases || {};
         const currentQty = Number(this.soloRocketMoonShopPurchases[item.name] || 0);
 
         if (item.limitOne && currentQty >= 1) {
             this.renderSoloRocketRabbitShop();
-            if (this.typeSoloRocketRabbitSpeech) {
-                this.typeSoloRocketRabbitSpeech('玉兔：月光碎片本趟只能帶一片喔。', 24);
-            } else if (this.soloRocketRabbitShopMessage) {
-                this.soloRocketRabbitShopMessage.setText('玉兔：月光碎片本趟只能帶一片喔。');
-            }
+            showRabbitSpeech('玉兔：月光碎片本趟只能帶一片喔。', 24);
             this.bounceSoloRocketRabbitShopkeeper();
             return;
         }
 
         if ((this.soloRocketMoonBudgetLeft || 0) < item.price) {
             this.renderSoloRocketRabbitShop();
-            if (this.typeSoloRocketRabbitSpeech) {
-                this.typeSoloRocketRabbitSpeech('玉兔：你的月球旅費不夠喔，先不要裝闊。', 24);
-            } else if (this.soloRocketRabbitShopMessage) {
-                this.soloRocketRabbitShopMessage.setText('玉兔：你的月球旅費不夠喔，先不要裝闊。');
-            }
+            showRabbitSpeech('玉兔：你的月球旅費不夠喔，先不要裝闊。', 24);
             this.bounceSoloRocketRabbitShopkeeper();
             return;
         }
@@ -12797,12 +12973,7 @@ if (!data.scoreHandled && data.attacker) {
         }
 
         this.renderSoloRocketRabbitShop();
-
-        if (this.typeSoloRocketRabbitSpeech) {
-            this.typeSoloRocketRabbitSpeech(lines[item.name] || '玉兔：謝謝惠顧。', 24);
-        } else if (this.soloRocketRabbitShopMessage) {
-            this.soloRocketRabbitShopMessage.setText(lines[item.name] || '玉兔：謝謝惠顧。');
-        }
+        showRabbitSpeech(lines[item.name] || '玉兔：謝謝惠顧。', 24);
         this.bounceSoloRocketRabbitShopkeeper();
     }
   
