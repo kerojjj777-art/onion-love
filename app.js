@@ -258,8 +258,10 @@ function createSystemUI() {
             #login-screen input, #login-screen select { padding: 10px; border: 1px solid var(--mucha-gold); border-radius: 4px; background: #fffdf5; margin-bottom: 15px; width: 85%; font-size: 16px; box-sizing: border-box; font-family: inherit; color: var(--mucha-brown); }
             .login-room-label { display:block; width:85%; margin: 0 auto 6px auto; text-align:left; color:var(--mucha-brown); font-size:13px; font-weight:bold; }
             #join-btn { background: var(--mucha-gold); color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; width: 95%; }
-            .modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--mucha-paper); padding: 20px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 250; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8); width: 85%; max-width: 320px; max-height: 80vh; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
+            .modal { display: none; position: fixed !important; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--mucha-paper); padding: 20px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 250; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8); width: 85%; max-width: 320px; max-height: min(80vh, calc(var(--onion-vh, 1vh) * 82)); overflow-y: auto; overflow-x: hidden; box-sizing: border-box; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; } background: var(--mucha-paper); padding: 20px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 250; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8); width: 85%; max-width: 320px; max-height: 80vh; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
             .modal h3 { color: var(--mucha-green); margin-top: 0; border-bottom: 1px solid var(--mucha-gold); padding-bottom: 8px; }
+            html, body { width: 100%; min-height: calc(var(--onion-vh, 1vh) * 100); overflow: hidden; overscroll-behavior: none; }
+#app-container, #game-layout-container, #phaser-app { width: 100%; height: calc(var(--onion-vh, 1vh) * 100); min-height: calc(var(--onion-vh, 1vh) * 100); overflow: hidden; }
             .modal-btns { display: flex; justify-content: space-around; margin-top: 15px; }
             .modal-btns button, .close-modal-btn { padding: 10px 15px; border-radius: 4px; border: none; cursor: pointer; font-family: inherit; font-size: 15px; margin: 5px;}
             .btn-primary { background: var(--mucha-gold); color: white; } .btn-secondary { background: #ccc; color: #333; } .btn-edit { background: var(--mucha-green); color: white; } .btn-danger { background: #d9534f; color: white; }
@@ -783,6 +785,75 @@ function createSystemUI() {
     }, 500);
 }
 createSystemUI();
+
+window.refreshMobileViewportLayout = function() {
+    try {
+        const vv = window.visualViewport;
+        const viewW = Math.max(1, Math.round(vv && vv.width ? vv.width : window.innerWidth));
+        const viewH = Math.max(1, Math.round(vv && vv.height ? vv.height : window.innerHeight));
+        const vh = viewH * 0.01;
+
+        document.documentElement.style.setProperty('--onion-vh', `${vh}px`);
+
+        const appContainer = document.getElementById('app-container');
+        const gameLayout = document.getElementById('game-layout-container');
+        const phaserApp = document.getElementById('phaser-app');
+
+        [appContainer, gameLayout, phaserApp].forEach(el => {
+            if (!el) return;
+            el.style.height = `calc(var(--onion-vh, 1vh) * 100)`;
+            el.style.minHeight = `calc(var(--onion-vh, 1vh) * 100)`;
+        });
+
+        window.scrollTo(0, 0);
+
+        if (window.GameLogic && window.GameLogic.phaserGame && window.GameLogic.phaserGame.scale) {
+            const scale = window.GameLogic.phaserGame.scale;
+
+            if (scale.refresh) scale.refresh();
+            if (scale.resize) scale.resize(viewW, viewH);
+
+            const uiScene = window.GameLogic.phaserGame.scene.getScene('UIScene');
+            if (uiScene && uiScene.resizeUI && uiScene.scale && uiScene.scale.gameSize) {
+                uiScene.resizeUI(uiScene.scale.gameSize);
+            }
+
+            const mainScene = window.GameLogic.phaserGame.scene.getScene('MainScene');
+            if (mainScene && mainScene.updateCameraBounds) {
+                mainScene.updateCameraBounds();
+            }
+        }
+    } catch (err) {
+        console.warn('[手機版 UI] refreshMobileViewportLayout 失敗，已略過：', err);
+    }
+};
+
+window.scheduleMobileViewportRefresh = function() {
+    try {
+        if (window.__onionMobileViewportTimer) clearTimeout(window.__onionMobileViewportTimer);
+        window.__onionMobileViewportTimer = setTimeout(() => {
+            window.__onionMobileViewportTimer = null;
+            if (window.refreshMobileViewportLayout) window.refreshMobileViewportLayout();
+        }, 80);
+    } catch (_) {}
+};
+
+['resize', 'orientationchange', 'pageshow'].forEach(evt => {
+    window.addEventListener(evt, window.scheduleMobileViewportRefresh, { passive: true });
+});
+
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && window.scheduleMobileViewportRefresh) {
+        window.scheduleMobileViewportRefresh();
+    }
+});
+
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', window.scheduleMobileViewportRefresh, { passive: true });
+    window.visualViewport.addEventListener('scroll', window.scheduleMobileViewportRefresh, { passive: true });
+}
+
+window.refreshMobileViewportLayout();
 window.syncLoginRoomSelect(window.getRememberedServerRoom());
 
 document.body.classList.add('login-bg-active');
@@ -2883,7 +2954,7 @@ class BootScene extends Phaser.Scene {
         this.load.audio('prince-cat-normal-meow', 'pet-cat-wzm-normal-meow.mp3');
         this.load.audio('prince-cat-got-touched', 'pet-cat-wzm-got-touched.mp3');
         this.load.audio('prince-cat-feel-good', 'pet-cat-wzm-feel-good.mp3');
-        this.load.image('bg7Eonion', '7eonion-bg.jpg'); this.load.image('storeManager', 'store-manager.png'); this.load.spritesheet('onion-throw', 'onion-throw.png', { frameWidth: 90, frameHeight: 75 }); this.load.spritesheet('water-ball-blast', 'water-ball-blast.png', { frameWidth: 50, frameHeight: 50 }); this.load.spritesheet('onion-wet', 'onion-wet.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('made-coin', 'made-coin.png', { frameWidth: 50, frameHeight: 50 }); this.load.image('dummy', 'dummy.png'); this.load.spritesheet('dummy-got-shot', 'dummy-got-shot.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.image('bg7Eonion', '7eonion-bg.jpg'); this.load.image('storeManager', 'store-manager.png'); this.load.spritesheet('onion-throw', 'onion-throw.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('water-ball-blast', 'water-ball-blast.png', { frameWidth: 50, frameHeight: 50 }); this.load.spritesheet('onion-wet', 'onion-wet.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('made-coin', 'made-coin.png', { frameWidth: 50, frameHeight: 50 }); this.load.image('dummy', 'dummy.png'); this.load.spritesheet('dummy-got-shot', 'dummy-got-shot.png', { frameWidth: 75, frameHeight: 75 });
         this.load.image('fireworks', 'shop-fireworks.png'); this.load.spritesheet('onion-fireworks', 'onion-fireworks.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-got-shot', 'onion-got-shot.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('mimi-thief-walk', 'mimi-thief-walk.png', { frameWidth: 75, frameHeight: 75 });
         this.load.spritesheet('fireworks-shoot', 'fireworks-shoot.png', { frameWidth: 50, frameHeight: 50 });
         this.load.spritesheet('mimi-thief-stealing', 'mimi-thief-stealing.png', { frameWidth: 75, frameHeight: 75 });
@@ -2949,10 +3020,10 @@ class BootScene extends Phaser.Scene {
         // 補丁 6-1：玉兔伴手禮店 placeholder 素材。缺檔時商店會使用 Phaser fallback，不讓副本黑頻。
         this.load.image('solo-rocket-rabbit-shop-bg', 'solo-rocket-rabbit-shop-bg.png');
         this.load.image('solo-rocket-rabbit-shopkeeper', 'solo-rocket-rabbit-shopkeeper.png');
+        this.load.spritesheet('solo-rocket-rabbit-shopkeeper-sheet', 'solo-rocket-rabbit-shopkeeper-sheet.png', { frameWidth: 100, frameHeight: 100 });
         this.load.image('solo-rocket-item-moon-shard', 'solo-rocket-item-moon-shard.png');
         this.load.image('solo-rocket-item-moon-staff', 'solo-rocket-item-moon-staff.png');
         this.load.image('solo-rocket-item-moon-bun', 'solo-rocket-item-moon-bun.png');
-        this.load.image('solo-rocket-rabbit-shop-sign', 'solo-rocket-rabbit-shop-sign.png');
         this.load.audio('solo-rocket-rabbit-shop-bgm', 'solo-rocket-rabbit-shop-bgm.mp3');
         this.load.audio('solo-rocket-rabbit-shop-finish', 'solo-rocket-rabbit-shop-finish.mp3');
         this.load.audio('solo-rocket-rabbit-shop-buy', 'solo-rocket-rabbit-shop-buy.mp3');
@@ -3010,7 +3081,30 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'prince-cat-touched', frames: this.anims.generateFrameNumbers('prince-cat-touched-sheet', { start: 0, end: 5 }), frameRate: 5, repeat: -1 });
         this.anims.create({ key: 'prince-cat-eating', frames: this.anims.generateFrameNumbers('prince-cat-eating-sheet', { start: 0, end: 5 }), frameRate: 6, repeat: -1 });
         this.anims.create({ key: 'prince-cat-yummy', frames: this.anims.generateFrameNumbers('prince-cat-yummy-sheet', { start: 0, end: 5 }), frameRate: 5, repeat: -1 });
-        // 王子麵第二版餵食補丁緊急修正：
+
+        try {
+            const shopkeeperSheetKey = 'solo-rocket-rabbit-shopkeeper-sheet';
+            const shopkeeperAnimKey = 'solo-rocket-rabbit-shopkeeper-idle';
+
+            if (this.textures.exists(shopkeeperSheetKey) && !this.anims.exists(shopkeeperAnimKey)) {
+                const tex = this.textures.get(shopkeeperSheetKey);
+                const frameKeys = Object.keys((tex && tex.frames) || {}).filter(k => k !== '__BASE');
+                const frameEnd = Math.max(0, frameKeys.length - 1);
+
+                if (frameEnd >= 1) {
+                    this.anims.create({
+                        key: shopkeeperAnimKey,
+                        frames: this.anims.generateFrameNumbers(shopkeeperSheetKey, { start: 0, end: frameEnd }),
+                        duration: 3000,
+                        repeat: -1
+                    });
+                }
+            }
+        } catch (err) {
+            console.warn('[玉兔伴手禮店] 建立店員 spritesheet 動畫失敗，改用靜態 fallback：', err);
+        }
+     
+     // 王子麵第二版餵食補丁緊急修正：
         // BootScene 不呼叫 MainScene method，改用 inline 防呆建立開罐動畫，避免啟動黑屏。
         try {
             const sourceKey = 'pet-cat-can-open-source';
@@ -3194,15 +3288,26 @@ class UIScene extends Phaser.Scene {
             [this.furnBtn, this.furnText, this.itemBtn, this.itemText, this.btnA, this.txtA, this.btnB, this.txtB, this.statusContainer].forEach(obj => {
                 if (obj && obj.setVisible) obj.setVisible(false);
             });
+
             if (this.partyDash) this.partyDash.setVisible(false);
+
+            const mainScene = this.scene.manager.getScene('MainScene');
+            const isRabbitShopOpen = !!(
+                mainScene &&
+                mainScene.soloRocketRabbitShopContainer &&
+                mainScene.soloRocketRabbitShopContainer.active !== false
+            );
+
             if (this.joyStick) {
+                const showJoystick = !isRabbitShopOpen;
                 if (this.joyStick.base && this.joyStick.base.setVisible) {
-                    this.joyStick.base.setVisible(true);
+                    this.joyStick.base.setVisible(showJoystick);
                 }
                 if (this.joyStick.thumb && this.joyStick.thumb.setVisible) {
-                    this.joyStick.thumb.setVisible(true);
+                    this.joyStick.thumb.setVisible(showJoystick);
                 }
             }
+
             return;
         }
         
@@ -3438,8 +3543,8 @@ class MainScene extends Phaser.Scene {
         this.soloRocketBossHpFill = null;
         this.soloRocketBossHpText = null;
         this.soloRocketBossFloatTween = null;
-        this.soloRocketBossHp = 160;
-        this.soloRocketBossMaxHp = 160;
+        this.soloRocketBossHp = 138;
+        this.soloRocketBossMaxHp = 138;
         this.soloRocketBossSpawned = false;
         this.soloRocketBossKilled = false;
         this.soloRocketBossPunished = false;
@@ -7716,7 +7821,7 @@ this.events.on('action_B', () => {
         this.soloRocketAsteroidSpawnActive = false;
         this.soloRocketAsteroidSpawnStopped = false;
         this.soloRocketAsteroidNextSpawnAt = 12000;
-        this.soloRocketAsteroidExtraBudget = 50;
+        this.soloRocketAsteroidExtraBudget = 25;
         this.soloRocketAsteroidExtraNextAt = 64000;
         this.soloRocketLastFireAt = 0;
         this.soloRocketLastSpinAt = 0;
@@ -7844,8 +7949,8 @@ this.events.on('action_B', () => {
         this.soloRocketBossLastMissileAt = 0;
 
         if (resetFlags) {
-            this.soloRocketBossHp = 160;
-            this.soloRocketBossMaxHp = 160;
+            this.soloRocketBossHp = 138;
+            this.soloRocketBossMaxHp = 138;
             this.soloRocketBossSpawned = false;
             this.soloRocketBossKilled = false;
             this.soloRocketBossPunished = false;
@@ -8069,7 +8174,7 @@ this.events.on('action_B', () => {
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
         this.soloRocketBossSpawned = true;
         this.soloRocketBossEntering = true;
-        this.soloRocketBossMaxHp = 160;
+        this.soloRocketBossMaxHp = 138;
         this.soloRocketBossHp = this.soloRocketBossMaxHp;
 
         try {
@@ -8186,7 +8291,7 @@ this.events.on('action_B', () => {
         if (!this.soloRocketBossHpFill) return;
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
         const barW = Math.min(rect.w - 72, 300) - 4;
-        const maxHp = this.soloRocketBossMaxHp || 160;
+        const maxHp = this.soloRocketBossMaxHp || 138;
         const hpRate = Phaser.Math.Clamp((this.soloRocketBossHp || 0) / Math.max(1, maxHp), 0, 1);
         this.soloRocketBossHpFill.displayWidth = Math.max(1, barW * hpRate);
         if (this.soloRocketBossHpText) {
@@ -11475,61 +11580,108 @@ this.events.on('action_B', () => {
         this.soloRocketRabbitShopMessage = null;
     }
 
-    createSoloRocketRabbitSpeechBubble(text) {
+    createSoloRocketRabbitSpeechBubble(text, options = {}) {
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
         const shop = this.soloRocketRabbitShopContainer;
         if (!shop) return;
 
         this.clearSoloRocketRabbitSpeechBubble();
 
-        const bubbleW = Math.min(rect.w - 32, 370);
-        const bubbleH = 76;
-        const bubbleX = rect.centerX;
-        const bubbleY = Phaser.Math.Clamp(
-            rect.y + rect.h * 0.22,
-            rect.y + 96,
-            rect.y + rect.h - 330
+        const hasButton = !!options.buttonLabel;
+        const bubbleW = Math.min(rect.w - 32, hasButton ? 390 : 350);
+        const bubbleH = hasButton ? 166 : 82;
+
+        const rabbit = this.soloRocketRabbitShopKeeperObj;
+        const rabbitX = rabbit && Number.isFinite(Number(rabbit.__soloRocketShopBaseX))
+            ? Number(rabbit.__soloRocketShopBaseX)
+            : rect.x + rect.w * 0.72;
+        const rabbitY = rabbit && Number.isFinite(Number(rabbit.__soloRocketShopBaseY))
+            ? Number(rabbit.__soloRocketShopBaseY)
+            : rect.y + rect.h * 0.72;
+
+        const bubbleX = Phaser.Math.Clamp(
+            rabbitX - bubbleW * 0.42,
+            rect.x + bubbleW / 2 + 12,
+            rect.x + rect.w - bubbleW / 2 - 12
         );
+
+        const bubbleY = Phaser.Math.Clamp(
+            rabbitY - bubbleH * 0.82,
+            rect.y + 92,
+            rect.y + rect.h - bubbleH / 2 - 96
+        );
+
         const bubbleLeft = bubbleX - bubbleW / 2;
         const bubbleTop = bubbleY - bubbleH / 2;
 
         const bubble = this.add.container(0, 0).setScrollFactor(0);
         const bg = this.add.graphics();
-        bg.fillStyle(0x12001f, 0.72);
+
+        bg.fillStyle(0x12001f, 0.78);
         bg.fillRoundedRect(bubbleLeft, bubbleTop, bubbleW, bubbleH, 15);
-        bg.lineStyle(2, 0xffd36a, 0.92);
+        bg.lineStyle(2, 0xffd36a, 0.94);
         bg.strokeRoundedRect(bubbleLeft, bubbleTop, bubbleW, bubbleH, 15);
 
         const triX = Phaser.Math.Clamp(
-            bubbleX + bubbleW * 0.26,
-            bubbleLeft + 40,
-            bubbleLeft + bubbleW - 40
+            rabbitX - 10,
+            bubbleLeft + 42,
+            bubbleLeft + bubbleW - 42
         );
-        bg.fillStyle(0x12001f, 0.72);
-        bg.fillTriangle(triX, bubbleTop + bubbleH, triX + 20, bubbleTop + bubbleH, triX + 8, bubbleTop + bubbleH + 18);
+
+        bg.fillStyle(0x12001f, 0.78);
+        bg.fillTriangle(triX, bubbleTop + bubbleH, triX + 22, bubbleTop + bubbleH, triX + 10, bubbleTop + bubbleH + 18);
         bg.lineStyle(2, 0xffd36a, 0.7);
-        bg.lineBetween(triX, bubbleTop + bubbleH, triX + 8, bubbleTop + bubbleH + 18);
-        bg.lineBetween(triX + 20, bubbleTop + bubbleH, triX + 8, bubbleTop + bubbleH + 18);
+        bg.lineBetween(triX, bubbleTop + bubbleH, triX + 10, bubbleTop + bubbleH + 18);
+        bg.lineBetween(triX + 22, bubbleTop + bubbleH, triX + 10, bubbleTop + bubbleH + 18);
 
         const txt = this.add.text(bubbleLeft + 16, bubbleTop + 14, '', {
-            fontSize: '13px',
+            fontSize: hasButton ? '12px' : '13px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#fff8d6',
             stroke: '#000000',
             strokeThickness: 3,
             lineSpacing: 3,
-            wordWrap: { width: bubbleW - 32 }
+            wordWrap: { width: bubbleW - 32, useAdvancedWrap: true }
         }).setOrigin(0, 0);
 
         bubble.add([bg, txt]);
+
+        if (hasButton) {
+            const buyX = bubbleX;
+            const buyY = bubbleTop + bubbleH - 26;
+            const canBuy = !!options.canBuy;
+
+            const buyBg = this.add.rectangle(buyX, buyY, 132, 34, canBuy ? 0xffffff : 0x555555, 1)
+                .setStrokeStyle(2, canBuy ? 0xffd36a : 0x999999, 1);
+
+            const buyText = this.add.text(buyX, buyY, options.buttonLabel, {
+                fontSize: '15px',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold',
+                color: canBuy ? '#000000' : '#dddddd'
+            }).setOrigin(0.5);
+
+            bubble.add([buyBg, buyText]);
+
+            if (this.soloRocketRabbitShopHitAreas) {
+                this.soloRocketRabbitShopHitAreas.buy = {
+                    x: buyX,
+                    y: buyY,
+                    w: 178,
+                    h: 58,
+                    itemName: options.itemName || null
+                };
+            }
+        }
+
         shop.add(bubble);
 
         this.soloRocketRabbitShopSpeechBubble = bubble;
         this.soloRocketRabbitShopSpeechText = txt;
         this.soloRocketRabbitShopMessage = txt;
 
-        this.typeSoloRocketRabbitSpeech(text || '', 26);
+        this.typeSoloRocketRabbitSpeech(text || '', hasButton ? 12 : 22);
     }
 
     typeSoloRocketRabbitSpeech(fullText, speed) {
@@ -11641,7 +11793,13 @@ this.events.on('action_B', () => {
         const rabbitY = rect.y + rect.h - rabbitSize * 0.45 - 28;
 
         let rabbitObj = null;
-        if (this.textures.exists('solo-rocket-rabbit-shopkeeper')) {
+        if (this.textures.exists('solo-rocket-rabbit-shopkeeper-sheet') && this.anims.exists('solo-rocket-rabbit-shopkeeper-idle')) {
+            rabbitObj = this.add.sprite(rabbitX, rabbitY, 'solo-rocket-rabbit-shopkeeper-sheet', 0)
+                .setDisplaySize(rabbitSize, rabbitSize)
+                .setAlpha(0.98);
+
+            rabbitObj.play('solo-rocket-rabbit-shopkeeper-idle');
+        } else if (this.textures.exists('solo-rocket-rabbit-shopkeeper')) {
             rabbitObj = this.add.image(rabbitX, rabbitY, 'solo-rocket-rabbit-shopkeeper')
                 .setDisplaySize(rabbitSize, rabbitSize)
                 .setAlpha(0.98);
@@ -11728,21 +11886,8 @@ this.events.on('action_B', () => {
             });
         });
 
-        const panelW = Math.min(rect.w - 28, 396);
-        const panelH = selectedItem ? 176 : 104;
-        let panelMinY = productY + iconSize * 0.70 + panelH / 2 + 18;
-        let panelMaxY = rect.y + rect.h - 118 - panelH / 2;
-        if (panelMaxY < panelMinY) panelMaxY = panelMinY;
-
-        const panelX = rect.centerX;
-        const panelY = Phaser.Math.Clamp(rect.y + rect.h * 0.56, panelMinY, panelMaxY);
-        const panelLeft = panelX - panelW / 2;
-        const panelTop = panelY - panelH / 2;
-
-        const infoBg = this.add.graphics();
-        infoBg.fillStyle(0x000000, 0.5).fillRoundedRect(panelLeft, panelTop, panelW, panelH, 16);
-        infoBg.lineStyle(2, 0xffd36a, selectedItem ? 0.85 : 0.45).strokeRoundedRect(panelLeft, panelTop, panelW, panelH, 16);
-        objects.push(infoBg);
+        let selectedShopSpeech = '';
+        let selectedShopButtonOptions = null;
 
         if (selectedItem) {
             const qty = (this.soloRocketMoonShopPurchases && this.soloRocketMoonShopPurchases[selectedItem.name]) || 0;
@@ -11751,49 +11896,20 @@ this.events.on('action_B', () => {
             const canBuy = canAfford && !alreadyLimited && !this.soloRocketMoonShopFinalizing && !this.soloRocketMoonShopFinalized;
             const buttonLabel = alreadyLimited ? '本趟已購買' : (canAfford ? '購買' : '旅費不足');
 
-            const infoTitle = this.add.text(panelLeft + 18, panelTop + 16, `${selectedItem.name}　${selectedItem.price} 旅費`, {
-                fontSize: '18px',
-                fontFamily: 'Arial, sans-serif',
-                fontStyle: 'bold',
-                color: '#fff8d6',
-                stroke: '#000000',
-                strokeThickness: 4
-            }).setOrigin(0, 0);
+            selectedShopSpeech =
+                `玉兔：${selectedItem.name}\n` +
+                `價格：${selectedItem.price} 旅費\n` +
+                `本趟已購買：${qty}\n` +
+                `${selectedItem.desc}`;
 
-            const infoQty = this.add.text(panelLeft + 18, panelTop + 45, `本趟購買：${qty}`, {
-                fontSize: '13px',
-                fontFamily: 'Arial, sans-serif',
-                color: '#b7f7ff',
-                stroke: '#000000',
-                strokeThickness: 3
-            }).setOrigin(0, 0);
-
-            const infoDesc = this.add.text(panelLeft + 18, panelTop + 70, selectedItem.desc, {
-                fontSize: '12px',
-                fontFamily: 'Arial, sans-serif',
-                color: '#ffffff',
-                stroke: '#000000',
-                strokeThickness: 3,
-                wordWrap: { width: panelW - 36 }
-            }).setOrigin(0, 0);
-
-            const buyX = panelX;
-            const buyY = panelTop + panelH - 27;
-            const buyBg = this.add.rectangle(buyX, buyY, 132, 36, canBuy ? 0xffffff : 0x555555, 1)
-                .setStrokeStyle(2, canBuy ? 0xffd36a : 0x999999, 1);
-
-            const buyText = this.add.text(buyX, buyY, buttonLabel, {
-                fontSize: '15px',
-                fontFamily: 'Arial, sans-serif',
-                fontStyle: 'bold',
-                color: canBuy ? '#000000' : '#dddddd'
-            }).setOrigin(0.5);
-
-            this.soloRocketRabbitShopHitAreas.buy = { x: buyX, y: buyY, w: 178, h: 62, itemName: selectedItem.name };
-            objects.push(infoTitle, infoQty, infoDesc, buyBg, buyText);
+            selectedShopButtonOptions = {
+                buttonLabel,
+                canBuy,
+                itemName: selectedItem.name
+            };
         } else {
-            const hint = this.add.text(panelX, panelY,
-                '點選上方三個月球伴手禮，商品資訊與購買按鈕會出現在這裡。', {
+            const hint = this.add.text(rect.centerX, Phaser.Math.Clamp(productY + iconSize + 58, rect.y + 186, rect.y + rect.h - 176),
+                '點選月球伴手禮，玉兔會介紹商品。', {
                 fontSize: '15px',
                 fontFamily: 'Arial, sans-serif',
                 fontStyle: 'bold',
@@ -11801,8 +11917,9 @@ this.events.on('action_B', () => {
                 stroke: '#000000',
                 strokeThickness: 4,
                 align: 'center',
-                wordWrap: { width: panelW - 36 }
+                wordWrap: { width: rect.w - 42 }
             }).setOrigin(0.5);
+
             objects.push(hint);
         }
 
@@ -11823,11 +11940,12 @@ this.events.on('action_B', () => {
         objects.push(leaveBg, leaveText);
         shop.add(objects);
 
-        const defaultSpeech = this.soloRocketSelectedMoonShopItemName
-            ? '玉兔：看好了就按購買，別亂花旅費喔。'
-            : '玉兔：遠道而來的洋蔥，看看月球限定伴手禮吧。';
         if (this.createSoloRocketRabbitSpeechBubble) {
-            this.createSoloRocketRabbitSpeechBubble(defaultSpeech);
+            if (selectedItem && selectedShopSpeech) {
+                this.createSoloRocketRabbitSpeechBubble(selectedShopSpeech, selectedShopButtonOptions || {});
+            } else {
+                this.createSoloRocketRabbitSpeechBubble('玉兔：遠道而來的洋蔥，點商品我再跟你介紹。');
+            }
         }
 
         if (this.startSoloRocketRabbitShopMeteors) {
@@ -11889,11 +12007,6 @@ this.events.on('action_B', () => {
         if (!item) return;
         this.soloRocketSelectedMoonShopItemName = item.name;
         this.renderSoloRocketRabbitShop();
-        if (this.typeSoloRocketRabbitSpeech) {
-            this.typeSoloRocketRabbitSpeech('玉兔：這項商品不錯吧？想買就按購買。', 24);
-        } else if (this.soloRocketRabbitShopMessage) {
-            this.soloRocketRabbitShopMessage.setText('玉兔：這項商品不錯吧？想買就按購買。');
-        }
         this.bounceSoloRocketRabbitShopkeeper();
     }
 
@@ -12990,13 +13103,53 @@ playPrinceCatYummySFXOnce(yummyEffectKey) {
     this.playPrinceCatSFX('prince-cat-full-sfx');
 }
 
+showPrinceCatFriendshipHint(count, customText = null) {
+    const text = customText || `友好度提升 ${count}/3`;
+    const cam = this.cameras && this.cameras.main ? this.cameras.main : null;
+    if (!cam) return;
+
+    const x = cam.width / 2;
+    const y = cam.height - (cam.height > cam.width ? 150 : 105);
+
+    const hint = this.add.text(x, y, text, {
+        fontSize: '22px',
+        fontFamily: 'Arial, sans-serif',
+        fontStyle: 'bold',
+        color: '#fff8d6',
+        stroke: '#5d4037',
+        strokeThickness: 5,
+        align: 'center'
+    }).setOrigin(0.5).setDepth(9990).setScrollFactor(0).setAlpha(0);
+
+    this.tweens.add({
+        targets: hint,
+        alpha: 1,
+        y: y - 8,
+        duration: 180,
+        ease: 'Cubic.easeOut',
+        onComplete: () => {
+            this.tweens.add({
+                targets: hint,
+                y: y - 28,
+                alpha: 0,
+                duration: 850,
+                delay: 520,
+                ease: 'Cubic.easeIn',
+                onComplete: () => {
+                    if (hint && hint.destroy) hint.destroy();
+                }
+            });
+        }
+    });
+}
+  
 playPrinceCatFriendshipUpIfNeeded(oldBond, newBond) {
     const oldStage = window.getPrinceBondStageIndex ? window.getPrinceBondStageIndex(oldBond) : 0;
     const newStage = window.getPrinceBondStageIndex ? window.getPrinceBondStageIndex(newBond) : 0;
 
     if (newStage > oldStage) {
         this.playPrinceCatSFX('prince-cat-friendship-up-sfx');
-        sendPrinceCatBubble("王子麵羈絆升階了！");
+        this.showPrinceCatFriendshipHint(null, '王子麵羈絆升階了！');
     }
 }
 
@@ -13162,7 +13315,8 @@ finishPrinceCatFeeding(uid, catRef, feedingToken = null) {
 
     update(ref(window.GameLogic.db, window.getServerRoomPath(`cafePlayers/${uid}`)), {
         action: null,
-        actionTime: null
+        actionTime: null,
+        princeCatFeedFlipX: null
     }).catch(err => console.warn('[王子麵餵食] 清除玩家餵食 action 失敗：', err));
 
     const safeCatRef = catRef || ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat'));
@@ -13237,6 +13391,8 @@ async startPrinceCatFeeding() {
         const feedRestoreMs = 4300;
         const lockUntil = now + feedRestoreMs;
         feedingToken = `feed-${uid}-${now}`;
+
+        const princeFeedFlipX = this.princeCatSprite.x < this.localPlayer.sprite.x;
         catRef = ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat'));
 
         const snap = await get(catRef);
@@ -13269,13 +13425,16 @@ async startPrinceCatFeeding() {
 
         if (this.textures.exists('onion-feeding')) {
             this.localPlayer.sprite.setTexture('onion-feeding');
+            this.localPlayer.sprite.setFlipX(princeFeedFlipX);
+            this.localPlayer.sprite.princeCatFeedFlipX = princeFeedFlipX;
         }
 
         update(ref(window.GameLogic.db, window.getServerRoomPath(`cafePlayers/${uid}`)), {
             action: 'feedPrinceCat',
             actionTime: now,
             x: this.localPlayer.sprite.x,
-            y: this.localPlayer.sprite.y
+            y: this.localPlayer.sprite.y,
+            princeCatFeedFlipX: princeFeedFlipX
         }).catch(err => console.warn('[王子麵餵食] 同步玩家餵食 action 失敗：', err));
 
         // 重要：保底恢復必須在任何特效、音效、動畫播放之前先註冊，避免特效錯誤導致角色永久蹲住。
@@ -13358,7 +13517,7 @@ applyPrinceFeedBondGain() {
         princeLastFeedDate: p.princeLastFeedDate
     }).catch(err => console.warn('Firebase 更新王子麵餵食羈絆失敗:', err));
 
-    sendPrinceCatBubble(`王子麵開心地吃掉了罐罐！\n王子麵羈絆增加了！\n今日餵食：${p.princeFeedCountToday} / 3`);
+    this.showPrinceCatFriendshipHint(p.princeFeedCountToday);
     this.playPrinceCatFriendshipUpIfNeeded(oldBond, p.princeBond);
 
     return true;
@@ -13528,7 +13687,7 @@ tryPrinceCatSweepBonus(x, y) {
                 princeLastPetDate: p.princeLastPetDate
             }).catch(err => console.warn('Firebase 更新王子麵羈絆失敗:', err));
 
-            sendPrinceCatBubble(`與王子麵的羈絆增加了！\n今日摸摸：${p.princePetCountToday} / 3`);
+            this.showPrinceCatFriendshipHint(p.princePetCountToday);
             this.playPrinceCatFriendshipUpIfNeeded(oldBond, p.princeBond);
         } else {
             sendPrinceCatBubble("王子麵把頭轉開了。\n今日摸摸已達上限。");
@@ -14309,6 +14468,9 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
             this.localPlayer.sprite.setVelocity(0, 0);
             if (isPrinceCatFeedingLocked && this.textures.exists('onion-feeding')) {
                 this.localPlayer.sprite.setTexture('onion-feeding');
+                if (typeof this.localPlayer.sprite.princeCatFeedFlipX === 'boolean') {
+                    this.localPlayer.sprite.setFlipX(this.localPlayer.sprite.princeCatFeedFlipX);
+                }
             } else {
                 this.localPlayer.sprite.play('onion-petting', true);
             }
@@ -14652,9 +14814,12 @@ if (dist < 30) {
                              op.sprite.isFeedingPrinceCat = true;
                              op.sprite.feedPrinceCatUntil = Date.now() + 4500;
 
-                                if (this.textures.exists('onion-feeding')) {
-                             op.sprite.setTexture('onion-feeding');
-                         }
+                          if (this.textures.exists('onion-feeding')) {
+                              op.sprite.setTexture('onion-feeding');
+                              if (typeof pd.princeCatFeedFlipX === 'boolean') {
+                                  op.sprite.setFlipX(pd.princeCatFeedFlipX);
+                              }
+                          }
 
                             this.time.delayedCall(4300, () => {
                                 if (op.sprite && op.sprite.active) {
