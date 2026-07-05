@@ -763,6 +763,10 @@ function createSystemUI() {
                 <div class="catalog-item" onclick="window.devAddCoins()" style="flex-direction:row; justify-content:center; padding: 15px; font-weight:bold; background:rgba(197, 160, 89, 0.1); width:100%; box-sizing:border-box;">
                     <span>💰 增加10萬馬德幣</span>
                 </div>
+                <div class="catalog-item" onclick="window.devMigrateLegacyRoomDataToOnionGang()" style="flex-direction:column; justify-content:center; padding: 15px; font-weight:bold; background:rgba(217, 83, 79, 0.12); border-color:#d9534f; width:100%; box-sizing:border-box;">
+                    <span>📦 搬移舊回憶與排行榜到五告派</span>
+                    <small style="margin-top:6px; color:#d9534f; font-size:11px;">臨時一次性按鈕，成功後請刪除</small>
+                </div>
             </div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%;" onclick="document.getElementById('dev-modal').style.display='none'; document.getElementById('inventory-modal').style.display='block';">返回背包</button>
         </div>
@@ -1574,6 +1578,205 @@ window.openMagicModal = function() {
     document.getElementById('magic-desc').innerText = "點擊法寶查看說明...";
     document.getElementById('magic-modal').style.display = 'block';
 };
+
+// ====== 臨時一次性工具：舊全域 memories / weeklySweeps 遷移到洋蔥五告派 ======
+// 注意：遷移成功並完成測試後，請移除此整段與 dev-modal 按鈕，避免正式版誤按。
+window.isLegacyRoomMigrationAdmin = function() {
+    const user = window.GameLogic && window.GameLogic.currentUser ? window.GameLogic.currentUser : null;
+    if (!user) return false;
+
+    const email = (user.email || '').toLowerCase();
+
+    // 一次性遷移工具管理員名單：目前只開放 onion@gmail.com。
+    // 如需授權其他白名單管理者，請只手動加入該管理者 UID，不要直接開放所有玩家資料節點。
+    const LEGACY_MIGRATION_ADMIN_EMAILS = {
+        "onion@gmail.com": true
+    };
+
+    const LEGACY_MIGRATION_ADMIN_UIDS = {
+        "GkVVzRWAlzenkAUan95q7QfznVb2": true // onion@gmail.com
+    };
+
+    return !!LEGACY_MIGRATION_ADMIN_EMAILS[email] || !!LEGACY_MIGRATION_ADMIN_UIDS[user.uid];
+};
+
+window.devMigrateLegacyRoomDataToOnionGang = async function() {
+    if (!window.GameLogic || !window.GameLogic.currentUser) {
+        alert("請先登入管理員帳號。");
+        return false;
+    }
+
+    if (!window.isLegacyRoomMigrationAdmin()) {
+        alert("只有管理員可以執行舊資料遷移。");
+        console.warn("[舊資料遷移] 非管理員嘗試執行：", window.GameLogic.currentUser.email, window.GameLogic.currentUser.uid);
+        return false;
+    }
+
+    const firstConfirm = confirm(
+        "這是一次性遷移工具。\n\n" +
+        "將只複製：\n" +
+        "memories → serverRooms/onionGang/memories\n" +
+        "weeklySweeps → serverRooms/onionGang/weeklySweeps\n\n" +
+        "不會刪除舊資料，不會搬 users/privateChats/manuals/onlinePlayers/cafePlayers，也不會寫入 ryoFriends。\n\n" +
+        "確定要開始檢查並準備遷移嗎？"
+    );
+
+    if (!firstConfirm) return false;
+
+    const dbRoot = ref(window.GameLogic.db);
+    const sourcePaths = {
+        memories: "memories",
+        weeklySweeps: "weeklySweeps"
+    };
+    const targetPaths = {
+        memories: "serverRooms/onionGang/memories",
+        weeklySweeps: "serverRooms/onionGang/weeklySweeps"
+    };
+
+    const isPlainObject = (val) => {
+        return val !== null && typeof val === "object" && !Array.isArray(val);
+    };
+
+    const hasMeaningfulData = (val) => {
+        if (val === null || val === undefined) return false;
+        if (isPlainObject(val)) return Object.keys(val).length > 0;
+        if (Array.isArray(val)) return val.length > 0;
+        return true;
+    };
+
+    const countTopLevel = (val) => {
+        if (!hasMeaningfulData(val)) return 0;
+        if (isPlainObject(val) || Array.isArray(val)) return Object.keys(val).length;
+        return 1;
+    };
+
+    const updates = {};
+    const collisions = [];
+    const skipped = [];
+
+    const collectCopyUpdates = (sourceVal, targetVal, targetPath, labelPath) => {
+        if (sourceVal === undefined || sourceVal === null) return;
+
+        if (isPlainObject(sourceVal)) {
+            const keys = Object.keys(sourceVal);
+
+            if (keys.length === 0) {
+                if (targetVal !== undefined && targetVal !== null) collisions.push(labelPath);
+                updates[targetPath] = {};
+                return;
+            }
+
+            keys.forEach(key => {
+                const nextTargetVal = (
+                    targetVal &&
+                    typeof targetVal === "object" &&
+                    Object.prototype.hasOwnProperty.call(targetVal, key)
+                ) ? targetVal[key] : undefined;
+
+                collectCopyUpdates(
+                    sourceVal[key],
+                    nextTargetVal,
+                    `${targetPath}/${key}`,
+                    `${labelPath}/${key}`
+                );
+            });
+
+            return;
+        }
+
+        if (targetVal !== undefined && targetVal !== null) collisions.push(labelPath);
+        updates[targetPath] = sourceVal;
+    };
+
+    try {
+        const [
+            legacyMemoriesSnap,
+            legacyWeeklySweepsSnap,
+            targetMemoriesSnap,
+            targetWeeklySweepsSnap
+        ] = await Promise.all([
+            get(ref(window.GameLogic.db, sourcePaths.memories)),
+            get(ref(window.GameLogic.db, sourcePaths.weeklySweeps)),
+            get(ref(window.GameLogic.db, targetPaths.memories)),
+            get(ref(window.GameLogic.db, targetPaths.weeklySweeps))
+        ]);
+
+        const legacyMemories = legacyMemoriesSnap.val();
+        const legacyWeeklySweeps = legacyWeeklySweepsSnap.val();
+        const targetMemories = targetMemoriesSnap.val();
+        const targetWeeklySweeps = targetWeeklySweepsSnap.val();
+
+        if (hasMeaningfulData(legacyMemories)) {
+            collectCopyUpdates(legacyMemories, targetMemories, targetPaths.memories, targetPaths.memories);
+        } else {
+            skipped.push("舊全域 memories 沒有資料，略過。");
+        }
+
+        if (hasMeaningfulData(legacyWeeklySweeps)) {
+            collectCopyUpdates(legacyWeeklySweeps, targetWeeklySweeps, targetPaths.weeklySweeps, targetPaths.weeklySweeps);
+        } else {
+            skipped.push("舊全域 weeklySweeps 沒有資料，略過。");
+        }
+
+        const updateKeys = Object.keys(updates);
+
+        if (updateKeys.length === 0) {
+            alert("沒有可遷移的舊資料。\n\n" + (skipped.length ? skipped.join("\n") : ""));
+            console.warn("[舊資料遷移] 沒有可寫入的資料。", { skipped });
+            return false;
+        }
+
+        if (collisions.length > 0) {
+            const preview = collisions.slice(0, 12).join("\n");
+            const more = collisions.length > 12 ? `\n...另有 ${collisions.length - 12} 個同名欄位` : "";
+            const overwriteConfirm = confirm(
+                "偵測到 onionGang 目標位置已經有同名資料。\n\n" +
+                "按「取消」會停止，不會寫入任何資料。\n" +
+                "按「確定」才會覆蓋這些同名欄位。\n\n" +
+                `同名欄位數：${collisions.length}\n` +
+                `${preview}${more}\n\n` +
+                "是否確定要覆蓋上述同名欄位？"
+            );
+
+            if (!overwriteConfirm) {
+                alert("已停止遷移；沒有寫入任何資料。");
+                console.warn("[舊資料遷移] 因目標已有同名資料，管理員取消遷移。", { collisions });
+                return false;
+            }
+        }
+
+        await update(dbRoot, updates);
+
+        const message =
+            "舊資料遷移完成！\n\n" +
+            `來源 memories 頂層筆數：約 ${countTopLevel(legacyMemories)}\n` +
+            `來源 weeklySweeps 頂層筆數：約 ${countTopLevel(legacyWeeklySweeps)}\n` +
+            `本次寫入路徑數：${updateKeys.length}\n` +
+            `同名覆蓋欄位數：${collisions.length}\n\n` +
+            "已寫入 onionGang，未刪除舊全域資料，也未寫入 ryoFriends。\n\n" +
+            "測試完成後，請移除此一次性遷移函式與 dev-modal 按鈕。";
+
+        alert(message);
+        console.log("[舊資料遷移] 完成。", {
+            updates,
+            collisions,
+            skipped,
+            sourcePaths,
+            targetPaths
+        });
+
+        const devModal = document.getElementById("dev-modal");
+        if (devModal) devModal.style.display = "none";
+
+        return true;
+    } catch (err) {
+        console.warn("[舊資料遷移] 執行失敗：", err);
+        alert("舊資料遷移失敗，請打開 F12 Console 查看錯誤。\n\n" + (err && err.message ? err.message : err));
+        return false;
+    }
+};
+// ====== 臨時一次性工具結束 ======
+
 // 【新增】開發者一鍵測試：在交誼廳中央直接生成米米
 window.devSummonMimi = function() {
     if (window.GameLogic.currentScene !== 'cafe') {
