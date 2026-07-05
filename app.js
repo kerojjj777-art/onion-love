@@ -13447,6 +13447,7 @@ if (!data.scoreHandled && data.attacker) {
             callback: runCycle,
             callbackScope: this
         });
+    }
 
     bounceSoloRocketRabbitShopkeeper() {
         const rabbit = this.soloRocketRabbitShopKeeperObj;
