@@ -4153,7 +4153,7 @@ this.events.on('action_B', () => {
         });
         
         const activePartyRoomId = window.PartyLogic && window.PartyLogic.roomId ? window.PartyLogic.roomId : '';
-        this.partyAllHitsListener = onValue(ref(window.GameLogic.db, `partyRooms/${activePartyRoomId}/hits`), (snap) => {
+        this.partyAllHitsListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${activePartyRoomId}/hits`)), (snap) => {
             let hits = snap.val() || {};
             this.partySeenHitTimes = this.partySeenHitTimes || {};
 
@@ -4269,7 +4269,7 @@ this.events.on('action_B', () => {
                 });
             }
       });
-        this.fwHitListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`)), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 2000)) { if (this.localPlayer.isInvincible) return; window.playSFX(this, 'bomb'); this.localPlayer.isInvincible = true; this.localPlayer.isStunned = true; this.localPlayer.sprite.play('fw-hit', true); let p = window.GameLogic.myProfile; let loss = Math.min(p.coins || 0, 100); p.coins -= loss; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }).catch(err => console.warn('Firebase 被擊中扣款失敗:', err)); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins; if (loss > 0) { let amounts = [Math.floor(loss * 0.4), Math.floor(loss * 0.3), loss - Math.floor(loss * 0.4) - Math.floor(loss * 0.3)]; for (let i = 0; i < 3; i++) { if(amounts[i] <= 0) continue; let angle = (Math.PI * 2 / 3) * i + Phaser.Math.FloatBetween(-0.25, 0.25); let dist = Phaser.Math.Between(100, 160); let cx = Phaser.Math.Clamp(this.localPlayer.sprite.x + Math.cos(angle) * dist, 80, this.physics.world.bounds.width - 80); let cy = Phaser.Math.Clamp(this.localPlayer.sprite.y + Math.sin(angle) * dist + 20, 80, this.physics.world.bounds.height - 80); push(ref(window.GameLogic.db, window.getServerRoomPath('droppedCoins')), { x: cx, y: cy, amount: amounts[i], scene: this.sceneName }); } } this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); remove(ref(window.GameLogic.db, `serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`)); } });
+        this.fwHitListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`)), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 2000)) { if (this.localPlayer.isInvincible) return; window.playSFX(this, 'bomb'); this.localPlayer.isInvincible = true; this.localPlayer.isStunned = true; this.localPlayer.sprite.play('fw-hit', true); let p = window.GameLogic.myProfile; let loss = Math.min(p.coins || 0, 100); p.coins -= loss; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }).catch(err => console.warn('Firebase 被擊中扣款失敗:', err)); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins; if (loss > 0) { let amounts = [Math.floor(loss * 0.4), Math.floor(loss * 0.3), loss - Math.floor(loss * 0.4) - Math.floor(loss * 0.3)]; for (let i = 0; i < 3; i++) { if(amounts[i] <= 0) continue; let angle = (Math.PI * 2 / 3) * i + Phaser.Math.FloatBetween(-0.25, 0.25); let dist = Phaser.Math.Between(100, 160); let cx = Phaser.Math.Clamp(this.localPlayer.sprite.x + Math.cos(angle) * dist, 80, this.physics.world.bounds.width - 80); let cy = Phaser.Math.Clamp(this.localPlayer.sprite.y + Math.sin(angle) * dist + 20, 80, this.physics.world.bounds.height - 80); push(ref(window.GameLogic.db, window.getServerRoomPath('droppedCoins')), { x: cx, y: cy, amount: amounts[i], scene: this.sceneName }); } } this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); remove(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`))); } });
         this.fwPlayersHitListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/fireworksHits')), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { window.playSFX(this, 'bomb'); opSprite.isStunned = true; opSprite.play('fw-hit', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
         this.fwDummyHitListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/fireworksDummyHits')), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { window.playSFX(this, 'bomb'); dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
         this.globalFwListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/globalFireworks')), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 3000) && data.scene === this.sceneName) { if (this.lastGlobalFwTime !== data.time) { this.lastGlobalFwTime = data.time; this.playGlobalFireworks(); } } });
@@ -13301,7 +13301,7 @@ if (activeBubbleMsg) {
                         for (let uid in counts) { if (counts[uid] > maxV) { maxV = counts[uid]; winners = [uid]; } else if (counts[uid] === maxV) { winners.push(uid); } }
                         let finalWinner = winners[Math.floor(Math.random() * winners.length)];
                         if (finalWinner === 'any') { let seatedUids = pUids.filter(u => window.GameLogic.shrinePlayers[u].isSeated); finalWinner = seatedUids[Math.floor(Math.random() * seatedUids.length)]; }
-                        update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'countdown', targetUid: finalWinner, startTime: Date.now() });
+                        update(ref(window.GameLogic.db, window.getServerRoomPath('shrineEvents/current')), { state: 'countdown', targetUid: finalWinner, startTime: Date.now() });
                     }
                 }
             }
@@ -13315,7 +13315,7 @@ if (activeBubbleMsg) {
                 if (isHost && elapsed > 4000) {
                     if (!this.pendingStateChange || Date.now() - this.pendingStateChange > 2000) {
                         this.pendingStateChange = Date.now();
-                        update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'purifying', decay: 0, startTime: Date.now() });
+                        update(ref(window.GameLogic.db, window.getServerRoomPath('shrineEvents/current')), { state: 'purifying', decay: 0, startTime: Date.now() });
                     }
                 }
             }
@@ -13327,7 +13327,7 @@ if (activeBubbleMsg) {
             if (isHost) {
                 if (!this.lastDecaySync || Date.now() - this.lastDecaySync > 500) {
                     this.lastDecaySync = Date.now(); currentDecay += 4; 
-                    update(ref(window.GameLogic.db, 'shrineEvents/current'), { decay: currentDecay, lastDecayTime: Date.now() });
+                    update(ref(window.GameLogic.db, window.getServerRoomPath('shrineEvents/current')), { decay: currentDecay, lastDecayTime: Date.now() });
                 }
             }
             let progressVal = (totalClicks * 5) - currentDecay; if (progressVal < 0) progressVal = 0;
@@ -13338,7 +13338,7 @@ if (activeBubbleMsg) {
             if (isHost && ratio >= 1) {
                 if (!this.pendingStateChange || Date.now() - this.pendingStateChange > 2000) {
                     this.pendingStateChange = Date.now();
-                    update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'success', endTime: Date.now() });
+                    update(ref(window.GameLogic.db, window.getServerRoomPath('shrineEvents/current')), { state: 'success', endTime: Date.now() });
                 }
             }
 
@@ -13454,7 +13454,7 @@ if (activeBubbleMsg) {
                 }
                 this.time.delayedCall(8000, () => {
                     this.successTextShown = false; this.coinsDropped = false;
-                    if (isHost) update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'finished' });
+                    if (isHost) update(ref(window.GameLogic.db, window.getServerRoomPath('shrineEvents/current')), { state: 'finished' });
                     if (this.localPlayer.isSeated) { this.localPlayer.isSeated = false; update(ref(window.GameLogic.db, window.getServerRoomPath(`shrinePlayers/${window.GameLogic.currentUser.uid}`)), { isSeated: false }); }
                 });
             }
@@ -15534,7 +15534,7 @@ window.processPartyEventLogic = function(scene) {
     
     if (state === 'starting') {
         if (pUids.length <= 1 && isCoordinator) {
-            update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'finished', finishTime: Date.now(), aborted: true });
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}`)), { state: 'finished', finishTime: Date.now(), aborted: true });
             return;
         }
 
@@ -15574,7 +15574,7 @@ window.processPartyEventLogic = function(scene) {
         }
         
         if (remain <= 0 && isCoordinator) {
-            update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`), { ammo: window.PartyLogic.ammo });
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`)), { ammo: window.PartyLogic.ammo });
             update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}`)), { state: 'finished', finishTime: Date.now() }); 
         }
     } else if (state === 'finished') {
