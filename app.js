@@ -13937,7 +13937,11 @@ tryPrinceCatSweepBonus(x, y) {
         }
     }
   
-    createPlayerEntity(x, y, pData, isLocal = false) { let entity = { sprite: this.physics.add.sprite(x, y, 'onion').setCollideWorldBounds(true).setDepth(10) }; if (!isLocal) { entity.sprite.setInteractive(); entity.sprite.on('pointerdown', (pointer) => { const actionMenu = document.getElementById("action-menu"); actionMenu.style.display = "flex"; actionMenu.style.left = pointer.event.pageX + "px"; actionMenu.style.top = pointer.event.pageY + "px"; actionMenu.dataset.uid = pData.uid; }); } 
+    createPlayerEntity(x, y, pData, isLocal = false) {
+        let entity = { sprite: this.physics.add.sprite(x, y, 'onion').setCollideWorldBounds(true).setDepth(10) };
+        if (!isLocal) {
+            this.bindDirectPlayerTap(entity.sprite, pData);
+        } 
         // 修正1：使用 Container 取代直接繪製，解決每幀重繪造成的掉幀問題
         entity.nameContainer = this.add.container(x, y).setDepth(12); entity.nameBg = this.add.graphics(); entity.nameText = this.add.text(0, 0, pData.name || '匿名', { fontSize: '13px', fontFamily: 'Georgia', color: pData.color || '#fff', fontStyle: 'bold' }).setOrigin(0.5); entity.nameContainer.add([entity.nameBg, entity.nameText]);
         entity.bubbleContainer = this.add.container(x, y).setDepth(14).setVisible(false); entity.bubbleBg = this.add.graphics(); entity.bubbleText = this.add.text(0, 0, '', { fontSize: '14px', fontFamily: 'Georgia', color: '#3e2723', fontStyle: 'bold', wordWrap: { width: 160, useAdvancedWrap: true }, align: 'center' }).setOrigin(0.5); entity.bubbleContainer.add([entity.bubbleBg, entity.bubbleText]);
@@ -14609,8 +14613,169 @@ if (activeBubbleMsg) {
         return true;
     }
 
+    tryUseArmedItemOnDirectTarget(targetUid, targetSprite, targetType = 'player') {
+        const itemName = window.GameLogic ? window.GameLogic.armedItemName : null;
+        const directTargetItems = { '水球': true, '煙火': true, '蔥友機': true };
+
+        if (!window.GameLogic || window.GameLogic.armedItemState !== 'ready') return false;
+        if (!directTargetItems[itemName]) return false;
+        if (!targetUid || !targetSprite || !targetSprite.active) return false;
+        if (!this.localPlayer || !this.localPlayer.sprite) return false;
+        if (this.localPlayer.isSleeping || this.localPlayer.isSeated || this.localPlayer.isSweeping) return false;
+
+        const lockedUid = window.GameLogic.currentTargetUid;
+        const lockedSprite = window.GameLogic.currentTargetSprite;
+        const lockedType = window.GameLogic.currentTargetType;
+
+        if (lockedUid !== targetUid || lockedType !== targetType) return false;
+        if (lockedSprite && lockedSprite !== targetSprite) return false;
+
+        window.GameLogic.currentTargetUid = targetUid;
+        window.GameLogic.currentTargetSprite = targetSprite;
+        window.GameLogic.currentTargetType = targetType;
+
+        this.events.emit('action_A_short');
+        return true;
+    }
+
+    handleDoghouseBedDirectInteraction(key, f) {
+        if (this.sceneName !== 'doghouse' || !key || !key.includes('bed')) return false;
+        if (!f || !f.sprite || !f.sprite.active || !f.sprite.isLocked) return false;
+        if (!this.localPlayer || !this.localPlayer.sprite) return false;
+        if (this.localPlayer.isSeated || this.localPlayer.isSweeping) return false;
+
+        if (this.localPlayer.isSleeping) {
+            this.events.emit('action_A_short');
+            return true;
+        }
+
+        this.localPlayer.sprite.setVelocity(0, 0);
+        this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y);
+        this.events.emit('action_A_short');
+        return true;
+    }
+
+    handleShrineSeatDirectInteraction(key, f) {
+        if (this.sceneName !== 'shrine' || !key || !key.startsWith('seat_')) return false;
+        if (!f || !f.sprite || !f.sprite.active || !f.sprite.isLocked) return false;
+        if (!this.localPlayer || !this.localPlayer.sprite) return false;
+        if (this.localPlayer.isSleeping) return false;
+
+        if (this.localPlayer.isSeated) {
+            this.localPlayer.isSeated = false;
+            this.localPlayer.sprite.play('idle');
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`shrinePlayers/${window.GameLogic.currentUser.uid}`)), { isSeated: false });
+            return true;
+        }
+
+        this.localPlayer.isSeated = true;
+        this.localPlayer.sprite.setVelocity(0, 0);
+        this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y - 15);
+        this.localPlayer.sprite.play('seat-idle', true);
+        update(ref(window.GameLogic.db, window.getServerRoomPath(`shrinePlayers/${window.GameLogic.currentUser.uid}`)), {
+            isSeated: true,
+            x: f.sprite.x,
+            y: f.sprite.y - 15
+        });
+        return true;
+    }
+
+    bindDirectPlayerTap(sprite, pData) {
+        if (!sprite || !sprite.setInteractive || sprite._onionPlayerDirectTapBound) return;
+        sprite._onionPlayerDirectTapBound = true;
+
+        try {
+            sprite.setInteractive({ useHandCursor: true });
+        } catch (err) {
+            try { sprite.setInteractive(); } catch (_) { return; }
+        }
+
+        const dragThreshold = 12;
+        const cooldownMs = 300;
+
+        const markMoveIfNeeded = (pointer) => {
+            const state = sprite._onionPlayerDirectTapState;
+            if (!state || state.pointerId !== pointer.id) return;
+
+            const dx = pointer.x - state.startX;
+            const dy = pointer.y - state.startY;
+            const movedDist = Math.sqrt(dx * dx + dy * dy);
+
+            if (movedDist > dragThreshold) {
+                state.moved = true;
+                if (!this.canvasDirectionalInput || this.canvasDirectionalInput.pointerId !== pointer.id) {
+                    this.startCanvasDirectionalInput(pointer);
+                }
+            }
+        };
+
+        sprite.on('pointerdown', (pointer) => {
+            if (!this.canUseDirectSceneTap()) {
+                sprite._onionPlayerDirectTapState = null;
+                return;
+            }
+
+            sprite._onionPlayerDirectTapState = {
+                pointerId: pointer.id,
+                startX: pointer.x,
+                startY: pointer.y,
+                moved: false
+            };
+            this.pendingDirectObjectTap = sprite._onionPlayerDirectTapState;
+        });
+
+        sprite.on('pointermove', markMoveIfNeeded);
+        sprite.on('pointerout', markMoveIfNeeded);
+
+        sprite.on('pointerup', (pointer) => {
+            const state = sprite._onionPlayerDirectTapState;
+            sprite._onionPlayerDirectTapState = null;
+            if (!state || state.pointerId !== pointer.id) return;
+
+            const dx = pointer.x - state.startX;
+            const dy = pointer.y - state.startY;
+            const movedDist = Math.sqrt(dx * dx + dy * dy);
+
+            if (state.moved || movedDist > dragThreshold) return;
+            if (!this.canUseDirectSceneTap()) return;
+            if (this.lastDirectSceneTapAt && Date.now() - this.lastDirectSceneTapAt < cooldownMs) return;
+
+            this.markDirectSceneTapConsumed(pointer);
+
+            const uid = pData && pData.uid ? pData.uid : null;
+            const itemName = window.GameLogic ? window.GameLogic.armedItemName : null;
+            const directTargetItems = { '水球': true, '煙火': true, '蔥友機': true };
+
+            if (window.GameLogic && window.GameLogic.armedItemState === 'ready' && directTargetItems[itemName]) {
+                if (!this.tryUseArmedItemOnDirectTarget(uid, sprite, 'player')) {
+                    sendBubble('目標尚未鎖定，靠近一點再點擊。');
+                }
+                return;
+            }
+
+            const actionMenu = document.getElementById('action-menu');
+            if (!actionMenu || !uid) return;
+            actionMenu.style.display = 'flex';
+            actionMenu.style.left = pointer.event.pageX + 'px';
+            actionMenu.style.top = pointer.event.pageY + 'px';
+            actionMenu.dataset.uid = uid;
+        });
+    }
+  
     handleFurnitureDirectInteraction(key, f) {
         if (!key || !f || !f.sprite || !f.sprite.active || !f.sprite.isLocked) return false;
+
+        const itemName = window.GameLogic ? window.GameLogic.armedItemName : null;
+        const directTargetItems = { '水球': true, '煙火': true, '蔥友機': true };
+        if (key.includes('dummy') && window.GameLogic && window.GameLogic.armedItemState === 'ready' && directTargetItems[itemName]) {
+            if (!this.tryUseArmedItemOnDirectTarget(key, f.sprite, 'dummy')) {
+                sendBubble('目標尚未鎖定，靠近一點再點擊。');
+            }
+            return true;
+        }
+
+        if (this.handleDoghouseBedDirectInteraction(key, f)) return true;
+        if (this.handleShrineSeatDirectInteraction(key, f)) return true;
 
         if (this.sceneName === 'shrine' && key === 'altar') {
             const modal = document.getElementById('summon-confirm-modal');
