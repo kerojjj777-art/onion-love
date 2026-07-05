@@ -15294,10 +15294,27 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
                         }
                     }
                 } else {
-                    if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
-                    window.GameLogic.placingFurnitureKey = null;
-                    this.placePrompt.setVisible(false);
-                    this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
+                    const pendingFurnData = this.isCafe
+                        ? window.GameLogic.cafeFurniture
+                        : (this.sceneName === 'doghouse'
+                            ? (window.GameLogic.doghouseFurniture || {})
+                            : (this.sceneName === 'shrine'
+                                ? (window.GameLogic.shrineFurniture || {})
+                                : {}));
+
+                    const pendingFd = pendingFurnData && pendingFurnData[placingKey];
+
+                    // 第一次從目錄點選家具／法器時，資料已建立但 sprite 可能要等同一輪 update 後半段才生成。
+                    // 這種情況不可立刻取消 placingFurnitureKey，否則會變成只出現半透明影子、但不能移動。
+                    if (pendingFd && pendingFd.locked === false) {
+                        this.localPlayer.sprite.setVelocity(0, 0);
+                        this.placePrompt.setVisible(false);
+                    } else {
+                        if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+                        window.GameLogic.placingFurnitureKey = null;
+                        this.placePrompt.setVisible(false);
+                        this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
+                    }
                 }
             } else {
                 this.placePrompt.setVisible(false); this.localPlayer.sprite.setVelocity(vx, vy); 
