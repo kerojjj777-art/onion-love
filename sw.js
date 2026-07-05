@@ -1,4 +1,4 @@
-const CACHE_NAME = 'onion-store-v0.4.0.1';
+const CACHE_NAME = 'onion-store-v0.4.0.2';
 
 const ASSETS = [
     './',
