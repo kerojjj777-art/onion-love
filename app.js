@@ -3574,6 +3574,17 @@ class MainScene extends Phaser.Scene {
         this.lastPrinceCatStateStartTime = null;
         this.lastPrinceCatWalkStopMeowKey = null;
         this.lastPrinceCatPettingEffectKey = null;
+        this.princeCatPetGameActive = false;
+        this.princeCatPetProgress = 0;
+        this.princeCatPetPointerId = null;
+        this.princeCatPetLastX = 0;
+        this.princeCatPetLastY = 0;
+        this.princeCatPetLastDir = 0;
+        this.princeCatPetStrokeDist = 0;
+        this.princeCatPetLastMoveAt = 0;
+        this.princeCatPetCompleteWriting = false;
+        this.princeCatPetCompleteCooldownUntil = 0;
+        this.princeCatPetUiObjects = [];
         // 獨樂雞 Phaser overlay 狀態初始化
         this.soloChickenMenuOpen = false;
         this.soloChickenMenuContainer = null;
@@ -5361,6 +5372,7 @@ this.events.on('action_B', () => {
             if (this.dummyHitListener) this.dummyHitListener(); 
             if (this.fwThrowsListener) this.fwThrowsListener();
             if (this.waterThrowsListener) this.waterThrowsListener();
+            if (this.clearPrinceCatPetMiniGame) this.clearPrinceCatPetMiniGame(false);
             if (this.princeCatListener) { this.princeCatListener(); this.princeCatListener = null; }
             // 修正：徹底清除精靈與實體指標，防止 Phaser 重新啟動場景時讀取到已銷毀的舊物件導致 Crash
             this.mimiSprite = null;
@@ -13395,6 +13407,9 @@ entity.showOffRainbowTween = this.tweens.add({
         if (!this.isCafe || !this.princeCatSprite || !window.GameLogic.currentUser) return;
 
         const uid = window.GameLogic.currentUser.uid;
+
+        if (!this.canInteractWithPrinceCat(170, true)) return;
+
         const now = Date.now();
         const catRef = ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat'));
         const snap = await get(catRef);
@@ -13950,16 +13965,389 @@ tryPrinceCatSweepBonus(x, y) {
     return true;
 }
 
-    async startPrinceCatPetting() {
-        if (!this.isCafe || !this.princeCatSprite || !window.GameLogic.currentUser) return;
+    canInteractWithPrinceCat(maxDist = 170, showMessage = false) {
+        if (!this.isCafe || !this.princeCatSprite || !this.localPlayer || !this.localPlayer.sprite) return false;
 
-        const menu = document.getElementById('prince-cat-menu');
-        if (menu) menu.style.display = 'none';
+        const dist = Phaser.Math.Distance.Between(
+            this.localPlayer.sprite.x,
+            this.localPlayer.sprite.y,
+            this.princeCatSprite.x,
+            this.princeCatSprite.y
+        );
 
-        if (window.GameLogic.princeCatMenuTimeout) {
-            clearTimeout(window.GameLogic.princeCatMenuTimeout);
-            window.GameLogic.princeCatMenuTimeout = null;
+        if (dist >= maxDist) {
+            if (showMessage) sendBubble("要靠近王子麵才能摸摸喔！");
+            return false;
         }
+
+        return true;
+    }
+
+    getPrinceCatPetMiniGameScreenPosition() {
+        const cam = this.cameras && this.cameras.main ? this.cameras.main : null;
+        if (!cam || !this.princeCatSprite) {
+            return { x: 160, y: 180 };
+        }
+
+        const view = cam.worldView || { x: cam.scrollX || 0, y: cam.scrollY || 0 };
+        const zoom = cam.zoom || 1;
+
+        const rawX = (this.princeCatSprite.x - view.x) * zoom;
+        const rawY = (this.princeCatSprite.y - view.y) * zoom;
+
+        return {
+            x: Phaser.Math.Clamp(rawX, 100, cam.width - 100),
+            y: Phaser.Math.Clamp(rawY, 135, cam.height - 125)
+        };
+    }
+
+    stopPrinceCatPetPointerEvent(event) {
+        if (event && event.stopPropagation) event.stopPropagation();
+        if (event && event.event && event.event.stopPropagation) event.event.stopPropagation();
+    }
+
+    drawPrinceCatPetProgressBar() {
+        if (!this.princeCatPetGameActive) return;
+
+        const cam = this.cameras && this.cameras.main ? this.cameras.main : null;
+        if (!cam) return;
+
+        const pos = this.getPrinceCatPetMiniGameScreenPosition();
+
+        if (this.princeCatPetCatSprite) this.princeCatPetCatSprite.setPosition(pos.x, pos.y);
+        if (this.princeCatPetHitZone) this.princeCatPetHitZone.setPosition(pos.x, pos.y);
+
+        if (this.princeCatPetHintText) {
+            this.princeCatPetHintText.setPosition(
+                Phaser.Math.Clamp(pos.x, 110, cam.width - 110),
+                Phaser.Math.Clamp(pos.y + 104, 90, cam.height - 45)
+            );
+        }
+
+        if (this.princeCatPetCloseBg && this.princeCatPetCloseText) {
+            const closeX = cam.width - 42;
+            const closeY = 42;
+            this.princeCatPetCloseBg.setPosition(closeX, closeY);
+            this.princeCatPetCloseText.setPosition(closeX, closeY);
+        }
+
+        if (this.princeCatPetBlocker) {
+            this.princeCatPetBlocker.setPosition(cam.width / 2, cam.height / 2);
+            this.princeCatPetBlocker.setSize(cam.width, cam.height);
+        }
+
+        const barW = 18;
+        const barH = 96;
+        const barX = Phaser.Math.Clamp(pos.x - 74, 28, cam.width - 28);
+        const barY = Phaser.Math.Clamp(pos.y - 60, 55, cam.height - 130);
+        const fillH = Phaser.Math.Clamp(this.princeCatPetProgress || 0, 0, 100) / 100 * barH;
+
+        if (this.princeCatPetBarGlow) {
+            this.princeCatPetBarGlow.clear();
+            if (fillH > 0) {
+                this.princeCatPetBarGlow
+                    .fillStyle(0xff80ab, 0.28)
+                    .fillRoundedRect(barX - barW / 2 - 5, barY + barH / 2 - fillH - 5, barW + 10, fillH + 10, 10);
+            }
+        }
+
+        if (this.princeCatPetBarBg) {
+            this.princeCatPetBarBg.clear()
+                .fillStyle(0x000000, 0.42)
+                .fillRoundedRect(barX - barW / 2 - 3, barY - barH / 2 - 3, barW + 6, barH + 6, 10)
+                .lineStyle(2, 0xffffff, 1)
+                .strokeRoundedRect(barX - barW / 2 - 3, barY - barH / 2 - 3, barW + 6, barH + 6, 10)
+                .lineStyle(2, 0xffc1d6, 1)
+                .strokeRoundedRect(barX - barW / 2, barY - barH / 2, barW, barH, 8);
+        }
+
+        if (this.princeCatPetBarFill) {
+            this.princeCatPetBarFill.clear();
+            if (fillH > 0) {
+                this.princeCatPetBarFill
+                    .fillStyle(0xff80ab, 1)
+                    .fillRoundedRect(barX - barW / 2 + 2, barY + barH / 2 - fillH, barW - 4, fillH, 6);
+            }
+        }
+    }
+
+    createPrinceCatPetMiniGameUI() {
+        const keepActive = this.princeCatPetGameActive;
+        this.clearPrinceCatPetMiniGame(false);
+        this.princeCatPetGameActive = keepActive;
+
+        const cam = this.cameras.main;
+        const pos = this.getPrinceCatPetMiniGameScreenPosition();
+
+        this.princeCatPetBlocker = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x000000, 0.18)
+            .setScrollFactor(0)
+            .setDepth(9780)
+            .setInteractive();
+
+        this.princeCatPetCatSprite = this.add.sprite(pos.x, pos.y, 'prince-cat-stand-sheet', 0)
+            .setScrollFactor(0)
+            .setDepth(9802)
+            .setScale(1.95);
+
+        if (this.anims.exists('prince-cat-stand')) {
+            this.princeCatPetCatSprite.play('prince-cat-stand', true);
+        }
+
+        this.princeCatPetHitZone = this.add.zone(pos.x, pos.y, 165, 155)
+            .setScrollFactor(0)
+            .setDepth(9804)
+            .setInteractive({ useHandCursor: true });
+
+        this.princeCatPetBarGlow = this.add.graphics().setScrollFactor(0).setDepth(9805);
+        this.princeCatPetBarBg = this.add.graphics().setScrollFactor(0).setDepth(9806);
+        this.princeCatPetBarFill = this.add.graphics().setScrollFactor(0).setDepth(9807);
+
+        this.princeCatPetHintText = this.add.text(pos.x, pos.y + 104, '在王子麵身上來回滑動摸摸', {
+            fontSize: '17px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#fff7fb',
+            stroke: '#7a294a',
+            strokeThickness: 4,
+            align: 'center'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(9808);
+
+        this.princeCatPetCloseBg = this.add.circle(cam.width - 42, 42, 18, 0xffffff, 0.92)
+            .setScrollFactor(0)
+            .setDepth(9810)
+            .setInteractive({ useHandCursor: true });
+
+        this.princeCatPetCloseText = this.add.text(cam.width - 42, 42, '×', {
+            fontSize: '24px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ad1457'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(9811);
+
+        const stopOnly = (pointer, localX, localY, event) => {
+            this.stopPrinceCatPetPointerEvent(event);
+            if (pointer && pointer.event && pointer.event.preventDefault) pointer.event.preventDefault();
+            if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+        };
+
+        this.princeCatPetBlocker.on('pointerdown', stopOnly);
+        this.princeCatPetBlocker.on('pointermove', stopOnly);
+        this.princeCatPetBlocker.on('pointerup', stopOnly);
+
+        this.princeCatPetHitZone.on('pointerdown', (pointer, localX, localY, event) => {
+            this.handlePrinceCatPetPointerDown(pointer, event);
+        });
+
+        this.princeCatPetHitZone.on('pointermove', (pointer, localX, localY, event) => {
+            this.handlePrinceCatPetPointerMove(pointer, event);
+        });
+
+        this.princeCatPetHitZone.on('pointerup', (pointer, localX, localY, event) => {
+            this.handlePrinceCatPetPointerUp(pointer, event);
+        });
+
+        this.princeCatPetHitZone.on('pointerout', (pointer, event) => {
+            this.handlePrinceCatPetPointerUp(pointer, event);
+        });
+
+        this.princeCatPetCloseBg.on('pointerdown', (pointer, localX, localY, event) => {
+            this.stopPrinceCatPetPointerEvent(event);
+            this.clearPrinceCatPetMiniGame(true);
+            sendPrinceCatBubble("王子麵抖了抖毛。");
+        });
+
+        this.princeCatPetUiObjects = [
+            this.princeCatPetBlocker,
+            this.princeCatPetCatSprite,
+            this.princeCatPetHitZone,
+            this.princeCatPetBarGlow,
+            this.princeCatPetBarBg,
+            this.princeCatPetBarFill,
+            this.princeCatPetHintText,
+            this.princeCatPetCloseBg,
+            this.princeCatPetCloseText
+        ];
+
+        if (this.minimap) {
+            this.minimap.ignore(this.princeCatPetUiObjects.filter(Boolean));
+        }
+
+        this.drawPrinceCatPetProgressBar();
+    }
+
+    handlePrinceCatPetPointerDown(pointer, event) {
+        this.stopPrinceCatPetPointerEvent(event);
+        if (!this.princeCatPetGameActive || this.princeCatPetCompleteWriting) return;
+
+        if (pointer && pointer.event && pointer.event.preventDefault) pointer.event.preventDefault();
+        if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+
+        this.princeCatPetPointerId = pointer.id;
+        this.princeCatPetLastX = pointer.x;
+        this.princeCatPetLastY = pointer.y;
+        this.princeCatPetLastDir = 0;
+        this.princeCatPetStrokeDist = 0;
+        this.princeCatPetLastMoveAt = Date.now();
+    }
+
+    handlePrinceCatPetPointerMove(pointer, event) {
+        this.stopPrinceCatPetPointerEvent(event);
+        if (!this.princeCatPetGameActive || this.princeCatPetCompleteWriting) return;
+        if (!pointer || pointer.id !== this.princeCatPetPointerId) return;
+
+        if (pointer.event && pointer.event.preventDefault) pointer.event.preventDefault();
+        if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+
+        const dx = pointer.x - this.princeCatPetLastX;
+        const dy = pointer.y - this.princeCatPetLastY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 2.5) return;
+
+        const axisDelta = Math.abs(dx) >= Math.abs(dy) ? dx : dy;
+        const dir = axisDelta > 0 ? 1 : -1;
+
+        this.princeCatPetStrokeDist += dist;
+        this.princeCatPetLastX = pointer.x;
+        this.princeCatPetLastY = pointer.y;
+        this.princeCatPetLastMoveAt = Date.now();
+
+        if (!this.princeCatPetLastDir) {
+            this.princeCatPetLastDir = dir;
+            return;
+        }
+
+        if (dir !== this.princeCatPetLastDir && this.princeCatPetStrokeDist >= 30) {
+            this.princeCatPetLastDir = dir;
+            this.princeCatPetStrokeDist = 0;
+            this.princeCatPetProgress = Phaser.Math.Clamp((this.princeCatPetProgress || 0) + 10, 0, 100);
+            this.drawPrinceCatPetProgressBar();
+
+            if (this.princeCatPetCatSprite) {
+                this.tweens.add({
+                    targets: this.princeCatPetCatSprite,
+                    scaleX: 2.06,
+                    scaleY: 2.06,
+                    yoyo: true,
+                    duration: 70
+                });
+            }
+
+            if (this.princeCatPetProgress >= 100) {
+                this.completePrinceCatPetMiniGame();
+            }
+        }
+    }
+
+    handlePrinceCatPetPointerUp(pointer, event) {
+        this.stopPrinceCatPetPointerEvent(event);
+        if (!pointer || pointer.id !== this.princeCatPetPointerId) return;
+
+        this.princeCatPetPointerId = null;
+        this.princeCatPetLastDir = 0;
+        this.princeCatPetStrokeDist = 0;
+    }
+
+    updatePrinceCatPetMiniGame(time, delta) {
+        if (!this.princeCatPetGameActive) return;
+
+        if (!this.isCafe || !this.princeCatSprite || !this.localPlayer || !this.localPlayer.sprite) {
+            this.clearPrinceCatPetMiniGame(false);
+            return;
+        }
+
+        if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+
+        const now = Date.now();
+        if (!this.princeCatPetLastMoveAt || now - this.princeCatPetLastMoveAt > 260) {
+            const decay = Math.max(0, delta || 16) * 0.007;
+            this.princeCatPetProgress = Phaser.Math.Clamp((this.princeCatPetProgress || 0) - decay, 0, 100);
+        }
+
+        this.drawPrinceCatPetProgressBar();
+    }
+
+    clearPrinceCatPetMiniGame(restoreCat = true) {
+        const wasActive = !!this.princeCatPetGameActive;
+
+        this.princeCatPetGameActive = false;
+        this.princeCatPetProgress = 0;
+        this.princeCatPetPointerId = null;
+        this.princeCatPetLastDir = 0;
+        this.princeCatPetStrokeDist = 0;
+        this.princeCatPetLastMoveAt = 0;
+
+        if (!this.princeCatPetCompleteWriting) {
+            this.princePettingLockUntil = 0;
+        }
+
+        (this.princeCatPetUiObjects || []).forEach(obj => {
+            if (obj && obj.destroy) obj.destroy();
+        });
+
+        this.princeCatPetUiObjects = [];
+        this.princeCatPetBlocker = null;
+        this.princeCatPetCatSprite = null;
+        this.princeCatPetHitZone = null;
+        this.princeCatPetBarGlow = null;
+        this.princeCatPetBarBg = null;
+        this.princeCatPetBarFill = null;
+        this.princeCatPetHintText = null;
+        this.princeCatPetCloseBg = null;
+        this.princeCatPetCloseText = null;
+
+        if (this.localPlayer && this.localPlayer.sprite && !this.princeCatPetCompleteWriting) {
+            this.localPlayer.sprite.isPettingPrinceCat = false;
+            this.localPlayer.sprite.setVelocity(0, 0);
+            if (this.anims.exists('idle')) this.localPlayer.sprite.play('idle', true);
+        }
+
+        if (restoreCat && wasActive && window.GameLogic.currentUser) {
+            const uid = window.GameLogic.currentUser.uid;
+            const catRef = ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat'));
+
+            get(catRef).then(snap => {
+                const data = snap.val() || {};
+                if (data.interactingUid === uid && data.state !== 'petting' && data.state !== 'feeding' && data.state !== 'yummy') {
+                    const closeNow = Date.now();
+                    update(catRef, {
+                        interactingUid: null,
+                        lockedUntil: 0,
+                        state: 'idle',
+                        stateStartTime: closeNow,
+                        stateUntil: closeNow + 1200
+                    }).catch(err => console.warn('[王子麵摸摸] 清理未完成摸摸狀態失敗：', err));
+                }
+            }).catch(err => console.warn('[王子麵摸摸] 讀取清理狀態失敗：', err));
+        }
+    }
+
+    async completePrinceCatPetMiniGame() {
+        if (this.princeCatPetCompleteWriting) return;
+        if (Date.now() < (this.princeCatPetCompleteCooldownUntil || 0)) return;
+
+        this.princeCatPetCompleteWriting = true;
+        this.princeCatPetCompleteCooldownUntil = Date.now() + 1200;
+
+        if (this.princeCatPetBarGlow) {
+            this.tweens.add({
+                targets: this.princeCatPetBarGlow,
+                alpha: 0.8,
+                yoyo: true,
+                repeat: 2,
+                duration: 110
+            });
+        }
+
+        try {
+            await this.finishPrinceCatPettingSuccess();
+        } finally {
+            this.princeCatPetCompleteWriting = false;
+        }
+    }
+
+    async finishPrinceCatPettingSuccess() {
+        if (!this.isCafe || !this.princeCatSprite || !window.GameLogic.currentUser) return;
 
         const uid = window.GameLogic.currentUser.uid;
         const now = Date.now();
@@ -13971,8 +14359,11 @@ tryPrinceCatSweepBonus(x, y) {
 
         if (data.interactingUid && data.interactingUid !== uid && data.lockedUntil && now < data.lockedUntil) {
             sendPrinceCatBubble("王子麵正在理別人");
+            this.clearPrinceCatPetMiniGame(true);
             return;
         }
+
+        this.clearPrinceCatPetMiniGame(false);
 
         this.princePettingLockUntil = lockUntil;
         this.localPlayer.sprite.isPettingPrinceCat = true;
@@ -14008,6 +14399,7 @@ tryPrinceCatSweepBonus(x, y) {
                 this.localPlayer.sprite.setVelocity(0, 0);
                 this.localPlayer.sprite.play('idle', true);
             }
+
             this.princePettingLockUntil = 0;
 
             update(ref(window.GameLogic.db, window.getServerRoomPath(`cafePlayers/${uid}`)), {
@@ -14033,6 +14425,67 @@ tryPrinceCatSweepBonus(x, y) {
         });
     }
 
+    async startPrinceCatPetting() {
+        if (!this.isCafe || !this.princeCatSprite || !window.GameLogic.currentUser) return;
+
+        if (!this.canInteractWithPrinceCat(170, true)) return;
+
+        if (Date.now() < (this.princeCatPetCompleteCooldownUntil || 0)) {
+            sendPrinceCatBubble("王子麵還在回味剛剛的摸摸。");
+            return;
+        }
+
+        const menu = document.getElementById('prince-cat-menu');
+        if (menu) menu.style.display = 'none';
+
+        if (window.GameLogic.princeCatMenuTimeout) {
+            clearTimeout(window.GameLogic.princeCatMenuTimeout);
+            window.GameLogic.princeCatMenuTimeout = null;
+        }
+
+        const uid = window.GameLogic.currentUser.uid;
+        const now = Date.now();
+        const miniGameUntil = now + 90000;
+        const catRef = ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat'));
+        const snap = await get(catRef);
+        const data = snap.val() || {};
+
+        if (data.interactingUid && data.interactingUid !== uid && data.lockedUntil && now < data.lockedUntil) {
+            sendPrinceCatBubble("王子麵正在理別人");
+            return;
+        }
+
+        await update(catRef, {
+            x: data.x || this.princeCatSprite.x,
+            y: data.y || this.princeCatSprite.y,
+            targetX: data.x || this.princeCatSprite.x,
+            targetY: data.y || this.princeCatSprite.y,
+            state: 'idle',
+            interactingUid: uid,
+            direction: data.direction || 'right',
+            stateStartTime: now,
+            stateUntil: miniGameUntil,
+            lockedUntil: miniGameUntil
+        });
+
+        this.princeCatPetGameActive = true;
+        this.princeCatPetProgress = 0;
+        this.princeCatPetPointerId = null;
+        this.princeCatPetLastDir = 0;
+        this.princeCatPetStrokeDist = 0;
+        this.princeCatPetLastMoveAt = Date.now();
+
+        this.createPrinceCatPetMiniGameUI();
+
+        this.princePettingLockUntil = miniGameUntil;
+        this.localPlayer.sprite.isPettingPrinceCat = true;
+        this.localPlayer.sprite.setVelocity(0, 0);
+        this.localPlayer.sprite.play('onion-petting', true);
+
+        if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+
+        sendPrinceCatBubble("王子麵瞇起眼睛，等你摸摸。");
+    }
     applyPrinceBondGain() {
         const p = window.normalizePrinceCatProfileFields();
         const today = window.getPrinceLocalDateKey();
@@ -15159,6 +15612,7 @@ if (activeBubbleMsg) {
         if (this.suppressCanvasDirectionUntil && Date.now() < this.suppressCanvasDirectionUntil) return true;
 
         if (
+            this.princeCatPetGameActive ||
             this.soloRocketCruiseActive ||
             this.soloRocketCruiseFinished ||
             window.GameLogic.soloRocketCruiseActive ||
@@ -15735,6 +16189,10 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
         if (this.isCafe && this.princeCatSprite) {
             this.updatePrinceCatAutonomy(time, delta);
             this.updatePrinceCatVisual();
+        }
+
+        if (this.princeCatPetGameActive) {
+            this.updatePrinceCatPetMiniGame(time, delta);
         }
         
         if (this.localPlayer.isInvincible) { this.localPlayer.sprite.setAlpha((Math.floor(time / 100) % 2 === 0) ? 0.5 : 1); } else { 
