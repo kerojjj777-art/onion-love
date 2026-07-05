@@ -1963,33 +1963,44 @@ function leaveShrine() {
     if (window.GameLogic.currentUser) {
         let players = window.GameLogic.shrinePlayers || {};
         let now = Date.now();
+
         // 篩選出真正在線且在神龕內的人
-        let validUids = Object.keys(players).filter(uid => window.GameLogic.onlinePlayers && window.GameLogic.onlinePlayers[uid] && (now - (window.GameLogic.onlinePlayers[uid].lastActive || 0) < 20000));
+        let validUids = Object.keys(players).filter(uid =>
+            window.GameLogic.onlinePlayers &&
+            window.GameLogic.onlinePlayers[uid] &&
+            (now - (window.GameLogic.onlinePlayers[uid].lastActive || 0) < 20000)
+        );
         
-        // 修正3：當所有人（或最後一個有效在線玩家）離開神龕時，立刻清空地上沒被撿完的神龕法器金幣
+        // 當所有人（或最後一個有效在線玩家）離開神龕時，結束本房間神龕事件，並清空本房間神龕金幣
         if (validUids.length <= 1) {
             if (window.GameLogic.shrineEventData && window.GameLogic.shrineEventData.state !== 'finished') {
-            get(ref(window.GameLogic.db, window.getServerRoomPath('droppedCoins'))).then(snap => {
+                update(ref(window.GameLogic.db, window.getServerRoomPath('shrineEvents/current')), { state: 'finished' });
             }
-            get(ref(window.GameLogic.db, 'droppedCoins')).then(snap => {
+
+            get(ref(window.GameLogic.db, window.getServerRoomPath('droppedCoins'))).then(snap => {
                 let coins = snap.val() || {};
                 let updates = {};
+
                 Object.keys(coins).forEach(k => {
                     const coinData = coins[k] || {};
                     if (k.startsWith('shrine_coin_') || coinData.scene === 'shrine') {
                         updates[window.getServerRoomPath(`droppedCoins/${k}`)] = null;
                     }
                 });
+
                 if (Object.keys(updates).length > 0) update(ref(window.GameLogic.db), updates);
             });
         }
-            set(ref(window.GameLogic.db, window.getServerRoomPath('shrineEvents/current')), { state: 'voting', startTime: Date.now() }); 
+
+        set(ref(window.GameLogic.db, window.getServerRoomPath(`shrinePlayers/${window.GameLogic.currentUser.uid}`)), null); 
     }
+
     if (shrineUnsubscribe) { shrineUnsubscribe(); shrineUnsubscribe = null; } 
     if (shrineEventUnsubscribe) { shrineEventUnsubscribe(); shrineEventUnsubscribe = null; } 
-    document.getElementById('voting-modal').style.display = 'none'; document.getElementById('spam-ui').style.display = 'none';
-}
 
+    document.getElementById('voting-modal').style.display = 'none';
+    document.getElementById('spam-ui').style.display = 'none';
+}
 function checkShrineVotingTrigger() { 
     if (window.GameLogic.currentScene !== 'shrine') return; 
     let players = window.GameLogic.shrinePlayers || {}; 
@@ -2003,7 +2014,7 @@ function checkShrineVotingTrigger() {
     let allSeated = seatedCount > 0 && seatedCount === validUids.length; 
     if (allSeated) { 
         if (isHost && currentState === 'summoned') { 
-            set(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'voting', startTime: Date.now() }); 
+            set(ref(window.GameLogic.db, window.getServerRoomPath('shrineEvents/current')), { state: 'voting', startTime: Date.now() }); 
             // 修正：儀式正式進入投票階段！立刻將全服的召喚倒數歸零，瞬間關閉外面的 60 秒通知
             update(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/summonShrine')), { time: 0 });
         } 
@@ -3358,7 +3369,7 @@ class MainScene extends Phaser.Scene {
         this.events.off('action_A_long');
         this.events.off('action_B');
 
-        this.events.on('action_A_place', () => { let key = window.GameLogic.placingFurnitureKey; if(key && this.furnitureSprites[key]) { let f = this.furnitureSprites[key]; f.sprite.setVelocity(0, 0); let path = this.isCafe ? window.getServerRoomPath(`cafeFurniture/${key}`) : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}` : `shrineFurniture/${key}`); update(ref(window.GameLogic.db, path), { locked: true, x: f.sprite.x, y: f.sprite.y, ownerUid: window.GameLogic.currentUser.uid }); window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); } });
+        this.events.on('action_A_place', () => { let key = window.GameLogic.placingFurnitureKey; if(key && this.furnitureSprites[key]) { let f = this.furnitureSprites[key]; f.sprite.setVelocity(0, 0); let path = this.isCafe ? window.getServerRoomPath(`cafeFurniture/${key}`) : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}` : window.getServerRoomPath(`shrineFurniture/${key}`)); update(ref(window.GameLogic.db, path), { locked: true, x: f.sprite.x, y: f.sprite.y, ownerUid: window.GameLogic.currentUser.uid }); window.GameLogic.placingFurnitureKey = null; this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08); } });
 
 this.events.on('action_A_short', () => {
     if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
@@ -3635,7 +3646,7 @@ this.events.on('action_A_short', () => {
                     });
 
                     if (this.sceneName === 'partyroom' && window.PartyLogic && window.PartyLogic.roomId) {
-                        update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), {
+                        update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`)), {
                             action: 'throwWater',
                             actionTime: waterActionTime,
                             targetUid: targetUid || 'none'
@@ -3672,12 +3683,12 @@ this.events.on('action_A_short', () => {
                                     if (this.sceneName === 'partyroom') {
                                         const hitActionTime = Date.now();
 
-                                        update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/hits/${targetUid}`), {
+                                        update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/hits/${targetUid}`)), {
                                             time: hitActionTime,
                                             attacker: window.GameLogic.currentUser.uid
                                         });
 
-                                        update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${targetUid}`), {
+                                        update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${targetUid}`)), {
                                             action: 'hitWater',
                                             actionTime: hitActionTime,
                                             targetUid: window.GameLogic.currentUser.uid
@@ -4213,12 +4224,12 @@ this.events.on('action_B', () => {
             }
         });
       
-      this.partyHitListener = onValue(ref(window.GameLogic.db, `partyRooms/${activePartyRoomId}/hits/${window.GameLogic.currentUser.uid}`), (snap) => {
+      this.partyHitListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${activePartyRoomId}/hits/${window.GameLogic.currentUser.uid}`)), (snap) => {
             let data = snap.val();
             if (data && data.time && (Date.now() - data.time < 2000)) {
                 if (!window.PartyLogic || !window.PartyLogic.roomId) return;
 
-                let hitPath = `partyRooms/${window.PartyLogic.roomId}/hits/${window.GameLogic.currentUser.uid}`;
+                let hitPath = window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/hits/${window.GameLogic.currentUser.uid}`);
 
                 if (this.lastPartyHitTime === data.time) {
                     remove(ref(window.GameLogic.db, hitPath));
@@ -4235,14 +4246,14 @@ this.events.on('action_B', () => {
                 this.localPlayer.isInvincible = true;
                 this.localPlayer.sprite.play('fw-hit', true);
                 
-                get(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}/gotHitCount`)).then(s => {
-                    update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`), {
+                get(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}/gotHitCount`))).then(s => {
+                    update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`)), {
                         gotHitCount: (s.val() || 0) + 1
                     });
                 });
 
-                get(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}/hitCount`)).then(s => {
-                    update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}`), {
+                get(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}/hitCount`))).then(s => {
+                    update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}`)), {
                         hitCount: (s.val() || 0) + 1
                     });
                 });
@@ -14416,7 +14427,7 @@ window.replyInvite = function(replyType) {
             let roomId = `playroom_${attacker}_${window.GameLogic.currentUser.uid}`;
 
             // 修正2：進入 Playroom 前，強迫清空舊有房間狀態，確保一切從頭開始
-            set(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { state: 'none' });
+            set(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`)), { state: 'none' });
 
             window.switchScene('playroom', { roomId: roomId });
         }
@@ -14445,9 +14456,9 @@ window.cancelRpsGame = function(roomId) {
     let dust = document.getElementById('rps-dust-container');
     if (dust) dust.innerHTML = '';
     
-    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${id}`), { state: 'none' });
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${id}`)), { state: 'none' });
     if (window.GameLogic.currentUser) {
-        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${id}/p_${window.GameLogic.currentUser.uid}`), { machineReady: null, betReady: null });
+        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${id}/p_${window.GameLogic.currentUser.uid}`)), { machineReady: null, betReady: null });
     }
 };
 
@@ -14473,7 +14484,7 @@ window.openRpsBetting = function(roomId) {
     if (players.length < 2) return alert("等對方進來再開始喔！");
     
     // 修正1：按下A只改變自己的機台準備狀態，不強制所有人進入下注
-    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}/p_${window.GameLogic.currentUser.uid}`), { machineReady: true });
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}/p_${window.GameLogic.currentUser.uid}`)), { machineReady: true });
 };
 
 window.confirmRpsBet = function() {
@@ -14481,7 +14492,7 @@ window.confirmRpsBet = function() {
     document.getElementById('rps-bet-input-area').style.display = 'none';
     document.getElementById('rps-bet-status-me').innerText = "✅已下注";
     document.getElementById('rps-bet-status-me').style.color = "#00ff00";
-        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { betReady: true, betValue: betVal });
+        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`)), { betReady: true, betValue: betVal });
 };
 
 window.selectRps = function(choice) {
@@ -14492,7 +14503,7 @@ window.selectRps = function(choice) {
     document.getElementById('rps-choice-' + choice).classList.add('rps-choice-selected');
 
     document.getElementById('rps-me-img').style.backgroundImage = `url('playroom-rps-onion-me-${choice}.png')`;
-    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { rpsChoice: choice });
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`)), { rpsChoice: choice });
 };
 
 window.clickRpsSpam = function() {
@@ -14570,12 +14581,12 @@ window.clickRpsSpam = function() {
     // 人物連擊精靈圖切換 (自己)
     window.triggerRpsAnim('rps-me-img', window.rpsMyRole === 'attacker');
     
-    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { spamCount: window.rpsMySpamCount });
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`)), { spamCount: window.rpsMySpamCount });
 };
 
 window.syncRpsState = function(roomId) {
     if (window.rpsUnsubscribe) window.rpsUnsubscribe();
-    window.rpsUnsubscribe = onValue(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), snap => {
+    window.rpsUnsubscribe = onValue(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`)), snap => {
             let data = snap.val(); if (!data) return;
             let state = data.state;
             window.rpsPhase = state;
@@ -14632,9 +14643,9 @@ window.syncRpsState = function(roomId) {
                 if (myData.machineReady) {
                     if (otherData.machineReady) {
                         if (uids.sort()[0] === myUid) {
-                            update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { state: 'betting' });
-                            update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}/p_${myUid}`), { betReady: false, betValue: 0, machineReady: null });
-                            update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}/p_${otherUid}`), { betReady: false, betValue: 0, machineReady: null });
+                            update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`)), { state: 'betting' });
+                            update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}/p_${myUid}`)), { betReady: false, betValue: 0, machineReady: null });
+                            update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}/p_${otherUid}`)), { betReady: false, betValue: 0, machineReady: null });
                         }
                     } else {
                         // 只有我按了 A，顯示等待畫面
@@ -14742,7 +14753,7 @@ window.syncRpsState = function(roomId) {
                         update(ref(window.GameLogic.db, `users/${myUid}`), { coins: Math.max(0, p1C) });
                         update(ref(window.GameLogic.db, `users/${otherUid}`), { coins: Math.max(0, p2C) });
                         
-                        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { 
+                        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`)), { 
                             state: 'bet_summary', 
                             agreedBet: avgBet, 
                             bonusMult: mult,
@@ -14788,9 +14799,9 @@ window.syncRpsState = function(roomId) {
                 }
                 // ==========================================
                 if (uids.sort()[0] === myUid && !data.summaryProcessed) {
-                    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { summaryProcessed: true });
+                    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`)), { summaryProcessed: true });
                     setTimeout(() => {
-                        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { 
+                        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`)), { 
                             state: 'rps_countdown', 
                             rpsStartTime: Date.now(),
                             roundCount: 1,
@@ -14880,7 +14891,7 @@ window.syncRpsState = function(roomId) {
                             ], { duration: 900, easing: 'ease-out' });
                         }
                         clearInterval(window.rpsInterval);
-                        if (uids.sort()[0] === myUid) update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { state: 'rps_result' });
+                        if (uids.sort()[0] === myUid) update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`)), { state: 'rps_result' });
                     }
                 }, 100);
             }
@@ -14913,7 +14924,7 @@ window.syncRpsState = function(roomId) {
                     else if (result === 'lose') window.triggerRpsWinExplosion('rps-opponent-img');
                     
                     if (uids.sort()[0] === myUid) {
-                         update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { explosionPlayed: true });
+                         update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`)), { explosionPlayed: true });
                     }
                 }
                 // 猜拳結果判定當下：勝利方產生大量橘紅氣泡特效
@@ -14946,9 +14957,9 @@ window.syncRpsState = function(roomId) {
                     if (!window.rpsStateTimeout) {
                         window.rpsStateTimeout = setTimeout(() => {
                             if (result === 'tie') {
-                                update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { state: 'rps_countdown', rpsStartTime: Date.now(), [`p_${myUid}/rpsChoice`]: null, [`p_${otherUid}/rpsChoice`]: null });
+                                update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`)), { state: 'rps_countdown', rpsStartTime: Date.now(), [`p_${myUid}/rpsChoice`]: null, [`p_${otherUid}/rpsChoice`]: null });
                             } else {
-                                update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { state: 'spam_countdown', winnerUid: result === 'win' ? myUid : otherUid, spamStartTime: Date.now(), [`p_${myUid}/spamCount`]: 0, [`p_${otherUid}/spamCount`]: 0 });
+                                update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`)), { state: 'spam_countdown', winnerUid: result === 'win' ? myUid : otherUid, spamStartTime: Date.now(), [`p_${myUid}/spamCount`]: 0, [`p_${otherUid}/spamCount`]: 0 });
                             }
                             window.rpsStateTimeout = null;
                         }, 2000);
@@ -15034,7 +15045,7 @@ window.syncRpsState = function(roomId) {
                                 anim.onfinish = () => { rpsMsg.style.opacity = '0'; }; // 動畫結束後徹底隱藏 GO!
                             }
                             clearInterval(window.rpsInterval);
-                            if (uids.sort()[0] === myUid) update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { state: 'spamming', spamPlayTime: Date.now() });
+                            if (uids.sort()[0] === myUid) update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`)), { state: 'spamming', spamPlayTime: Date.now() });
                         }
                     }, 100);
             }
@@ -15078,7 +15089,7 @@ window.syncRpsState = function(roomId) {
                     } else {
                         document.getElementById('rps-spam-area').style.display = 'none';
                         clearInterval(window.rpsInterval);
-                        if (uids.sort()[0] === myUid) update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { state: 'round_result' });
+                        if (uids.sort()[0] === myUid) update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`)), { state: 'round_result' });
                     }
                 }, 100);
             }
@@ -15141,10 +15152,10 @@ window.syncRpsState = function(roomId) {
                             updates[`p_${myUid}/rpsChoice`] = null;
                             updates[`p_${otherUid}/rpsChoice`] = null;
                         }
-                        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), updates);
+                        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`)), updates);
                     }, 3000);
                     
-                    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { roundProcessed: true });
+                    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`)), { roundProcessed: true });
                 }
             }
             else if (state === 'calc_result') {
@@ -15249,7 +15260,7 @@ window.syncRpsState = function(roomId) {
                         
                         update(ref(window.GameLogic.db, `users/${myUid}`), { coins: p1C });
                         update(ref(window.GameLogic.db, `users/${otherUid}`), { coins: p2C });
-                        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { moneyDistributed: true });
+                        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`)), { moneyDistributed: true });
                     });
                 }
             }
@@ -15288,7 +15299,7 @@ window.createPartyRoom = function() {
 
     // 延遲跳轉場景，讓動畫播完
     setTimeout(() => {
-        set(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'waiting', host: window.GameLogic.currentUser.uid, game: window.PartyLogic.selectedGame, startTime: Date.now() });
+        set(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}`)), { state: 'waiting', host: window.GameLogic.currentUser.uid, game: window.PartyLogic.selectedGame, startTime: Date.now() });
         set(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${window.PartyLogic.roomId}`)), { time: Date.now(), inviterUid: window.GameLogic.currentUser.uid, inviterName: window.GameLogic.myProfile.name, game: window.PartyLogic.selectedGame });
         window.switchScene('partyroom', { roomId: window.PartyLogic.roomId });
     }, 1500);
@@ -15337,11 +15348,11 @@ window.joinPartyroom = function(roomId) {
     }
     document.getElementById('party-red-flash').style.display = 'none'; document.getElementById('party-red-flash').style.opacity = 0;
     
-    const playerRef = ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${roomId}/players/${window.GameLogic.currentUser.uid}`);
+    const playerRef = ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${roomId}/players/${window.GameLogic.currentUser.uid}`));
     set(playerRef, { x: 1920/2, y: 1080/2, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1, ready: false });
     onDisconnect(playerRef).remove();
     
-    partyUnsubscribe = onValue(ref(window.GameLogic.db, `partyRooms/${roomId}`), snap => {
+    partyUnsubscribe = onValue(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${roomId}`)), snap => {
         let data = snap.val(); if(!data) { window.leavePartyroom(); return; }
         window.PartyLogic.state = data.state;
         window.PartyLogic.players = data.players || {};
@@ -15350,7 +15361,7 @@ window.joinPartyroom = function(roomId) {
         window.PartyLogic.gameData = data;
         
         let pUids = Object.keys(window.PartyLogic.players);
-        if (pUids.length >= 10 && data.state === 'waiting') update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${roomId}`), { closed: true });
+        if (pUids.length >= 10 && data.state === 'waiting') update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${roomId}`)), { closed: true });
         
         if (data.state === 'waiting') {
             document.getElementById('party-waiting-modal').style.display = 'flex';
@@ -15402,15 +15413,15 @@ window.leavePartyroom = function(skipSceneSwitch = false) {
     if (startBtn) startBtn.style.display = 'none';
     
     if (leavingRoomId && leavingUid) {
-        const roomRef = ref(window.GameLogic.db, `partyRooms/${leavingRoomId}`);
-        const playerRef = ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${leavingRoomId}/players/${leavingUid}`);
+        const roomRef = ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${leavingRoomId}`));
+        const playerRef = ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${leavingRoomId}/players/${leavingUid}`));
 
         set(playerRef, null)
             .then(() => get(roomRef))
             .then(snap => {
                 let roomData = snap.val();
                 if (!roomData) {
-                    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${leavingRoomId}`), { closed: true }).catch(err => console.warn('Firebase 關閉不存在派對邀請失敗:', err));
+                    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${leavingRoomId}`)), { closed: true }).catch(err => console.warn('Firebase 關閉不存在派對邀請失敗:', err));
                     return;
                 }
 
@@ -15419,7 +15430,7 @@ window.leavePartyroom = function(skipSceneSwitch = false) {
 
                 if (remainingUids.length === 0) {
                     // 所有人都離開等候室或派對房間：關閉右側邀請，並刪除空房間
-                    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${leavingRoomId}`), { closed: true }).catch(err => console.warn('Firebase 關閉空派對邀請失敗:', err));
+                    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${leavingRoomId}`)), { closed: true }).catch(err => console.warn('Firebase 關閉空派對邀請失敗:', err));
                     set(roomRef, null).catch(err => console.warn('Firebase 清除空派對房間失敗:', err));
                 } else if (roomData.host === leavingUid) {
                     // 房主離開但房內還有人：由 UID 排序第一位接手房主
@@ -15438,7 +15449,7 @@ window.togglePartyReady = function() {
     let isReady = btn.innerText === '取消準備';
     btn.innerText = isReady ? '準備好了' : '取消準備';
     btn.style.background = isReady ? 'var(--mucha-gold)' : '#5cb85c';
-    update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), { ready: !isReady });
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`)), { ready: !isReady });
 };
 
 window.startPartyGame = function() {
@@ -15463,15 +15474,15 @@ window.startPartyGame = function() {
         }
     }
     // 修正：移除動態 import
-    update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'starting', stones: stones, gameStartTime: Date.now() });
-    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${window.PartyLogic.roomId}`), { closed: true });
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}`)), { state: 'starting', stones: stones, gameStartTime: Date.now() });
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${window.PartyLogic.roomId}`)), { closed: true });
     
     let pUids = Object.keys(window.PartyLogic.players);
     pUids.forEach(uid => {
         let rx = Phaser.Math.Between(0,1) ? Phaser.Math.Between(100, 300) : Phaser.Math.Between(1620, 1820);
         let ry = Phaser.Math.Between(0,1) ? Phaser.Math.Between(100, 300) : Phaser.Math.Between(780, 980);
-        update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${uid}`), { x: rx, y: ry });
-        set(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${uid}`), { hitCount: 0, gotHitCount: 0, ammo: 666 });
+        update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${uid}`)), { x: rx, y: ry });
+        set(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${uid}`)), { hitCount: 0, gotHitCount: 0, ammo: 666 });
     });
 };
 
@@ -15492,7 +15503,7 @@ window.replyPartyInvite = function(reply) {
             let playerCount = Object.keys(roomPlayers).length;
 
             if (!inviteData || inviteData.closed || !inviteData.time || (Date.now() - inviteData.time >= 60000) || !roomData || playerCount === 0) {
-                update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${inviteId}`), { closed: true }).catch(err => console.warn('Firebase 關閉失效派對邀請失敗:', err));
+                update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${inviteId}`)), { closed: true }).catch(err => console.warn('Firebase 關閉失效派對邀請失敗:', err));
                 if (window.GameLogic.partyInvitesData && window.GameLogic.partyInvitesData[inviteId]) {
                     window.GameLogic.partyInvitesData[inviteId].closed = true;
                 }
@@ -15543,7 +15554,7 @@ window.processPartyEventLogic = function(scene) {
         } else if (phase >= 3 && window.PartyLogic.playPhase < 3) {
             window.PartyLogic.playPhase = 3;
             scene.partyAnnounceText.setVisible(false);
-            if (isCoordinator) update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'gaming', gamingStartTime: Date.now() });
+            if (isCoordinator) update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}`)), { state: 'gaming', gamingStartTime: Date.now() });
         }
     } else if (state === 'gaming') {
         let elapsed = Date.now() - data.gamingStartTime;
@@ -15551,7 +15562,7 @@ window.processPartyEventLogic = function(scene) {
         
         // 若遊戲途中玩家不足2人，改由目前房內排序第一位玩家負責強制結束，避免房主消失時卡在0秒
         if (pUids.length <= 1 && isCoordinator) {
-            update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'finished', finishTime: Date.now(), aborted: true }); 
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}`)), { state: 'finished', finishTime: Date.now(), aborted: true }); 
             return;
         }
 
@@ -15564,7 +15575,7 @@ window.processPartyEventLogic = function(scene) {
         
         if (remain <= 0 && isCoordinator) {
             update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`), { ammo: window.PartyLogic.ammo });
-            update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'finished', finishTime: Date.now() }); 
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}`)), { state: 'finished', finishTime: Date.now() }); 
         }
     } else if (state === 'finished') {
         window.PartyLogic.speedBoost = false;
@@ -15598,7 +15609,7 @@ window.processPartyEventLogic = function(scene) {
             window.playSFX(scene, 'party-finish');
             
             // Upload final ammo before scoring
-            update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`), { ammo: window.PartyLogic.ammo });
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`)), { ammo: window.PartyLogic.ammo });
             
             setTimeout(() => {
                 scene.partyAnnounceText.setVisible(false);
