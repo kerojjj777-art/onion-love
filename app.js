@@ -285,25 +285,37 @@ function createSystemUI() {
             .catalog-item:hover { background: rgba(197, 160, 89, 0.2); }
             .catalog-item img { width: 50px; height: 50px; margin-bottom: 5px; object-fit: contain;}
 
-            /* 7-EONION 黑綠黑洞商店＋購買拉條＋給西主題美化＋大廳家具木紋 */
+            /* 7-EONION 黑綠深紫黑洞商店＋購買拉條＋給西主題美化＋大廳家具木紋 */
             #store-modal.store-blackhole-ui,
             #purchase-modal.purchase-blackhole-ui {
-                background: #020806 !important;
-                border: 2px solid rgba(57, 255, 20, 0.85) !important;
-                box-shadow: 0 0 22px rgba(57, 255, 20, 0.45), inset 0 0 28px rgba(0, 80, 38, 0.85) !important;
-                color: #eaffea;
+                background: radial-gradient(circle at 50% 38%, #020202 0%, #041006 36%, #13051e 72%, #020202 100%) !important;
+                border: 2px solid rgba(90, 255, 90, 0.9) !important;
+                box-shadow: 0 0 22px rgba(57, 255, 20, 0.42), 0 0 34px rgba(142, 45, 255, 0.35), inset 0 0 30px rgba(0, 0, 0, 0.95) !important;
+                color: #f0fff0;
                 overflow: hidden !important;
+                animation: store-blackhole-color-shift 3.8s ease-in-out infinite alternate;
+            }
+            #purchase-modal.purchase-blackhole-ui {
+                max-height: min(82vh, calc(var(--onion-vh, 1vh) * 82)) !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                -webkit-overflow-scrolling: touch;
+                touch-action: pan-y;
             }
             #store-modal.store-blackhole-ui::before,
             #purchase-modal.purchase-blackhole-ui::before {
                 content: "";
                 position: absolute;
-                inset: -45%;
+                inset: -35%;
                 background:
-                    radial-gradient(circle at center, rgba(0,0,0,0.9) 0 15%, rgba(0,50,20,0.38) 16% 27%, transparent 28%),
-                    conic-gradient(from 0deg, transparent 0deg, rgba(57,255,20,0.36) 60deg, rgba(0,0,0,0.92) 130deg, rgba(0,180,80,0.24) 220deg, transparent 320deg);
-                animation: store-blackhole-spin 18s linear infinite;
-                opacity: 0.55;
+                    radial-gradient(circle at center, rgba(255,255,255,0.95) 0 1px, transparent 2px),
+                    radial-gradient(circle at center, rgba(0,0,0,0.95) 0 3px, transparent 5px),
+                    radial-gradient(circle at center, rgba(210,255,220,0.82) 0 1px, transparent 3px),
+                    radial-gradient(circle at center, rgba(0,0,0,0.86) 0 5px, transparent 8px);
+                background-size: 34px 34px, 52px 52px, 76px 76px, 108px 108px;
+                background-position: center center;
+                animation: store-blackhole-particle-burst 2.8s linear infinite;
+                opacity: 0.52;
                 pointer-events: none;
                 z-index: 0;
             }
@@ -311,39 +323,73 @@ function createSystemUI() {
             #purchase-modal.purchase-blackhole-ui::after {
                 content: "";
                 position: absolute;
-                inset: 0;
+                inset: -40%;
                 background:
-                    radial-gradient(circle at 18% 18%, rgba(120,255,160,0.72) 0 1px, transparent 2px),
-                    radial-gradient(circle at 82% 26%, rgba(57,255,20,0.55) 0 1px, transparent 2px),
-                    radial-gradient(circle at 30% 78%, rgba(180,255,210,0.55) 0 1px, transparent 2px),
-                    radial-gradient(circle at 72% 68%, rgba(57,255,20,0.48) 0 1px, transparent 2px);
-                animation: store-blackhole-pulse 3.8s ease-in-out infinite alternate;
+                    radial-gradient(circle at center, rgba(0,0,0,1) 0 13%, rgba(8, 42, 16, 0.55) 14% 22%, transparent 23%),
+                    conic-gradient(from 0deg, rgba(57,255,20,0.12), rgba(104,24,180,0.55), rgba(0,0,0,0.9), rgba(57,255,20,0.48), rgba(104,24,180,0.28), rgba(0,0,0,0.9));
+                animation: store-blackhole-spin 16s linear infinite, store-blackhole-pulse 3.2s ease-in-out infinite alternate;
+                opacity: 0.66;
                 pointer-events: none;
                 z-index: 0;
             }
+            @keyframes store-blackhole-color-shift {
+                0% {
+                    border-color: rgba(57, 255, 20, 0.88);
+                    box-shadow: 0 0 22px rgba(57, 255, 20, 0.42), 0 0 30px rgba(70, 255, 120, 0.2), inset 0 0 30px rgba(0, 0, 0, 0.95);
+                }
+                100% {
+                    border-color: rgba(173, 80, 255, 0.9);
+                    box-shadow: 0 0 24px rgba(173, 80, 255, 0.48), 0 0 34px rgba(57, 255, 20, 0.24), inset 0 0 30px rgba(0, 0, 0, 0.95);
+                }
+            }
             @keyframes store-blackhole-spin { 100% { transform: rotate(360deg); } }
-            @keyframes store-blackhole-pulse { 0% { opacity: 0.28; filter: blur(0); } 100% { opacity: 0.75; filter: blur(0.6px); } }
+            @keyframes store-blackhole-pulse { 0% { opacity: 0.42; filter: blur(0); } 100% { opacity: 0.78; filter: blur(0.8px); } }
+            @keyframes store-blackhole-particle-burst {
+                0% {
+                    transform: scale(0.22) rotate(0deg);
+                    opacity: 0;
+                    filter: blur(0);
+                }
+                18% {
+                    opacity: 0.75;
+                }
+                100% {
+                    transform: scale(1.18) rotate(22deg);
+                    opacity: 0;
+                    filter: blur(1px);
+                }
+            }
             .store-blackhole-layer,
-            .purchase-blackhole-layer { position: relative; z-index: 1; }
+            .purchase-blackhole-layer {
+                position: relative;
+                z-index: 1;
+            }
             .store-blackhole-hero {
-                background: linear-gradient(180deg, #000 0%, #031b0d 100%) !important;
+                background: linear-gradient(180deg, #030303 0%, #06180b 45%, #170624 100%) !important;
                 text-align: center;
                 position: relative;
-                border-bottom: 2px solid rgba(57,255,20,0.78) !important;
+                border-bottom: 2px solid rgba(142, 45, 255, 0.72) !important;
                 padding-top: 45px;
                 overflow: hidden;
+                animation: store-blackhole-hero-glow 3.8s ease-in-out infinite alternate;
             }
-            .store-blackhole-hero img { filter: drop-shadow(0 0 12px rgba(57,255,20,0.35)); }
+            @keyframes store-blackhole-hero-glow {
+                0% { box-shadow: inset 0 -18px 26px rgba(57,255,20,0.18); }
+                100% { box-shadow: inset 0 -18px 26px rgba(173,80,255,0.28); }
+            }
+            .store-blackhole-hero img {
+                filter: drop-shadow(0 0 12px rgba(57,255,20,0.35)) drop-shadow(0 0 10px rgba(173,80,255,0.22));
+            }
             #store-manager-bubble.store-blackhole-bubble {
-                background: rgba(1, 24, 12, 0.92) !important;
-                color: #d8ffdc !important;
-                border: 2px solid rgba(57,255,20,0.82) !important;
-                box-shadow: 0 0 12px rgba(57,255,20,0.45) !important;
+                background: rgba(4, 12, 8, 0.92) !important;
+                color: #e8ffe8 !important;
+                border: 2px solid rgba(142, 255, 142, 0.82) !important;
+                box-shadow: 0 0 12px rgba(57,255,20,0.45), 0 0 16px rgba(173,80,255,0.28) !important;
                 text-shadow: 0 0 5px rgba(57,255,20,0.8);
             }
             .store-blackhole-coins {
-                background: rgba(0,0,0,0.72);
-                border: 1px solid rgba(57,255,20,0.62);
+                background: rgba(0,0,0,0.76);
+                border: 1px solid rgba(191, 116, 255, 0.66);
                 border-radius: 12px;
                 color: #d8ff65 !important;
                 text-shadow: 0 0 8px #39ff14, 0 0 12px #000 !important;
@@ -353,55 +399,75 @@ function createSystemUI() {
                 bottom:5px;
                 right:5px;
                 background:rgba(0,0,0,0.82);
-                color:#9dffb0;
+                color:#d5b3ff;
                 padding:4px 8px;
                 border-radius:4px;
                 font-size:12px;
-                border:1px solid rgba(57,255,20,0.72);
+                border:1px solid rgba(191,116,255,0.72);
                 font-weight:bold;
                 z-index:2;
-                box-shadow: 0 0 8px rgba(57,255,20,0.35);
+                box-shadow: 0 0 8px rgba(173,80,255,0.38);
             }
-            .store-blackhole-body { padding:15px; max-height:55vh; overflow-y:auto; position:relative; z-index:1; }
+            .store-blackhole-body {
+                padding:15px;
+                max-height:55vh;
+                overflow-y:auto;
+                overflow-x:hidden;
+                position:relative;
+                z-index:1;
+                -webkit-overflow-scrolling: touch;
+                touch-action: pan-y;
+            }
             .store-blackhole-title,
             .purchase-blackhole-ui h3 {
-                color: #caffca !important;
-                border-bottom: 1px solid rgba(57,255,20,0.62) !important;
-                text-shadow: 0 0 8px rgba(57,255,20,0.85);
+                color: #eaffea !important;
+                border-bottom: 1px solid rgba(191,116,255,0.68) !important;
+                text-shadow: 0 0 8px rgba(57,255,20,0.75), 0 0 10px rgba(173,80,255,0.6);
             }
             .store-blackhole-list .catalog-item {
-                background: linear-gradient(180deg, rgba(7, 64, 35, 0.94), rgba(2, 32, 18, 0.96)) !important;
+                background: linear-gradient(180deg, rgba(7, 64, 35, 0.95), rgba(34, 8, 55, 0.95)) !important;
                 color: #f0fff0 !important;
-                border: 1px solid rgba(57,255,20,0.58) !important;
-                box-shadow: inset 0 0 12px rgba(57,255,20,0.16), 0 5px 14px rgba(0,0,0,0.38);
+                border: 1px solid rgba(126,255,126,0.58) !important;
+                box-shadow: inset 0 0 12px rgba(57,255,20,0.16), 0 0 12px rgba(173,80,255,0.22), 0 5px 14px rgba(0,0,0,0.38);
                 position: relative;
                 overflow: hidden;
+                animation: store-blackhole-card-glow 4s ease-in-out infinite alternate;
+            }
+            @keyframes store-blackhole-card-glow {
+                0% { border-color: rgba(57,255,20,0.58); }
+                100% { border-color: rgba(191,116,255,0.72); }
             }
             .store-blackhole-list .catalog-item::after {
                 content:"";
                 position:absolute;
                 inset:0;
-                background: linear-gradient(120deg, transparent 0 38%, rgba(180,255,200,0.14) 45%, transparent 54%);
+                background: linear-gradient(120deg, transparent 0 38%, rgba(255,255,255,0.18) 45%, transparent 54%);
                 transform: translateX(-120%);
                 animation: store-blackhole-card-sheen 4.8s ease-in-out infinite;
                 pointer-events:none;
             }
             @keyframes store-blackhole-card-sheen { 0%, 65% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
-            .store-blackhole-list .catalog-item span:last-child { color:#d8ff65 !important; text-shadow:0 0 6px rgba(57,255,20,0.75); }
-            .store-blackhole-list .catalog-item:hover { transform: translateY(-2px); box-shadow: 0 0 16px rgba(57,255,20,0.42); }
+            .store-blackhole-list .catalog-item span:last-child {
+                color:#d8ff65 !important;
+                text-shadow:0 0 6px rgba(57,255,20,0.75), 0 0 8px rgba(173,80,255,0.48);
+            }
+            .store-blackhole-list .catalog-item:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 0 16px rgba(57,255,20,0.42), 0 0 18px rgba(173,80,255,0.36);
+            }
 
             .purchase-blackhole-desc {
                 font-size:12px;
-                color:#d8ffdc;
-                background:rgba(0, 22, 11, 0.78);
+                color:#e8ffe8;
+                background:rgba(2, 10, 7, 0.82);
                 padding:9px;
                 border-radius:8px;
-                border:1px dashed rgba(57,255,20,0.62);
+                border:1px dashed rgba(191,116,255,0.62);
                 margin-bottom:12px;
                 text-align:left;
                 line-height:1.45;
                 white-space:pre-line;
-                box-shadow: inset 0 0 12px rgba(57,255,20,0.12);
+                box-shadow: inset 0 0 12px rgba(57,255,20,0.12), 0 0 12px rgba(173,80,255,0.16);
             }
             .purchase-blackhole-slider-wrap { margin: 14px 0 10px 0; color:#d8ffdc; }
             .purchase-blackhole-row { display:flex; justify-content:space-between; align-items:center; font-size:13px; margin-bottom:6px; }
@@ -410,8 +476,8 @@ function createSystemUI() {
             #purchase-slider::-webkit-slider-runnable-track {
                 height: 8px;
                 border-radius:999px;
-                background:linear-gradient(90deg,#062812,#39ff14);
-                box-shadow:0 0 8px rgba(57,255,20,0.65);
+                background:linear-gradient(90deg,#062812,#39ff14,#9d52ff);
+                box-shadow:0 0 8px rgba(57,255,20,0.65), 0 0 8px rgba(173,80,255,0.45);
             }
             #purchase-slider::-webkit-slider-thumb {
                 -webkit-appearance:none;
@@ -421,22 +487,22 @@ function createSystemUI() {
                 border-radius:50%;
                 margin-top:-8px;
                 background:#eaffea;
-                border:2px solid #39ff14;
-                box-shadow:0 0 12px #39ff14;
+                border:2px solid #9d52ff;
+                box-shadow:0 0 12px #39ff14, 0 0 14px #9d52ff;
             }
             #purchase-slider::-moz-range-track {
                 height:8px;
                 border-radius:999px;
-                background:linear-gradient(90deg,#062812,#39ff14);
-                box-shadow:0 0 8px rgba(57,255,20,0.65);
+                background:linear-gradient(90deg,#062812,#39ff14,#9d52ff);
+                box-shadow:0 0 8px rgba(57,255,20,0.65), 0 0 8px rgba(173,80,255,0.45);
             }
             #purchase-slider::-moz-range-thumb {
                 width:22px;
                 height:22px;
                 border-radius:50%;
                 background:#eaffea;
-                border:2px solid #39ff14;
-                box-shadow:0 0 12px #39ff14;
+                border:2px solid #9d52ff;
+                box-shadow:0 0 12px #39ff14, 0 0 14px #9d52ff;
             }
             .purchase-total-box {
                 display:inline-flex;
@@ -444,17 +510,17 @@ function createSystemUI() {
                 gap:5px;
                 padding:7px 10px;
                 border-radius:10px;
-                border:1px solid rgba(57,255,20,0.7);
-                background:rgba(0,0,0,0.55);
+                border:1px solid rgba(191,116,255,0.7);
+                background:rgba(0,0,0,0.58);
                 color:#d8ffdc;
-                box-shadow:0 0 10px rgba(57,255,20,0.25);
+                box-shadow:0 0 10px rgba(57,255,20,0.25), 0 0 12px rgba(173,80,255,0.25);
             }
             .purchase-total-value {
                 display:inline-block;
                 color:#d8ff65 !important;
                 font-size:20px;
                 font-weight:bold;
-                text-shadow:0 0 8px #39ff14, 0 0 12px #000;
+                text-shadow:0 0 8px #39ff14, 0 0 12px #9d52ff, 0 0 12px #000;
                 animation: purchase-total-jitter var(--purchase-shake-speed, 0.6s) infinite steps(2, end);
             }
             @keyframes purchase-total-jitter {
@@ -470,11 +536,16 @@ function createSystemUI() {
             #medal-detail-modal {
                 width: 90% !important;
                 max-width: 400px !important;
+                max-height: min(82vh, calc(var(--onion-vh, 1vh) * 82)) !important;
                 background: linear-gradient(135deg, #f7f7f7 0%, #aeb4ba 28%, #ffffff 45%, #8d969e 70%, #dfe3e6 100%) !important;
                 border: 2px solid rgba(255,255,255,0.9) !important;
                 box-shadow: 0 12px 26px rgba(0,0,0,0.55), inset 0 0 18px rgba(255,255,255,0.72) !important;
                 color: #25313a !important;
-                overflow: hidden !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior: contain;
+                touch-action: pan-y;
             }
             .id-metal-card::before,
             #medal-list-modal::before,
@@ -534,30 +605,52 @@ function createSystemUI() {
                 background: linear-gradient(180deg, #ff86bd 0%, #ffc1dc 100%) !important;
                 border: 4px solid #ffffff !important;
                 box-shadow: inset 0 0 25px rgba(255,255,255,0.55), 0 10px 24px rgba(184,39,116,0.45) !important;
-                overflow:hidden !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior: contain;
+                touch-action: pan-y;
             }
-            #phone-modal.phone-pink-ui::before {
-                content:"😍   🤩      🥰   🤣      😤   🥹      🤬   💋      🤡";
+            .phone-pink-emoji-field {
                 position:absolute;
-                inset:12px;
-                color:rgba(255,255,255,0.32);
-                font-size:24px;
-                line-height:2.4;
-                word-spacing:12px;
-                animation: phone-pink-emoji-bounce 5s ease-in-out infinite;
+                inset:0;
+                overflow:hidden;
                 pointer-events:none;
                 z-index:0;
+                border-radius:10px;
             }
-            @keyframes phone-pink-emoji-bounce {
-                0%,100% { transform: translateY(0); }
-                50% { transform: translateY(-10px); }
+            .phone-pink-emoji-field span {
+                position:absolute;
+                bottom:-42px;
+                left:var(--emoji-left, 50%);
+                font-size:var(--emoji-size, 24px);
+                opacity:0;
+                filter: drop-shadow(0 0 7px rgba(255,255,255,0.82));
+                animation: phone-pink-emoji-missile var(--emoji-speed, 5s) linear infinite;
+                animation-delay:var(--emoji-delay, 0s);
             }
-            #phone-modal.phone-pink-ui > * { position:relative; z-index:1; }
+            @keyframes phone-pink-emoji-missile {
+                0% {
+                    transform: translate(0, 0) rotate(-18deg) scale(0.75);
+                    opacity:0;
+                }
+                10% {
+                    opacity:0.78;
+                }
+                100% {
+                    transform: translate(var(--emoji-dx, 70px), -520px) rotate(18deg) scale(1.18);
+                    opacity:0;
+                }
+            }
+            #phone-modal.phone-pink-ui > * {
+                position:relative;
+                z-index:1;
+            }
             #phone-modal.phone-pink-ui h3 {
                 color:#fff !important;
                 font-weight:900 !important;
                 border-bottom:2px solid rgba(255,255,255,0.75) !important;
-                text-shadow:0 2px 4px rgba(158,20,90,0.65);
+                text-shadow:0 2px 4px rgba(158,20,90,0.65), 0 0 10px rgba(255,255,255,0.75);
             }
             #phone-modal.phone-pink-ui .phone-contact {
                 background:rgba(255,255,255,0.88) !important;
@@ -568,13 +661,40 @@ function createSystemUI() {
             }
             #phone-modal.phone-pink-ui .phone-contact-sub { color:#7d3657 !important; }
             #phone-modal.phone-pink-ui .phone-contact-title { text-shadow:none !important; }
+            #phone-modal.phone-pink-ui button,
+            #pm-modal.phone-pink-chat-ui button,
+            .phone-pink-btn {
+                background: linear-gradient(180deg, #d81b72, #8f0f4f) !important;
+                color:#fff !important;
+                border:1px solid rgba(255,255,255,0.8) !important;
+                border-radius:12px !important;
+                box-shadow:0 0 10px rgba(255,64,160,0.68), inset 0 0 10px rgba(255,255,255,0.22) !important;
+                text-shadow:0 1px 2px rgba(0,0,0,0.55);
+                font-weight:bold;
+            }
+            #phone-modal.phone-pink-ui button:active,
+            #pm-modal.phone-pink-chat-ui button:active,
+            .phone-pink-btn:active {
+                transform:scale(0.96);
+                box-shadow:0 0 18px rgba(255,64,160,0.92), inset 0 0 10px rgba(255,255,255,0.28) !important;
+            }
+            #pm-modal.phone-pink-chat-ui {
+                background: linear-gradient(180deg, #ff9ac9 0%, #ffd0e7 100%) !important;
+                border: 4px solid #ffffff !important;
+                box-shadow: inset 0 0 24px rgba(255,255,255,0.5), 0 10px 24px rgba(184,39,116,0.42) !important;
+            }
 
             .furniture-wood-ui {
                 background: linear-gradient(180deg, #7a4a24 0%, #4d2b13 100%) !important;
                 border: 3px solid #d8a45f !important;
                 box-shadow: 0 10px 24px rgba(0,0,0,0.55), inset 0 0 28px rgba(68,32,10,0.9) !important;
                 color:#fff2da;
-                overflow:hidden !important;
+                max-height: min(82vh, calc(var(--onion-vh, 1vh) * 82)) !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior: contain;
+                touch-action: pan-y;
             }
             .furniture-wood-ui::before {
                 content:"";
@@ -586,23 +706,48 @@ function createSystemUI() {
                 pointer-events:none;
                 z-index:0;
             }
-            .furniture-wood-ui::after {
-                content:"";
+            .furniture-wood-fairy-field {
                 position:absolute;
                 inset:0;
-                background:
-                    radial-gradient(circle at 18% 20%, rgba(140,255,220,0.78) 0 2px, transparent 3px),
-                    radial-gradient(circle at 78% 34%, rgba(160,220,255,0.7) 0 2px, transparent 3px),
-                    radial-gradient(circle at 55% 82%, rgba(165,255,185,0.65) 0 2px, transparent 3px);
-                animation: furniture-wood-fairy 7s ease-in-out infinite alternate;
+                overflow:hidden;
                 pointer-events:none;
                 z-index:0;
+                border-radius:10px;
             }
-            @keyframes furniture-wood-fairy {
-                0% { transform: translate(0,0); opacity:0.35; }
-                100% { transform: translate(10px,-14px); opacity:0.8; }
+            .furniture-wood-fairy-field span {
+                position:absolute;
+                bottom:-20px;
+                left:var(--fairy-left, 50%);
+                width:7px;
+                height:7px;
+                border-radius:50%;
+                background:var(--fairy-color, #9fffe0);
+                box-shadow:0 0 8px var(--fairy-color, #9fffe0), 0 0 16px var(--fairy-color, #9fffe0);
+                opacity:0;
+                animation: furniture-wood-fairy-fly var(--fairy-speed, 7s) ease-in-out infinite;
+                animation-delay:var(--fairy-delay, 0s);
             }
-            .furniture-wood-ui > * { position:relative; z-index:1; }
+            @keyframes furniture-wood-fairy-fly {
+                0% {
+                    transform: translate(0, 0) scale(0.65);
+                    opacity:0;
+                }
+                15% {
+                    opacity:0.85;
+                }
+                50% {
+                    transform: translate(var(--fairy-mid-x, 24px), -150px) scale(1);
+                    opacity:0.95;
+                }
+                100% {
+                    transform: translate(var(--fairy-end-x, -28px), -330px) scale(0.45);
+                    opacity:0;
+                }
+            }
+            .furniture-wood-ui > * {
+                position:relative;
+                z-index:1;
+            }
             .furniture-wood-ui h3 {
                 color:#fff2da !important;
                 border-bottom:1px solid rgba(255,226,170,0.65) !important;
@@ -809,7 +954,17 @@ function createSystemUI() {
             <div class="modal-btns"><button id="start-edit-btn" class="btn-edit" style="display:none;">編輯</button><button id="save-edit-btn" class="btn-primary" style="display:none;">儲存</button><button class="close-modal-btn btn-secondary" onclick="window.closeProfileModal()">收起證件</button></div>
         </div>
 
-        <div id="furniture-catalog-modal" class="modal"><h3 id="catalog-title">📦 家俱目錄</h3><div id="catalog-list" class="catalog-grid"></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('furniture-catalog-modal').style.display='none'">關閉</button></div>
+        <div id="furniture-catalog-modal" class="modal">
+            <div class="furniture-wood-fairy-field" aria-hidden="true">
+                <span style="--fairy-left:12%; --fairy-color:#9fffe0; --fairy-speed:7.2s; --fairy-delay:0s; --fairy-mid-x:34px; --fairy-end-x:-18px;"></span>
+                <span style="--fairy-left:38%; --fairy-color:#9fd8ff; --fairy-speed:8.6s; --fairy-delay:1.4s; --fairy-mid-x:-30px; --fairy-end-x:32px;"></span>
+                <span style="--fairy-left:68%; --fairy-color:#adffbf; --fairy-speed:7.8s; --fairy-delay:2.6s; --fairy-mid-x:26px; --fairy-end-x:-34px;"></span>
+                <span style="--fairy-left:84%; --fairy-color:#8fd4ff; --fairy-speed:9.2s; --fairy-delay:3.8s; --fairy-mid-x:-24px; --fairy-end-x:18px;"></span>
+            </div>
+            <h3 id="catalog-title">📦 家俱目錄</h3>
+            <div id="catalog-list" class="catalog-grid"></div>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('furniture-catalog-modal').style.display='none'">關閉</button>
+        </div>
         <div id="fridge-modal" class="modal"><h3>❄️ 公用大冰箱</h3><p style="color:#888; font-size: 14px;">冰箱目前空空如也... 等待下次採買中</p><button class="close-modal-btn btn-primary" onclick="document.getElementById('fridge-modal').style.display='none'">關上冰箱</button></div>
         <div id="memory-modal" class="modal">
             <h3>📖 洋蔥回憶錄</h3>
@@ -949,12 +1104,31 @@ function createSystemUI() {
 
         <div id="inventory-modal" class="modal"><div id="inventory-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--mucha-gold); padding-bottom: 5px; margin-bottom: 15px;"><h3 style="margin:0; border:none; color: var(--mucha-brown);">🎒 我的給西</h3><button id="inventory-edit-btn" class="btn-edit" onclick="window.toggleInventoryEdit()" style="padding:4px 8px; font-size:12px;">編輯排序</button></div><div id="inventory-list" class="catalog-grid" style="max-height: 50vh; overflow-y: auto; padding-right: 5px;"></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('inventory-modal').style.display='none'">關閉</button></div>
         <div id="phone-modal" class="modal phone-pink-ui">
-    <h3 style="color: var(--mucha-green);">📱 洋蔥手機</h3>
-    <p style="font-size: 12px; color: #fff; text-shadow:1px 1px 2px #000; margin-top: 0;">點擊聯絡人發送私訊</p>
-    <div id="phone-contacts"></div>
-    <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width:100%; min-height:40px;" onclick="window.closePhoneModal()">收起手機</button>
-</div>
-        <div id="pm-modal" class="modal" style="z-index: 260;"><h3 id="pm-title" style="color: var(--mucha-green);">私訊</h3><div id="pm-chat-box"></div><div style="display:flex; gap: 5px;"><input type="text" id="pm-input" style="flex-grow:1; padding:5px; border: 1px solid var(--mucha-gold); border-radius: 4px;" placeholder="輸入訊息..."><button class="btn-primary" onclick="window.sendPM()">發送</button></div><button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="window.closePM()">返回聯絡人</button></div>
+            <div class="phone-pink-emoji-field" aria-hidden="true">
+                <span style="--emoji-left:8%; --emoji-dx:72px; --emoji-size:23px; --emoji-speed:5.2s; --emoji-delay:0s;">😍</span>
+                <span style="--emoji-left:22%; --emoji-dx:-46px; --emoji-size:25px; --emoji-speed:6.1s; --emoji-delay:0.7s;">🤩</span>
+                <span style="--emoji-left:38%; --emoji-dx:58px; --emoji-size:22px; --emoji-speed:5.8s; --emoji-delay:1.4s;">🥰</span>
+                <span style="--emoji-left:54%; --emoji-dx:-74px; --emoji-size:26px; --emoji-speed:6.4s; --emoji-delay:2.1s;">🤣</span>
+                <span style="--emoji-left:70%; --emoji-dx:52px; --emoji-size:24px; --emoji-speed:5.6s; --emoji-delay:2.9s;">😤</span>
+                <span style="--emoji-left:86%; --emoji-dx:-62px; --emoji-size:22px; --emoji-speed:6.8s; --emoji-delay:3.5s;">🥹</span>
+                <span style="--emoji-left:16%; --emoji-dx:96px; --emoji-size:23px; --emoji-speed:7.1s; --emoji-delay:4.2s;">🤬</span>
+                <span style="--emoji-left:48%; --emoji-dx:-88px; --emoji-size:24px; --emoji-speed:6.6s; --emoji-delay:4.9s;">💋</span>
+                <span style="--emoji-left:78%; --emoji-dx:74px; --emoji-size:25px; --emoji-speed:7.4s; --emoji-delay:5.5s;">🤡</span>
+            </div>
+            <h3 style="color: var(--mucha-green);">📱 洋蔥手機</h3>
+            <p style="font-size: 12px; color: #fff; text-shadow:1px 1px 2px #000; margin-top: 0;">點擊聯絡人發送私訊</p>
+            <div id="phone-contacts"></div>
+            <button class="close-modal-btn btn-secondary phone-pink-btn" style="margin-top: 15px; width:100%; min-height:40px;" onclick="window.closePhoneModal()">收起手機</button>
+        </div>
+        <div id="pm-modal" class="modal phone-pink-chat-ui" style="z-index: 260;">
+            <h3 id="pm-title" style="color: #fff; text-shadow:0 2px 4px rgba(158,20,90,0.65);">私訊</h3>
+            <div id="pm-chat-box"></div>
+            <div style="display:flex; gap: 5px;">
+                <input type="text" id="pm-input" style="flex-grow:1; padding:5px; border: 1px solid var(--mucha-gold); border-radius: 4px;" placeholder="輸入訊息...">
+                <button class="btn-primary phone-pink-btn" onclick="window.sendPM()">發送</button>
+            </div>
+            <button class="close-modal-btn btn-secondary phone-pink-btn" style="margin-top: 15px;" onclick="window.closePM()">返回聯絡人</button>
+        </div>
         
         <div id="store-modal" class="modal store-blackhole-ui" style="padding:0; overflow:hidden; z-index: 250;">
             <div class="store-blackhole-hero store-blackhole-layer">
