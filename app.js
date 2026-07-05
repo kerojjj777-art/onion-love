@@ -87,7 +87,7 @@ window.GameLogic = {
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0, inventoryOrder: [], princeBond: 0, princePetCountToday: 0, princeLastPetDate: "", princeRewardsClaimed: {}, princeFeedCountToday: 0, princeLastFeedDate: "" },
     cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, placingFurnitureKey: null, 
     phaserGame: null, phaserLoaded: false, pendingScene: null, db: db,
-    armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false, moonBunBuffUntil: 0, moonBunSweepPressCount: 0, moonBunBuffEndNotified: false,
+    armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false, rpsModalActive: false, moonBunBuffUntil: 0, moonBunSweepPressCount: 0, moonBunBuffEndNotified: false, moonBunBuffRemainingMs: 0, moonBunBuffLastSaveAt: 0,
     selectedServerRoom: initialServerRoom, currentServerRoom: initialServerRoom, serverRooms: SERVER_ROOMS, authGuardSigningOut: false
 };
 
@@ -787,6 +787,87 @@ function createSystemUI() {
 createSystemUI();
 
 window.refreshMobileViewportLayout = function() {
+
+// ====== 猜拳遊戲：手機 PWA 圖層防穿透保護 ======
+window.setRpsModalActive = function(isActive) {
+    if (!window.GameLogic) return false;
+
+    const active = !!isActive;
+    window.GameLogic.rpsModalActive = active;
+
+    try {
+        document.body.classList.toggle('rps-modal-active', active);
+    } catch (_) {}
+
+    return active;
+};
+
+window.syncRpsModalActive = function() {
+    const modal = document.getElementById('rps-modal');
+    if (!modal) {
+        window.setRpsModalActive(false);
+        return false;
+    }
+
+    const style = window.getComputedStyle(modal);
+    const active = style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) !== 0;
+    return window.setRpsModalActive(active);
+};
+
+window.installRpsModalGuards = function() {
+    const modal = document.getElementById('rps-modal');
+    if (!modal || modal.__rpsModalGuardsInstalled) return;
+
+    modal.__rpsModalGuardsInstalled = true;
+    modal.style.touchAction = 'none';
+    modal.style.pointerEvents = 'auto';
+
+    const stopInsideRps = (e) => {
+        if (e && e.stopPropagation) e.stopPropagation();
+
+        // 不阻擋 button / img 本身 onclick 或 onpointerdown，只阻止滑動、滾輪、右鍵等穿透與瀏覽器原生行為。
+        if (
+            e &&
+            e.cancelable &&
+            (e.type === 'touchmove' || e.type === 'pointermove' || e.type === 'wheel' || e.type === 'contextmenu')
+        ) {
+            e.preventDefault();
+        }
+    };
+
+    [
+        'pointerdown',
+        'pointerup',
+        'pointermove',
+        'touchstart',
+        'touchend',
+        'touchmove',
+        'mousedown',
+        'mouseup',
+        'click',
+        'dblclick',
+        'wheel',
+        'contextmenu'
+    ].forEach(evt => {
+        modal.addEventListener(evt, stopInsideRps, { passive: false });
+    });
+
+    const observer = new MutationObserver(() => {
+        window.syncRpsModalActive();
+    });
+
+    observer.observe(modal, {
+        attributes: true,
+        attributeFilter: ['style', 'class']
+    });
+
+    modal.__rpsModalObserver = observer;
+    window.syncRpsModalActive();
+};
+
+window.installRpsModalGuards();
+// ====== 猜拳遊戲：手機 PWA 圖層防穿透保護結束 ======
+  
     try {
         const vv = window.visualViewport;
         const viewW = Math.max(1, Math.round(vv && vv.width ? vv.width : window.innerWidth));
@@ -1416,6 +1497,126 @@ window.formatMoonBunBuffTime = function(ms) {
     return `${m}:${s}`;
 };
 
+// ====== 月光饅頭：離線暫停倒數與剩餘時間保存 ======
+window.MOON_BUN_BUFF_DURATION_MS = 4 * 60 * 1000;
+window.MOON_BUN_REMAINING_STORAGE_KEY = 'onion_moon_bun_buff_remaining_ms';
+
+window.getMoonBunBuffRemainingMs = function() {
+    if (!window.GameLogic || !window.GameLogic.moonBunBuffUntil) return 0;
+    return Math.max(0, Number(window.GameLogic.moonBunBuffUntil || 0) - Date.now());
+};
+
+window.saveMoonBunBuffRemaining = function(options = {}) {
+    const force = !!options.force;
+    const clear = !!options.clear;
+    const now = Date.now();
+
+    let remainingMs = clear ? 0 : window.getMoonBunBuffRemainingMs();
+    remainingMs = Math.max(0, Math.floor(Number(remainingMs || 0)));
+
+    window.GameLogic.moonBunBuffRemainingMs = remainingMs;
+
+    try {
+        if (remainingMs > 0) {
+            localStorage.setItem(window.MOON_BUN_REMAINING_STORAGE_KEY, String(remainingMs));
+        } else {
+            localStorage.removeItem(window.MOON_BUN_REMAINING_STORAGE_KEY);
+        }
+    } catch (err) {
+        console.warn('[月光饅頭] localStorage 保存剩餘時間失敗：', err);
+    }
+
+    if (!force && now - Number(window.GameLogic.moonBunBuffLastSaveAt || 0) < 10000) {
+        return remainingMs;
+    }
+
+    window.GameLogic.moonBunBuffLastSaveAt = now;
+
+    const uid = window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : null;
+    if (!uid) return remainingMs;
+
+    update(ref(window.GameLogic.db, `users/${uid}`), {
+        moonBunBuffRemainingMs: remainingMs > 0 ? remainingMs : null
+    }).catch(err => console.warn('[月光饅頭] Firebase 保存剩餘時間失敗：', err));
+
+    return remainingMs;
+};
+
+window.clearMoonBunBuffSavedRemaining = function() {
+    window.saveMoonBunBuffRemaining({ clear: true, force: true });
+};
+
+window.restoreMoonBunBuffFromSavedRemaining = function(profile = {}) {
+    let savedRemainingMs = Number(profile.moonBunBuffRemainingMs || 0);
+
+    if (!savedRemainingMs) {
+        try {
+            savedRemainingMs = Number(localStorage.getItem(window.MOON_BUN_REMAINING_STORAGE_KEY) || 0);
+        } catch (_) {
+            savedRemainingMs = 0;
+        }
+    }
+
+    savedRemainingMs = Math.max(0, Math.min(savedRemainingMs, window.MOON_BUN_BUFF_DURATION_MS));
+
+    if (savedRemainingMs > 0) {
+        window.GameLogic.moonBunBuffUntil = Date.now() + savedRemainingMs;
+        window.GameLogic.moonBunBuffRemainingMs = savedRemainingMs;
+        window.GameLogic.moonBunSweepPressCount = 0;
+        window.GameLogic.moonBunBuffEndNotified = false;
+
+        try {
+            localStorage.setItem(window.MOON_BUN_REMAINING_STORAGE_KEY, String(savedRemainingMs));
+        } catch (_) {}
+
+        window.saveMoonBunBuffRemaining({ force: true });
+
+        setTimeout(() => {
+            const ms = window.getMainSceneSafe ? window.getMainSceneSafe() : null;
+            if (ms && ms.createOrUpdateMoonBunBuffUi) ms.createOrUpdateMoonBunBuffUi();
+
+            if (!window.GameLogic.moonBunBuffRestoreNotified) {
+                window.GameLogic.moonBunBuffRestoreNotified = true;
+                const timeText = window.formatMoonBunBuffTime(savedRemainingMs);
+                sendBubble(`月光饅頭效果恢復，剩餘 ${timeText}。`);
+            }
+        }, 800);
+
+        return true;
+    }
+
+    window.GameLogic.moonBunBuffUntil = 0;
+    window.GameLogic.moonBunBuffRemainingMs = 0;
+    window.GameLogic.moonBunSweepPressCount = 0;
+
+    try {
+        localStorage.removeItem(window.MOON_BUN_REMAINING_STORAGE_KEY);
+    } catch (_) {}
+
+    return false;
+};
+
+window.installMoonBunPersistenceGuards = function() {
+    if (window.__moonBunPersistenceGuardsInstalled) return;
+    window.__moonBunPersistenceGuardsInstalled = true;
+
+    const saveIfActive = () => {
+        if (window.isMoonBunBuffActive && window.isMoonBunBuffActive()) {
+            window.saveMoonBunBuffRemaining({ force: true });
+        }
+    };
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) saveIfActive();
+    });
+
+    window.addEventListener('pagehide', saveIfActive);
+    window.addEventListener('beforeunload', saveIfActive);
+};
+
+window.installMoonBunPersistenceGuards();
+// ====== 月光饅頭：離線暫停倒數與剩餘時間保存結束 ======
+
 window.getMainSceneSafe = function() {
     if (!window.GameLogic.phaserGame) return null;
     try {
@@ -1458,19 +1659,31 @@ window.useMoonShard = function() {
 window.useMoonBun = function() {
     if (window.GameLogic.currentScene !== 'cafe') {
         sendBubble("月光饅頭要在洋蔥大廳吃才有感覺。");
-        return;
+        return false;
     }
 
     if (window.isMoonBunBuffActive()) {
         sendBubble("月光饅頭的效果還在喔，不要貪吃。");
-        return;
+        return false;
     }
 
-    if (!window.consumeMoonInventoryItem('月光饅頭')) return;
+    if (!window.consumeMoonInventoryItem('月光饅頭')) return false;
 
-    window.GameLogic.moonBunBuffUntil = Date.now() + 4 * 60 * 1000;
+    const durationMs = window.MOON_BUN_BUFF_DURATION_MS || (4 * 60 * 1000);
+
+    window.GameLogic.moonBunBuffUntil = Date.now() + durationMs;
+    window.GameLogic.moonBunBuffRemainingMs = durationMs;
     window.GameLogic.moonBunSweepPressCount = 0;
     window.GameLogic.moonBunBuffEndNotified = false;
+    window.GameLogic.moonBunBuffRestoreNotified = false;
+
+    // 月光饅頭是立即吃掉的 buff，道具成功使用後不可維持裝填狀態。
+    window.GameLogic.armedItemState = null;
+    window.GameLogic.armedItemName = null;
+
+    if (window.saveMoonBunBuffRemaining) {
+        window.saveMoonBunBuffRemaining({ force: true });
+    }
 
     window.playOptionalSFX('moon-bun-use');
 
@@ -1484,6 +1697,7 @@ window.useMoonBun = function() {
     if (magicModal) magicModal.style.display = 'none';
 
     sendBubble("月光饅頭生效！接下來 4 分鐘，掃洋蔥皮只要按兩下 A。");
+    return true;
 };
 
 window.useMoonStaff = function() {
@@ -2295,6 +2509,15 @@ window.confirmPurchase = function() { let cost = window.currentPurchaseQty * win
 const loginScreen = document.getElementById("login-screen"); const gameLayoutContainer = document.getElementById("game-layout-container"); const chatSection = document.getElementById("chat-section"); const actionMenu = document.getElementById("action-menu"); const viewProfileModal = document.getElementById("view-profile-modal"); const chatInput = document.getElementById("chat-input");
 if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 window.addEventListener('pointerdown', (e) => { 
+    if (window.GameLogic && window.GameLogic.rpsModalActive) {
+        const insideRpsModal = e.target && e.target.closest && e.target.closest('#rps-modal');
+        if (!insideRpsModal) {
+            if (e.cancelable) e.preventDefault();
+            if (e.stopPropagation) e.stopPropagation();
+        }
+        return;
+    }
+
     if (window.GameLogic && window.GameLogic.soloRocketCruiseActive && e.target.tagName === 'CANVAS') {
         return;
     }
@@ -2374,6 +2597,11 @@ onAuthStateChanged(auth, async (user) => {
             window.GameLogic.myProfile = Object.assign({}, window.GameLogic.myProfile, profileSnap.val());
 
         window.normalizePrinceCatProfileFields();
+
+            if (window.restoreMoonBunBuffFromSavedRemaining) {
+                window.restoreMoonBunBuffFromSavedRemaining(window.GameLogic.myProfile);
+            }
+
             update(ref(db, `users/${user.uid}`), {
                 princeBond: window.GameLogic.myProfile.princeBond || 0,
                 princePetCountToday: window.GameLogic.myProfile.princePetCountToday || 0,
@@ -2993,6 +3221,7 @@ class BootScene extends Phaser.Scene {
         this.load.audio('prince-cat-bring-coin-sfx', 'pet-cat-wzm-bring-coin.mp3');
         this.load.audio('prince-cat-friendship-up-sfx', 'pet-cat-wzm-friendship-up.mp3');
         this.load.spritesheet('onion-petting-sheet', 'onion-petting.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.audio('onion-petting-sfx', 'onion-petting.mp3');
         this.load.image('prince-cat-love', 'pet-cat-wzm-love.png'); // 王子麵摸摸愛心特效，showPrinceCatLoveEffect() 使用此 key
         this.load.image('ranking-medal-cat-wzm-no0.png', 'ranking-medal-cat-wzm-no0.png');
         this.load.audio('prince-cat-normal-meow', 'pet-cat-wzm-normal-meow.mp3');
@@ -3289,6 +3518,8 @@ class UIScene extends Phaser.Scene {
         this.furnBtn = this.add.circle(0, 0, 30, 0x8b5a2b).setStrokeStyle(3, 0xc5a059).setInteractive(); this.furnText = this.add.text(0, 0, '家俱', { fontSize: '16px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
         this.itemBtn = this.add.circle(0, 0, 30, 0x607d8b).setStrokeStyle(3, 0xc5a059).setInteractive(); this.itemText = this.add.text(0, 0, '給西', { fontSize: '16px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
 
+        const isRpsModalBlocking = () => !!(window.GameLogic && window.GameLogic.rpsModalActive);
+
         this.sweepBtnGlow = this.add.circle(0, 0, 62, 0xfff176, 0.18).setStrokeStyle(2, 0xffffff, 0.35).setDepth(208).setVisible(false);
         this.sweepBtn = this.add.circle(0, 0, 50, 0xffcc00).setStrokeStyle(4, 0xffffff, 1).setInteractive({ useHandCursor: true }).setDepth(209).setVisible(false);
         this.sweepText = this.add.text(0, 0, '掃！', {
@@ -3297,15 +3528,45 @@ class UIScene extends Phaser.Scene {
             fontStyle: 'bold'
         }).setOrigin(0.5).setDepth(210).setVisible(false).setShadow(0, 0, '#ffffff', 4, true, true);
 
-        this.itemBtn.on('pointerdown', () => { window.openInventoryModal(); });
-        this.furnBtn.on('pointerdown', () => { if (this.furnText.text === '農具') return alert("農具選單尚未開放！"); openFurnitureCatalog(); });
-        this.aPressTime = 0;
-        this.btnA.on('pointerdown', () => { this.btnA.setFillStyle(0xb52b27); this.aPressTime = Date.now(); });
-        this.btnA.on('pointerup', () => { this.btnA.setFillStyle(0xd9534f); let duration = Date.now() - this.aPressTime; const mainScene = this.scene.manager.getScene('MainScene'); if(mainScene) { if (window.GameLogic.placingFurnitureKey) mainScene.events.emit('action_A_place'); else if (duration > 500) mainScene.events.emit('action_A_long'); else mainScene.events.emit('action_A_short'); } });
+        this.itemBtn.on('pointerdown', () => {
+    if (isRpsModalBlocking()) return;
+    window.openInventoryModal();
+});
+
+this.furnBtn.on('pointerdown', () => {
+    if (isRpsModalBlocking()) return;
+    if (this.furnText.text === '農具') return alert("農具選單尚未開放！");
+    openFurnitureCatalog();
+});
+
+this.aPressTime = 0;
+this.btnA.on('pointerdown', () => {
+    if (isRpsModalBlocking()) return;
+    this.btnA.setFillStyle(0xb52b27);
+    this.aPressTime = Date.now();
+});
+
+this.btnA.on('pointerup', () => {
+    if (isRpsModalBlocking()) {
+        this.btnA.setFillStyle(0xd9534f);
+        return;
+    }
+
+    this.btnA.setFillStyle(0xd9534f);
+    let duration = Date.now() - this.aPressTime;
+    const mainScene = this.scene.manager.getScene('MainScene');
+    if(mainScene) {
+        if (window.GameLogic.placingFurnitureKey) mainScene.events.emit('action_A_place');
+        else if (duration > 500) mainScene.events.emit('action_A_long');
+        else mainScene.events.emit('action_A_short');
+    }
+});
 
         this.sweepBtn.on('pointerdown', () => {
-            const mainScene = this.scene.manager.getScene('MainScene');
-            if (!mainScene || !mainScene.localPlayer || !mainScene.localPlayer.isSweeping) return;
+        if (isRpsModalBlocking()) return;
+
+        const mainScene = this.scene.manager.getScene('MainScene');
+        if (!mainScene || !mainScene.localPlayer || !mainScene.localPlayer.isSweeping) return;
 
             this.sweepBtn.setFillStyle(0xffe066);
             this.sweepBtnGlow.setVisible(true).setAlpha(0.45);
@@ -3341,26 +3602,37 @@ class UIScene extends Phaser.Scene {
         }).setDepth(500).stop();
 
         this.btnB.on('pointerdown', () => { 
-            this.btnB.setFillStyle(0x005599); 
-            this.bLongPressTriggered = false;
-            this.bLongPressTimer = this.time.delayedCall(300, () => {
-                this.bLongPressTriggered = true;
-                const mainScene = this.scene.manager.getScene('MainScene');
-                if (mainScene) mainScene.events.emit('action_B_long');
-            });
-        });
-        this.btnB.on('pointerup', () => { 
-            this.btnB.setFillStyle(0x0077cc);
-            if (this.bLongPressTimer) this.bLongPressTimer.remove();
-            if (!this.bLongPressTriggered) {
-                const mainScene = this.scene.manager.getScene('MainScene');
-                if (mainScene) mainScene.events.emit('action_B');
-            }
-        });
-        this.btnB.on('pointerout', () => { 
-            this.btnB.setFillStyle(0x0077cc);
-            if (this.bLongPressTimer) this.bLongPressTimer.remove();
-        });
+    if (isRpsModalBlocking()) return;
+
+    this.btnB.setFillStyle(0x005599); 
+    this.bLongPressTriggered = false;
+    this.bLongPressTimer = this.time.delayedCall(300, () => {
+        if (isRpsModalBlocking()) return;
+        this.bLongPressTriggered = true;
+        const mainScene = this.scene.manager.getScene('MainScene');
+        if (mainScene) mainScene.events.emit('action_B_long');
+    });
+});
+
+this.btnB.on('pointerup', () => { 
+    if (isRpsModalBlocking()) {
+        this.btnB.setFillStyle(0x0077cc);
+        if (this.bLongPressTimer) this.bLongPressTimer.remove();
+        return;
+    }
+
+    this.btnB.setFillStyle(0x0077cc);
+    if (this.bLongPressTimer) this.bLongPressTimer.remove();
+    if (!this.bLongPressTriggered) {
+        const mainScene = this.scene.manager.getScene('MainScene');
+        if (mainScene) mainScene.events.emit('action_B');
+    }
+});
+
+this.btnB.on('pointerout', () => { 
+    this.btnB.setFillStyle(0x0077cc);
+    if (this.bLongPressTimer) this.bLongPressTimer.remove();
+});
         
         this.scale.on('resize', this.resizeUI, this); this.resizeUI(this.scale.gameSize); window.updateUnreadGlow();
     }
@@ -4350,22 +4622,36 @@ this.events.on('action_A_short', () => {
                     return;
                 }
 
-                if (itemName === '月光法杖' || itemName === '月光饅頭') {
-                    const beforeQty = Number(inv[itemName] || 0);
-                    if (itemName === '月光法杖') window.useMoonStaff();
-                    else window.useMoonBun();
+                if (itemName === '月光法杖') {
+    const beforeQty = Number(inv[itemName] || 0);
+    const used = window.useMoonStaff();
 
-                    const latestInv = window.GameLogic.myProfile.inventory || {};
-                    const afterQty = Number(latestInv[itemName] || 0);
-                    if (afterQty > 0 || (afterQty === beforeQty && beforeQty > 0)) {
-                        window.GameLogic.armedItemState = 'ready';
-                        window.GameLogic.armedItemName = itemName;
-                    } else {
-                        window.GameLogic.armedItemState = null;
-                        window.GameLogic.armedItemName = null;
-                    }
-                    return;
-                }
+    if (used) {
+        const latestInv = window.GameLogic.myProfile.inventory || {};
+        const afterQty = Number(latestInv[itemName] || 0);
+
+        if (afterQty > 0 || (afterQty === beforeQty && beforeQty > 0)) {
+            window.GameLogic.armedItemState = 'ready';
+            window.GameLogic.armedItemName = itemName;
+        } else {
+            window.GameLogic.armedItemState = null;
+            window.GameLogic.armedItemName = null;
+        }
+    }
+
+    return;
+}
+
+if (itemName === '月光饅頭') {
+    const used = window.useMoonBun();
+
+    if (used) {
+        window.GameLogic.armedItemState = null;
+        window.GameLogic.armedItemName = null;
+    }
+
+    return;
+}
 
                 if (window.GameLogic.energyActive && !isPartyMode) {
                     let currentEnergy = window.GameLogic.myProfile.energy || 0;
@@ -5537,25 +5823,36 @@ if (!data.scoreHandled && data.attacker) {
     }
 
     updateMoonBunBuffUi() {
-        if (!window.GameLogic.moonBunBuffUntil) {
-            this.clearMoonBunBuffFx(false);
-            return;
-        }
-
-        if (!this.isMoonBunBuffActive()) {
-            if (!window.GameLogic.moonBunBuffEndNotified) {
-                window.GameLogic.moonBunBuffEndNotified = true;
-                window.GameLogic.moonBunBuffUntil = 0;
-                window.GameLogic.moonBunSweepPressCount = 0;
-                sendBubble("月光饅頭的力量消退了，手又開始痠了。");
-            }
-            this.clearMoonBunBuffFx(false);
-            return;
-        }
-
-        if (this.isCafe) this.createOrUpdateMoonBunBuffUi();
-        else this.clearMoonBunBuffFx(false);
+    if (!window.GameLogic.moonBunBuffUntil) {
+        this.clearMoonBunBuffFx(false);
+        return;
     }
+
+    if (!this.isMoonBunBuffActive()) {
+        if (!window.GameLogic.moonBunBuffEndNotified) {
+            window.GameLogic.moonBunBuffEndNotified = true;
+            window.GameLogic.moonBunBuffUntil = 0;
+            window.GameLogic.moonBunBuffRemainingMs = 0;
+            window.GameLogic.moonBunSweepPressCount = 0;
+
+            if (window.clearMoonBunBuffSavedRemaining) {
+                window.clearMoonBunBuffSavedRemaining();
+            }
+
+            sendBubble("月光饅頭的力量消退了，手又開始痠了。");
+        }
+
+        this.clearMoonBunBuffFx(false);
+        return;
+    }
+
+    if (window.saveMoonBunBuffRemaining) {
+        window.saveMoonBunBuffRemaining({ force: false });
+    }
+
+    if (this.isCafe) this.createOrUpdateMoonBunBuffUi();
+    else this.clearMoonBunBuffFx(false);
+}
 
     clearMoonBunBuffFx(clearTimer = false) {
         if (this.moonBunBuffUi) {
@@ -13406,20 +13703,32 @@ entity.showOffRainbowTween = this.tweens.add({
     }
 
     playPrinceCatPettingSFXOnce(pettingEffectKey) {
-        if (!pettingEffectKey) return;
-        if (this.lastPrinceCatPettingEffectKey === pettingEffectKey) return;
+    if (!pettingEffectKey) return;
+    if (this.lastPrinceCatPettingEffectKey === pettingEffectKey) return;
 
-        this.lastPrinceCatPettingEffectKey = pettingEffectKey;
-        this.showPrinceCatLoveEffect();
+    this.lastPrinceCatPettingEffectKey = pettingEffectKey;
+    this.showPrinceCatLoveEffect();
 
-        [
-            'prince-cat-normal-meow',
-            'prince-cat-got-touched',
-            'prince-cat-feel-good'
-        ].forEach(key => this.playPrinceCatSFX(key));
+    [
+        'prince-cat-normal-meow',
+        'prince-cat-got-touched',
+        'prince-cat-feel-good'
+    ].forEach(key => this.playPrinceCatSFX(key));
+}
+
+playPrinceCatPettingTouchSFX(force = false) {
+    const now = Date.now();
+    const cooldownMs = 220;
+
+    if (!force && this.lastPrinceCatPettingTouchSfxAt && now - this.lastPrinceCatPettingTouchSfxAt < cooldownMs) {
+        return;
     }
 
-    showPrinceCatLoveEffect() {
+    this.lastPrinceCatPettingTouchSfxAt = now;
+    this.playPrinceCatSFX('onion-petting-sfx');
+}
+
+showPrinceCatLoveEffect() {
         if (!this.princeCatSprite) return;
 
         const loveTextureKey = 'prince-cat-love';
@@ -14274,6 +14583,7 @@ tryPrinceCatSweepBonus(x, y) {
         this.princeCatPetLastDir = 0;
         this.princeCatPetStrokeDist = 0;
         this.princeCatPetLastMoveAt = Date.now();
+        this.playPrinceCatPettingTouchSFX(true);
     }
 
     handlePrinceCatPetPointerMove(pointer, event, allowGraceArea = false) {
@@ -14296,6 +14606,8 @@ tryPrinceCatSweepBonus(x, y) {
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist < 2.5) return;
+
+        this.playPrinceCatPettingTouchSFX(false);
 
         const axisDelta = Math.abs(dx) >= Math.abs(dy) ? dx : dy;
         const dir = axisDelta > 0 ? 1 : -1;
@@ -16834,7 +17146,10 @@ window.cancelRpsGame = function(roomId) {
     window.rpsLocalRewardAdded = false; 
     // ==========================================
     
-    document.getElementById('rps-modal').style.display = 'none';
+    let rpsModal = document.getElementById('rps-modal');
+    if (rpsModal) rpsModal.style.display = 'none';
+    if (window.setRpsModalActive) window.setRpsModalActive(false);
+
     let waitPhase = document.getElementById('rps-phase-waiting');
     if (waitPhase) waitPhase.style.display = 'none';
     let summaryEl = document.getElementById('rps-phase-summary');
@@ -16862,7 +17177,10 @@ window.handleRpsDisconnect = function(roomId) {
 };
 
 window.exitPlayroom = function() {
-    document.getElementById('rps-modal').style.display = 'none';
+    let rpsModal = document.getElementById('rps-modal');
+    if (rpsModal) rpsModal.style.display = 'none';
+    if (window.setRpsModalActive) window.setRpsModalActive(false);
+
     window.cancelRpsGame(); // 離開時連帶重置
     window.switchScene('cafe');
 };
