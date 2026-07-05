@@ -14131,8 +14131,22 @@ tryPrinceCatSweepBonus(x, y) {
             if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
         };
 
+        const petMove = (pointer, localX, localY, event) => {
+            this.stopPrinceCatPetPointerEvent(event);
+            if (pointer && pointer.event && pointer.event.preventDefault) pointer.event.preventDefault();
+            if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+            this.handlePrinceCatPetPointerMove(pointer, event, true);
+        };
+
+        const closePetMiniGame = (pointer, localX, localY, event) => {
+            this.stopPrinceCatPetPointerEvent(event);
+            if (pointer && pointer.event && pointer.event.preventDefault) pointer.event.preventDefault();
+            this.clearPrinceCatPetMiniGame(true);
+            sendPrinceCatBubble("王子麵抖了抖毛。");
+        };
+
         this.princeCatPetBlocker.on('pointerdown', stopOnly);
-        this.princeCatPetBlocker.on('pointermove', stopOnly);
+        this.princeCatPetBlocker.on('pointermove', petMove);
         this.princeCatPetBlocker.on('pointerup', (pointer, localX, localY, event) => {
             this.handlePrinceCatPetPointerUp(pointer, event);
         });
@@ -14141,32 +14155,19 @@ tryPrinceCatSweepBonus(x, y) {
             this.handlePrinceCatPetPointerDown(pointer, event);
         });
 
-        this.princeCatPetHitZone.on('pointermove', stopOnly);
+        this.princeCatPetHitZone.on('pointermove', petMove);
 
         this.princeCatPetHitZone.on('pointerup', (pointer, localX, localY, event) => {
             this.handlePrinceCatPetPointerUp(pointer, event);
         });
 
-        // 不在 pointerout 取消本次摸摸，避免手指滑出 hitZone 後必須重新點擊。
         this.princeCatPetHitZone.on('pointerout', (pointer, event) => {
             this.stopPrinceCatPetPointerEvent(event);
         });
 
-        this.princeCatPetGlobalPointerMove = (pointer) => {
-            this.handlePrinceCatPetPointerMove(pointer, null, true);
-        };
-        this.princeCatPetGlobalPointerUp = (pointer) => {
-            this.handlePrinceCatPetPointerUp(pointer, null);
-        };
-        this.input.on('pointermove', this.princeCatPetGlobalPointerMove);
-        this.input.on('pointerup', this.princeCatPetGlobalPointerUp);
-        this.input.on('pointerupoutside', this.princeCatPetGlobalPointerUp);
-
-        this.princeCatPetCloseBg.on('pointerdown', (pointer, localX, localY, event) => {
-            this.stopPrinceCatPetPointerEvent(event);
-            this.clearPrinceCatPetMiniGame(true);
-            sendPrinceCatBubble("王子麵抖了抖毛。");
-        });
+        this.princeCatPetCloseBg.on('pointerdown', closePetMiniGame);
+        this.princeCatPetCloseText.setInteractive({ useHandCursor: true });
+        this.princeCatPetCloseText.on('pointerdown', closePetMiniGame);
 
         this.princeCatPetUiObjects = [
             this.princeCatPetBlocker,
@@ -14187,78 +14188,14 @@ tryPrinceCatSweepBonus(x, y) {
         this.drawPrinceCatPetProgressBar();
     }
 
-    handlePrinceCatPetPointerDown(pointer, event) {
-        this.stopPrinceCatPetPointerEvent(event);
-        if (!this.princeCatPetGameActive || this.princeCatPetCompleteWriting) return;
-
-        if (pointer && pointer.event && pointer.event.preventDefault) pointer.event.preventDefault();
-        if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
-
-        this.princeCatPetPointerId = pointer.id;
-        this.princeCatPetLastX = pointer.x;
-        this.princeCatPetLastY = pointer.y;
-        this.princeCatPetLastDir = 0;
-        this.princeCatPetStrokeDist = 0;
-        this.princeCatPetLastMoveAt = Date.now();
-    }
-
-    handlePrinceCatPetPointerMove(pointer, event) {
-        this.stopPrinceCatPetPointerEvent(event);
-        if (!this.princeCatPetGameActive || this.princeCatPetCompleteWriting) return;
-        if (!pointer || pointer.id !== this.princeCatPetPointerId) return;
-
-        if (pointer.event && pointer.event.preventDefault) pointer.event.preventDefault();
-        if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
-
-        const dx = pointer.x - this.princeCatPetLastX;
-        const dy = pointer.y - this.princeCatPetLastY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist < 2.5) return;
-
-        const axisDelta = Math.abs(dx) >= Math.abs(dy) ? dx : dy;
-        const dir = axisDelta > 0 ? 1 : -1;
-
-        this.princeCatPetStrokeDist += dist;
-        this.princeCatPetLastX = pointer.x;
-        this.princeCatPetLastY = pointer.y;
-        this.princeCatPetLastMoveAt = Date.now();
-
-        if (!this.princeCatPetLastDir) {
-            this.princeCatPetLastDir = dir;
-            return;
-        }
-
-        if (dir !== this.princeCatPetLastDir && this.princeCatPetStrokeDist >= 30) {
-            this.princeCatPetLastDir = dir;
-            this.princeCatPetStrokeDist = 0;
-            this.princeCatPetProgress = Phaser.Math.Clamp((this.princeCatPetProgress || 0) + 10, 0, 100);
-            this.drawPrinceCatPetProgressBar();
-
-            if (this.princeCatPetCatSprite) {
-                this.tweens.add({
-                    targets: this.princeCatPetCatSprite,
-                    scaleX: 2.06,
-                    scaleY: 2.06,
-                    yoyo: true,
-                    duration: 70
-                });
-            }
-
-            if (this.princeCatPetProgress >= 100) {
-                this.completePrinceCatPetMiniGame();
-            }
-        }
-    }
-
     isPrinceCatPetPointerInsideActiveArea(pointer) {
         if (!pointer || !this.princeCatPetCatSprite) return false;
 
         const dx = pointer.x - this.princeCatPetCatSprite.x;
         const dy = pointer.y - this.princeCatPetCatSprite.y;
 
-        // 使用比顯示圖略大的安全範圍，讓手機手指滑動不會因為短暫離開 hitZone 就中斷。
-        return Math.abs(dx) <= 122 && Math.abs(dy) <= 112;
+        // 比顯示圖略大，但不是全螢幕；讓手機手指來回滑時不會被邊界卡死。
+        return Math.abs(dx) <= 145 && Math.abs(dy) <= 135;
     }
 
     handlePrinceCatPetPointerDown(pointer, event) {
@@ -14285,6 +14222,9 @@ tryPrinceCatSweepBonus(x, y) {
         if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
 
         if (allowGraceArea && !this.isPrinceCatPetPointerInsideActiveArea(pointer)) {
+            // 手指滑太遠時不加分，但保留最後座標；滑回王子麵附近可繼續同一次觸摸。
+            this.princeCatPetLastX = pointer.x;
+            this.princeCatPetLastY = pointer.y;
             return;
         }
 
@@ -14307,7 +14247,7 @@ tryPrinceCatSweepBonus(x, y) {
             return;
         }
 
-        if (dir !== this.princeCatPetLastDir && this.princeCatPetStrokeDist >= 30) {
+        if (dir !== this.princeCatPetLastDir && this.princeCatPetStrokeDist >= 24) {
             this.princeCatPetLastDir = dir;
             this.princeCatPetStrokeDist = 0;
             this.princeCatPetProgress = Phaser.Math.Clamp((this.princeCatPetProgress || 0) + 10, 0, 100);
