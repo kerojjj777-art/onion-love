@@ -46,7 +46,7 @@ window.GameLogic = {
     selectedServerRoom: DEFAULT_SERVER_ROOM, currentServerRoom: DEFAULT_SERVER_ROOM, serverRooms: SERVER_ROOMS, authGuardSigningOut: false
 };
 
-let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, profileViewingUid = null;
+let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, profileViewingUid = null;
 window.switchScene = switchScene; window.showProfileModal = showProfileModal; window.leaveCafe = leaveCafe; window.signOut = signOut; window.auth = auth;
 
 // ====== 入口房間共用工具 ======
@@ -1131,14 +1131,14 @@ window.confirmSummon = function(isYes) {
     update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { coins: window.GameLogic.myProfile.coins }).catch(err => console.warn('Firebase 扣除召喚費失敗:', err));
     let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
     
-    update(ref(db, 'serverEvents/summonShrine'), { time: Date.now(), callerUid: window.GameLogic.currentUser.uid, callerName: window.GameLogic.myProfile.name });
+    update(ref(db, window.getServerRoomPath('serverEvents/summonShrine')), { time: Date.now(), callerUid: window.GameLogic.currentUser.uid, callerName: window.GameLogic.myProfile.name });
     // 修正2：只有付費後，資料庫才會刻上 'summoned' 狀態，並以此作為入座後開啟票選的唯一觸發鑰匙
-    set(ref(db, 'shrineEvents/current'), { state: 'summoned', startTime: Date.now() });
+    set(ref(db, window.getServerRoomPath('shrineEvents/current')), { state: 'summoned', startTime: Date.now() });
     sendBubble("已發出神聖的召喚...");
     window.startShrineRitual();
 };
 window.attemptJoinShrine = function() {
-    get(ref(window.GameLogic.db, 'shrineEvents/current')).then(snap => {
+    get(ref(window.GameLogic.db, window.getServerRoomPath('shrineEvents/current'))).then(snap => {
         let ev = snap.val();
         // 判斷是否已經有儀式在進行，且超過 60 秒或是狀態不是等待入座 (summoned)
         if (ev && ev.state && ev.state !== 'finished' && ev.state !== 'none') {
@@ -1156,7 +1156,7 @@ window.acceptSummon = function() {
     // 修正死碼：變數參照錯誤，原本的全域計時器為 globalSummonInterval
     if (window.globalSummonInterval) { clearInterval(window.globalSummonInterval); window.globalSummonInterval = null; }
     
-    get(ref(window.GameLogic.db, 'shrineEvents/current')).then(snap => {
+    get(ref(window.GameLogic.db, window.getServerRoomPath('shrineEvents/current'))).then(snap => {
         let ev = snap.val();
         // 雙重驗證：如果點擊按鈕時已經超時或儀式已經開始，則拒絕進入
         if (ev && ev.state && ev.state !== 'finished' && ev.state !== 'none') {
@@ -1183,7 +1183,7 @@ window.selectVoteTarget = function(uid) {
     }
 
     // 修正4：即時上傳未確認的選擇供他人觀看
-    update(ref(window.GameLogic.db, `shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`), {
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`)), {
         target: voteTarget || 'none',
         name: window.GameLogic.myProfile.name,
         confirmed: false
@@ -1202,7 +1202,7 @@ window.selectVoteTalisman = function(tId) {
         if (taliEl) taliEl.classList.add('selected');
     }
 
-    update(ref(window.GameLogic.db, `shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`), {
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`)), {
         talisman: voteTalisman || 'none',
         name: window.GameLogic.myProfile.name,
         confirmed: false
@@ -1210,14 +1210,14 @@ window.selectVoteTalisman = function(tId) {
 };
 window.submitVote = function() {
     if (!voteTarget || !voteTalisman) return alert("請選擇一位淨化對象與一款符咒！");
-    update(ref(db, `shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`), { target: voteTarget, talisman: voteTalisman, confirmed: true, name: window.GameLogic.myProfile.name });
+    update(ref(db, window.getServerRoomPath(`shrineEvents/current/votes/${window.GameLogic.currentUser.uid}`)), { target: voteTarget, talisman: voteTalisman, confirmed: true, name: window.GameLogic.myProfile.name });
     document.getElementById('voting-confirm-btn').innerText = "已確認 (等待他人...)"; document.getElementById('voting-confirm-btn').disabled = true;
 };
 window.clickSpamBtn = function() {
     if (window.GameLogic.shrineEventData && window.GameLogic.shrineEventData.state === 'purifying') {
         let currentClicks = window.GameLogic.myPurifyClicks || 0;
         currentClicks++; window.GameLogic.myPurifyClicks = currentClicks;
-        set(ref(db, `shrineEvents/current/clicks/${window.GameLogic.currentUser.uid}`), currentClicks);
+        set(ref(db, window.getServerRoomPath(`shrineEvents/current/clicks/${window.GameLogic.currentUser.uid}`)), currentClicks);
         let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
         if (ms) {
             if (!window.GameLogic.muteSFX && currentClicks % 5 === 0) window.playSFX(ms, 'minimum_laser'); 
@@ -1394,7 +1394,7 @@ window.useMoonStaff = function() {
 
     // 沿用既有 serverEvents 架構：同一張地圖中的玩家都會收到並播放，不新增複雜同步資料格式。
     if (window.GameLogic.currentUser) {
-        update(ref(window.GameLogic.db, `serverEvents/moonStaffBlessings/${window.GameLogic.currentUser.uid}`), {
+        update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/moonStaffBlessings/${window.GameLogic.currentUser.uid}`)), {
             time: actionTime,
             scene: window.GameLogic.currentScene || 'cafe',
             casterName: window.GameLogic.myProfile ? (window.GameLogic.myProfile.name || '匿名') : '匿名',
@@ -1544,7 +1544,7 @@ window.devSummonMimi = function() {
     let spawnX = playerSprite ? Phaser.Math.Clamp(playerSprite.x - 260, 100, 1948) : 1024;
     let spawnY = playerSprite ? Phaser.Math.Clamp(playerSprite.y, 100, 1948) : 1024;
     
-    set(ref(window.GameLogic.db, 'cafeMimi'), {
+    set(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), {
         active: true,
         x: spawnX,
         y: spawnY,
@@ -1812,9 +1812,9 @@ onAuthStateChanged(auth, async (user) => {
             window.GameLogic.cafeFurniture = snap.val() || {};
         });
 
-        // 全局強制召喚監聽
-        // 全局強制召喚監聽與 60 秒倒數
-        onValue(ref(db, 'serverEvents/summonShrine'), snap => {
+        // 房間內神龕強制召喚監聽與 60 秒倒數
+        if (summonUnsubscribe) { summonUnsubscribe(); summonUnsubscribe = null; }
+        summonUnsubscribe = onValue(ref(db, window.getServerRoomPath('serverEvents/summonShrine')), snap => {
             let data = snap.val();
             // 當 data.time 被設為 0 (或超時) 時，就會跳到 else 區塊強制關閉視窗
             if (data && Date.now() - data.time < 60000) {
@@ -1870,6 +1870,7 @@ onAuthStateChanged(auth, async (user) => {
         if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
         if (memoryUnsubscribe) { memoryUnsubscribe(); memoryUnsubscribe = null; }
         if (cafeFurnitureUnsubscribe) { cafeFurnitureUnsubscribe(); cafeFurnitureUnsubscribe = null; }
+        if (summonUnsubscribe) { summonUnsubscribe(); summonUnsubscribe = null; }
         if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; }
         if (shrineUnsubscribe) { shrineUnsubscribe(); shrineUnsubscribe = null; }
         if (shrineEventUnsubscribe) { shrineEventUnsubscribe(); shrineEventUnsubscribe = null; }
@@ -1879,12 +1880,12 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 function joinShrine() {
-    const playerRef = ref(db, `shrinePlayers/${window.GameLogic.currentUser.uid}`);
+    const playerRef = ref(db, window.getServerRoomPath(`shrinePlayers/${window.GameLogic.currentUser.uid}`));
     // 【修正 BUG 2】補上 level 屬性，讓其他玩家能看見真實等級
     set(playerRef, { x: window.GameLogic.myProfile.lastX || 640, y: window.GameLogic.myProfile.lastY || 360, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1, isSeated: false });
     onDisconnect(playerRef).remove();
-    shrineUnsubscribe = onValue(ref(db, 'shrinePlayers'), (snapshot) => { window.GameLogic.shrinePlayers = snapshot.val() || {}; checkShrineVotingTrigger(); });
-    shrineEventUnsubscribe = onValue(ref(db, 'shrineEvents/current'), snap => {
+    shrineUnsubscribe = onValue(ref(db, window.getServerRoomPath('shrinePlayers')), (snapshot) => { window.GameLogic.shrinePlayers = snapshot.val() || {}; checkShrineVotingTrigger(); });
+    shrineEventUnsubscribe = onValue(ref(db, window.getServerRoomPath('shrineEvents/current')), snap => {
         let eventData = snap.val(); window.GameLogic.shrineEventData = eventData;
         let votingModal = document.getElementById('voting-modal'); let spamUI = document.getElementById('spam-ui');
         if (!eventData || eventData.state === 'finished') { votingModal.style.display = 'none'; spamUI.style.display = 'none'; window.GameLogic.myPurifyClicks = 0; return; }
@@ -1968,7 +1969,7 @@ function leaveShrine() {
         // 修正3：當所有人（或最後一個有效在線玩家）離開神龕時，立刻清空地上沒被撿完的神龕法器金幣
         if (validUids.length <= 1) {
             if (window.GameLogic.shrineEventData && window.GameLogic.shrineEventData.state !== 'finished') {
-                update(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'finished' });
+            get(ref(window.GameLogic.db, window.getServerRoomPath('droppedCoins'))).then(snap => {
             }
             get(ref(window.GameLogic.db, 'droppedCoins')).then(snap => {
                 let coins = snap.val() || {};
@@ -1976,13 +1977,13 @@ function leaveShrine() {
                 Object.keys(coins).forEach(k => {
                     const coinData = coins[k] || {};
                     if (k.startsWith('shrine_coin_') || coinData.scene === 'shrine') {
-                        updates[`droppedCoins/${k}`] = null;
+                        updates[window.getServerRoomPath(`droppedCoins/${k}`)] = null;
                     }
                 });
                 if (Object.keys(updates).length > 0) update(ref(window.GameLogic.db), updates);
             });
         }
-        set(ref(db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), null); 
+            set(ref(window.GameLogic.db, window.getServerRoomPath('shrineEvents/current')), { state: 'voting', startTime: Date.now() }); 
     }
     if (shrineUnsubscribe) { shrineUnsubscribe(); shrineUnsubscribe = null; } 
     if (shrineEventUnsubscribe) { shrineEventUnsubscribe(); shrineEventUnsubscribe = null; } 
@@ -2004,7 +2005,7 @@ function checkShrineVotingTrigger() {
         if (isHost && currentState === 'summoned') { 
             set(ref(window.GameLogic.db, 'shrineEvents/current'), { state: 'voting', startTime: Date.now() }); 
             // 修正：儀式正式進入投票階段！立刻將全服的召喚倒數歸零，瞬間關閉外面的 60 秒通知
-            update(ref(window.GameLogic.db, 'serverEvents/summonShrine'), { time: 0 });
+            update(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/summonShrine')), { time: 0 });
         } 
     } 
 }
@@ -2106,13 +2107,13 @@ let playroomUnsubscribe = null;
 function joinPlayroom(roomId) {
     window.GameLogic.currentRoomId = roomId;
 
-    const playerRef = ref(db, `playroomPlayers/${roomId}/${window.GameLogic.currentUser.uid}`);
+    const playerRef = ref(db, window.getServerRoomPath(`playroomPlayers/${roomId}/${window.GameLogic.currentUser.uid}`));
     let startX = 640 + (Math.random() * 100 - 50); // 稍微錯開出生點避免疊加卡死
     set(playerRef, { x: startX, y: 450, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1 });
     onDisconnect(playerRef).remove();
-    onDisconnect(ref(db, `playroomGames/${roomId}/p_${window.GameLogic.currentUser.uid}`)).remove();
+    onDisconnect(ref(db, window.getServerRoomPath(`playroomGames/${roomId}/p_${window.GameLogic.currentUser.uid}`))).remove();
 
-    playroomUnsubscribe = onValue(ref(db, `playroomPlayers/${roomId}`), (snapshot) => {
+    playroomUnsubscribe = onValue(ref(db, window.getServerRoomPath(`playroomPlayers/${roomId}`)), (snapshot) => {
         window.GameLogic.playroomPlayers = snapshot.val() || {};
 
         // 偵測對方離線邏輯
@@ -2130,7 +2131,7 @@ function joinPlayroom(roomId) {
 function leavePlayroom() {
     if (window.GameLogic.currentRoomId && window.GameLogic.currentUser) {
         // 修正死碼：直接呼叫全域已引入的 set 與 ref，避免非同步落差導致 currentRoomId 遺失
-        set(ref(db, `playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`), null);
+        set(ref(db, window.getServerRoomPath(`playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`)), null);
         // 離開時防呆：強迫清理正在進行的 RPS
         window.cancelRpsGame(window.GameLogic.currentRoomId);
     }
@@ -3016,7 +3017,7 @@ class MainScene extends Phaser.Scene {
             const mapSize = 120; const marginX = 20; const marginY = 60;
             this.minimap = this.cameras.add(this.cameras.main.width - mapSize - marginX, marginY, mapSize, mapSize).setZoom(mapSize / 2048).setName('minimap'); this.minimap.setBackgroundColor('rgba(26, 16, 8, 0.7)'); this.minimap.centerOn(1024, 1024);
             this.scale.on('resize', (gameSize) => { if (this.minimap) this.minimap.setPosition(gameSize.width - mapSize - marginX, marginY); });
-            this.trashListener = onValue(ref(window.GameLogic.db, 'cafeTrashes'), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.trashes.find(t => t.key === key)) { let tData = data[key]; let isOld = tData.type === 'old'; let spriteKey = isOld ? 'onion-skin-old' : 'onion-skin'; let animKey = isOld ? 'skin-old-anim' : 'skin-anim'; let skin = this.physics.add.sprite(tData.x, tData.y, spriteKey).setDepth(4); skin.play(animKey); skin.type = isOld ? 'onion-skin-old' : 'onion-skin'; skin.key = key; this.trashes.push(skin); } } this.trashes = this.trashes.filter(t => { if (!data[t.key]) { t.destroy(); if (this.closestTrash === t) { 
+            this.trashListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('cafeTrashes')), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.trashes.find(t => t.key === key)) { let tData = data[key]; let isOld = tData.type === 'old'; let spriteKey = isOld ? 'onion-skin-old' : 'onion-skin'; let animKey = isOld ? 'skin-old-anim' : 'skin-anim'; let skin = this.physics.add.sprite(tData.x, tData.y, spriteKey).setDepth(4); skin.play(animKey); skin.type = isOld ? 'onion-skin-old' : 'onion-skin'; skin.key = key; this.trashes.push(skin); } } this.trashes = this.trashes.filter(t => { if (!data[t.key]) { t.destroy(); if (this.closestTrash === t) { 
     this.closestTrash = null; 
 
     if (this.localPlayer && this.localPlayer.isSweeping) { 
@@ -3042,7 +3043,7 @@ class MainScene extends Phaser.Scene {
         } else if (this.sceneName === "farm") {
             this.add.image(mapW/2, mapH/2, 'bgFarm').setDisplaySize(mapW, mapH);
         } else if (this.sceneName === "shrine") {
-            this.add.image(mapW/2, mapH/2, 'bgShrine').setDisplaySize(mapW, mapH); this.shrineFurnListener = onValue(ref(window.GameLogic.db, 'shrineFurniture'), (snap) => { window.GameLogic.shrineFurniture = snap.val() || {}; });
+            this.add.image(mapW/2, mapH/2, 'bgShrine').setDisplaySize(mapW, mapH); this.shrineFurnListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('shrineFurniture')), (snap) => { window.GameLogic.shrineFurniture = snap.val() || {}; });
             this.purifyBarBg = this.add.graphics().setDepth(200).setVisible(false); this.purifyBar = this.add.graphics().setDepth(201).setVisible(false);
             this.countdownText = this.add.text(mapW/2, mapH/2, '', { fontSize: '72px', fontStyle: 'bold', color: '#fff', stroke: '#8a2be2', strokeThickness: 8 }).setOrigin(0.5).setDepth(300).setVisible(false);
         } else if (this.sceneName === "7eonion") {
@@ -3055,7 +3056,7 @@ class MainScene extends Phaser.Scene {
         } else if (this.sceneName === "partyroom") {
             this.add.image(mapW/2, mapH/2, 'bgPartyroom').setDisplaySize(mapW, mapH);
             this.partyStonesGroup = this.physics.add.staticGroup();
-            this.partyStonesListener = onValue(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/stones`), snap => {
+            this.partyStonesListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/stones`)), snap => {
                 let stones = snap.val();
                 if (stones) {
                     this.partyStonesGroup.clear(true, true);
@@ -3082,7 +3083,7 @@ class MainScene extends Phaser.Scene {
         this.otherPlayers = {}; this.furnitureSprites = {}; this.dummySprites = {}; this.coinSprites = {};
         
                 if (this.isCafe || this.sceneName === "shrine") { 
-            this.coinsListener = onValue(ref(window.GameLogic.db, 'droppedCoins'), (snap) => { 
+            this.coinsListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('droppedCoins')), (snap) => { 
                 let data = snap.val() || {}; 
                 for (let key in data) { 
                     let cData = data[key] || {};
@@ -3107,7 +3108,7 @@ class MainScene extends Phaser.Scene {
                 } 
             });
             this.dummiesListener = onValue(ref(window.GameLogic.db, 'cafeDummies'), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.dummySprites[key]) { let dData = data[key]; let dummySprite = this.physics.add.sprite(dData.x, dData.y, 'dummy').setDepth(8); this.dummySprites[key] = dummySprite; } } for (let key in this.dummySprites) { if (!data[key]) { this.dummySprites[key].destroy(); delete this.dummySprites[key]; } } });
-          this.mimiListener = onValue(ref(window.GameLogic.db, 'cafeMimi'), (snap) => {
+          this.mimiListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), (snap) => {
                 let data = snap.val();
                 window.GameLogic.cafeMimiData = data;
 
@@ -3173,8 +3174,8 @@ class MainScene extends Phaser.Scene {
                         
                         let updates = {};
                         updates[`users/${window.GameLogic.currentUser.uid}/coins`] = p.coins;
-                        updates[`cafeMimi/stolenPool`] = (data.stolenPool || 0) + amt;
-                        updates[`cafeMimi/stolenUids/${window.GameLogic.currentUser.uid}`] = true;
+                        updates[window.getServerRoomPath('cafeMimi/stolenPool')] = (data.stolenPool || 0) + amt;
+                        updates[window.getServerRoomPath(`cafeMimi/stolenUids/${window.GameLogic.currentUser.uid}`)] = true;
                         update(ref(window.GameLogic.db), updates);
                         
                         sendBubble(`被老鼠偷走了 ${amt} 元！`); 
@@ -3473,7 +3474,7 @@ this.events.on('action_A_short', () => {
                 
                 if (itemName === '派對喇叭') {
                     // 全服廣播喇叭播放，修正移除無效的 import 確保能正常觸發
-                    update(ref(window.GameLogic.db, `serverEvents/trumpetPlay/${window.GameLogic.currentUser.uid}`), { time: Date.now(), scene: this.sceneName });
+                    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/trumpetPlay/${window.GameLogic.currentUser.uid}`)), { time: Date.now(), scene: this.sceneName });
                     return;
                 }
 
@@ -3553,7 +3554,7 @@ this.events.on('action_A_short', () => {
                     this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
                     
                     // 新增11：向全服發送投擲動畫訊號 (修正 targetUid 為空會報錯的問題)
-                    update(ref(window.GameLogic.db, `serverEvents/planeThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), targetUid: targetUid || 'none', scene: this.sceneName });
+                    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/planeThrows/${window.GameLogic.currentUser.uid}`)), { time: Date.now(), targetUid: targetUid || 'none', scene: this.sceneName });
                     
                     if (targetUid && targetSprite) {
                         let plane = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'plane').setDepth(15);
@@ -3562,7 +3563,7 @@ this.events.on('action_A_short', () => {
                                 plane.destroy();
                                 if (targetType === 'player') {
                                     window.GameLogic.activeInvite = true;
-                                    update(ref(window.GameLogic.db, `serverEvents/planeHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid, attackerName: window.GameLogic.myProfile.name });
+                                    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/planeHits/${targetUid}`)), { time: Date.now(), attacker: window.GameLogic.currentUser.uid, attackerName: window.GameLogic.myProfile.name });
                                     sendBubble("蔥友機發射！等待對方回應...");
                                     
                                     // 15 秒超時判斷
@@ -3592,7 +3593,7 @@ this.events.on('action_A_short', () => {
                     this.localPlayer.isThrowing = true;
                     this.localPlayer.isStunned = false; // 解除受傷硬直，強制完成反擊動作
                     this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
-                    update(ref(window.GameLogic.db, `serverEvents/fireworkThrows/${window.GameLogic.currentUser.uid}`), { time: Date.now(), targetUid: targetUid || 'none', scene: this.sceneName });
+                    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/fireworkThrows/${window.GameLogic.currentUser.uid}`)), { time: Date.now(), targetUid: targetUid || 'none', scene: this.sceneName });
                     
                     if (targetUid && targetSprite) {
                         let fw = this.physics.add.sprite(this.localPlayer.sprite.x, this.localPlayer.sprite.y, 'fireworks-shoot').setDepth(15);
@@ -3602,12 +3603,12 @@ this.events.on('action_A_short', () => {
                                 fw.destroy();
                                 this.createMiniExplosion(targetSprite.x, targetSprite.y);
                                 if (targetType === 'player') {
-                                update(ref(window.GameLogic.db, `serverEvents/fireworksHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/fireworksHits/${targetUid}`)), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                             } else if (targetType === 'dummy') {
-                                update(ref(window.GameLogic.db, `serverEvents/fireworksDummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/fireworksDummyHits/${targetUid}`)), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                                 for (let i = 0; i < 3; i++) {
                                     let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
-                                    push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: 15, scene: this.sceneName });
+                                    push(ref(db, window.getServerRoomPath('droppedCoins')), { x: cx, y: cy, amount: 15, scene: this.sceneName });
                                 }
                             } else if (targetType === 'mimi') {
                                 this.handleMimiHit(targetSprite.x, targetSprite.y);
@@ -3615,7 +3616,7 @@ this.events.on('action_A_short', () => {
                             }
                         });
                     } else {
-                        update(ref(window.GameLogic.db, 'serverEvents/globalFireworks'), { time: Date.now(), scene: this.sceneName, initiator: window.GameLogic.currentUser.uid });
+                        update(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/globalFireworks')), { time: Date.now(), scene: this.sceneName, initiator: window.GameLogic.currentUser.uid });
                         sendBubble("施放了全頻煙火！");
                     }
                 } else {
@@ -3627,14 +3628,14 @@ this.events.on('action_A_short', () => {
                     this.time.delayedCall(300, () => { this.localPlayer.isThrowing = false; });
                     const waterActionTime = Date.now();
 
-                    update(ref(window.GameLogic.db, `serverEvents/waterThrows/${window.GameLogic.currentUser.uid}`), {
+                    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/waterThrows/${window.GameLogic.currentUser.uid}`)), {
                         time: waterActionTime,
                         targetUid: targetUid || 'none',
                         scene: this.sceneName
                     });
 
                     if (this.sceneName === 'partyroom' && window.PartyLogic && window.PartyLogic.roomId) {
-                        update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), {
+                        update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), {
                             action: 'throwWater',
                             actionTime: waterActionTime,
                             targetUid: targetUid || 'none'
@@ -3671,28 +3672,28 @@ this.events.on('action_A_short', () => {
                                     if (this.sceneName === 'partyroom') {
                                         const hitActionTime = Date.now();
 
-                                        update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/hits/${targetUid}`), {
+                                        update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/hits/${targetUid}`), {
                                             time: hitActionTime,
                                             attacker: window.GameLogic.currentUser.uid
                                         });
 
-                                        update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${targetUid}`), {
+                                        update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${targetUid}`), {
                                             action: 'hitWater',
                                             actionTime: hitActionTime,
                                             targetUid: window.GameLogic.currentUser.uid
                                         });
                                     } else {
-                                        update(ref(window.GameLogic.db, `serverEvents/waterHits/${targetUid}`), {
+                                        update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/waterHits/${targetUid}`)), {
                                             time: Date.now(),
                                             attacker: window.GameLogic.currentUser.uid,
                                             scene: this.sceneName
                                         });
                                     }
                                 } else if (targetType === 'dummy') {
-                                    update(ref(window.GameLogic.db, `serverEvents/dummyHits/${targetUid}`), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
+                                    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/dummyHits/${targetUid}`)), { time: Date.now(), attacker: window.GameLogic.currentUser.uid });
                                     for (let i = 0; i < 3; i++) {
                                         let cx = targetSprite.x + Phaser.Math.Between(-40, 40); let cy = targetSprite.y + Phaser.Math.Between(-40, 40) + 20;
-                                        push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: 5, scene: this.sceneName });
+                                        push(ref(db, window.getServerRoomPath('droppedCoins')), { x: cx, y: cy, amount: 5, scene: this.sceneName });
                                     }
                                 } else if (targetType === 'mimi') {
                                     this.handleMimiHit(targetSprite.x, targetSprite.y);
@@ -4090,7 +4091,7 @@ this.events.on('action_B', () => {
                         this.localPlayer.isSeated = true; this.localPlayer.sprite.setVelocity(0, 0); 
                         this.localPlayer.sprite.setPosition(closestSeat.sprite.x, closestSeat.sprite.y - 15); 
                         this.localPlayer.sprite.play('seat-idle', true); 
-                        update(ref(window.GameLogic.db, `shrinePlayers/${window.GameLogic.currentUser.uid}`), { isSeated: true, x: closestSeat.sprite.x, y: closestSeat.sprite.y - 15 }); 
+                        update(ref(window.GameLogic.db, window.getServerRoomPath(`shrinePlayers/${window.GameLogic.currentUser.uid}`)), { isSeated: true, x: closestSeat.sprite.x, y: closestSeat.sprite.y - 15 }); 
                         return; 
                     }
                 } 
@@ -4117,7 +4118,7 @@ this.events.on('action_B', () => {
 
         this.placePrompt = this.add.text(0, 0, '洋蔥精靈: 按A確定擺放', { fontSize: '14px', fontFamily: 'Georgia', fontStyle: 'bold', color: '#fff', backgroundColor: 'rgba(74, 93, 78, 0.8)', padding: {x:8, y:4} }).setOrigin(0.5).setDepth(20).setVisible(false); if (this.minimap) this.minimap.ignore(this.placePrompt);
       
-        this.trumpetListener = onValue(ref(window.GameLogic.db, 'serverEvents/trumpetPlay'), (snap) => {
+        this.trumpetListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/trumpetPlay')), (snap) => {
             let events = snap.val() || {};
             for (let uid in events) {
                 let data = events[uid];
@@ -4167,16 +4168,16 @@ this.events.on('action_B', () => {
             }
         });
 
-        this.hitListener = onValue(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`), (snap) => {
+        this.hitListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/waterHits/${window.GameLogic.currentUser.uid}`)), (snap) => {
             let data = snap.val();
             if (data && data.time && (Date.now() - data.time < 2000)) {
                 if (data.scene && data.scene !== this.sceneName) {
-                    remove(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`));
+                    remove(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/waterHits/${window.GameLogic.currentUser.uid}`)));
                     return;
                 }
 
                 if (this.localPlayer.isInvincible) {
-                    remove(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`));
+                    remove(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/waterHits/${window.GameLogic.currentUser.uid}`)));
                     return;
                 }
 
@@ -4208,7 +4209,7 @@ this.events.on('action_B', () => {
 
                 this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; });
                 this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; });
-                remove(ref(window.GameLogic.db, `serverEvents/waterHits/${window.GameLogic.currentUser.uid}`));
+                remove(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/waterHits/${window.GameLogic.currentUser.uid}`)));
             }
         });
       
@@ -4234,14 +4235,14 @@ this.events.on('action_B', () => {
                 this.localPlayer.isInvincible = true;
                 this.localPlayer.sprite.play('fw-hit', true);
                 
-                get(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}/gotHitCount`)).then(s => {
-                    update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`), {
+                get(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}/gotHitCount`)).then(s => {
+                    update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`), {
                         gotHitCount: (s.val() || 0) + 1
                     });
                 });
 
-                get(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}/hitCount`)).then(s => {
-                    update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}`), {
+                get(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}/hitCount`)).then(s => {
+                    update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${data.attacker}`), {
                         hitCount: (s.val() || 0) + 1
                     });
                 });
@@ -4257,13 +4258,13 @@ this.events.on('action_B', () => {
                 });
             }
       });
-        this.fwHitListener = onValue(ref(window.GameLogic.db, `serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 2000)) { if (this.localPlayer.isInvincible) return; window.playSFX(this, 'bomb'); this.localPlayer.isInvincible = true; this.localPlayer.isStunned = true; this.localPlayer.sprite.play('fw-hit', true); let p = window.GameLogic.myProfile; let loss = Math.min(p.coins || 0, 100); p.coins -= loss; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }).catch(err => console.warn('Firebase 被擊中扣款失敗:', err)); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins; if (loss > 0) { let amounts = [Math.floor(loss * 0.4), Math.floor(loss * 0.3), loss - Math.floor(loss * 0.4) - Math.floor(loss * 0.3)]; for (let i = 0; i < 3; i++) { if(amounts[i] <= 0) continue; let angle = (Math.PI * 2 / 3) * i + Phaser.Math.FloatBetween(-0.25, 0.25); let dist = Phaser.Math.Between(100, 160); let cx = Phaser.Math.Clamp(this.localPlayer.sprite.x + Math.cos(angle) * dist, 80, this.physics.world.bounds.width - 80); let cy = Phaser.Math.Clamp(this.localPlayer.sprite.y + Math.sin(angle) * dist + 20, 80, this.physics.world.bounds.height - 80); push(ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: amounts[i], scene: this.sceneName }); } } this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); remove(ref(window.GameLogic.db, `serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`)); } });
-        this.fwPlayersHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworksHits'), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { window.playSFX(this, 'bomb'); opSprite.isStunned = true; opSprite.play('fw-hit', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
-        this.fwDummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworksDummyHits'), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { window.playSFX(this, 'bomb'); dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
-        this.globalFwListener = onValue(ref(window.GameLogic.db, 'serverEvents/globalFireworks'), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 3000) && data.scene === this.sceneName) { if (this.lastGlobalFwTime !== data.time) { this.lastGlobalFwTime = data.time; this.playGlobalFireworks(); } } });
+        this.fwHitListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`)), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 2000)) { if (this.localPlayer.isInvincible) return; window.playSFX(this, 'bomb'); this.localPlayer.isInvincible = true; this.localPlayer.isStunned = true; this.localPlayer.sprite.play('fw-hit', true); let p = window.GameLogic.myProfile; let loss = Math.min(p.coins || 0, 100); p.coins -= loss; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }).catch(err => console.warn('Firebase 被擊中扣款失敗:', err)); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins; if (loss > 0) { let amounts = [Math.floor(loss * 0.4), Math.floor(loss * 0.3), loss - Math.floor(loss * 0.4) - Math.floor(loss * 0.3)]; for (let i = 0; i < 3; i++) { if(amounts[i] <= 0) continue; let angle = (Math.PI * 2 / 3) * i + Phaser.Math.FloatBetween(-0.25, 0.25); let dist = Phaser.Math.Between(100, 160); let cx = Phaser.Math.Clamp(this.localPlayer.sprite.x + Math.cos(angle) * dist, 80, this.physics.world.bounds.width - 80); let cy = Phaser.Math.Clamp(this.localPlayer.sprite.y + Math.sin(angle) * dist + 20, 80, this.physics.world.bounds.height - 80); push(ref(window.GameLogic.db, 'droppedCoins'), { x: cx, y: cy, amount: amounts[i], scene: this.sceneName }); } } this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); remove(ref(window.GameLogic.db, `serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`)); } });
+        this.fwPlayersHitListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/fireworksHits')), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { window.playSFX(this, 'bomb'); opSprite.isStunned = true; opSprite.play('fw-hit', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
+        this.fwDummyHitListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/fireworksDummyHits')), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { window.playSFX(this, 'bomb'); dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
+        this.globalFwListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/globalFireworks')), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 3000) && data.scene === this.sceneName) { if (this.lastGlobalFwTime !== data.time) { this.lastGlobalFwTime = data.time; this.playGlobalFireworks(); } } });
 
         // 補丁 6-2 後續：月光法杖全域祝福，同一張地圖中的玩家都會播放特效與音效。
-        this.moonStaffBlessingListener = onValue(ref(window.GameLogic.db, 'serverEvents/moonStaffBlessings'), (snap) => {
+                    this.moonStaffBlessingListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/moonStaffBlessings')), (snap) => {
             const events = snap.val() || {};
             this.moonStaffRemoteTimes = this.moonStaffRemoteTimes || {};
 
@@ -4296,7 +4297,7 @@ this.events.on('action_B', () => {
             }
         });
 
-        this.fwThrowsListener = onValue(ref(window.GameLogic.db, 'serverEvents/fireworkThrows'), (snap) => {
+        this.fwThrowsListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/fireworkThrows')), (snap) => {
             let throws = snap.val() || {};
             for (let uid in throws) {
                 if (uid === window.GameLogic.currentUser.uid) continue;
@@ -4322,7 +4323,7 @@ this.events.on('action_B', () => {
             }
         });
         
-        this.waterThrowsListener = onValue(ref(window.GameLogic.db, 'serverEvents/waterThrows'), (snap) => {
+        this.waterThrowsListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/waterThrows')), (snap) => {
             let throws = snap.val() || {};
 
             const playRemoteWaterThrow = (uid, data, retry = 0) => {
@@ -4378,11 +4379,11 @@ this.events.on('action_B', () => {
             }
         });
 
-        this.playersHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/waterHits'), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { opSprite.isStunned = true; opSprite.play('wet', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
-        this.dummyHitListener = onValue(ref(window.GameLogic.db, 'serverEvents/dummyHits'), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
+        this.playersHitListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/waterHits')), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { opSprite.isStunned = true; opSprite.play('wet', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
+        this.dummyHitListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/dummyHits')), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
         
         // 新增11：全服接收他人發射蔥友機的動畫
-        this.planeThrowsListener = onValue(ref(window.GameLogic.db, 'serverEvents/planeThrows'), (snap) => { 
+        this.planeThrowsListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/planeThrows')), (snap) => { 
             let throws = snap.val() || {}; 
             for (let uid in throws) { 
                 if (uid === window.GameLogic.currentUser.uid) continue; 
@@ -4411,7 +4412,7 @@ this.events.on('action_B', () => {
         });
 
         // 接收邀請
-        this.planeHitsListener = onValue(ref(window.GameLogic.db, `serverEvents/planeHits/${window.GameLogic.currentUser.uid}`), (snap) => {
+        this.planeHitsListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/planeHits/${window.GameLogic.currentUser.uid}`)), (snap) => {
             let data = snap.val(); 
             if (data && data.time && (Date.now() - data.time < 5000)) { 
                 let modal = document.getElementById('invite-modal');
@@ -4431,12 +4432,12 @@ this.events.on('action_B', () => {
                         }
                     }, 1000);
                 }
-                remove(ref(window.GameLogic.db, `serverEvents/planeHits/${window.GameLogic.currentUser.uid}`)); 
+                remove(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/planeHits/${window.GameLogic.currentUser.uid}`))); 
             } 
         });
 
         // 接收對方的回覆
-        this.inviteRepliesListener = onValue(ref(window.GameLogic.db, `serverEvents/inviteReplies/${window.GameLogic.currentUser.uid}`), (snap) => {
+        this.inviteRepliesListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/inviteReplies/${window.GameLogic.currentUser.uid}`)), (snap) => {
             let data = snap.val();
             if (data && data.time && (Date.now() - data.time < 5000) && window.GameLogic.activeInvite) {
                 window.GameLogic.activeInvite = false;
@@ -4452,7 +4453,7 @@ this.events.on('action_B', () => {
                     window.GameLogic.planeCooldowns = window.GameLogic.planeCooldowns || {};
                     window.GameLogic.planeCooldowns[data.replierUid] = Date.now();
                 }
-                remove(ref(window.GameLogic.db, `serverEvents/inviteReplies/${window.GameLogic.currentUser.uid}`)); 
+                remove(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/inviteReplies/${window.GameLogic.currentUser.uid}`))); 
             }
         });
 
@@ -11773,9 +11774,9 @@ this.events.on('action_B', () => {
         if (!window.GameLogic.currentUser) return null;
         const uid = window.GameLogic.currentUser.uid;
         if (this.isCafe) return window.getServerRoomPath(`cafePlayers/${uid}`);
-        if (this.sceneName === 'shrine') return `shrinePlayers/${uid}`;
-        if (this.sceneName === 'playroom' && window.GameLogic.currentRoomId) return `playroomPlayers/${window.GameLogic.currentRoomId}/${uid}`;
-        if (this.sceneName === 'partyroom' && window.PartyLogic && window.PartyLogic.roomId) return `partyRooms/${window.PartyLogic.roomId}/players/${uid}`;
+        if (this.sceneName === 'shrine') return window.getServerRoomPath(`shrinePlayers/${uid}`);
+        if (this.sceneName === 'playroom' && window.GameLogic.currentRoomId) return window.getServerRoomPath(`playroomPlayers/${window.GameLogic.currentRoomId}/${uid}`);
+        if (this.sceneName === 'partyroom' && window.PartyLogic && window.PartyLogic.roomId) return window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${uid}`);
         return null;
     }
 
@@ -11917,7 +11918,7 @@ entity.showOffRainbowTween = this.tweens.add({
     let tx = Phaser.Math.Between(150, 1898); 
     let ty = Phaser.Math.Between(150, 1898); 
     let isOld = Math.random() < 0.05; 
-    push(ref(window.GameLogic.db, 'cafeTrashes'), { 
+        push(ref(window.GameLogic.db, window.getServerRoomPath('cafeTrashes')), {
         x: tx, 
         y: ty, 
         type: isOld ? 'old' : 'normal' 
@@ -12011,14 +12012,14 @@ entity.showOffRainbowTween = this.tweens.add({
         if (type === 'feed') this.startPrinceCatFeeding();
      };
 
-        this.princeCatListener = onValue(ref(window.GameLogic.db, 'cafePrinceCat'), (snap) => {
+        this.princeCatListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat')), (snap) => {
             const data = snap.val();
 
             if (!data) {
                 window.GameLogic.princeCatData = null;
 
                 if (this.isPrinceCatHost()) {
-                    set(ref(window.GameLogic.db, 'cafePrinceCat'), {
+                    set(ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat')), {
                         x: 1024,
                         y: 1024,
                         targetX: 1200,
@@ -12192,7 +12193,7 @@ entity.showOffRainbowTween = this.tweens.add({
 
         if (!this.princeCatLastSync || time - this.princeCatLastSync > 500) {
             this.princeCatLastSync = time;
-            update(ref(window.GameLogic.db, 'cafePrinceCat'), nextData).catch(err => console.warn('Firebase 同步王子麵狀態失敗:', err));
+            update(ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat')), nextData).catch(err => console.warn('Firebase 同步王子麵狀態失敗:', err));
         }
     }
 
@@ -12349,7 +12350,7 @@ entity.showOffRainbowTween = this.tweens.add({
 
         const uid = window.GameLogic.currentUser.uid;
         const now = Date.now();
-        const catRef = ref(window.GameLogic.db, 'cafePrinceCat');
+        const catRef = ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat'));
         const snap = await get(catRef);
         const data = snap.val() || {};
 
@@ -12389,7 +12390,7 @@ entity.showOffRainbowTween = this.tweens.add({
         if (!restoreCat || !window.GameLogic.currentUser) return;
 
         const uid = window.GameLogic.currentUser.uid;
-        const catRef = ref(window.GameLogic.db, 'cafePrinceCat');
+        const catRef = ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat'));
         const snap = await get(catRef);
         const data = snap.val() || {};
 
@@ -12597,7 +12598,7 @@ finishPrinceCatFeeding(uid, catRef, feedingToken = null) {
         actionTime: null
     }).catch(err => console.warn('[王子麵餵食] 清除玩家餵食 action 失敗：', err));
 
-    const safeCatRef = catRef || ref(window.GameLogic.db, 'cafePrinceCat');
+    const safeCatRef = catRef || ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat'));
 
     get(safeCatRef).then(latestSnap => {
         const latest = latestSnap.val() || {};
@@ -12669,7 +12670,7 @@ async startPrinceCatFeeding() {
         const feedRestoreMs = 4300;
         const lockUntil = now + feedRestoreMs;
         feedingToken = `feed-${uid}-${now}`;
-        catRef = ref(window.GameLogic.db, 'cafePrinceCat');
+        catRef = ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat'));
 
         const snap = await get(catRef);
         const data = snap.val() || {};
@@ -12872,7 +12873,7 @@ tryPrinceCatSweepBonus(x, y) {
         const now = Date.now();
         const lockUntil = now + 3500;
         const pettingEffectKey = `${uid}_${now}`;
-        const catRef = ref(window.GameLogic.db, 'cafePrinceCat');
+        const catRef = ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat'));
         const snap = await get(catRef);
         const data = snap.val() || {};
 
@@ -13156,7 +13157,7 @@ if (activeBubbleMsg) {
           
             this.tryPrinceCatSweepBonus(px, py);
 
-            remove(ref(window.GameLogic.db, 'cafeTrashes/' + trashKey)); 
+            remove(ref(window.GameLogic.db, window.getServerRoomPath('cafeTrashes/' + trashKey))); 
             this.closestTrash = null; let leveledUp = gainRewards(0, expGain); 
             if (leveledUp) { window.playSFX(this, 'chorus_of_angels1'); } 
             
@@ -13167,7 +13168,7 @@ if (activeBubbleMsg) {
                 let dist = Phaser.Math.Between(70, 110);
                 let cx = Phaser.Math.Clamp(dropBaseX + Math.cos(angle) * dist, 80, this.physics.world.bounds.width - 80); 
                 let cy = Phaser.Math.Clamp(dropBaseY + Math.sin(angle) * dist, 80, this.physics.world.bounds.height - 80); 
-                push(ref(db, 'droppedCoins'), { x: cx, y: cy, amount: coinAmounts[i], scene: this.sceneName }); 
+                push(ref(db, window.getServerRoomPath('droppedCoins')), { x: cx, y: cy, amount: coinAmounts[i], scene: this.sceneName }); 
             } 
         } 
     }
@@ -13430,7 +13431,7 @@ if (activeBubbleMsg) {
                                     let rx = Phaser.Math.Clamp(altar.x + Phaser.Math.Between(-250, 250), 100, mapW - 100);
                                     let ry = Phaser.Math.Clamp(altar.y + Phaser.Math.Between(-150, 150), 120, mapH - 120);
                                     let key = 'shrine_coin_' + Date.now() + '_' + i;
-                                    dropUpdates[`droppedCoins/${key}`] = { x: rx, y: ry, amount: coinValue, scene: 'shrine' };
+                                    dropUpdates[window.getServerRoomPath(`droppedCoins/${key}`)] = { x: rx, y: ry, amount: coinValue, scene: 'shrine' };
                                 }
                                 update(ref(window.GameLogic.db), dropUpdates);
                             }
@@ -13451,17 +13452,17 @@ if (activeBubbleMsg) {
 
     handleMimiHit(x, y) {
         // 修正：徹底拔除多餘的動態 import，直接使用全域引入的 get, ref, update，解決打擊瞬間的卡頓感
-        get(ref(db, 'cafeMimi/hp')).then(snap => {
+        get(ref(db, window.getServerRoomPath('cafeMimi/hp'))).then(snap => {
             let chp = snap.val() || 0;
             if (chp > 0) {
                 let newHp = chp - 1; 
-                update(ref(db, 'cafeMimi'), { hp: newHp });
+                update(ref(db, window.getServerRoomPath('cafeMimi')), { hp: newHp });
                 
                 window.playSFX(this, 'mimi-thief-stealing');
 
     if (newHp <= 0) {
                     let downTime = Date.now();
-                    update(ref(db, 'cafeMimi'), {
+                    update(ref(db, window.getServerRoomPath('cafeMimi')), {
                         state: 'down',
                         active: true,
                         downTime: downTime,
@@ -13494,9 +13495,9 @@ if (activeBubbleMsg) {
                     for(let i=0; i<10; i++) { 
                         let cx = Phaser.Math.Clamp(x + Phaser.Math.Between(-80, 80), 100, 1948);
                         let cy = Phaser.Math.Clamp(y + Phaser.Math.Between(-80, 80) + 20, 100, 1948);
-                        dropUpdates[`droppedCoins/mimi_coin_${Date.now()}_${i}`] = { x: cx, y: cy, amount: coinValue, scene: this.sceneName }; 
+                        dropUpdates[window.getServerRoomPath(`droppedCoins/mimi_coin_${Date.now()}_${i}`)] = { x: cx, y: cy, amount: coinValue, scene: this.sceneName }; 
                     }
-                    dropUpdates['serverEvents/mimiNextSpawn'] = Date.now() + Phaser.Math.Between(600000, 900000);
+                    dropUpdates[window.getServerRoomPath('serverEvents/mimiNextSpawn')] = Date.now() + Phaser.Math.Between(600000, 900000);
                     update(ref(db), dropUpdates);
                     sendBubble("打倒鼠偷米米啦！掉出滿地金幣！");
                 }
@@ -13522,7 +13523,7 @@ if (activeBubbleMsg) {
             if (isHost) {
                 if (!this.mimiCheckTime || time - this.mimiCheckTime > 3000) {
                     this.mimiCheckTime = time;
-                    get(ref(window.GameLogic.db, 'serverEvents/mimiNextSpawn')).then(snap => {
+                    get(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/mimiNextSpawn'))).then(snap => {
                         let nextSpawn = snap.val(); let now = Date.now();
                         if (!nextSpawn || now > nextSpawn) {
                             let mimiData = window.GameLogic.cafeMimiData;
@@ -13530,7 +13531,7 @@ if (activeBubbleMsg) {
                                                                 let requiredHp = Math.min(6, 2 + Math.max(1, pUids.length));
                                 let spawnX = Phaser.Math.Clamp(px - 260, 100, 1948);
                                 let spawnY = Phaser.Math.Clamp(py, 100, 1948);
-                                update(ref(window.GameLogic.db, 'cafeMimi'), { active: true, x: spawnX, y: spawnY, state: 'walk', hp: requiredHp, playersInvolved: Math.max(1, pUids.length), stolenPool: 0, flipX: true, stolenUids: null });
+                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { active: true, x: spawnX, y: spawnY, state: 'walk', hp: requiredHp, playersInvolved: Math.max(1, pUids.length), stolenPool: 0, flipX: true, stolenUids: null });
                             }
                         }
                     });
@@ -13556,9 +13557,9 @@ if (activeBubbleMsg) {
                                 let angle = Phaser.Math.Angle.Between(mData.x, mData.y, targetX, targetY); 
                                 targetX = mData.x + Math.cos(angle) * (calcDelta / 1000) * walkSpeed; 
                                 targetY = mData.y + Math.sin(angle) * (calcDelta / 1000) * walkSpeed; 
-                                update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX > mData.x) }); 
+                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { x: targetX, y: targetY, flipX: (targetX > mData.x) }); 
                             } else {
-                                update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'stealing', stealingFrom: targetUid }); 
+                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { state: 'stealing', stealingFrom: targetUid }); 
                             }
                         } else {
                             let sumX = 0, sumY = 0; pUids.forEach(u => { let op = this.otherPlayers[u] ? this.otherPlayers[u].sprite : (u === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null); if (op) { sumX += op.x; sumY += op.y; } });
@@ -13576,25 +13577,25 @@ if (activeBubbleMsg) {
                                 
                                 targetX = mData.x + Math.cos(angle) * (calcDelta / 1000) * 150; 
                                 targetY = mData.y + Math.sin(angle) * (calcDelta / 1000) * 150; 
-                                update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX > mData.x) }); 
+                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { x: targetX, y: targetY, flipX: (targetX > mData.x) }); 
                             } else { 
-                                update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'laughing', laughTime: Date.now() }); 
+                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { state: 'laughing', laughTime: Date.now() }); 
                             }
                         }
                     } else if (mData.state === 'stealing' && mData.hp > 0) {
                         if (mData.stolenUids && mData.stolenUids[mData.stealingFrom]) {
-                            update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'walk' });
+                            update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { state: 'walk' });
                         }
                     } else if (mData.state === 'laughing' && mData.hp > 0) {
                         if (Date.now() - mData.laughTime > 3000) {
                             let unrobbedExist = pUids.some(uid => !(mData.stolenUids && mData.stolenUids[uid]));
-                            if (unrobbedExist) update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'walk' });
-                            else update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'chase', randomAngle: Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024) });
+                            if (unrobbedExist) update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { state: 'walk' });
+                            else update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { state: 'chase', randomAngle: Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024) });
                         }
                     } else if (mData.state === 'chase' && mData.hp > 0) {
                         let unrobbedExist = pUids.some(uid => !(mData.stolenUids && mData.stolenUids[uid]));
                         if (unrobbedExist) {
-                            update(ref(window.GameLogic.db, 'cafeMimi'), { state: 'walk' });
+                            update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { state: 'walk' });
                         } else {
                             let minDistToPlayer = 9999; let nearestP = null;
                             pUids.forEach(uid => {
@@ -13625,17 +13626,17 @@ if (activeBubbleMsg) {
                             } else {
                                 boostSpeed = 200;
                             }
-                            update(ref(window.GameLogic.db, 'cafeMimi'), { x: targetX, y: targetY, flipX: (targetX > mData.x), randomAngle: angle, speedBoost: boostSpeed });
+                            update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { x: targetX, y: targetY, flipX: (targetX > mData.x), randomAngle: angle, speedBoost: boostSpeed });
                         }
                     } else if (mData.state === 'down') {
-                        if (!mData.downTime) update(ref(window.GameLogic.db, 'cafeMimi'), { downTime: Date.now() });
-                        else if (Date.now() - mData.downTime > 3000) update(ref(window.GameLogic.db, 'cafeMimi'), { active: false, state: 'none' });
+                        if (!mData.downTime) update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { downTime: Date.now() });
+                        else if (Date.now() - mData.downTime > 3000) update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { active: false, state: 'none' });
                     }
                 }
             } else {
                 // 如果房間內已無人，清除米米
                 if (pUids.length === 0 && window.GameLogic.cafeMimiData && window.GameLogic.cafeMimiData.active) {
-                    update(ref(window.GameLogic.db, 'cafeMimi'), { active: false });
+                    update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { active: false });
                 }
             }
         }
@@ -13727,7 +13728,7 @@ if (activeBubbleMsg) {
 ) {
     this.finishPrinceCatFeeding(
         window.GameLogic.currentUser.uid,
-        ref(window.GameLogic.db, 'cafePrinceCat'),
+        ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat')),
         this.localPlayer.sprite.princeCatFeedingToken
     );
 }
@@ -13815,7 +13816,7 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
                 this.localPlayer.sprite.setVelocity(0, 0).play('idle', true); let f = this.furnitureSprites[window.GameLogic.placingFurnitureKey];
                 if (f && f.sprite && f.sprite.active) {
                     f.sprite.setVelocity(vx, vy); this.cameras.main.startFollow(f.sprite, true, 0.1, 0.1); this.placePrompt.setPosition(f.sprite.x, f.sprite.y - 80).setVisible(true);
-                    if (vx !== 0 || vy !== 0) { if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) { let path = this.isCafe ? window.getServerRoomPath(`cafeFurniture/${window.GameLogic.placingFurnitureKey}`) : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${window.GameLogic.placingFurnitureKey}` : `shrineFurniture/${window.GameLogic.placingFurnitureKey}`); update(ref(window.GameLogic.db, path), { x: f.sprite.x, y: f.sprite.y }); this.lastSyncTime = Date.now(); } }
+                    if (vx !== 0 || vy !== 0) { if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) { let path = this.isCafe ? window.getServerRoomPath(`cafeFurniture/${window.GameLogic.placingFurnitureKey}`) : (this.sceneName === 'doghouse' ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${window.GameLogic.placingFurnitureKey}` : window.getServerRoomPath(`shrineFurniture/${window.GameLogic.placingFurnitureKey}`)); update(ref(window.GameLogic.db, path), { x: f.sprite.x, y: f.sprite.y }); this.lastSyncTime = Date.now(); } }
                 }
             } else {
                 this.placePrompt.setVisible(false); this.localPlayer.sprite.setVelocity(vx, vy); 
@@ -13829,7 +13830,7 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
                 }
                 if ((this.isCafe || this.sceneName === 'shrine' || this.sceneName === 'playroom' || this.sceneName === 'partyroom') && (vx !== 0 || vy !== 0)) { 
                     if(!this.lastSyncTime || Date.now() - this.lastSyncTime > 100) { 
-                        let path = this.isCafe ? window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`) : (this.sceneName === 'shrine' ? `shrinePlayers/${window.GameLogic.currentUser.uid}` : (this.sceneName === 'playroom' ? `playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}` : `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`)); 
+                        let path = this.isCafe ? window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`) : (this.sceneName === 'shrine' ? window.getServerRoomPath(`shrinePlayers/${window.GameLogic.currentUser.uid}`) : (this.sceneName === 'playroom' ? window.getServerRoomPath(`playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`) : window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`))); 
                         update(ref(window.GameLogic.db, path), { x: this.localPlayer.sprite.x, y: this.localPlayer.sprite.y }); this.lastSyncTime = Date.now(); 
                     } 
                 }
@@ -13956,7 +13957,7 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
 if (dist < 30) { 
     window.playSFX(this, 'coin03'); 
     let coinAmount = coin.amount; 
-    let coinRef = ref(window.GameLogic.db, `droppedCoins/${key}`);
+    let coinRef = ref(window.GameLogic.db, window.getServerRoomPath(`droppedCoins/${key}`));
 
     get(coinRef).then((coinSnap) => { 
         if (coinSnap.exists()) { 
@@ -14169,7 +14170,7 @@ function openFurnitureCatalog() {
             if (item.isAction) {
                 if (item.key === 'clear_seats') {
                                         let seats = Object.keys(window.GameLogic.shrineFurniture || {}).filter(k => k.startsWith('seat_'));
-                    let updates = {}; seats.forEach(s => updates[`shrineFurniture/${s}`] = null);
+                    let updates = {}; seats.forEach(s => updates[window.getServerRoomPath(`shrineFurniture/${s}`)] = null);
                     update(ref(window.GameLogic.db), updates).then(() => { 
                         sendBubble("已回收所有禁屎坐墊！"); 
                         modal.style.display = 'none'; 
@@ -14180,7 +14181,7 @@ function openFurnitureCatalog() {
             
             modal.style.display = 'none'; let isCafe = window.GameLogic.currentScene === "cafe"; let isDoghouse = window.GameLogic.currentScene === "doghouse"; let isShrine = window.GameLogic.currentScene === "shrine";
             let targetDict = isCafe ? window.GameLogic.cafeFurniture : (isDoghouse ? window.GameLogic.doghouseFurniture : window.GameLogic.shrineFurniture);
-            let pathPrefix = isCafe ? window.getServerRoomPath('cafeFurniture/') : (isDoghouse ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/` : 'shrineFurniture/');
+            let pathPrefix = isCafe ? window.getServerRoomPath('cafeFurniture/') : (isDoghouse ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/` : window.getServerRoomPath('shrineFurniture/'));
             
             let itemKey = item.key;
             if (item.infinite) { 
@@ -14285,8 +14286,8 @@ function sendBubble(msg, options = {}) {
 
         let path = "";
         if (window.GameLogic.currentScene === "cafe") path = window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`);
-        else if (window.GameLogic.currentScene === "shrine") path = `shrinePlayers/${window.GameLogic.currentUser.uid}`;
-        else if (window.GameLogic.currentScene === "playroom" && window.GameLogic.currentRoomId) path = `playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`;
+        else if (window.GameLogic.currentScene === "shrine") path = window.getServerRoomPath(`shrinePlayers/${window.GameLogic.currentUser.uid}`);
+        else if (window.GameLogic.currentScene === "playroom" && window.GameLogic.currentRoomId) path = window.getServerRoomPath(`playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`);
         
         if (path !== "") {
             update(ref(db, path), { 
@@ -14408,14 +14409,14 @@ window.replyInvite = function(replyType) {
 
     let attacker = window.currentInviteAttacker;
     if (attacker) {
-        update(ref(window.GameLogic.db, `serverEvents/inviteReplies/${attacker}`), { reply: replyType, replierUid: window.GameLogic.currentUser.uid, time: Date.now() });
+        update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/inviteReplies/${attacker}`)), { reply: replyType, replierUid: window.GameLogic.currentUser.uid, time: Date.now() });
 
         if (replyType === 'yes') {
             window.GameLogic.armedItemState = null; window.GameLogic.armedItemName = null;
             let roomId = `playroom_${attacker}_${window.GameLogic.currentUser.uid}`;
 
             // 修正2：進入 Playroom 前，強迫清空舊有房間狀態，確保一切從頭開始
-            set(ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'none' });
+            set(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { state: 'none' });
 
             window.switchScene('playroom', { roomId: roomId });
         }
@@ -14444,9 +14445,9 @@ window.cancelRpsGame = function(roomId) {
     let dust = document.getElementById('rps-dust-container');
     if (dust) dust.innerHTML = '';
     
-    update(ref(window.GameLogic.db, `playroomGames/${id}`), { state: 'none' });
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${id}`), { state: 'none' });
     if (window.GameLogic.currentUser) {
-        update(ref(window.GameLogic.db, `playroomGames/${id}/p_${window.GameLogic.currentUser.uid}`), { machineReady: null, betReady: null });
+        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${id}/p_${window.GameLogic.currentUser.uid}`), { machineReady: null, betReady: null });
     }
 };
 
@@ -14472,7 +14473,7 @@ window.openRpsBetting = function(roomId) {
     if (players.length < 2) return alert("等對方進來再開始喔！");
     
     // 修正1：按下A只改變自己的機台準備狀態，不強制所有人進入下注
-    update(ref(window.GameLogic.db, `playroomGames/${roomId}/p_${window.GameLogic.currentUser.uid}`), { machineReady: true });
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}/p_${window.GameLogic.currentUser.uid}`), { machineReady: true });
 };
 
 window.confirmRpsBet = function() {
@@ -14480,7 +14481,7 @@ window.confirmRpsBet = function() {
     document.getElementById('rps-bet-input-area').style.display = 'none';
     document.getElementById('rps-bet-status-me').innerText = "✅已下注";
     document.getElementById('rps-bet-status-me').style.color = "#00ff00";
-        update(ref(window.GameLogic.db, `playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { betReady: true, betValue: betVal });
+        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { betReady: true, betValue: betVal });
 };
 
 window.selectRps = function(choice) {
@@ -14491,7 +14492,7 @@ window.selectRps = function(choice) {
     document.getElementById('rps-choice-' + choice).classList.add('rps-choice-selected');
 
     document.getElementById('rps-me-img').style.backgroundImage = `url('playroom-rps-onion-me-${choice}.png')`;
-    update(ref(window.GameLogic.db, `playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { rpsChoice: choice });
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { rpsChoice: choice });
 };
 
 window.clickRpsSpam = function() {
@@ -14569,12 +14570,12 @@ window.clickRpsSpam = function() {
     // 人物連擊精靈圖切換 (自己)
     window.triggerRpsAnim('rps-me-img', window.rpsMyRole === 'attacker');
     
-    update(ref(window.GameLogic.db, `playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { spamCount: window.rpsMySpamCount });
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${window.GameLogic.currentRoomId}/p_${window.GameLogic.currentUser.uid}`), { spamCount: window.rpsMySpamCount });
 };
 
 window.syncRpsState = function(roomId) {
     if (window.rpsUnsubscribe) window.rpsUnsubscribe();
-    window.rpsUnsubscribe = onValue(ref(window.GameLogic.db, `playroomGames/${roomId}`), snap => {
+    window.rpsUnsubscribe = onValue(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), snap => {
             let data = snap.val(); if (!data) return;
             let state = data.state;
             window.rpsPhase = state;
@@ -14631,9 +14632,9 @@ window.syncRpsState = function(roomId) {
                 if (myData.machineReady) {
                     if (otherData.machineReady) {
                         if (uids.sort()[0] === myUid) {
-                            update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'betting' });
-                            update(ref(window.GameLogic.db, `playroomGames/${roomId}/p_${myUid}`), { betReady: false, betValue: 0, machineReady: null });
-                            update(ref(window.GameLogic.db, `playroomGames/${roomId}/p_${otherUid}`), { betReady: false, betValue: 0, machineReady: null });
+                            update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { state: 'betting' });
+                            update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}/p_${myUid}`), { betReady: false, betValue: 0, machineReady: null });
+                            update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}/p_${otherUid}`), { betReady: false, betValue: 0, machineReady: null });
                         }
                     } else {
                         // 只有我按了 A，顯示等待畫面
@@ -14741,7 +14742,7 @@ window.syncRpsState = function(roomId) {
                         update(ref(window.GameLogic.db, `users/${myUid}`), { coins: Math.max(0, p1C) });
                         update(ref(window.GameLogic.db, `users/${otherUid}`), { coins: Math.max(0, p2C) });
                         
-                        update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { 
+                        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { 
                             state: 'bet_summary', 
                             agreedBet: avgBet, 
                             bonusMult: mult,
@@ -14787,9 +14788,9 @@ window.syncRpsState = function(roomId) {
                 }
                 // ==========================================
                 if (uids.sort()[0] === myUid && !data.summaryProcessed) {
-                    update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { summaryProcessed: true });
+                    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { summaryProcessed: true });
                     setTimeout(() => {
-                        update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { 
+                        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { 
                             state: 'rps_countdown', 
                             rpsStartTime: Date.now(),
                             roundCount: 1,
@@ -14879,7 +14880,7 @@ window.syncRpsState = function(roomId) {
                             ], { duration: 900, easing: 'ease-out' });
                         }
                         clearInterval(window.rpsInterval);
-                        if (uids.sort()[0] === myUid) update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'rps_result' });
+                        if (uids.sort()[0] === myUid) update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { state: 'rps_result' });
                     }
                 }, 100);
             }
@@ -14912,7 +14913,7 @@ window.syncRpsState = function(roomId) {
                     else if (result === 'lose') window.triggerRpsWinExplosion('rps-opponent-img');
                     
                     if (uids.sort()[0] === myUid) {
-                         update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { explosionPlayed: true });
+                         update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { explosionPlayed: true });
                     }
                 }
                 // 猜拳結果判定當下：勝利方產生大量橘紅氣泡特效
@@ -14945,9 +14946,9 @@ window.syncRpsState = function(roomId) {
                     if (!window.rpsStateTimeout) {
                         window.rpsStateTimeout = setTimeout(() => {
                             if (result === 'tie') {
-                                update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'rps_countdown', rpsStartTime: Date.now(), [`p_${myUid}/rpsChoice`]: null, [`p_${otherUid}/rpsChoice`]: null });
+                                update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { state: 'rps_countdown', rpsStartTime: Date.now(), [`p_${myUid}/rpsChoice`]: null, [`p_${otherUid}/rpsChoice`]: null });
                             } else {
-                                update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'spam_countdown', winnerUid: result === 'win' ? myUid : otherUid, spamStartTime: Date.now(), [`p_${myUid}/spamCount`]: 0, [`p_${otherUid}/spamCount`]: 0 });
+                                update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { state: 'spam_countdown', winnerUid: result === 'win' ? myUid : otherUid, spamStartTime: Date.now(), [`p_${myUid}/spamCount`]: 0, [`p_${otherUid}/spamCount`]: 0 });
                             }
                             window.rpsStateTimeout = null;
                         }, 2000);
@@ -15033,7 +15034,7 @@ window.syncRpsState = function(roomId) {
                                 anim.onfinish = () => { rpsMsg.style.opacity = '0'; }; // 動畫結束後徹底隱藏 GO!
                             }
                             clearInterval(window.rpsInterval);
-                            if (uids.sort()[0] === myUid) update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'spamming', spamPlayTime: Date.now() });
+                            if (uids.sort()[0] === myUid) update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { state: 'spamming', spamPlayTime: Date.now() });
                         }
                     }, 100);
             }
@@ -15077,7 +15078,7 @@ window.syncRpsState = function(roomId) {
                     } else {
                         document.getElementById('rps-spam-area').style.display = 'none';
                         clearInterval(window.rpsInterval);
-                        if (uids.sort()[0] === myUid) update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { state: 'round_result' });
+                        if (uids.sort()[0] === myUid) update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { state: 'round_result' });
                     }
                 }, 100);
             }
@@ -15140,10 +15141,10 @@ window.syncRpsState = function(roomId) {
                             updates[`p_${myUid}/rpsChoice`] = null;
                             updates[`p_${otherUid}/rpsChoice`] = null;
                         }
-                        update(ref(window.GameLogic.db, `playroomGames/${roomId}`), updates);
+                        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), updates);
                     }, 3000);
                     
-                    update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { roundProcessed: true });
+                    update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { roundProcessed: true });
                 }
             }
             else if (state === 'calc_result') {
@@ -15248,7 +15249,7 @@ window.syncRpsState = function(roomId) {
                         
                         update(ref(window.GameLogic.db, `users/${myUid}`), { coins: p1C });
                         update(ref(window.GameLogic.db, `users/${otherUid}`), { coins: p2C });
-                        update(ref(window.GameLogic.db, `playroomGames/${roomId}`), { moneyDistributed: true });
+                        update(ref(window.GameLogic.db, window.getServerRoomPath(`playroomGames/${roomId}`), { moneyDistributed: true });
                     });
                 }
             }
@@ -15283,12 +15284,12 @@ window.createPartyRoom = function() {
     }
     
     // 向全服廣播喇叭吹奏
-    update(ref(window.GameLogic.db, `serverEvents/trumpetPlay/${window.GameLogic.currentUser.uid}`), { time: Date.now(), scene: window.GameLogic.currentScene });
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/trumpetPlay/${window.GameLogic.currentUser.uid}`)), { time: Date.now(), scene: window.GameLogic.currentScene });
 
     // 延遲跳轉場景，讓動畫播完
     setTimeout(() => {
         set(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'waiting', host: window.GameLogic.currentUser.uid, game: window.PartyLogic.selectedGame, startTime: Date.now() });
-        set(ref(window.GameLogic.db, `serverEvents/partyInvites/${window.PartyLogic.roomId}`), { time: Date.now(), inviterUid: window.GameLogic.currentUser.uid, inviterName: window.GameLogic.myProfile.name, game: window.PartyLogic.selectedGame });
+        set(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${window.PartyLogic.roomId}`)), { time: Date.now(), inviterUid: window.GameLogic.currentUser.uid, inviterName: window.GameLogic.myProfile.name, game: window.PartyLogic.selectedGame });
         window.switchScene('partyroom', { roomId: window.PartyLogic.roomId });
     }, 1500);
 };
@@ -15336,7 +15337,7 @@ window.joinPartyroom = function(roomId) {
     }
     document.getElementById('party-red-flash').style.display = 'none'; document.getElementById('party-red-flash').style.opacity = 0;
     
-    const playerRef = ref(window.GameLogic.db, `partyRooms/${roomId}/players/${window.GameLogic.currentUser.uid}`);
+    const playerRef = ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${roomId}/players/${window.GameLogic.currentUser.uid}`);
     set(playerRef, { x: 1920/2, y: 1080/2, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1, ready: false });
     onDisconnect(playerRef).remove();
     
@@ -15349,7 +15350,7 @@ window.joinPartyroom = function(roomId) {
         window.PartyLogic.gameData = data;
         
         let pUids = Object.keys(window.PartyLogic.players);
-        if (pUids.length >= 10 && data.state === 'waiting') update(ref(window.GameLogic.db, `serverEvents/partyInvites/${roomId}`), { closed: true });
+        if (pUids.length >= 10 && data.state === 'waiting') update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${roomId}`), { closed: true });
         
         if (data.state === 'waiting') {
             document.getElementById('party-waiting-modal').style.display = 'flex';
@@ -15402,14 +15403,14 @@ window.leavePartyroom = function(skipSceneSwitch = false) {
     
     if (leavingRoomId && leavingUid) {
         const roomRef = ref(window.GameLogic.db, `partyRooms/${leavingRoomId}`);
-        const playerRef = ref(window.GameLogic.db, `partyRooms/${leavingRoomId}/players/${leavingUid}`);
+        const playerRef = ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${leavingRoomId}/players/${leavingUid}`);
 
         set(playerRef, null)
             .then(() => get(roomRef))
             .then(snap => {
                 let roomData = snap.val();
                 if (!roomData) {
-                    update(ref(window.GameLogic.db, `serverEvents/partyInvites/${leavingRoomId}`), { closed: true }).catch(err => console.warn('Firebase 關閉不存在派對邀請失敗:', err));
+                    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${leavingRoomId}`), { closed: true }).catch(err => console.warn('Firebase 關閉不存在派對邀請失敗:', err));
                     return;
                 }
 
@@ -15418,7 +15419,7 @@ window.leavePartyroom = function(skipSceneSwitch = false) {
 
                 if (remainingUids.length === 0) {
                     // 所有人都離開等候室或派對房間：關閉右側邀請，並刪除空房間
-                    update(ref(window.GameLogic.db, `serverEvents/partyInvites/${leavingRoomId}`), { closed: true }).catch(err => console.warn('Firebase 關閉空派對邀請失敗:', err));
+                    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${leavingRoomId}`), { closed: true }).catch(err => console.warn('Firebase 關閉空派對邀請失敗:', err));
                     set(roomRef, null).catch(err => console.warn('Firebase 清除空派對房間失敗:', err));
                 } else if (roomData.host === leavingUid) {
                     // 房主離開但房內還有人：由 UID 排序第一位接手房主
@@ -15437,7 +15438,7 @@ window.togglePartyReady = function() {
     let isReady = btn.innerText === '取消準備';
     btn.innerText = isReady ? '準備好了' : '取消準備';
     btn.style.background = isReady ? 'var(--mucha-gold)' : '#5cb85c';
-    update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), { ready: !isReady });
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`), { ready: !isReady });
 };
 
 window.startPartyGame = function() {
@@ -15463,14 +15464,14 @@ window.startPartyGame = function() {
     }
     // 修正：移除動態 import
     update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'starting', stones: stones, gameStartTime: Date.now() });
-    update(ref(window.GameLogic.db, `serverEvents/partyInvites/${window.PartyLogic.roomId}`), { closed: true });
+    update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${window.PartyLogic.roomId}`), { closed: true });
     
     let pUids = Object.keys(window.PartyLogic.players);
     pUids.forEach(uid => {
         let rx = Phaser.Math.Between(0,1) ? Phaser.Math.Between(100, 300) : Phaser.Math.Between(1620, 1820);
         let ry = Phaser.Math.Between(0,1) ? Phaser.Math.Between(100, 300) : Phaser.Math.Between(780, 980);
-        update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/players/${uid}`), { x: rx, y: ry });
-        set(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${uid}`), { hitCount: 0, gotHitCount: 0, ammo: 666 });
+        update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${uid}`), { x: rx, y: ry });
+        set(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${uid}`), { hitCount: 0, gotHitCount: 0, ammo: 666 });
     });
 };
 
@@ -15482,8 +15483,8 @@ window.replyPartyInvite = function(reply) {
         if ((window.GameLogic.myProfile.coins || 0) < 50) return alert("馬德幣不足50！無法參加派對。");
 
         Promise.all([
-            get(ref(window.GameLogic.db, `serverEvents/partyInvites/${inviteId}`)),
-            get(ref(window.GameLogic.db, `partyRooms/${inviteId}`))
+            get(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${inviteId}`))),
+            get(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${inviteId}`)))
         ]).then(([inviteSnap, roomSnap]) => {
             let inviteData = inviteSnap.val();
             let roomData = roomSnap.val();
@@ -15491,7 +15492,7 @@ window.replyPartyInvite = function(reply) {
             let playerCount = Object.keys(roomPlayers).length;
 
             if (!inviteData || inviteData.closed || !inviteData.time || (Date.now() - inviteData.time >= 60000) || !roomData || playerCount === 0) {
-                update(ref(window.GameLogic.db, `serverEvents/partyInvites/${inviteId}`), { closed: true }).catch(err => console.warn('Firebase 關閉失效派對邀請失敗:', err));
+                update(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/partyInvites/${inviteId}`), { closed: true }).catch(err => console.warn('Firebase 關閉失效派對邀請失敗:', err));
                 if (window.GameLogic.partyInvitesData && window.GameLogic.partyInvitesData[inviteId]) {
                     window.GameLogic.partyInvitesData[inviteId].closed = true;
                 }
@@ -15562,7 +15563,7 @@ window.processPartyEventLogic = function(scene) {
         }
         
         if (remain <= 0 && isCoordinator) {
-            update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`), { ammo: window.PartyLogic.ammo });
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`), { ammo: window.PartyLogic.ammo });
             update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}`), { state: 'finished', finishTime: Date.now() }); 
         }
     } else if (state === 'finished') {
@@ -15597,7 +15598,7 @@ window.processPartyEventLogic = function(scene) {
             window.playSFX(scene, 'party-finish');
             
             // Upload final ammo before scoring
-            update(ref(window.GameLogic.db, `partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`), { ammo: window.PartyLogic.ammo });
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/scores/${window.GameLogic.currentUser.uid}`), { ammo: window.PartyLogic.ammo });
             
             setTimeout(() => {
                 scene.partyAnnounceText.setVisible(false);
@@ -15682,7 +15683,7 @@ window.partyInviteTimer = setInterval(() => {
 }, 1000);
 
 // Global Listener for Party Invites
-partyInvitesUnsubscribe = onValue(ref(window.GameLogic.db, 'serverEvents/partyInvites'), snap => {
+partyInvitesUnsubscribe = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/partyInvites')), snap => {
     let invites = snap.val() || {};
     window.GameLogic.partyInvitesData = invites; // 更新快取供計時器使用，避免登入狀態剛切換時漏接
     if (!window.GameLogic.currentUser) return;
@@ -15826,7 +15827,7 @@ window.checkPendingWeeklyRewardNotice = async function() {
 };
 
 // 【新增】實時監聽全服是否有玩家正在與大粉蔥(派獎箱)互動
-onValue(ref(db, 'serverEvents/giftBoxInteracting'), snap => {
+onValue(ref(db, window.getServerRoomPath('serverEvents/giftBoxInteracting')), snap => {
     let interactingUsers = snap.val() || {};
     let isAnyoneInteracting = Object.keys(interactingUsers).length > 0;
     if (window.GameLogic && window.GameLogic.phaserGame) {
@@ -15868,7 +15869,7 @@ window.openRewardModal = function(furnitureObj) {
     
     // 【新增】寫入 Firebase 廣播互動狀態
     if (window.GameLogic.currentUser) {
-        const interactRef = ref(db, `serverEvents/giftBoxInteracting/${window.GameLogic.currentUser.uid}`);
+        const interactRef = ref(db, window.getServerRoomPath(`serverEvents/giftBoxInteracting/${window.GameLogic.currentUser.uid}`));
         set(interactRef, true);
         onDisconnect(interactRef).remove();
     }
@@ -15896,7 +15897,7 @@ window.closeRewardModal = function() {
     
     // 【新增】移除 Firebase 互動狀態
     if (window.GameLogic && window.GameLogic.currentUser) {
-        remove(ref(db, `serverEvents/giftBoxInteracting/${window.GameLogic.currentUser.uid}`));
+        remove(ref(db, window.getServerRoomPath(`serverEvents/giftBoxInteracting/${window.GameLogic.currentUser.uid}`)));
     }
 
     if (window.GameLogic.activeGiftBox) { 
