@@ -2657,12 +2657,21 @@ window.clearAllModals = function() {
     // 1. 關閉所有共用 Modal 類別
     document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
 
-    // Phaser overlay 不是 DOM modal，需要另外清理
+    // Phaser overlay 不是 DOM modal，需要另外清理；任何清理失敗都不能中斷傳送門切場景。
     if (window.GameLogic.phaserGame) {
-        const ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
-        if (ms && ms.closeSoloChickenMenu) ms.closeSoloChickenMenu();
-        if (ms && ms.clearSoloRocketCruise && (ms.soloRocketCruiseActive || ms.soloRocketContainer || ms.soloRocketResultContainer)) {
-            ms.clearSoloRocketCruise(true);
+        try {
+            const ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
+            if (ms && ms.closeSoloChickenMenu) ms.closeSoloChickenMenu();
+
+            if (ms && ms.clearPrinceCatPetMiniGame && (ms.princeCatPetGameActive || (ms.princeCatPetUiObjects && ms.princeCatPetUiObjects.length > 0))) {
+                ms.clearPrinceCatPetMiniGame(false);
+            }
+
+            if (ms && ms.clearSoloRocketCruise && (ms.soloRocketCruiseActive || ms.soloRocketContainer || ms.soloRocketResultContainer)) {
+                ms.clearSoloRocketCruise(true);
+            }
+        } catch (err) {
+            console.warn('[場景切換] 清理 Phaser overlay 失敗，已略過以避免傳送門黑屏：', err);
         }
     }
     
@@ -2714,7 +2723,36 @@ function switchScene(sceneName, extraData = null) {
         window.updateOnlinePlayersUI();
         if (window.GameLogic.phaserGame && window.GameLogic.phaserLoaded) { 
             const game = window.GameLogic.phaserGame; 
-            game.scene.stop('MainScene'); game.scene.start('MainScene'); game.scene.bringToTop('UIScene'); 
+
+            try {
+                const oldMain = game.scene.getScene('MainScene');
+                if (oldMain && oldMain.clearPrinceCatPetMiniGame) {
+                    try {
+                        oldMain.clearPrinceCatPetMiniGame(false);
+                    } catch (err) {
+                        console.warn('[場景切換] 王子麵摸摸 UI 預清理失敗，已略過：', err);
+                    }
+                }
+
+                game.scene.stop('MainScene');
+            } catch (err) {
+                console.warn('[場景切換] 停止 MainScene 時發生錯誤，改用保護模式繼續啟動新場景：', err);
+            }
+
+            try {
+                game.scene.start('MainScene');
+                game.scene.bringToTop('UIScene');
+            } catch (err) {
+                console.warn('[場景切換] 啟動 MainScene 失敗，稍後重試一次：', err);
+                setTimeout(() => {
+                    try {
+                        game.scene.start('MainScene');
+                        game.scene.bringToTop('UIScene');
+                    } catch (retryErr) {
+                        console.error('[場景切換] MainScene 重試仍失敗：', retryErr);
+                    }
+                }, 0);
+            }
         }
     };
 
@@ -5373,7 +5411,15 @@ this.events.on('action_B', () => {
             if (this.dummyHitListener) this.dummyHitListener(); 
             if (this.fwThrowsListener) this.fwThrowsListener();
             if (this.waterThrowsListener) this.waterThrowsListener();
-            if (this.clearPrinceCatPetMiniGame) this.clearPrinceCatPetMiniGame(false);
+            if (this.clearPrinceCatPetMiniGame) {
+                try {
+                    this.clearPrinceCatPetMiniGame(false);
+                } catch (err) {
+                    console.warn('[王子麵摸摸] shutdown 清理失敗，已略過以避免傳送門黑屏：', err);
+                    this.princeCatPetGameActive = false;
+                    this.princeCatPetUiObjects = [];
+                }
+            }
             if (this.princeCatListener) { this.princeCatListener(); this.princeCatListener = null; }
             // 修正：徹底清除精靈與實體指標，防止 Phaser 重新啟動場景時讀取到已銷毀的舊物件導致 Crash
             this.mimiSprite = null;
@@ -14324,7 +14370,11 @@ tryPrinceCatSweepBonus(x, y) {
         }
 
         (this.princeCatPetUiObjects || []).forEach(obj => {
-            if (obj && obj.destroy) obj.destroy();
+            try {
+                if (obj && obj.destroy && !obj.destroyed) obj.destroy();
+            } catch (err) {
+                console.warn('[王子麵摸摸] UI 物件清除失敗，已略過：', err);
+            }
         });
 
         this.princeCatPetUiObjects = [];
@@ -14338,10 +14388,14 @@ tryPrinceCatSweepBonus(x, y) {
         this.princeCatPetCloseBg = null;
         this.princeCatPetCloseText = null;
 
-        if (this.localPlayer && this.localPlayer.sprite && !this.princeCatPetCompleteWriting) {
+        if (this.localPlayer && this.localPlayer.sprite && this.localPlayer.sprite.active && !this.princeCatPetCompleteWriting) {
             this.localPlayer.sprite.isPettingPrinceCat = false;
-            this.localPlayer.sprite.setVelocity(0, 0);
-            if (this.anims.exists('idle')) this.localPlayer.sprite.play('idle', true);
+            if (this.localPlayer.sprite.body && this.localPlayer.sprite.setVelocity) {
+                this.localPlayer.sprite.setVelocity(0, 0);
+            }
+            if (this.anims && this.anims.exists && this.anims.exists('idle')) {
+                this.localPlayer.sprite.play('idle', true);
+            }
         }
 
         if (restoreCat && wasActive && window.GameLogic.currentUser) {
