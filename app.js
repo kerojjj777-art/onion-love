@@ -764,6 +764,145 @@ function createSystemUI() {
                 transform: translateY(-2px);
                 box-shadow:0 0 14px rgba(160,255,220,0.38), inset 0 0 10px rgba(70,30,8,0.55);
             }
+
+            /* 微調補丁：手機 emoji 噴射、身分證金屬按鍵、戰績日期、家具精靈粒子 */
+            #phone-modal.phone-pink-ui > .phone-pink-emoji-field {
+                position:absolute !important;
+                inset:0 !important;
+                width:100% !important;
+                height:100% !important;
+                overflow:hidden !important;
+                pointer-events:none !important;
+                z-index:0 !important;
+                border-radius:10px;
+            }
+            #phone-modal.phone-pink-ui > :not(.phone-pink-emoji-field) {
+                position:relative;
+                z-index:2;
+            }
+            #phone-modal.phone-pink-ui .phone-pink-emoji-field span {
+                position:absolute !important;
+                bottom:-48px !important;
+                left:var(--emoji-left, 50%) !important;
+                display:block !important;
+                font-size:var(--emoji-size, 28px) !important;
+                line-height:1 !important;
+                opacity:0;
+                transform-origin:center center;
+                filter:drop-shadow(0 0 8px rgba(255,255,255,0.95)) drop-shadow(0 0 12px rgba(255,30,150,0.7));
+                animation: phone-pink-emoji-rocket var(--emoji-speed, 4.8s) linear infinite !important;
+                animation-delay:var(--emoji-delay, 0s) !important;
+                animation-fill-mode:both;
+            }
+            @keyframes phone-pink-emoji-rocket {
+                0% {
+                    transform: translate(0, 0) rotate(-28deg) scale(0.55);
+                    opacity:0;
+                }
+                7% {
+                    opacity:0.95;
+                }
+                72% {
+                    opacity:0.9;
+                }
+                100% {
+                    transform: translate(var(--emoji-dx, 80px), -520px) rotate(22deg) scale(1.25);
+                    opacity:0;
+                }
+            }
+
+            #view-profile-modal.id-metal-card .modal-btns button {
+                background:linear-gradient(145deg, #7f8790 0%, #2f363d 28%, #11161b 52%, #4f5963 76%, #9ba3aa 100%) !important;
+                color:#eef3f6 !important;
+                border:1px solid rgba(255,255,255,0.82) !important;
+                border-radius:10px !important;
+                box-shadow:0 4px 10px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.72), inset 0 -8px 14px rgba(0,0,0,0.45), 0 0 10px rgba(120,130,140,0.42) !important;
+                text-shadow:0 1px 2px rgba(0,0,0,0.85), 0 0 5px rgba(210,220,230,0.45);
+                font-weight:bold;
+            }
+            #view-profile-modal.id-metal-card .modal-btns button:active {
+                transform:scale(0.96);
+                box-shadow:0 2px 6px rgba(0,0,0,0.55), inset 0 2px 8px rgba(0,0,0,0.55), 0 0 14px rgba(180,190,200,0.55) !important;
+            }
+
+            #medal-detail-modal #md-date {
+                color:#30363d !important;
+                font-weight:bold !important;
+                text-shadow:0 0 4px rgba(255,255,255,0.9), 0 0 8px rgba(75,85,95,0.85), 0 0 14px rgba(35,40,45,0.55) !important;
+                letter-spacing:0.5px;
+            }
+
+            .furniture-wood-ui > .furniture-wood-fairy-field {
+                position:absolute !important;
+                inset:0 !important;
+                width:100% !important;
+                height:100% !important;
+                overflow:hidden !important;
+                pointer-events:none !important;
+                z-index:0 !important;
+                border-radius:10px;
+            }
+            .furniture-wood-ui > :not(.furniture-wood-fairy-field) {
+                position:relative;
+                z-index:2;
+            }
+            .furniture-wood-ui .furniture-wood-fairy-field span {
+                position:absolute !important;
+                bottom:-28px !important;
+                left:var(--fairy-left, 50%) !important;
+                display:block !important;
+                width:10px !important;
+                height:10px !important;
+                border-radius:50%;
+                background:radial-gradient(circle, #ffffff 0%, var(--fairy-color, #9fffe0) 38%, rgba(255,255,255,0) 72%) !important;
+                box-shadow:0 0 10px var(--fairy-color, #9fffe0), 0 0 20px var(--fairy-color, #9fffe0), 0 0 28px rgba(255,255,255,0.55);
+                opacity:0;
+                animation:furniture-wood-fairy-sprite-fly var(--fairy-speed, 6s) ease-in-out infinite !important;
+                animation-delay:var(--fairy-delay, 0s) !important;
+                animation-fill-mode:both;
+            }
+            .furniture-wood-ui .furniture-wood-fairy-field span::after {
+                content:"✦";
+                position:absolute;
+                left:-5px;
+                top:-11px;
+                color:var(--fairy-color, #9fffe0);
+                font-size:18px;
+                line-height:1;
+                text-shadow:0 0 6px #fff, 0 0 14px var(--fairy-color, #9fffe0);
+                animation:furniture-wood-fairy-twinkle 0.72s ease-in-out infinite alternate;
+            }
+            @keyframes furniture-wood-fairy-sprite-fly {
+                0% {
+                    transform:translate(0, 0) scale(0.45) rotate(0deg);
+                    opacity:0;
+                }
+                10% {
+                    opacity:0.95;
+                }
+                38% {
+                    transform:translate(var(--fairy-mid-x, 30px), -105px) scale(1.18) rotate(14deg);
+                    opacity:1;
+                }
+                70% {
+                    transform:translate(calc(var(--fairy-mid-x, 30px) * -0.55), -215px) scale(0.92) rotate(-12deg);
+                    opacity:0.9;
+                }
+                100% {
+                    transform:translate(var(--fairy-end-x, -24px), -355px) scale(0.35) rotate(24deg);
+                    opacity:0;
+                }
+            }
+            @keyframes furniture-wood-fairy-twinkle {
+                0% {
+                    transform:scale(0.72) rotate(0deg);
+                    opacity:0.45;
+                }
+                100% {
+                    transform:scale(1.25) rotate(22deg);
+                    opacity:1;
+                }
+            }
             #chat-section { display: flex; position: absolute; top: 60px; left: 10px; width: 190px; flex-direction: column; z-index: 100; pointer-events: none; }
             #chat-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 8px 8px 0 0; padding: 5px 12px; width: fit-content; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 -2px 5px rgba(0,0,0,0.2);}
             #chat-content { pointer-events: auto; transition: max-height 0.3s ease-in-out; overflow: hidden; display: flex; flex-direction: column; background: rgba(0, 0, 0, 0.6); border-radius: 0 8px 8px 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
@@ -956,10 +1095,18 @@ function createSystemUI() {
 
         <div id="furniture-catalog-modal" class="modal">
             <div class="furniture-wood-fairy-field" aria-hidden="true">
-                <span style="--fairy-left:12%; --fairy-color:#9fffe0; --fairy-speed:7.2s; --fairy-delay:0s; --fairy-mid-x:34px; --fairy-end-x:-18px;"></span>
-                <span style="--fairy-left:38%; --fairy-color:#9fd8ff; --fairy-speed:8.6s; --fairy-delay:1.4s; --fairy-mid-x:-30px; --fairy-end-x:32px;"></span>
-                <span style="--fairy-left:68%; --fairy-color:#adffbf; --fairy-speed:7.8s; --fairy-delay:2.6s; --fairy-mid-x:26px; --fairy-end-x:-34px;"></span>
-                <span style="--fairy-left:84%; --fairy-color:#8fd4ff; --fairy-speed:9.2s; --fairy-delay:3.8s; --fairy-mid-x:-24px; --fairy-end-x:18px;"></span>
+                <span style="--fairy-left:8%; --fairy-color:#9fffe0; --fairy-speed:5.8s; --fairy-delay:0s; --fairy-mid-x:42px; --fairy-end-x:-22px;"></span>
+                <span style="--fairy-left:17%; --fairy-color:#8fd4ff; --fairy-speed:7.1s; --fairy-delay:0.45s; --fairy-mid-x:-36px; --fairy-end-x:28px;"></span>
+                <span style="--fairy-left:28%; --fairy-color:#adffbf; --fairy-speed:6.4s; --fairy-delay:0.9s; --fairy-mid-x:34px; --fairy-end-x:-36px;"></span>
+                <span style="--fairy-left:39%; --fairy-color:#9fd8ff; --fairy-speed:7.8s; --fairy-delay:1.25s; --fairy-mid-x:-32px; --fairy-end-x:34px;"></span>
+                <span style="--fairy-left:50%; --fairy-color:#b8ffe8; --fairy-speed:6.9s; --fairy-delay:1.8s; --fairy-mid-x:22px; --fairy-end-x:-18px;"></span>
+                <span style="--fairy-left:61%; --fairy-color:#7ee8ff; --fairy-speed:8.2s; --fairy-delay:2.2s; --fairy-mid-x:-44px; --fairy-end-x:38px;"></span>
+                <span style="--fairy-left:72%; --fairy-color:#b5ff9f; --fairy-speed:6.2s; --fairy-delay:2.75s; --fairy-mid-x:36px; --fairy-end-x:-28px;"></span>
+                <span style="--fairy-left:84%; --fairy-color:#8fd4ff; --fairy-speed:7.4s; --fairy-delay:3.1s; --fairy-mid-x:-28px; --fairy-end-x:24px;"></span>
+                <span style="--fairy-left:13%; --fairy-color:#c5fff2; --fairy-speed:8.6s; --fairy-delay:3.55s; --fairy-mid-x:58px; --fairy-end-x:-44px;"></span>
+                <span style="--fairy-left:33%; --fairy-color:#9fffe0; --fairy-speed:6.7s; --fairy-delay:4.05s; --fairy-mid-x:-48px; --fairy-end-x:34px;"></span>
+                <span style="--fairy-left:67%; --fairy-color:#8fd4ff; --fairy-speed:7.9s; --fairy-delay:4.45s; --fairy-mid-x:46px; --fairy-end-x:-38px;"></span>
+                <span style="--fairy-left:91%; --fairy-color:#adffbf; --fairy-speed:8.9s; --fairy-delay:4.9s; --fairy-mid-x:-42px; --fairy-end-x:18px;"></span>
             </div>
             <h3 id="catalog-title">📦 家俱目錄</h3>
             <div id="catalog-list" class="catalog-grid"></div>
