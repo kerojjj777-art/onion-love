@@ -14822,6 +14822,17 @@ if (activeBubbleMsg) {
         if (this.localPlayer.isSleeping || this.localPlayer.isSeated) return false;
         if (this.localPlayer.isSweeping) return true;
 
+        const sweepInteractDist = 90;
+        const playerSprite = this.localPlayer.sprite;
+        const dist = Phaser.Math.Distance.Between(playerSprite.x, playerSprite.y, trash.x, trash.y);
+
+        // 直接點擊洋蔥皮只是一個「靠近後可互動」入口，距離門檻沿用原本按鍵提示的 90。
+        // 避免玩家只要在畫面上看見洋蔥皮，遠距離點擊就直接進入打掃模式。
+        if (dist >= sweepInteractDist) {
+            sendBubble("再靠近一點才能掃洋蔥皮喔！");
+            return false;
+        }
+
         this.closestTrash = trash;
         this.localPlayer.isSweeping = true;
         this.qteProgress = 0;
