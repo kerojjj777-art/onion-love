@@ -1292,6 +1292,45 @@ function createSystemUI() {
                 }
             }
 
+            /* 補丁：大廳家具銀色金屬邊框＋給西項目切換動畫 */
+            #furniture-catalog-modal.furniture-wood-ui {
+                border:3px solid rgba(230,235,240,0.96) !important;
+                box-shadow:0 10px 24px rgba(0,0,0,0.58), 0 0 18px rgba(210,220,230,0.42), inset 0 0 28px rgba(68,32,10,0.9), inset 0 2px 0 rgba(255,255,255,0.5) !important;
+            }
+            #furniture-catalog-modal.furniture-wood-ui #catalog-title {
+                border-bottom:2px solid rgba(230,235,240,0.88) !important;
+                text-shadow:0 2px 3px rgba(0,0,0,0.75), 0 0 8px rgba(230,235,240,0.55) !important;
+            }
+            .modal.modal-switch-exit {
+                animation:modal-switch-exit 0.25s ease-in forwards !important;
+                pointer-events:none !important;
+                transform-origin:center center !important;
+            }
+            .modal.modal-switch-enter {
+                animation:modal-switch-enter 0.25s cubic-bezier(0.17, 0.84, 0.38, 1.2) forwards !important;
+                transform-origin:center center !important;
+            }
+            @keyframes modal-switch-exit {
+                0% {
+                    opacity:1;
+                    transform:var(--modal-switch-base-transform, translate(-50%, -50%)) scale(1);
+                }
+                100% {
+                    opacity:0;
+                    transform:var(--modal-switch-base-transform, translate(-50%, -50%)) scale(0.18);
+                }
+            }
+            @keyframes modal-switch-enter {
+                0% {
+                    opacity:0;
+                    transform:var(--modal-switch-base-transform, translate(-50%, -50%)) scale(0.18);
+                }
+                100% {
+                    opacity:1;
+                    transform:var(--modal-switch-base-transform, translate(-50%, -50%)) scale(1);
+                }
+            }
+
             #chat-section { display: flex; position: absolute; top: 60px; left: 10px; width: 190px; flex-direction: column; z-index: 100; pointer-events: none; }
             #chat-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 8px 8px 0 0; padding: 5px 12px; width: fit-content; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 -2px 5px rgba(0,0,0,0.2);}
             #chat-content { pointer-events: auto; transition: max-height 0.3s ease-in-out; overflow: hidden; display: flex; flex-direction: column; background: rgba(0, 0, 0, 0.6); border-radius: 0 8px 8px 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
@@ -3127,14 +3166,123 @@ window.closeInventoryModal = function(options = {}) {
 
 window.installInventoryModalDisplayGuard();
 
-window.clickSysItem = function(key) {
-    if (window.closeInventoryModal) {
-        window.closeInventoryModal({ immediate: true });
-    } else {
-        document.getElementById('inventory-modal').style.display = 'none';
+window.prepareModalSwitchAnimation = function(modal, mode) {
+    if (!modal) return;
+
+    const computed = window.getComputedStyle(modal);
+    const baseTransform = computed.transform && computed.transform !== 'none'
+        ? computed.transform
+        : 'translate(0, 0)';
+
+    modal.style.setProperty('--modal-switch-base-transform', baseTransform);
+    modal.classList.remove('modal-switch-enter', 'modal-switch-exit');
+
+    void modal.offsetWidth;
+
+    modal.classList.add(mode === 'enter' ? 'modal-switch-enter' : 'modal-switch-exit');
+
+    setTimeout(() => {
+        modal.classList.remove('modal-switch-enter', 'modal-switch-exit');
+        modal.style.removeProperty('--modal-switch-base-transform');
+    }, 270);
+};
+
+window.getInventoryLinkedModalElement = function(key) {
+    const map = {
+        magic_items: 'magic-modal',
+        phone: 'phone-modal',
+        portal: 'portal-modal',
+        energy: 'energy-modal',
+        profile: 'view-profile-modal',
+        music: 'settings-modal',
+        manual: 'manual-modal',
+        dev: 'dev-modal'
+    };
+
+    const id = map[key];
+    return id ? document.getElementById(id) : null;
+};
+
+window.openInventoryLinkedModal = function(key) {
+    if (key === 'logout') {
+        if (window.closeInventoryModal) {
+            window.closeInventoryModal({ immediate: true });
+        } else {
+            document.getElementById('inventory-modal').style.display = 'none';
+        }
+
+        window.leaveCafe();
+        if (window.GameLogic.currentUser) {
+            window.cleanupCurrentServerPresence(window.GameLogic.currentUser.uid);
+        }
+        window.signOut(window.auth);
+        return;
     }
 
-    if (key === 'magic_items') { window.openMagicModal(); } else if (key === 'phone') { window.openPhoneModal(); } else if (key === 'portal') { window.openPortalModal(); } else if (key === 'energy') { window.openEnergyModal(); } else if (key === 'profile') { window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid); } else if (key === 'music') { document.getElementById('settings-modal').style.display = 'block'; } else if (key === 'manual') { window.openManualModal(); } else if (key === 'dev') { document.getElementById('dev-modal').style.display = 'block'; } else if (key === 'logout') { window.leaveCafe(); if (window.GameLogic.currentUser) { window.cleanupCurrentServerPresence(window.GameLogic.currentUser.uid); } window.signOut(window.auth); }
+    if (window.__inventoryModalSwitching) return;
+    window.__inventoryModalSwitching = true;
+
+    const inventoryModal = document.getElementById('inventory-modal');
+    const blocker = document.getElementById('inventory-close-blocker');
+
+    const openTarget = () => {
+        if (key === 'magic_items') {
+            window.openMagicModal();
+        } else if (key === 'phone') {
+            window.openPhoneModal();
+        } else if (key === 'portal') {
+            window.openPortalModal();
+        } else if (key === 'energy') {
+            window.openEnergyModal();
+        } else if (key === 'profile') {
+            window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid);
+        } else if (key === 'music') {
+            document.getElementById('settings-modal').style.display = 'block';
+        } else if (key === 'manual') {
+            window.openManualModal();
+        } else if (key === 'dev') {
+            document.getElementById('dev-modal').style.display = 'block';
+        }
+
+        setTimeout(() => {
+            const targetModal = window.getInventoryLinkedModalElement(key);
+            if (targetModal && targetModal.style.display !== 'none') {
+                window.prepareModalSwitchAnimation(targetModal, 'enter');
+            }
+        }, 20);
+    };
+
+    if (inventoryModal && inventoryModal.style.display !== 'none') {
+        if (window.__inventoryOpenTimer) {
+            clearTimeout(window.__inventoryOpenTimer);
+            window.__inventoryOpenTimer = null;
+        }
+
+        if (window.__inventoryCloseTimer) {
+            clearTimeout(window.__inventoryCloseTimer);
+            window.__inventoryCloseTimer = null;
+        }
+
+        inventoryModal.classList.remove('inventory-opening', 'inventory-closing', 'inventory-opened');
+        window.prepareModalSwitchAnimation(inventoryModal, 'exit');
+
+        setTimeout(() => {
+            inventoryModal.style.display = 'none';
+            if (blocker) blocker.style.display = 'none';
+            openTarget();
+        }, 250);
+    } else {
+        if (blocker) blocker.style.display = 'none';
+        openTarget();
+    }
+
+    setTimeout(() => {
+        window.__inventoryModalSwitching = false;
+    }, 560);
+};
+
+window.clickSysItem = function(key) {
+    window.openInventoryLinkedModal(key);
 };
 
 window.openMagicModal = function() {
@@ -5086,10 +5234,87 @@ class UIScene extends Phaser.Scene {
         this.statusContainer.add([ this.statusBg, this.portrait, this.nameLevelText, this.energyBg, this.energyLiquid, this.energyZone, this.energyText, this.expBarBg, this.expLiquid, this.expText, this.statusText, this.equipText, this.statusToggleBtn ]);
         this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, { radius: 40, base: this.add.circle(0, 0, 40, 0xc5a059, 0.2).setStrokeStyle(2, 0xc5a059), thumb: this.add.circle(0, 0, 20, 0xc5a059, 0.8) });
         this.disableLegacyVirtualJoystick();
-        this.btnA = this.add.circle(0, 0, 30, 0xd9534f).setStrokeStyle(3, 0xffffff).setInteractive(); this.txtA = this.add.text(0, 0, 'A', { fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
-        this.btnB = this.add.circle(0, 0, 30, 0x0077cc).setStrokeStyle(3, 0xffffff).setInteractive(); this.txtB = this.add.text(0, 0, 'B', { fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
-        this.furnBtn = this.add.circle(0, 0, 30, 0x8b5a2b).setStrokeStyle(3, 0xc5a059).setInteractive(); this.furnText = this.add.text(0, 0, '家俱', { fontSize: '16px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
-        this.itemBtn = this.add.circle(0, 0, 30, 0x607d8b).setStrokeStyle(3, 0xc5a059).setInteractive(); this.itemText = this.add.text(0, 0, '給西', { fontSize: '16px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+        const drawOnionUiButtonSkin = (skin, config, x = 0, y = 0, pressed = false) => {
+            const colors = pressed ? config.pressed : config.normal;
+            skin.clear();
+            skin.setPosition(x, y);
+            skin.fillGradientStyle(colors[0], colors[1], colors[2], colors[3], 1);
+            skin.fillCircle(0, 0, 30);
+            skin.lineStyle(5, config.outer, 1);
+            skin.strokeCircle(0, 0, 31);
+            skin.lineStyle(2, config.inner, 0.92);
+            skin.strokeCircle(0, 0, 25);
+            skin.fillStyle(0xffffff, pressed ? 0.12 : 0.24);
+            skin.fillEllipse(-9, -12, 24, 10);
+            skin.fillStyle(0x000000, pressed ? 0.28 : 0.16);
+            skin.fillEllipse(8, 13, 30, 11);
+        };
+
+        const applyOnionUiButtonSkin = (btn, config) => {
+            const skin = this.add.graphics();
+            skin.setDepth(1);
+            btn.setAlpha(0.01);
+            btn.setDepth(3);
+            btn.__onionUiSkin = skin;
+            btn.__onionUiConfig = config;
+            btn.__onionUiPressed = false;
+
+            const originalSetPosition = btn.setPosition.bind(btn);
+            btn.setPosition = (x, y, z, w) => {
+                originalSetPosition(x, y, z, w);
+                drawOnionUiButtonSkin(skin, config, x, y, btn.__onionUiPressed);
+                return btn;
+            };
+
+            const originalSetVisible = btn.setVisible.bind(btn);
+            btn.setVisible = (visible) => {
+                originalSetVisible(visible);
+                skin.setVisible(visible);
+                return btn;
+            };
+
+            btn.setFillStyle = (color) => {
+                btn.__onionUiPressed = Array.isArray(config.activeColors) && config.activeColors.includes(color);
+                drawOnionUiButtonSkin(skin, config, btn.x, btn.y, btn.__onionUiPressed);
+                return btn;
+            };
+
+            drawOnionUiButtonSkin(skin, config, btn.x, btn.y, false);
+        };
+
+        this.btnA = this.add.circle(0, 0, 30, 0xd9534f, 0.01).setStrokeStyle(3, 0xffffff, 0.01).setInteractive(); this.txtA = this.add.text(0, 0, 'A', { fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(4).setShadow(0, 2, '#5a0806', 3, true, true);
+        this.btnB = this.add.circle(0, 0, 30, 0x0077cc, 0.01).setStrokeStyle(3, 0xffffff, 0.01).setInteractive(); this.txtB = this.add.text(0, 0, 'B', { fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(4).setShadow(0, 2, '#00335f', 3, true, true);
+        this.furnBtn = this.add.circle(0, 0, 30, 0x4b2b15, 0.01).setStrokeStyle(3, 0xe6edf2, 0.01).setInteractive(); this.furnText = this.add.text(0, 0, '家俱', { fontSize: '16px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(4).setShadow(0, 2, '#1c0d05', 3, true, true);
+        this.itemBtn = this.add.circle(0, 0, 30, 0xd4a64f, 0.01).setStrokeStyle(3, 0xffd45a, 0.01).setInteractive(); this.itemText = this.add.text(0, 0, '給西', { fontSize: '16px', color: '#4a2a07', fontStyle: 'bold' }).setOrigin(0.5).setDepth(4).setShadow(0, 0, '#fff4c2', 4, true, true);
+
+        applyOnionUiButtonSkin(this.btnA, {
+            normal: [0xff9a91, 0xe85f59, 0xb82c27, 0x6f0f0c],
+            pressed: [0xd6453f, 0xb52b27, 0x7f1410, 0x420503],
+            outer: 0xfff2e8,
+            inner: 0xffb6ae,
+            activeColors: [0xb52b27]
+        });
+        applyOnionUiButtonSkin(this.btnB, {
+            normal: [0x7bd6ff, 0x1e94e8, 0x006dbd, 0x003a74],
+            pressed: [0x2d9ad8, 0x005599, 0x003f73, 0x001d38],
+            outer: 0xe8f8ff,
+            inner: 0x9be6ff,
+            activeColors: [0x005599]
+        });
+        applyOnionUiButtonSkin(this.furnBtn, {
+            normal: [0x8a5730, 0x5b3219, 0x2b1408, 0x140803],
+            pressed: [0x5b3219, 0x35180a, 0x1d0b04, 0x090301],
+            outer: 0xe6edf2,
+            inner: 0x9ea8af,
+            activeColors: []
+        });
+        applyOnionUiButtonSkin(this.itemBtn, {
+            normal: [0xf6d39a, 0xd5a960, 0xb97834, 0x7c4318],
+            pressed: [0xd5a960, 0xb97834, 0x7c4318, 0x4b240c],
+            outer: 0xffd45a,
+            inner: 0xfff4c2,
+            activeColors: []
+        });
 
         const isRpsModalBlocking = () => !!(window.GameLogic && window.GameLogic.rpsModalActive);
 
