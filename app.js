@@ -12572,6 +12572,13 @@ if (!data.scoreHandled && data.attacker) {
         this.soloRocketRabbitShopSpeechTimer = null;
 
         try {
+            if (this.soloRocketRabbitShopInfoCardGlitchTween && this.soloRocketRabbitShopInfoCardGlitchTween.remove) {
+                this.soloRocketRabbitShopInfoCardGlitchTween.remove();
+            }
+        } catch (_) {}
+        this.soloRocketRabbitShopInfoCardGlitchTween = null;
+
+        try {
             if (this.soloRocketRabbitShopSpeechBubble && this.soloRocketRabbitShopSpeechBubble.destroy) {
                 this.soloRocketRabbitShopSpeechBubble.destroy(true);
             }
@@ -12596,28 +12603,25 @@ if (!data.scoreHandled && data.attacker) {
 
         const hasButton = !!options.buttonLabel;
         const isProductCard = !!options.productCard;
-        const bubbleW = Math.min(rect.w - 32, isProductCard ? 420 : (hasButton ? 360 : 330));
-        const bubbleH = isProductCard ? 194 : (hasButton ? 118 : 68);
+        const safeMargin = 14;
+        const bubbleW = Math.min(rect.w - safeMargin * 2, isProductCard ? 430 : (hasButton ? 360 : 340));
+        const bubbleH = isProductCard
+            ? Phaser.Math.Clamp(Math.floor(rect.h * 0.24), 154, 194)
+            : (hasButton ? Phaser.Math.Clamp(Math.floor(rect.h * 0.16), 94, 118) : 68);
 
-        const rabbit = this.soloRocketRabbitShopKeeperObj;
-        const rabbitX = rabbit && Number.isFinite(Number(rabbit.__soloRocketShopBaseX))
-            ? Number(rabbit.__soloRocketShopBaseX)
-            : rect.x + rect.w * 0.72;
-        const rabbitY = rabbit && Number.isFinite(Number(rabbit.__soloRocketShopBaseY))
-            ? Number(rabbit.__soloRocketShopBaseY)
-            : rect.y + rect.h * 0.72;
+        const minBubbleY = rect.y + bubbleH / 2 + 76;
+        const maxBubbleY = Math.max(
+            minBubbleY,
+            rect.y + rect.h - bubbleH / 2 - (isProductCard ? 178 : 122)
+        );
+        const preferredBubbleY = rect.y + bubbleH / 2 + (isProductCard ? 82 : 90);
 
         const bubbleX = Phaser.Math.Clamp(
-            rabbitX - bubbleW * 0.42,
-            rect.x + bubbleW / 2 + 12,
-            rect.x + rect.w - bubbleW / 2 - 12
+            rect.centerX,
+            rect.x + bubbleW / 2 + safeMargin,
+            rect.x + rect.w - bubbleW / 2 - safeMargin
         );
-
-        const bubbleY = Phaser.Math.Clamp(
-            rabbitY - bubbleH * 0.74,
-            rect.y + 92,
-            rect.y + rect.h - bubbleH / 2 - 96
-        );
+        const bubbleY = Phaser.Math.Clamp(preferredBubbleY, minBubbleY, maxBubbleY);
 
         const bubbleLeft = bubbleX - bubbleW / 2;
         const bubbleTop = bubbleY - bubbleH / 2;
@@ -12625,59 +12629,109 @@ if (!data.scoreHandled && data.attacker) {
         const bubble = this.add.container(0, 0).setScrollFactor(0);
         const bg = this.add.graphics();
 
-        bg.fillStyle(isProductCard ? 0xfffbdf : 0x12001f, isProductCard ? 0.94 : 0.78);
-        bg.fillRoundedRect(bubbleLeft, bubbleTop, bubbleW, bubbleH, 15);
-        bg.lineStyle(isProductCard ? 3 : 2, 0xffd36a, 0.94);
-        bg.strokeRoundedRect(bubbleLeft, bubbleTop, bubbleW, bubbleH, 15);
+        if (isProductCard) {
+            bg.fillStyle(0x7b00d8, 0.50);
+            bg.fillRoundedRect(bubbleLeft, bubbleTop, bubbleW, bubbleH, 16);
 
-        const triX = Phaser.Math.Clamp(
-            rabbitX - 10,
-            bubbleLeft + 42,
-            bubbleLeft + bubbleW - 42
-        );
+            bg.lineStyle(3, 0xf2a6ff, 0.96);
+            bg.strokeRoundedRect(bubbleLeft, bubbleTop, bubbleW, bubbleH, 16);
+            bg.lineStyle(1, 0x58f6ff, 0.78);
+            bg.strokeRoundedRect(bubbleLeft + 5, bubbleTop + 5, bubbleW - 10, bubbleH - 10, 12);
 
-        bg.fillStyle(isProductCard ? 0xfffbdf : 0x12001f, isProductCard ? 0.94 : 0.78);
-        bg.fillTriangle(triX, bubbleTop + bubbleH, triX + 22, bubbleTop + bubbleH, triX + 10, bubbleTop + bubbleH + 18);
-        bg.lineStyle(2, 0xffd36a, 0.7);
-        bg.lineBetween(triX, bubbleTop + bubbleH, triX + 10, bubbleTop + bubbleH + 18);
-        bg.lineBetween(triX + 22, bubbleTop + bubbleH, triX + 10, bubbleTop + bubbleH + 18);
+            bg.fillStyle(0xffffff, 0.10);
+            bg.fillRoundedRect(bubbleLeft + 8, bubbleTop + 8, bubbleW - 16, Math.max(18, bubbleH * 0.18), 10);
+
+            bg.lineStyle(1, 0xb85cff, 0.22);
+            for (let y = bubbleTop + 18; y < bubbleTop + bubbleH - 12; y += 9) {
+                bg.lineBetween(bubbleLeft + 12, y, bubbleLeft + bubbleW - 12, y);
+            }
+
+            bg.lineStyle(3, 0x58f6ff, 0.95);
+            const c = 18;
+            bg.lineBetween(bubbleLeft + 10, bubbleTop + c, bubbleLeft + 10, bubbleTop + 10);
+            bg.lineBetween(bubbleLeft + 10, bubbleTop + 10, bubbleLeft + c, bubbleTop + 10);
+            bg.lineBetween(bubbleLeft + bubbleW - c, bubbleTop + 10, bubbleLeft + bubbleW - 10, bubbleTop + 10);
+            bg.lineBetween(bubbleLeft + bubbleW - 10, bubbleTop + 10, bubbleLeft + bubbleW - 10, bubbleTop + c);
+            bg.lineBetween(bubbleLeft + 10, bubbleTop + bubbleH - c, bubbleLeft + 10, bubbleTop + bubbleH - 10);
+            bg.lineBetween(bubbleLeft + 10, bubbleTop + bubbleH - 10, bubbleLeft + c, bubbleTop + bubbleH - 10);
+            bg.lineBetween(bubbleLeft + bubbleW - c, bubbleTop + bubbleH - 10, bubbleLeft + bubbleW - 10, bubbleTop + bubbleH - 10);
+            bg.lineBetween(bubbleLeft + bubbleW - 10, bubbleTop + bubbleH - c, bubbleLeft + bubbleW - 10, bubbleTop + bubbleH - 10);
+        } else {
+            bg.fillStyle(0x12001f, 0.82);
+            bg.fillRoundedRect(bubbleLeft, bubbleTop, bubbleW, bubbleH, 15);
+            bg.lineStyle(2, 0xffd36a, 0.94);
+            bg.strokeRoundedRect(bubbleLeft, bubbleTop, bubbleW, bubbleH, 15);
+            bg.lineStyle(1, 0xffffff, 0.35);
+            bg.strokeRoundedRect(bubbleLeft + 4, bubbleTop + 4, bubbleW - 8, bubbleH - 8, 12);
+        }
 
         bubble.add(bg);
 
         let txt = null;
 
         if (isProductCard) {
-            const titleText = this.add.text(bubbleLeft + 16, bubbleTop + 14, options.cardTitle || '', {
-                fontSize: '16px',
+            const titleText = this.add.text(bubbleLeft + 18, bubbleTop + 13, options.cardTitle || '', {
+                fontSize: rect.w < 420 ? '14px' : '16px',
                 fontFamily: 'Arial, sans-serif',
                 fontStyle: 'bold',
-                color: '#4a2b00',
-                stroke: '#ffffff',
-                strokeThickness: 2,
-                wordWrap: { width: bubbleW - 32, useAdvancedWrap: true }
+                color: '#ffffff',
+                stroke: '#5b008f',
+                strokeThickness: 3,
+                wordWrap: { width: bubbleW - 36, useAdvancedWrap: true }
             }).setOrigin(0, 0);
+            titleText.setShadow(0, 0, '#f2a6ff', 8, true, true);
 
-            const statsText = this.add.text(bubbleLeft + 16, bubbleTop + 43, options.cardStats || '', {
-                fontSize: '13px',
+            const statsText = this.add.text(bubbleLeft + 18, bubbleTop + 42, options.cardStats || '', {
+                fontSize: rect.w < 420 ? '12px' : '13px',
                 fontFamily: 'Arial, sans-serif',
                 fontStyle: 'bold',
-                color: '#1f8f3a',
-                stroke: '#ffffff',
+                color: '#9dffca',
+                stroke: '#001b22',
                 strokeThickness: 2,
-                wordWrap: { width: bubbleW - 32, useAdvancedWrap: true }
+                wordWrap: { width: bubbleW - 36, useAdvancedWrap: true }
             }).setOrigin(0, 0);
 
-            const descText = this.add.text(bubbleLeft + 16, bubbleTop + 72, options.cardDesc || '', {
-                fontSize: '13px',
+            const descText = this.add.text(bubbleLeft + 18, bubbleTop + 70, options.cardDesc || '', {
+                fontSize: bubbleH < 170 ? '11px' : '13px',
                 fontFamily: 'Arial, sans-serif',
-                color: '#3e2723',
-                stroke: '#ffffff',
-                strokeThickness: 1,
-                lineSpacing: 4,
-                wordWrap: { width: bubbleW - 32, useAdvancedWrap: true }
+                color: '#fff7ff',
+                stroke: '#180024',
+                strokeThickness: 2,
+                lineSpacing: bubbleH < 170 ? 2 : 4,
+                wordWrap: { width: bubbleW - 36, useAdvancedWrap: true }
             }).setOrigin(0, 0);
 
-            bubble.add([titleText, statsText, descText]);
+            const scanLine = this.add.rectangle(bubbleX, bubbleTop + 23, bubbleW - 32, 2, 0x58f6ff, 0.34)
+                .setOrigin(0.5)
+                .setBlendMode(Phaser.BlendModes.ADD);
+
+            bubble.add([titleText, statsText, descText, scanLine]);
+
+            if (this.tweens) {
+                this.tweens.add({
+                    targets: scanLine,
+                    y: bubbleTop + bubbleH - 24,
+                    alpha: 0.08,
+                    duration: 620,
+                    ease: 'Sine.easeInOut',
+                    onComplete: function() {
+                        try { scanLine.destroy(); } catch (_) {}
+                    }
+                });
+
+                this.soloRocketRabbitShopInfoCardGlitchTween = this.tweens.add({
+                    targets: bubble,
+                    x: 3,
+                    y: -1,
+                    duration: 34,
+                    yoyo: true,
+                    repeat: 3,
+                    ease: 'Stepped',
+                    onComplete: function() {
+                        if (bubble && bubble.active) bubble.setPosition(0, 0);
+                    }
+                });
+            }
         } else {
             txt = this.add.text(bubbleLeft + 16, bubbleTop + 14, '', {
                 fontSize: hasButton ? '12px' : '13px',
@@ -12697,22 +12751,22 @@ if (!data.scoreHandled && data.attacker) {
             const buyW = isProductCard ? 104 : 122;
             const buyH = 34;
             const buyX = isProductCard
-                ? bubbleLeft + 16 + buyW / 2
+                ? bubbleLeft + 18 + buyW / 2
                 : bubbleX;
             const buyY = bubbleTop + bubbleH - 25;
             const canBuy = !!options.canBuy;
 
             const buyBg = this.add.graphics();
-            buyBg.fillStyle(canBuy ? 0xffffff : 0x666666, 1);
+            buyBg.fillStyle(canBuy ? 0xffffff : 0x555555, canBuy ? 0.96 : 0.82);
             buyBg.fillRoundedRect(buyX - buyW / 2, buyY - buyH / 2, buyW, buyH, 11);
-            buyBg.lineStyle(2, canBuy ? 0xffd36a : 0x999999, 1);
+            buyBg.lineStyle(2, canBuy ? 0x58f6ff : 0x999999, 1);
             buyBg.strokeRoundedRect(buyX - buyW / 2, buyY - buyH / 2, buyW, buyH, 11);
 
             const buyText = this.add.text(buyX, buyY, options.buttonLabel, {
                 fontSize: isProductCard ? '14px' : '15px',
                 fontFamily: 'Arial, sans-serif',
                 fontStyle: 'bold',
-                color: canBuy ? '#000000' : '#dddddd'
+                color: canBuy ? '#220033' : '#dddddd'
             }).setOrigin(0.5);
 
             bubble.add([buyBg, buyText]);
@@ -12733,9 +12787,9 @@ if (!data.scoreHandled && data.attacker) {
         if (this.soloRocketRabbitShopHitAreas) {
             this.soloRocketRabbitShopHitAreas.speech = {
                 x: bubbleX,
-                y: bubbleY + 6,
+                y: bubbleY,
                 w: bubbleW,
-                h: bubbleH + 32
+                h: bubbleH + 18
             };
         }
 
@@ -12795,14 +12849,38 @@ if (!data.scoreHandled && data.attacker) {
         } catch (_) {}
         this.soloRocketRabbitShopBudgetGlowTween = null;
 
+        try {
+            if (this.soloRocketRabbitShopBudgetPulseTween && this.soloRocketRabbitShopBudgetPulseTween.remove) {
+                this.soloRocketRabbitShopBudgetPulseTween.remove();
+            }
+        } catch (_) {}
+        this.soloRocketRabbitShopBudgetPulseTween = null;
+
+        try {
+            (this.soloRocketRabbitShopBudgetFxTweens || []).forEach(function(tween) {
+                try {
+                    if (tween && tween.remove) tween.remove();
+                } catch (_) {}
+            });
+        } catch (_) {}
+        this.soloRocketRabbitShopBudgetFxTweens = [];
+
+        if (this.stopSoloRocketRabbitShopkeeperHop) this.stopSoloRocketRabbitShopkeeperHop();
         if (this.clearSoloRocketRabbitSpeechBubble) this.clearSoloRocketRabbitSpeechBubble();
         if (this.stopSoloRocketRabbitShopMeteors) this.stopSoloRocketRabbitShopMeteors();
+
+        try {
+            if (this.soloRocketRabbitShopBudgetFxLayer && this.soloRocketRabbitShopBudgetFxLayer.destroy) {
+                this.soloRocketRabbitShopBudgetFxLayer.destroy(true);
+            }
+        } catch (_) {}
 
         try {
             if (this.soloRocketRabbitShopContainer) this.soloRocketRabbitShopContainer.destroy(true);
         } catch (_) {}
         this.soloRocketRabbitShopContainer = null;
         this.soloRocketRabbitShopBudgetText = null;
+        this.soloRocketRabbitShopBudgetFxLayer = null;
         this.soloRocketRabbitShopMessage = null;
         this.soloRocketRabbitShopKeeperObj = null;
         this.soloRocketRabbitShopHitAreas = null;
@@ -12838,29 +12916,77 @@ if (!data.scoreHandled && data.attacker) {
         fallbackBg.fillRect(rect.x, rect.y, rect.w, rect.h);
         fallbackBg.fillStyle(0xffd36a, 0.14).fillCircle(rect.x + rect.w * 0.82, rect.y + rect.h * 0.14, 58);
 
-        this.soloRocketRabbitShopBudgetText = this.add.text(rect.centerX, rect.y + 34,
-            `月球旅費剩餘：${this.soloRocketMoonBudgetLeft || 0}`, {
-            fontSize: '18px',
+        const currentMoonBudgetLeft = Math.max(0, Number(this.soloRocketMoonBudgetLeft || 0));
+        const budgetChanged = this.soloRocketMoonShopBudgetLastValue !== undefined &&
+            Number(this.soloRocketMoonShopBudgetLastValue) !== currentMoonBudgetLeft;
+        this.soloRocketMoonShopBudgetLastValue = currentMoonBudgetLeft;
+
+        const budgetY = rect.y + 34;
+        this.soloRocketRabbitShopBudgetFxLayer = this.add.container(0, 0).setScrollFactor(0);
+        this.soloRocketRabbitShopBudgetFxTweens = [];
+
+        for (let i = 0; i < 10; i++) {
+            const dustX = rect.centerX + Phaser.Math.Between(-118, 118);
+            const dustY = budgetY + Phaser.Math.Between(-12, 18);
+            const dust = this.add.circle(dustX, dustY, Phaser.Math.FloatBetween(1.8, 3.6), 0xffe680, Phaser.Math.FloatBetween(0.40, 0.82))
+                .setScrollFactor(0)
+                .setBlendMode(Phaser.BlendModes.ADD);
+
+            this.soloRocketRabbitShopBudgetFxLayer.add(dust);
+
+            if (this.tweens) {
+                const tween = this.tweens.add({
+                    targets: dust,
+                    x: dustX + Phaser.Math.Between(-12, 12),
+                    y: dustY + Phaser.Math.Between(-8, 8),
+                    alpha: Phaser.Math.FloatBetween(0.15, 0.55),
+                    scaleX: Phaser.Math.FloatBetween(0.7, 1.35),
+                    scaleY: Phaser.Math.FloatBetween(0.7, 1.35),
+                    duration: Phaser.Math.Between(1050, 1750),
+                    delay: Phaser.Math.Between(0, 520),
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.easeInOut'
+                });
+                this.soloRocketRabbitShopBudgetFxTweens.push(tween);
+            }
+        }
+
+        this.soloRocketRabbitShopBudgetText = this.add.text(rect.centerX, budgetY,
+            `月球旅費剩餘：${currentMoonBudgetLeft}`, {
+            fontSize: rect.w < 420 ? '16px' : '18px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
-            color: '#ffeb8a',
-            stroke: '#000000',
-            strokeThickness: 4
+            color: '#fff3a6',
+            stroke: '#5a3100',
+            strokeThickness: 5
         }).setOrigin(0.5);
 
-        this.soloRocketRabbitShopBudgetText.setShadow(0, 0, '#ffe680', 10, true, true);
+        this.soloRocketRabbitShopBudgetText.setShadow(0, 0, '#ffd84a', 16, true, true);
 
         if (this.tweens) {
             this.soloRocketRabbitShopBudgetGlowTween = this.tweens.add({
                 targets: this.soloRocketRabbitShopBudgetText,
-                alpha: 0.78,
-                scaleX: 1.035,
-                scaleY: 1.035,
-                duration: 1250,
+                alpha: 0.88,
+                scaleX: 1.025,
+                scaleY: 1.025,
+                duration: 1180,
                 yoyo: true,
                 repeat: -1,
                 ease: 'Sine.easeInOut'
             });
+
+            if (budgetChanged) {
+                this.soloRocketRabbitShopBudgetPulseTween = this.tweens.add({
+                    targets: this.soloRocketRabbitShopBudgetText,
+                    scaleX: 1.16,
+                    scaleY: 1.16,
+                    duration: 105,
+                    yoyo: true,
+                    repeat: 1,
+                    ease: 'Back.easeOut'
+                });
+            }
         }
 
         const subtitle = this.add.text(rect.centerX, rect.y + 62,
@@ -12910,15 +13036,19 @@ if (!data.scoreHandled && data.attacker) {
         const iconSize = Math.min(82, rect.w * 0.21);
         const productGap = Math.min(iconSize + 42, rect.w * 0.30);
         const productStartX = rect.centerX - productGap;
+        const productMinY = Math.min(rect.y + 225, rect.y + rect.h - 260);
+        const productMaxY = Math.max(productMinY, rect.y + rect.h - 178);
         const productY = Phaser.Math.Clamp(
-            rect.y + rect.h * 0.36,
-            rect.y + 138,
-            rect.y + rect.h - 330
+            rect.y + rect.h * 0.44,
+            productMinY,
+            productMaxY
         );
 
         const objects = [fullBg, fallbackBg];
         if (bgObj) objects.push(bgObj);
-        objects.push(meteorLayer, this.soloRocketRabbitShopBudgetText, subtitle, rabbitObj);
+        objects.push(meteorLayer);
+        if (this.soloRocketRabbitShopBudgetFxLayer) objects.push(this.soloRocketRabbitShopBudgetFxLayer);
+        objects.push(this.soloRocketRabbitShopBudgetText, subtitle, rabbitObj);
 
         this.soloRocketRabbitShopHitAreas = {
             products: [],
@@ -13042,6 +13172,10 @@ if (!data.scoreHandled && data.attacker) {
         objects.push(leaveBg, leaveText);
         shop.add(objects);
 
+        if (this.startSoloRocketRabbitShopkeeperHop) {
+            this.startSoloRocketRabbitShopkeeperHop(rect);
+        }
+
         if (this.createSoloRocketRabbitSpeechBubble) {
             if (selectedItem && selectedShopButtonOptions) {
                 this.soloRocketRabbitShopBubblesHidden = false;
@@ -13127,30 +13261,142 @@ if (!data.scoreHandled && data.attacker) {
         this.bounceSoloRocketRabbitShopkeeper();
     }
 
+    stopSoloRocketRabbitShopkeeperHop() {
+        try {
+            if (this.soloRocketRabbitShopkeeperHopTimer && this.soloRocketRabbitShopkeeperHopTimer.remove) {
+                this.soloRocketRabbitShopkeeperHopTimer.remove(false);
+            }
+        } catch (_) {}
+        this.soloRocketRabbitShopkeeperHopTimer = null;
+
+        try {
+            (this.soloRocketRabbitShopkeeperHopDelayedCalls || []).forEach(function(timer) {
+                try {
+                    if (timer && timer.remove) timer.remove(false);
+                } catch (_) {}
+            });
+        } catch (_) {}
+        this.soloRocketRabbitShopkeeperHopDelayedCalls = [];
+
+        try {
+            (this.soloRocketRabbitShopkeeperHopTweens || []).forEach(function(tween) {
+                try {
+                    if (tween && tween.remove) tween.remove();
+                } catch (_) {}
+            });
+        } catch (_) {}
+        this.soloRocketRabbitShopkeeperHopTweens = [];
+
+        try {
+            if (this.soloRocketRabbitShopkeeperBounceTween && this.soloRocketRabbitShopkeeperBounceTween.remove) {
+                this.soloRocketRabbitShopkeeperBounceTween.remove();
+            }
+        } catch (_) {}
+        this.soloRocketRabbitShopkeeperBounceTween = null;
+    }
+
+    startSoloRocketRabbitShopkeeperHop(rect = null) {
+        const rabbit = this.soloRocketRabbitShopKeeperObj;
+        if (!rabbit || !rabbit.active || !this.tweens || !this.time) return;
+
+        this.stopSoloRocketRabbitShopkeeperHop();
+
+        const safeRect = rect || this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const baseX = Number.isFinite(Number(rabbit.__soloRocketShopBaseX)) ? Number(rabbit.__soloRocketShopBaseX) : rabbit.x;
+        const baseY = Number.isFinite(Number(rabbit.__soloRocketShopBaseY)) ? Number(rabbit.__soloRocketShopBaseY) : rabbit.y;
+        const displayW = Math.max(40, Number(rabbit.displayWidth || rabbit.width || 120));
+        const leftX = Phaser.Math.Clamp(
+            safeRect.x + displayW * 0.46 + 10,
+            safeRect.x + 42,
+            Math.max(safeRect.x + 42, baseX - 24)
+        );
+        const middleX = leftX + (baseX - leftX) * 0.5;
+        const hopY = Phaser.Math.Clamp(displayW * 0.055, 8, 18);
+        const hopDuration = 220;
+        const settleDuration = 115;
+
+        this.soloRocketRabbitShopkeeperHopTweens = [];
+        this.soloRocketRabbitShopkeeperHopDelayedCalls = [];
+
+        const addStoredTween = (cfg) => {
+            const tween = this.tweens.add(cfg);
+            this.soloRocketRabbitShopkeeperHopTweens.push(tween);
+            return tween;
+        };
+
+        const runHop = (targetX, faceLeft, delay) => {
+            const timer = this.time.delayedCall(delay, function() {
+                if (!this.soloRocketRabbitShopContainer || !rabbit || !rabbit.active) return;
+
+                if (rabbit.setFlipX) rabbit.setFlipX(!!faceLeft);
+
+                addStoredTween({
+                    targets: rabbit,
+                    x: targetX,
+                    y: baseY - hopY,
+                    duration: hopDuration,
+                    ease: 'Sine.easeOut',
+                    onComplete: function() {
+                        if (!this.soloRocketRabbitShopContainer || !rabbit || !rabbit.active) return;
+                        addStoredTween({
+                            targets: rabbit,
+                            y: baseY,
+                            duration: settleDuration,
+                            ease: 'Sine.easeIn'
+                        });
+                    },
+                    callbackScope: this
+                });
+            }, [], this);
+
+            this.soloRocketRabbitShopkeeperHopDelayedCalls.push(timer);
+        };
+
+        const runCycle = () => {
+            if (!this.soloRocketRabbitShopContainer || !rabbit || !rabbit.active) return;
+            runHop(middleX, true, 0);
+            runHop(leftX, true, 430);
+            runHop(middleX, false, 860);
+            runHop(baseX, false, 1290);
+        };
+
+        if (rabbit.setPosition) rabbit.setPosition(baseX, baseY);
+        if (rabbit.setFlipX) rabbit.setFlipX(false);
+
+        runCycle();
+
+        this.soloRocketRabbitShopkeeperHopTimer = this.time.addEvent({
+            delay: 2000,
+            loop: true,
+            callback: runCycle,
+            callbackScope: this
+        });
+    }
+
     bounceSoloRocketRabbitShopkeeper() {
         const rabbit = this.soloRocketRabbitShopKeeperObj;
         if (!rabbit || !rabbit.active || !this.tweens) return;
 
-        const baseX = Number.isFinite(Number(rabbit.__soloRocketShopBaseX)) ? Number(rabbit.__soloRocketShopBaseX) : rabbit.x;
-        const baseY = Number.isFinite(Number(rabbit.__soloRocketShopBaseY)) ? Number(rabbit.__soloRocketShopBaseY) : rabbit.y;
         const baseScaleX = Number.isFinite(Number(rabbit.__soloRocketShopBaseScaleX)) ? Number(rabbit.__soloRocketShopBaseScaleX) : rabbit.scaleX;
         const baseScaleY = Number.isFinite(Number(rabbit.__soloRocketShopBaseScaleY)) ? Number(rabbit.__soloRocketShopBaseScaleY) : rabbit.scaleY;
 
-        this.tweens.killTweensOf(rabbit);
-        rabbit.setPosition(baseX, baseY);
+        try {
+            if (this.soloRocketRabbitShopkeeperBounceTween && this.soloRocketRabbitShopkeeperBounceTween.remove) {
+                this.soloRocketRabbitShopkeeperBounceTween.remove();
+            }
+        } catch (_) {}
+
         rabbit.setScale(baseScaleX, baseScaleY);
 
-        this.tweens.add({
+        this.soloRocketRabbitShopkeeperBounceTween = this.tweens.add({
             targets: rabbit,
-            y: baseY - 12,
-            scaleX: baseScaleX * 1.035,
-            scaleY: baseScaleY * 1.035,
-            duration: 95,
+            scaleX: baseScaleX * 1.045,
+            scaleY: baseScaleY * 1.045,
+            duration: 90,
             yoyo: true,
             ease: 'Sine.easeOut',
             onComplete: function() {
-                rabbit.setPosition(baseX, baseY);
-                rabbit.setScale(baseScaleX, baseScaleY);
+                if (rabbit && rabbit.active) rabbit.setScale(baseScaleX, baseScaleY);
             }
         });
     }
