@@ -4405,6 +4405,16 @@ window.updateOnlinePlayersUI = function() {
 };
 
 // 新增：啟動神龕儀式的共用函式，停止背景音樂並開始詭異音效
+window.isShrineRitualActive = function(eventData = null) {
+    const ev = eventData || (window.GameLogic ? window.GameLogic.shrineEventData : null);
+    return !!(
+        ev &&
+        ev.state &&
+        ev.state !== 'finished' &&
+        ev.state !== 'none'
+    );
+};
+
 window.startShrineRitual = function() {
     window.forceAudioNormal();
     if (window.GameLogic.phaserGame) {
@@ -4422,16 +4432,49 @@ window.startShrineRitual = function() {
 window.confirmSummon = function(isYes) {
     document.getElementById('summon-confirm-modal').style.display = 'none';
     if (!isYes) return;
-    if ((window.GameLogic.myProfile.coins || 0) < 500) return alert("馬德幣不足！無法召喚。");
-    window.GameLogic.myProfile.coins -= 500;
-    update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { coins: window.GameLogic.myProfile.coins }).catch(err => console.warn('Firebase 扣除召喚費失敗:', err));
-    let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
-    
-    update(ref(db, window.getServerRoomPath('serverEvents/summonShrine')), { time: Date.now(), callerUid: window.GameLogic.currentUser.uid, callerName: window.GameLogic.myProfile.name });
-    // 修正2：只有付費後，資料庫才會刻上 'summoned' 狀態，並以此作為入座後開啟票選的唯一觸發鑰匙
-    set(ref(db, window.getServerRoomPath('shrineEvents/current')), { state: 'summoned', startTime: Date.now() });
-    sendBubble("已發出神聖的召喚...");
-    window.startShrineRitual();
+
+    get(ref(db, window.getServerRoomPath('shrineEvents/current'))).then(snap => {
+        const ev = snap.val();
+
+        if (window.isShrineRitualActive && window.isShrineRitualActive(ev)) {
+            alert("儀式已經發起，請先入座等待，不需要再次支付。");
+            return;
+        }
+
+        if ((window.GameLogic.myProfile.coins || 0) < 500) {
+            alert("馬德幣不足！無法召喚。");
+            return;
+        }
+
+        window.GameLogic.myProfile.coins -= 500;
+        update(ref(db, `users/${window.GameLogic.currentUser.uid}`), {
+            coins: window.GameLogic.myProfile.coins
+        }).catch(err => console.warn('Firebase 扣除召喚費失敗:', err));
+
+        let coinsEl = document.getElementById("vp-coins");
+        if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
+
+        const now = Date.now();
+
+        update(ref(db, window.getServerRoomPath('serverEvents/summonShrine')), {
+            time: now,
+            callerUid: window.GameLogic.currentUser.uid,
+            callerName: window.GameLogic.myProfile.name
+        });
+
+        // 只有付費後，資料庫才會刻上 summoned 狀態，並以此作為入座後開啟票選的唯一觸發鑰匙。
+        set(ref(db, window.getServerRoomPath('shrineEvents/current')), {
+            state: 'summoned',
+            startTime: now,
+            callerUid: window.GameLogic.currentUser.uid
+        });
+
+        sendBubble("已發出神聖的召喚...");
+        window.startShrineRitual();
+    }).catch(err => {
+        console.warn('[神龕召喚] 讀取目前儀式狀態失敗：', err);
+        alert("暫時無法確認祭壇狀態，請稍後再試。");
+    });
 };
 window.attemptJoinShrine = function() {
     get(ref(window.GameLogic.db, window.getServerRoomPath('shrineEvents/current'))).then(snap => {
@@ -6583,11 +6626,25 @@ function leaveShrine() {
             (now - (window.GameLogic.onlinePlayers[uid].lastActive || 0) < 20000)
         );
         
-        // 當所有人（或最後一個有效在線玩家）離開神龕時，結束本房間神龕事件，並清空本房間神龕金幣
+        // 當所有人（或最後一個有效在線玩家）離開神龕時，結束本房間神龕事件、關閉右方倒數，並清空本房間神龕金幣。
         if (validUids.length <= 1) {
             if (window.GameLogic.shrineEventData && window.GameLogic.shrineEventData.state !== 'finished') {
-                update(ref(window.GameLogic.db, window.getServerRoomPath('shrineEvents/current')), { state: 'finished' });
+                const finishUpdates = {};
+                finishUpdates[window.getServerRoomPath('shrineEvents/current/state')] = 'finished';
+                finishUpdates[window.getServerRoomPath('serverEvents/summonShrine/time')] = 0;
+                update(ref(window.GameLogic.db), finishUpdates);
             }
+
+            window.GameLogic.globalSummonCountdown = 0;
+            if (window.globalSummonInterval) {
+                clearInterval(window.globalSummonInterval);
+                window.globalSummonInterval = null;
+            }
+
+            const forcedModal = document.getElementById('forced-summon-modal');
+            if (forcedModal) forcedModal.style.display = 'none';
+
+            if (window.updateOnlinePlayersUI) window.updateOnlinePlayersUI();
 
             get(ref(window.GameLogic.db, window.getServerRoomPath('droppedCoins'))).then(snap => {
                 let coins = snap.val() || {};
@@ -20199,6 +20256,12 @@ if (activeBubbleMsg) {
         if (this.handleShrineSeatDirectInteraction(key, f)) return true;
 
         if (this.sceneName === 'shrine' && key === 'altar') {
+            const ev = window.GameLogic ? window.GameLogic.shrineEventData : null;
+            if (window.isShrineRitualActive && window.isShrineRitualActive(ev)) {
+                sendBubble("儀式已經發起，請入座等待。");
+                return true;
+            }
+
             const modal = document.getElementById('summon-confirm-modal');
             if (modal) modal.style.display = 'block';
             return true;
