@@ -2677,6 +2677,78 @@ function createSystemUI() {
                 }
             }
 
+            /* 手機版說明書位置微調：標題圖片下移、頁碼標籤說明鍵下移、說明氣泡向下浮現 */
+            @media (max-width: 768px), (orientation: portrait) {
+                #manual-modal.manual-crayon-ui #manual-page-title {
+                    transform:translateY(60px) !important;
+                    margin-bottom:3px !important;
+                }
+
+                #manual-modal.manual-crayon-ui #manual-content {
+                    transform:translateY(60px) !important;
+                    margin-bottom:26px !important;
+                }
+
+                #manual-modal.manual-crayon-ui #manual-page-indicator {
+                    bottom:-82px !important;
+                }
+
+                #manual-modal.manual-crayon-ui .manual-page-info-row {
+                    transform:translateY(120px) !important;
+                    margin:0 auto 0 auto !important;
+                }
+
+                #manual-modal.manual-crayon-ui #manual-page-desc.manual-desc-popover {
+                    top:calc(36vh + 212px) !important;
+                    bottom:auto !important;
+                    transform:translateX(-50%) !important;
+                    width:min(78%, 520px) !important;
+                    max-height:min(20vh, 160px) !important;
+                }
+
+                #manual-modal.manual-crayon-ui #manual-page-desc.manual-desc-popover::after {
+                    top:-9px !important;
+                    bottom:auto !important;
+                    border-right:0 !important;
+                    border-bottom:0 !important;
+                    border-left:2px solid rgba(255,255,255,0.86) !important;
+                    border-top:2px solid rgba(255,255,255,0.86) !important;
+                    box-shadow:-4px -4px 8px rgba(0,0,0,0.04) !important;
+                }
+
+                #manual-modal.manual-crayon-ui #manual-page-desc.manual-desc-popover.show {
+                    display:block !important;
+                    animation:manual-desc-bubble-drop-mobile 0.2s cubic-bezier(0.18, 0.9, 0.28, 1) forwards !important;
+                }
+
+                #manual-modal.manual-crayon-ui #manual-page-desc.manual-desc-popover.hiding {
+                    display:block !important;
+                    animation:manual-desc-bubble-drop-fade-mobile 0.16s ease-in forwards !important;
+                }
+            }
+
+            @keyframes manual-desc-bubble-drop-mobile {
+                0% {
+                    opacity:0;
+                    transform:translate(-50%, -16px) scale(0.94);
+                }
+                100% {
+                    opacity:1;
+                    transform:translate(-50%, 6px) scale(1);
+                }
+            }
+
+            @keyframes manual-desc-bubble-drop-fade-mobile {
+                0% {
+                    opacity:1;
+                    transform:translate(-50%, 6px) scale(1);
+                }
+                100% {
+                    opacity:0;
+                    transform:translate(-50%, 22px) scale(0.94);
+                }
+            }
+
 
             #chat-section {
                 position:fixed !important;
