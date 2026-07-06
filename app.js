@@ -1324,6 +1324,320 @@ function createSystemUI() {
                 border-bottom:2px solid rgba(230,235,240,0.88) !important;
                 text-shadow:0 2px 3px rgba(0,0,0,0.75), 0 0 8px rgba(230,235,240,0.55) !important;
             }
+
+            /* 第三包：說明書奶茶蠟筆手冊＋目錄主題視覺 */
+            #manual-modal.manual-crayon-ui {
+                background:#d0aa7a !important;
+                border:3px solid rgba(112, 72, 36, 0.86) !important;
+                box-shadow:0 12px 26px rgba(0,0,0,0.45), inset 0 0 34px rgba(115,70,32,0.24) !important;
+                color:#4a2d18 !important;
+                overflow:hidden !important;
+                position:fixed !important;
+            }
+            #manual-modal.manual-crayon-ui::before {
+                content:"";
+                position:absolute;
+                inset:-8%;
+                background:
+                    repeating-linear-gradient(8deg, rgba(92,58,28,0.13) 0 2px, transparent 3px 18px),
+                    repeating-linear-gradient(-14deg, rgba(255,236,196,0.11) 0 1px, transparent 2px 22px),
+                    radial-gradient(circle at 18% 22%, rgba(255,232,190,0.18), transparent 28%),
+                    radial-gradient(circle at 82% 70%, rgba(112,72,36,0.12), transparent 32%);
+                opacity:0.86;
+                pointer-events:none;
+                z-index:0;
+                animation:manual-crayon-drift 7.5s ease-in-out infinite alternate;
+            }
+            #manual-modal.manual-crayon-ui::after {
+                content:"";
+                position:absolute;
+                inset:0;
+                background:linear-gradient(135deg, rgba(255,246,225,0.16), transparent 42%, rgba(96,58,30,0.09));
+                pointer-events:none;
+                z-index:0;
+                animation:manual-paper-breathe 5.8s ease-in-out infinite alternate;
+            }
+            #manual-modal.manual-crayon-ui > * {
+                position:relative;
+                z-index:1;
+            }
+            #manual-modal.manual-crayon-ui h3 {
+                color:#4f321d !important;
+                text-shadow:0 1px 0 rgba(255,238,206,0.85), 0 0 8px rgba(126,75,36,0.22);
+            }
+            @keyframes manual-crayon-drift {
+                0% { transform:translate(-2px, 1px) rotate(-0.18deg); opacity:0.78; }
+                50% { transform:translate(2px, -1px) rotate(0.14deg); opacity:0.9; }
+                100% { transform:translate(-1px, 2px) rotate(-0.08deg); opacity:0.84; }
+            }
+            @keyframes manual-paper-breathe {
+                0% { opacity:0.44; }
+                100% { opacity:0.72; }
+            }
+            .manual-mode-btn {
+                width:34px;
+                height:34px;
+                border-radius:50%;
+                border:2px solid rgba(92,58,28,0.7);
+                background:rgba(255,238,206,0.82);
+                color:#4a2d18;
+                font-size:17px;
+                cursor:pointer;
+                box-shadow:0 2px 6px rgba(0,0,0,0.2), inset 0 0 8px rgba(255,255,255,0.35);
+                touch-action:manipulation;
+            }
+            .manual-mode-btn.active {
+                background:#6b3f1f;
+                color:#fff1d0;
+                box-shadow:0 0 12px rgba(255,232,160,0.75), inset 0 0 8px rgba(0,0,0,0.25);
+            }
+            .manual-thumb-grid {
+                display:grid;
+                grid-template-columns:repeat(2, minmax(0, 1fr));
+                gap:12px;
+                align-items:start;
+            }
+            .manual-thumb-card {
+                background:rgba(255,241,215,0.78);
+                border:2px solid rgba(112,72,36,0.44);
+                border-radius:12px;
+                padding:8px;
+                box-shadow:0 4px 10px rgba(0,0,0,0.16);
+                cursor:pointer;
+                text-align:left;
+            }
+            .manual-thumb-card img {
+                width:100%;
+                height:112px;
+                object-fit:cover;
+                border-radius:8px;
+                border:1px solid rgba(112,72,36,0.45);
+                background:#f4dfbe;
+            }
+            .manual-thumb-title {
+                margin-top:6px;
+                font-size:12px;
+                font-weight:bold;
+                color:#4a2d18;
+                line-height:1.35;
+                word-break:break-word;
+            }
+            .manual-category-tabs {
+                display:grid;
+                grid-template-columns:repeat(2, minmax(0, 1fr));
+                gap:8px;
+                margin-bottom:12px;
+            }
+            .manual-category-tab {
+                min-height:38px;
+                border-radius:999px;
+                border:1px solid rgba(92,58,28,0.55);
+                background:rgba(255,238,206,0.82);
+                color:#4a2d18;
+                font-size:13px;
+                font-weight:bold;
+                cursor:pointer;
+                padding:6px 8px;
+                touch-action:manipulation;
+            }
+            .manual-category-tab.active {
+                background:#6b3f1f;
+                color:#fff1d0;
+                box-shadow:0 0 10px rgba(255,232,160,0.65);
+            }
+            .manual-admin-panel {
+                background:rgba(255,238,206,0.62);
+                border:2px dashed rgba(92,58,28,0.46);
+                border-radius:12px;
+                padding:12px;
+                text-align:left;
+            }
+            .manual-admin-panel input,
+            .manual-admin-panel select {
+                width:100%;
+                box-sizing:border-box;
+                padding:8px;
+                margin:5px 0 8px 0;
+                border:1px solid rgba(92,58,28,0.55);
+                border-radius:8px;
+                background:#fff7e8;
+                color:#4a2d18;
+                font-family:inherit;
+            }
+            .modal.catalog-theme-opening {
+                animation:catalog-theme-fade-in 0.25s ease-out forwards !important;
+            }
+            .modal.catalog-theme-closing {
+                animation:catalog-theme-fade-out 0.25s ease-in forwards !important;
+                pointer-events:none !important;
+            }
+            @keyframes catalog-theme-fade-in {
+                0% { opacity:0; transform:translate(-50%, -50%) scale(0.96); }
+                100% { opacity:1; transform:translate(-50%, -50%) scale(1); }
+            }
+            @keyframes catalog-theme-fade-out {
+                0% { opacity:1; transform:translate(-50%, -50%) scale(1); }
+                100% { opacity:0; transform:translate(-50%, -50%) scale(0.96); }
+            }
+            #furniture-catalog-modal.shrine-taiji-ui {
+                background:radial-gradient(circle at center, rgba(255,255,255,0.12), rgba(0,0,0,0.92) 74%) !important;
+                border:3px solid rgba(245,245,245,0.9) !important;
+                color:#ffffff !important;
+                box-shadow:0 0 22px rgba(255,255,255,0.35), 0 0 26px rgba(0,0,0,0.88), inset 0 0 32px rgba(255,255,255,0.13) !important;
+                overflow:hidden !important;
+            }
+            #furniture-catalog-modal.shrine-taiji-ui::before {
+                content:"☯";
+                position:absolute;
+                left:50%;
+                top:50%;
+                transform:translate(-50%, -50%);
+                font-size:260px;
+                line-height:1;
+                color:rgba(255,255,255,0.32);
+                text-shadow:0 0 22px rgba(255,255,255,0.42), 0 0 28px rgba(0,0,0,0.95);
+                pointer-events:none;
+                z-index:0;
+                animation:shrine-taiji-spin 14s linear infinite;
+            }
+            #furniture-catalog-modal.shrine-taiji-ui::after {
+                content:"";
+                position:absolute;
+                inset:-30%;
+                background:radial-gradient(circle, rgba(255,255,255,0.55) 0 1px, transparent 3px), radial-gradient(circle, rgba(0,0,0,0.9) 0 2px, transparent 5px);
+                background-size:48px 48px, 76px 76px;
+                pointer-events:none;
+                z-index:0;
+                animation:shrine-taiji-pulse 2.8s ease-out infinite;
+            }
+            @keyframes shrine-taiji-spin {
+                100% { transform:translate(-50%, -50%) rotate(360deg); }
+            }
+            @keyframes shrine-taiji-pulse {
+                0% { transform:scale(0.55); opacity:0; }
+                35% { opacity:0.58; }
+                100% { transform:scale(1.22); opacity:0; }
+            }
+            #furniture-catalog-modal.shrine-taiji-ui > :not(.furniture-wood-fairy-field),
+            #furniture-catalog-modal.room-roof-ui > :not(.furniture-wood-fairy-field) {
+                position:relative;
+                z-index:2;
+            }
+            #furniture-catalog-modal.shrine-taiji-ui .furniture-wood-fairy-field,
+            #furniture-catalog-modal.room-roof-ui .furniture-wood-fairy-field {
+                position:absolute !important;
+                inset:0 !important;
+                width:100% !important;
+                height:100% !important;
+                pointer-events:none !important;
+                overflow:hidden !important;
+                z-index:1 !important;
+            }
+            #furniture-catalog-modal.shrine-taiji-ui .furniture-wood-fairy-field span {
+                position:absolute !important;
+                left:50% !important;
+                top:50% !important;
+                bottom:auto !important;
+                width:8px !important;
+                height:8px !important;
+                border-radius:50%;
+                background:var(--taiji-color, #ffffff) !important;
+                box-shadow:0 0 10px var(--taiji-color, #ffffff), 0 0 20px var(--taiji-color, #ffffff);
+                opacity:0;
+                animation:shrine-taiji-dot 2.5s ease-out infinite !important;
+                animation-delay:var(--fairy-delay, 0s) !important;
+            }
+            #furniture-catalog-modal.shrine-taiji-ui .furniture-wood-fairy-field span:nth-child(odd) { --taiji-color:#ffffff; }
+            #furniture-catalog-modal.shrine-taiji-ui .furniture-wood-fairy-field span:nth-child(even) { --taiji-color:#050505; }
+            @keyframes shrine-taiji-dot {
+                0% { transform:translate(-50%, -50%) scale(0.2); opacity:0; }
+                20% { opacity:0.9; }
+                100% { transform:translate(calc(-50% + var(--fairy-mid-x, 45px) * 2.1), calc(-50% + var(--fairy-end-x, -35px) * 2.1)) scale(0.1); opacity:0; }
+            }
+            #furniture-catalog-modal.shrine-taiji-ui h3,
+            #furniture-catalog-modal.shrine-taiji-ui .catalog-item,
+            #furniture-catalog-modal.shrine-taiji-ui button {
+                position:relative;
+                z-index:2;
+            }
+            #furniture-catalog-modal.shrine-taiji-ui h3 {
+                color:#ffffff !important;
+                border-bottom:2px solid rgba(255,255,255,0.72) !important;
+                text-shadow:0 0 8px #fff, 0 0 14px #000;
+            }
+            #furniture-catalog-modal.shrine-taiji-ui .catalog-item {
+                background:rgba(0,0,0,0.72) !important;
+                color:#fff !important;
+                border:1px solid rgba(255,255,255,0.72) !important;
+                box-shadow:0 0 12px rgba(255,255,255,0.24), inset 0 0 14px rgba(255,255,255,0.08);
+            }
+            #furniture-catalog-modal.room-roof-ui {
+                background:linear-gradient(180deg, #8f4a43 0%, #6d332f 100%) !important;
+                border:3px solid rgba(205,152,118,0.9) !important;
+                color:#fff3e6 !important;
+                box-shadow:0 10px 24px rgba(0,0,0,0.55), inset 0 0 26px rgba(82,31,28,0.78) !important;
+                overflow:hidden !important;
+            }
+            #furniture-catalog-modal.room-roof-ui::before {
+                content:"";
+                position:absolute;
+                inset:-6%;
+                background:
+                    repeating-linear-gradient(135deg, rgba(255,216,172,0.16) 0 8px, transparent 9px 32px),
+                    repeating-linear-gradient(45deg, rgba(92,31,28,0.25) 0 10px, transparent 11px 34px),
+                    linear-gradient(180deg, rgba(255,205,160,0.12), rgba(70,24,22,0.24));
+                pointer-events:none;
+                z-index:0;
+                animation:room-roof-drift 6.6s ease-in-out infinite alternate;
+            }
+            @keyframes room-roof-drift {
+                0% { transform:translate(0,0); }
+                100% { transform:translate(-8px,6px); }
+            }
+            #furniture-catalog-modal.room-roof-ui .furniture-wood-fairy-field span {
+                position:absolute !important;
+                top:var(--fairy-top, -20px) !important;
+                left:calc(100% + 22px) !important;
+                bottom:auto !important;
+                width:8px !important;
+                height:8px !important;
+                border-radius:50%;
+                background:radial-gradient(circle, #fff 0%, #ffd98a 42%, rgba(255,217,138,0) 74%) !important;
+                box-shadow:0 0 10px #ffd98a, 0 0 18px rgba(255,255,255,0.75);
+                opacity:0;
+                animation:room-roof-spark-hop var(--fairy-speed, 5.8s) ease-in-out infinite !important;
+                animation-delay:var(--fairy-delay, 0s) !important;
+            }
+            #furniture-catalog-modal.room-roof-ui .furniture-wood-fairy-field span:nth-child(1) { --fairy-top:4%; }
+            #furniture-catalog-modal.room-roof-ui .furniture-wood-fairy-field span:nth-child(2) { --fairy-top:10%; }
+            #furniture-catalog-modal.room-roof-ui .furniture-wood-fairy-field span:nth-child(3) { --fairy-top:18%; }
+            #furniture-catalog-modal.room-roof-ui .furniture-wood-fairy-field span:nth-child(4) { --fairy-top:26%; }
+            #furniture-catalog-modal.room-roof-ui .furniture-wood-fairy-field span:nth-child(5) { --fairy-top:34%; }
+            #furniture-catalog-modal.room-roof-ui .furniture-wood-fairy-field span:nth-child(6) { --fairy-top:42%; }
+            #furniture-catalog-modal.room-roof-ui .furniture-wood-fairy-field span:nth-child(7) { --fairy-top:50%; }
+            #furniture-catalog-modal.room-roof-ui .furniture-wood-fairy-field span:nth-child(8) { --fairy-top:58%; }
+            #furniture-catalog-modal.room-roof-ui .furniture-wood-fairy-field span:nth-child(9) { --fairy-top:66%; }
+            #furniture-catalog-modal.room-roof-ui .furniture-wood-fairy-field span:nth-child(10) { --fairy-top:74%; }
+            #furniture-catalog-modal.room-roof-ui .furniture-wood-fairy-field span:nth-child(11) { --fairy-top:82%; }
+            #furniture-catalog-modal.room-roof-ui .furniture-wood-fairy-field span:nth-child(12) { --fairy-top:90%; }
+            @keyframes room-roof-spark-hop {
+                0% { transform:translate(0,0) scale(0.42); opacity:0; }
+                12% { opacity:0.95; }
+                35% { transform:translate(-95px, 64px) scale(1.1); opacity:1; }
+                58% { transform:translate(-185px, 118px) scale(0.8); opacity:0.85; }
+                100% { transform:translate(-330px, 220px) scale(0.28); opacity:0; }
+            }
+            #furniture-catalog-modal.room-roof-ui h3 {
+                color:#fff3e6 !important;
+                border-bottom:2px solid rgba(255,220,178,0.7) !important;
+                text-shadow:0 2px 2px rgba(0,0,0,0.72), 0 0 8px rgba(255,216,172,0.52);
+            }
+            #furniture-catalog-modal.room-roof-ui .catalog-item {
+                background:linear-gradient(180deg, rgba(145,74,63,0.92), rgba(95,42,36,0.95)) !important;
+                color:#fff3e6 !important;
+                border:1px solid rgba(255,216,172,0.78) !important;
+                box-shadow:inset 0 0 12px rgba(60,22,18,0.62), 0 5px 12px rgba(0,0,0,0.28);
+            }
             .modal.modal-switch-exit {
                 animation:modal-switch-exit 0.25s ease-in forwards !important;
                 pointer-events:none !important;
@@ -1566,7 +1880,7 @@ function createSystemUI() {
             </div>
             <h3 id="catalog-title">📦 家俱目錄</h3>
             <div id="catalog-list" class="catalog-grid"></div>
-            <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('furniture-catalog-modal').style.display='none'">關閉</button>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="window.closeFurnitureCatalogModal ? window.closeFurnitureCatalogModal() : document.getElementById('furniture-catalog-modal').style.display='none'">關閉</button>
         </div>
         <div id="fridge-modal" class="modal"><h3>❄️ 公用大冰箱</h3><p style="color:#888; font-size: 14px;">冰箱目前空空如也... 等待下次採買中</p><button class="close-modal-btn btn-primary" onclick="document.getElementById('fridge-modal').style.display='none'">關上冰箱</button></div>
         <div id="memory-modal" class="modal">
@@ -1609,11 +1923,41 @@ function createSystemUI() {
             </div>
         </div>
 
-        <div id="manual-modal" class="modal" style="width: 90%; max-width: none; height: 90vh; max-height: none; top: 5%; left: 5%; transform: none; box-sizing: border-box; z-index: 260;">
-            <h3 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">📖 說明書</h3>
-            <div id="manual-content" style="display:flex; justify-content:center; align-items:center; height: 60vh; position: relative;"><button id="manual-prev-btn" class="btn-secondary" style="position:absolute; left:0; z-index:10; font-size:24px; padding:10px 15px;">&lt;</button><img id="manual-img-display" onclick="window.openFullscreen(this.src)" src="" alt="目前尚無說明書內容" style="max-width:80%; max-height:100%; object-fit:contain; border:1px solid var(--mucha-gold); border-radius:8px; cursor: pointer;"><button id="manual-next-btn" class="btn-secondary" style="position:absolute; right:0; z-index:10; font-size:24px; padding:10px 15px;">&gt;</button><div id="manual-page-indicator" style="position:absolute; bottom: -30px; text-align:center; width:100%; font-weight:bold; color:var(--mucha-brown);">0 / 0</div></div>
-            <div id="manual-admin-area" style="display:none; margin-top: 50px; border-top:2px dashed var(--mucha-gold); padding-top:15px; text-align:center;"><input type="file" id="manual-file" accept="image/*" style="margin-bottom: 10px;"><br><button class="btn-primary" onclick="window.uploadManualPage()">上傳新頁面</button><button class="btn-danger" onclick="window.deleteManualPage()">刪除此頁</button><div style="margin-top: 10px;"><button class="btn-secondary" onclick="window.moveManualPage(-1)">前移頁面</button><button class="btn-secondary" onclick="window.moveManualPage(1)">後移頁面</button></div></div>
-            <button class="close-modal-btn btn-secondary" style="margin-top: 30px; width: 100%;" onclick="document.getElementById('manual-modal').style.display='none'">關閉說明書</button>
+        <div id="manual-modal" class="modal manual-crayon-ui" style="width: 90%; max-width: none; height: 90vh; max-height: none; top: 5%; left: 5%; transform: none; box-sizing: border-box; z-index: 260;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; border-bottom: 2px solid rgba(92,58,28,0.55); padding-bottom: 10px; margin-bottom: 10px;">
+                <h3 style="margin:0; color: var(--mucha-green); border-bottom: none; padding-bottom: 0;">📖 說明書</h3>
+                <div id="manual-mode-switcher" style="display:flex; gap:6px; flex-shrink:0;">
+                    <button id="manual-mode-single" class="manual-mode-btn active" title="單頁翻閱" onclick="window.setManualMode('single')">📄</button>
+                    <button id="manual-mode-thumbs" class="manual-mode-btn" title="全部縮圖" onclick="window.setManualMode('thumbs')">▦</button>
+                    <button id="manual-mode-tags" class="manual-mode-btn" title="分類標籤" onclick="window.setManualMode('tags')">🏷️</button>
+                </div>
+            </div>
+            <div id="manual-page-title" style="font-weight:bold; color:#4a2d18; text-shadow:0 1px 0 rgba(255,238,206,0.75); margin-bottom:8px; min-height:20px; text-align:center;">未命名說明頁</div>
+            <div id="manual-single-view" style="display:block;">
+                <div id="manual-content" style="display:flex; justify-content:center; align-items:center; height: 58vh; position: relative;"><button id="manual-prev-btn" class="btn-secondary" style="position:absolute; left:0; z-index:10; font-size:24px; padding:10px 15px;">&lt;</button><img id="manual-img-display" onclick="window.openFullscreen(this.src)" src="" alt="目前尚無說明書內容" style="max-width:80%; max-height:100%; object-fit:contain; border:2px solid rgba(92,58,28,0.5); border-radius:10px; cursor: pointer; background:#f4dfbe; box-shadow:0 6px 14px rgba(0,0,0,0.18);"><button id="manual-next-btn" class="btn-secondary" style="position:absolute; right:0; z-index:10; font-size:24px; padding:10px 15px;">&gt;</button><div id="manual-page-indicator" style="position:absolute; bottom: -30px; text-align:center; width:100%; font-weight:bold; color:var(--mucha-brown);">0 / 0</div></div>
+            </div>
+            <div id="manual-thumb-view" style="display:none; max-height:60vh; overflow-y:auto; overflow-x:hidden; padding:4px; -webkit-overflow-scrolling:touch;"></div>
+            <div id="manual-category-view" style="display:none; max-height:60vh; overflow-y:auto; overflow-x:hidden; padding:4px; -webkit-overflow-scrolling:touch;">
+                <div id="manual-category-tabs" class="manual-category-tabs"></div>
+                <div id="manual-category-pages"></div>
+            </div>
+            <div id="manual-admin-area" class="manual-admin-panel" style="display:none; margin-top: 42px;">
+                <div style="font-weight:bold; color:#5b351d; margin-bottom:8px; text-align:center;">管理者設定</div>
+                <label style="font-size:12px; font-weight:bold;">目前頁面標題</label>
+                <input type="text" id="manual-title-input" placeholder="輸入這一頁的標題">
+                <label style="font-size:12px; font-weight:bold;">目前頁面分類</label>
+                <select id="manual-category-select"></select>
+                <button class="btn-primary" style="width:100%; margin:4px 0 10px 0;" onclick="window.updateManualPageMeta()">儲存目前頁面標題與分類</button>
+                <label style="font-size:12px; font-weight:bold;">新增／改名分類</label>
+                <input type="text" id="manual-category-name-input" placeholder="輸入分類名稱，例如：大廳操作">
+                <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+                    <button class="btn-primary" onclick="window.createManualCategory()">新增分類</button>
+                    <button class="btn-secondary" onclick="window.renameManualCategory()">改名分類</button>
+                </div>
+                <hr style="border:1px dashed rgba(92,58,28,0.35); margin:12px 0;">
+                <input type="file" id="manual-file" accept="image/*" style="margin-bottom: 10px;"><br><button class="btn-primary" onclick="window.uploadManualPage()">上傳新頁面</button><button class="btn-danger" onclick="window.deleteManualPage()">刪除此頁</button><div style="margin-top: 10px;"><button class="btn-secondary" onclick="window.moveManualPage(-1)">前移頁面</button><button class="btn-secondary" onclick="window.moveManualPage(1)">後移頁面</button></div>
+            </div>
+            <button class="close-modal-btn btn-secondary" style="margin-top: 18px; width: 100%;" onclick="document.getElementById('manual-modal').style.display='none'">關閉說明書</button>
         </div>
         
         <div id="portal-modal" class="modal" style="z-index: 260; padding: 0; width: 280px; height: 440px; box-sizing: border-box;">
@@ -2437,8 +2781,203 @@ window.renderLeaderboard = function(offset) {
 // ===================================
 
 window.manualPages = []; window.currentManualIndex = 0;
-window.openManualModal = function() { document.getElementById('manual-modal').style.display = 'block'; window.currentManualIndex = 0; if (window.GameLogic.currentUser && (window.GameLogic.currentUser.email === 'kerojjj777@gmail.com' || window.GameLogic.currentUser.email === 'kerojjj777@hotmail.com' || window.GameLogic.currentUser.email === 'onion@gmail.com')) { document.getElementById('manual-admin-area').style.display = 'block'; } else { document.getElementById('manual-admin-area').style.display = 'none'; } window.renderManualPage(); };
-window.renderManualPage = function() { const imgEl = document.getElementById('manual-img-display'); const indEl = document.getElementById('manual-page-indicator'); if (window.manualPages.length === 0) { imgEl.src = ''; imgEl.alt = '目前尚無說明書內容'; indEl.innerText = '0 / 0'; return; } if (window.currentManualIndex < 0) window.currentManualIndex = 0; if (window.currentManualIndex >= window.manualPages.length) window.currentManualIndex = window.manualPages.length - 1; let page = window.manualPages[window.currentManualIndex]; imgEl.src = page.imgBase64; indEl.innerText = `${window.currentManualIndex + 1} / ${window.manualPages.length}`; };
+window.manualViewMode = 'single';
+window.manualCategories = {};
+window.selectedManualCategoryId = 'uncategorized';
+
+window.isManualAdmin = function() {
+    const user = window.GameLogic && window.GameLogic.currentUser ? window.GameLogic.currentUser : null;
+    const email = user && user.email ? user.email.toLowerCase() : '';
+    return email === 'onion@gmail.com' || email === 'kerojjj777@gmail.com';
+};
+
+window.escapeManualHtml = function(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+};
+
+window.getManualPageTitle = function(page, idx = null) {
+    const title = page && page.title ? String(page.title).trim() : '';
+    if (title) return title;
+    if (idx !== null && idx !== undefined) return `未命名說明頁 ${Number(idx) + 1}`;
+    return '未命名說明頁';
+};
+
+window.getManualCategoryName = function(categoryId) {
+    if (!categoryId || categoryId === 'uncategorized') return '未分類';
+    const item = window.manualCategories && window.manualCategories[categoryId] ? window.manualCategories[categoryId] : null;
+    return item && item.name ? item.name : '未分類';
+};
+
+window.getManualCategoryOptions = function() {
+    const list = [{ id: 'uncategorized', name: '未分類', timestamp: 0 }];
+    const data = window.manualCategories || {};
+    Object.keys(data).forEach(id => {
+        if (!id || id === 'uncategorized') return;
+        const item = data[id] || {};
+        list.push({
+            id,
+            name: item.name || '未命名分類',
+            timestamp: Number(item.timestamp || 0)
+        });
+    });
+    return list.sort((a, b) => {
+        if (a.id === 'uncategorized') return -1;
+        if (b.id === 'uncategorized') return 1;
+        return (a.timestamp || 0) - (b.timestamp || 0);
+    });
+};
+
+window.openManualModal = function() {
+    const modal = document.getElementById('manual-modal');
+    const adminArea = document.getElementById('manual-admin-area');
+    if (modal) modal.style.display = 'block';
+    window.currentManualIndex = 0;
+    window.manualViewMode = 'single';
+    if (adminArea) adminArea.style.display = window.isManualAdmin() ? 'block' : 'none';
+    window.renderManualPage();
+};
+
+window.setManualMode = function(mode) {
+    if (!['single', 'thumbs', 'tags'].includes(mode)) mode = 'single';
+    window.manualViewMode = mode;
+    window.renderManualPage();
+};
+
+window.jumpToManualPage = function(idx) {
+    const total = Array.isArray(window.manualPages) ? window.manualPages.length : 0;
+    if (total <= 0) return;
+    window.currentManualIndex = Phaser.Math.Clamp(Number(idx || 0), 0, total - 1);
+    window.manualViewMode = 'single';
+    window.renderManualPage();
+};
+
+window.renderManualAdminFields = function() {
+    const adminArea = document.getElementById('manual-admin-area');
+    if (!adminArea) return;
+
+    const isAdmin = window.isManualAdmin();
+    adminArea.style.display = isAdmin ? 'block' : 'none';
+    if (!isAdmin) return;
+
+    const page = window.manualPages[window.currentManualIndex] || null;
+    const titleInput = document.getElementById('manual-title-input');
+    const categorySelect = document.getElementById('manual-category-select');
+
+    if (titleInput) titleInput.value = page ? (page.title || '') : '';
+
+    if (categorySelect) {
+        const currentCategoryId = page && page.categoryId ? page.categoryId : 'uncategorized';
+        categorySelect.innerHTML = window.getManualCategoryOptions().map(cat => {
+            const selected = cat.id === currentCategoryId ? 'selected' : '';
+            return `<option value="${window.escapeManualHtml(cat.id)}" ${selected}>${window.escapeManualHtml(cat.name)}</option>`;
+        }).join('');
+    }
+};
+
+window.renderManualThumbCards = function(pages, targetEl) {
+    if (!targetEl) return;
+    const sourcePages = Array.isArray(pages) ? pages : [];
+
+    if (sourcePages.length === 0) {
+        targetEl.innerHTML = `<div style="text-align:center; color:#5b351d; font-weight:bold; padding:20px;">目前沒有說明頁</div>`;
+        return;
+    }
+
+    targetEl.innerHTML = `<div class="manual-thumb-grid">${sourcePages.map(item => {
+        const page = item.page || item;
+        const idx = item.index !== undefined ? item.index : window.manualPages.indexOf(page);
+        const title = window.getManualPageTitle(page, idx);
+        return `<div class="manual-thumb-card" onclick="window.jumpToManualPage(${idx})">
+            <img src="${page.imgBase64 || ''}" alt="${window.escapeManualHtml(title)}">
+            <div class="manual-thumb-title">${window.escapeManualHtml(title)}</div>
+        </div>`;
+    }).join('')}</div>`;
+};
+
+window.renderManualCategoryMode = function() {
+    const tabsEl = document.getElementById('manual-category-tabs');
+    const pagesEl = document.getElementById('manual-category-pages');
+    if (!tabsEl || !pagesEl) return;
+
+    const cats = window.getManualCategoryOptions();
+    if (!cats.some(cat => cat.id === window.selectedManualCategoryId)) {
+        window.selectedManualCategoryId = 'uncategorized';
+    }
+
+    tabsEl.innerHTML = cats.map(cat => {
+        const active = cat.id === window.selectedManualCategoryId ? 'active' : '';
+        return `<button class="manual-category-tab ${active}" onclick="window.selectedManualCategoryId='${window.escapeManualHtml(cat.id)}'; window.renderManualPage();">${window.escapeManualHtml(cat.name)}</button>`;
+    }).join('');
+
+    const selectedId = window.selectedManualCategoryId || 'uncategorized';
+    const filtered = window.manualPages
+        .map((page, index) => ({ page, index }))
+        .filter(item => (item.page.categoryId || 'uncategorized') === selectedId);
+
+    window.renderManualThumbCards(filtered, pagesEl);
+};
+
+window.renderManualPage = function() {
+    const imgEl = document.getElementById('manual-img-display');
+    const indEl = document.getElementById('manual-page-indicator');
+    const titleEl = document.getElementById('manual-page-title');
+    const singleView = document.getElementById('manual-single-view');
+    const thumbView = document.getElementById('manual-thumb-view');
+    const categoryView = document.getElementById('manual-category-view');
+
+    ['single', 'thumbs', 'tags'].forEach(mode => {
+        const btn = document.getElementById(`manual-mode-${mode === 'thumbs' ? 'thumbs' : mode === 'tags' ? 'tags' : 'single'}`);
+        if (btn) btn.classList.toggle('active', window.manualViewMode === mode);
+    });
+
+    if (singleView) singleView.style.display = window.manualViewMode === 'single' ? 'block' : 'none';
+    if (thumbView) thumbView.style.display = window.manualViewMode === 'thumbs' ? 'block' : 'none';
+    if (categoryView) categoryView.style.display = window.manualViewMode === 'tags' ? 'block' : 'none';
+
+    const total = Array.isArray(window.manualPages) ? window.manualPages.length : 0;
+    if (total === 0) {
+        if (imgEl) {
+            imgEl.src = '';
+            imgEl.alt = '目前尚無說明書內容';
+        }
+        if (indEl) indEl.innerText = '0 / 0';
+        if (titleEl) titleEl.innerText = '目前尚無說明書內容';
+        if (thumbView) window.renderManualThumbCards([], thumbView);
+        if (categoryView) window.renderManualCategoryMode();
+        window.renderManualAdminFields();
+        return;
+    }
+
+    if (window.currentManualIndex < 0) window.currentManualIndex = 0;
+    if (window.currentManualIndex >= total) window.currentManualIndex = total - 1;
+
+    const page = window.manualPages[window.currentManualIndex];
+    const pageTitle = window.getManualPageTitle(page, window.currentManualIndex);
+    const categoryName = window.getManualCategoryName(page.categoryId || 'uncategorized');
+
+    if (imgEl) {
+        imgEl.src = page.imgBase64 || '';
+        imgEl.alt = pageTitle;
+    }
+    if (indEl) indEl.innerText = `${window.currentManualIndex + 1} / ${total}｜${categoryName}`;
+    if (titleEl) titleEl.innerText = pageTitle;
+
+    if (thumbView && window.manualViewMode === 'thumbs') {
+        window.renderManualThumbCards(window.manualPages.map((p, index) => ({ page: p, index })), thumbView);
+    }
+
+    if (categoryView && window.manualViewMode === 'tags') {
+        window.renderManualCategoryMode();
+    }
+
+    window.renderManualAdminFields();
+};
+
 document.getElementById('manual-prev-btn').addEventListener('click', () => {
     const total = Array.isArray(window.manualPages) ? window.manualPages.length : 0;
     if (total <= 1) {
@@ -2463,9 +3002,128 @@ document.getElementById('manual-next-btn').addEventListener('click', () => {
     window.renderManualPage();
 });
 
-window.uploadManualPage = function() { const fileInput = document.getElementById("manual-file"); const file = fileInput.files[0]; if (!file) return alert("請選擇圖片檔案！"); const reader = new FileReader(); reader.onload = e => { const img = new Image(); img.onload = () => { const cvs = document.createElement('canvas'); let w = img.width, h = img.height; if (w > 1200) { h *= 1200 / w; w = 1200; } cvs.width = w; cvs.height = h; cvs.getContext('2d').drawImage(img, 0, 0, w, h); push(ref(window.GameLogic.db, 'manuals'), { imgBase64: cvs.toDataURL('image/jpeg', 0.8), timestamp: Date.now() }).then(() => { alert('上傳成功！'); fileInput.value = ""; }); }; img.src = e.target.result; }; reader.readAsDataURL(file); };
-window.deleteManualPage = function() { if (window.manualPages.length === 0) return; if (confirm("確定要刪除當前顯示的說明書頁面嗎？")) { let pageKey = window.manualPages[window.currentManualIndex].key; remove(ref(window.GameLogic.db, `manuals/${pageKey}`)).then(() => { alert('已刪除！'); window.currentManualIndex = 0; }); } };
-window.moveManualPage = function(dir) { if (window.manualPages.length < 2) return; let idx1 = window.currentManualIndex; let idx2 = idx1 + dir; if (idx2 < 0 || idx2 >= window.manualPages.length) return; let p1 = window.manualPages[idx1]; let p2 = window.manualPages[idx2]; let tempTime = p1.timestamp; p1.timestamp = p2.timestamp; p2.timestamp = tempTime; let updates = {}; updates[`manuals/${p1.key}/timestamp`] = p1.timestamp; updates[`manuals/${p2.key}/timestamp`] = p2.timestamp; update(ref(window.GameLogic.db), updates).then(() => { window.currentManualIndex = idx2; }); };
+window.uploadManualPage = function() {
+    if (!window.isManualAdmin()) return alert("你沒有說明書管理權限。");
+    const fileInput = document.getElementById("manual-file");
+    const file = fileInput.files[0];
+    if (!file) return alert("請選擇圖片檔案！");
+
+    const titleInput = document.getElementById('manual-title-input');
+    const categorySelect = document.getElementById('manual-category-select');
+    const title = titleInput && titleInput.value.trim() ? titleInput.value.trim() : '';
+    const categoryId = categorySelect && categorySelect.value ? categorySelect.value : 'uncategorized';
+
+    const reader = new FileReader();
+    reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+            const cvs = document.createElement('canvas');
+            let w = img.width, h = img.height;
+            if (w > 1200) { h *= 1200 / w; w = 1200; }
+            cvs.width = w;
+            cvs.height = h;
+            cvs.getContext('2d').drawImage(img, 0, 0, w, h);
+            push(ref(window.GameLogic.db, 'manuals'), {
+                imgBase64: cvs.toDataURL('image/jpeg', 0.8),
+                timestamp: Date.now(),
+                title,
+                categoryId
+            }).then(() => {
+                alert('上傳成功！');
+                fileInput.value = "";
+            });
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+};
+
+window.updateManualPageMeta = function() {
+    if (!window.isManualAdmin()) return alert("你沒有說明書管理權限。");
+    const page = window.manualPages[window.currentManualIndex];
+    if (!page || !page.key) return alert("目前沒有可編輯的說明頁。");
+
+    const titleInput = document.getElementById('manual-title-input');
+    const categorySelect = document.getElementById('manual-category-select');
+    const title = titleInput ? titleInput.value.trim() : '';
+    const categoryId = categorySelect && categorySelect.value ? categorySelect.value : 'uncategorized';
+
+    update(ref(window.GameLogic.db, `manuals/${page.key}`), {
+        title,
+        categoryId
+    }).then(() => {
+        page.title = title;
+        page.categoryId = categoryId;
+        window.renderManualPage();
+        alert('說明頁資料已更新！');
+    });
+};
+
+window.createManualCategory = function() {
+    if (!window.isManualAdmin()) return alert("你沒有說明書管理權限。");
+    const input = document.getElementById('manual-category-name-input');
+    const name = input && input.value.trim() ? input.value.trim() : '';
+    if (!name) return alert("請輸入分類名稱。");
+
+    const id = `cat_${Date.now()}`;
+    set(ref(window.GameLogic.db, `manualCategories/${id}`), {
+        name,
+        timestamp: Date.now()
+    }).then(() => {
+        if (input) input.value = '';
+        window.selectedManualCategoryId = id;
+        alert('分類已新增！');
+    });
+};
+
+window.renameManualCategory = function() {
+    if (!window.isManualAdmin()) return alert("你沒有說明書管理權限。");
+    const categorySelect = document.getElementById('manual-category-select');
+    const input = document.getElementById('manual-category-name-input');
+    const categoryId = categorySelect && categorySelect.value ? categorySelect.value : 'uncategorized';
+    const name = input && input.value.trim() ? input.value.trim() : '';
+
+    if (categoryId === 'uncategorized') return alert("未分類是系統保留分類，不能改名。");
+    if (!name) return alert("請輸入新的分類名稱。");
+
+    update(ref(window.GameLogic.db, `manualCategories/${categoryId}`), {
+        name
+    }).then(() => {
+        if (input) input.value = '';
+        alert('分類名稱已更新！');
+    });
+};
+
+window.deleteManualPage = function() {
+    if (!window.isManualAdmin()) return alert("你沒有說明書管理權限。");
+    if (window.manualPages.length === 0) return;
+    if (confirm("確定要刪除當前顯示的說明書頁面嗎？")) {
+        let pageKey = window.manualPages[window.currentManualIndex].key;
+        remove(ref(window.GameLogic.db, `manuals/${pageKey}`)).then(() => {
+            alert('已刪除！');
+            window.currentManualIndex = 0;
+        });
+    }
+};
+
+window.moveManualPage = function(dir) {
+    if (!window.isManualAdmin()) return alert("你沒有說明書管理權限。");
+    if (window.manualPages.length < 2) return;
+    let idx1 = window.currentManualIndex;
+    let idx2 = idx1 + dir;
+    if (idx2 < 0 || idx2 >= window.manualPages.length) return;
+    let p1 = window.manualPages[idx1];
+    let p2 = window.manualPages[idx2];
+    let tempTime = p1.timestamp;
+    p1.timestamp = p2.timestamp;
+    p2.timestamp = tempTime;
+    let updates = {};
+    updates[`manuals/${p1.key}/timestamp`] = p1.timestamp;
+    updates[`manuals/${p2.key}/timestamp`] = p2.timestamp;
+    update(ref(window.GameLogic.db), updates).then(() => {
+        window.currentManualIndex = idx2;
+    });
+};
 
 window.updateUnreadGlow = function() {
     const validUnread = window.GameLogic.validUnreadPMs || {};
@@ -4504,7 +5162,8 @@ onAuthStateChanged(auth, async (user) => {
         pmUnreadUnsubscribe = onValue(ref(db, `users/${user.uid}/unreadPMs`), snap => {
         window.normalizeUnreadPMs(snap.val() || {});
         });
-        onValue(ref(db, 'manuals'), snap => { const data = snap.val(); window.manualPages = []; if (data) { Object.keys(data).forEach(key => { window.manualPages.push({ key: key, imgBase64: data[key].imgBase64, timestamp: data[key].timestamp }); }); window.manualPages.sort((a, b) => a.timestamp - b.timestamp); } window.renderManualPage(); });
+        onValue(ref(db, 'manuals'), snap => { const data = snap.val(); window.manualPages = []; if (data) { Object.keys(data).forEach(key => { const item = data[key] || {}; if (!item.imgBase64) return; window.manualPages.push({ key: key, imgBase64: item.imgBase64, timestamp: item.timestamp || 0, title: item.title || '', categoryId: item.categoryId || 'uncategorized' }); }); window.manualPages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); } window.renderManualPage(); });
+        onValue(ref(db, 'manualCategories'), snap => { window.manualCategories = snap.val() || {}; window.renderManualPage(); });
         if (cafeFurnitureUnsubscribe) { cafeFurnitureUnsubscribe(); cafeFurnitureUnsubscribe = null; }
         cafeFurnitureUnsubscribe = onValue(ref(db, window.getServerRoomPath('cafeFurniture')), snap => {
             window.GameLogic.cafeFurniture = snap.val() || {};
@@ -19351,7 +20010,12 @@ function initPhaser() { const config = { type: Phaser.AUTO, parent: 'phaser-app'
 
 function openFurnitureCatalog() {
     const modal = document.getElementById('furniture-catalog-modal'); const list = document.getElementById('catalog-list'); const title = document.getElementById('catalog-title');
-    if (modal) modal.classList.toggle('furniture-wood-ui', window.GameLogic.currentScene === "cafe");
+    if (modal) {
+        modal.classList.remove('furniture-wood-ui', 'shrine-taiji-ui', 'room-roof-ui', 'catalog-theme-opening', 'catalog-theme-closing');
+        if (window.GameLogic.currentScene === "cafe") modal.classList.add('furniture-wood-ui');
+        else if (window.GameLogic.currentScene === "doghouse") modal.classList.add('room-roof-ui');
+        else if (window.GameLogic.currentScene === "shrine") modal.classList.add('shrine-taiji-ui');
+    }
     list.innerHTML = "";
     let items = [];
     if (window.GameLogic.currentScene === "cafe") { 
@@ -19386,13 +20050,13 @@ function openFurnitureCatalog() {
                     let updates = {}; seats.forEach(s => updates[window.getServerRoomPath(`shrineFurniture/${s}`)] = null);
                     update(ref(window.GameLogic.db), updates).then(() => { 
                         sendBubble("已回收所有禁屎坐墊！"); 
-                        modal.style.display = 'none'; 
+                        if (window.closeFurnitureCatalogModal) window.closeFurnitureCatalogModal(); else modal.style.display = 'none'; 
                     });
                 }
                 return;
             }
             
-            modal.style.display = 'none'; let isCafe = window.GameLogic.currentScene === "cafe"; let isDoghouse = window.GameLogic.currentScene === "doghouse"; let isShrine = window.GameLogic.currentScene === "shrine";
+            if (window.closeFurnitureCatalogModal) window.closeFurnitureCatalogModal(); else modal.style.display = 'none'; let isCafe = window.GameLogic.currentScene === "cafe"; let isDoghouse = window.GameLogic.currentScene === "doghouse"; let isShrine = window.GameLogic.currentScene === "shrine";
             let targetDict = isCafe ? window.GameLogic.cafeFurniture : (isDoghouse ? window.GameLogic.doghouseFurniture : window.GameLogic.shrineFurniture);
             let pathPrefix = isCafe ? window.getServerRoomPath('cafeFurniture/') : (isDoghouse ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/` : window.getServerRoomPath('shrineFurniture/'));
             
@@ -19427,8 +20091,43 @@ function openFurnitureCatalog() {
                 window.GameLogic.placingFurnitureKey = itemKey;
             }
         }; list.appendChild(div);
-    }); modal.style.display = 'block';
+    });
+    if (window.showFurnitureCatalogModal) window.showFurnitureCatalogModal();
+    else modal.style.display = 'block';
 }
+
+window.showFurnitureCatalogModal = function() {
+    const modal = document.getElementById('furniture-catalog-modal');
+    if (!modal) return;
+    if (window.__furnitureCatalogCloseTimer) {
+        clearTimeout(window.__furnitureCatalogCloseTimer);
+        window.__furnitureCatalogCloseTimer = null;
+    }
+    modal.classList.remove('catalog-theme-opening', 'catalog-theme-closing');
+    modal.style.display = 'block';
+    void modal.offsetWidth;
+    modal.classList.add('catalog-theme-opening');
+    setTimeout(() => {
+        if (modal && modal.style.display !== 'none') modal.classList.remove('catalog-theme-opening');
+    }, 260);
+};
+
+window.closeFurnitureCatalogModal = function() {
+    const modal = document.getElementById('furniture-catalog-modal');
+    if (!modal) return;
+    if (window.__furnitureCatalogCloseTimer) {
+        clearTimeout(window.__furnitureCatalogCloseTimer);
+        window.__furnitureCatalogCloseTimer = null;
+    }
+    modal.classList.remove('catalog-theme-opening', 'catalog-theme-closing');
+    void modal.offsetWidth;
+    modal.classList.add('catalog-theme-closing');
+    window.__furnitureCatalogCloseTimer = setTimeout(() => {
+        modal.style.display = 'none';
+        modal.classList.remove('catalog-theme-closing');
+        window.__furnitureCatalogCloseTimer = null;
+    }, 250);
+};
 
 document.getElementById("view-profile-btn").addEventListener("click", async () => { actionMenu.style.display = "none"; const targetUid = actionMenu.dataset.uid; if (targetUid === window.GameLogic.currentUser.uid) showProfileModal(window.GameLogic.myProfile, targetUid); else { const snap = await get(ref(db, `users/${targetUid}`)); if (snap.exists()) showProfileModal(snap.val(), targetUid); } });
 function showProfileModal(p, uid) { 
