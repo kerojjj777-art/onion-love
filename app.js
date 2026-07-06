@@ -2532,25 +2532,25 @@ function createSystemUI() {
             @media (max-width: 768px), (orientation: portrait) {
                 #manual-modal.manual-crayon-ui {
                     width:96vw !important;
-                    height:92vh !important;
-                    top:4vh !important;
+                    height:96vh !important;
+                    top:2vh !important;
                     left:2vw !important;
-                    padding:12px 12px 14px 12px !important;
+                    padding:8px 10px 10px 10px !important;
                     max-height:none !important;
                     overflow:hidden !important;
                 }
 
                 #manual-modal.manual-crayon-ui > div[style*="border-bottom"] {
                     position:relative !important;
-                    min-height:92px !important;
-                    padding:0 42px 46px 0 !important;
-                    margin-bottom:4px !important;
+                    min-height:68px !important;
+                    padding:0 42px 34px 0 !important;
+                    margin-bottom:2px !important;
                     align-items:flex-start !important;
                 }
 
                 #manual-modal.manual-crayon-ui > div[style*="border-bottom"] > h3 {
-                    font-size:17px !important;
-                    line-height:34px !important;
+                    font-size:16px !important;
+                    line-height:30px !important;
                     white-space:nowrap !important;
                 }
 
@@ -2564,11 +2564,11 @@ function createSystemUI() {
                 #manual-search-input {
                     position:absolute !important;
                     top:0 !important;
-                    right:44px !important;
-                    width:min(48vw, 210px) !important;
-                    min-width:138px !important;
-                    height:34px !important;
-                    padding:6px 10px !important;
+                    right:42px !important;
+                    width:min(50vw, 210px) !important;
+                    min-width:136px !important;
+                    height:32px !important;
+                    padding:5px 10px !important;
                     font-size:13px !important;
                     box-sizing:border-box !important;
                 }
@@ -2576,35 +2576,40 @@ function createSystemUI() {
                 #manual-mode-switcher {
                     position:absolute !important;
                     left:50% !important;
-                    bottom:8px !important;
+                    bottom:3px !important;
                     transform:translateX(-50%) !important;
                     display:flex !important;
                     justify-content:center !important;
-                    gap:9px !important;
+                    gap:8px !important;
                     width:auto !important;
-                    max-width:calc(100vw - 42px) !important;
+                    max-width:calc(100vw - 40px) !important;
                     z-index:7 !important;
                 }
 
                 .manual-mode-btn {
-                    width:38px !important;
-                    height:38px !important;
-                    min-width:38px !important;
-                    min-height:38px !important;
-                    font-size:18px !important;
+                    width:36px !important;
+                    height:36px !important;
+                    min-width:36px !important;
+                    min-height:36px !important;
+                    font-size:17px !important;
                     display:inline-flex !important;
                     align-items:center !important;
                     justify-content:center !important;
                     padding:0 !important;
                 }
 
+                #manual-modal.manual-mode-thumbs #manual-page-title,
+                #manual-modal.manual-mode-tags #manual-page-title {
+                    display:none !important;
+                }
+
                 #manual-page-title {
                     display:block;
-                    margin:6px auto 6px auto !important;
-                    min-height:24px !important;
-                    max-width:88% !important;
-                    font-size:21px !important;
-                    line-height:1.25 !important;
+                    margin:2px auto 4px auto !important;
+                    min-height:22px !important;
+                    max-width:90% !important;
+                    font-size:20px !important;
+                    line-height:1.18 !important;
                     font-weight:900 !important;
                     text-align:center !important;
                     color:#3f2412 !important;
@@ -2612,29 +2617,53 @@ function createSystemUI() {
                 }
 
                 #manual-content {
-                    height:56vh !important;
-                    margin-bottom:38px !important;
+                    height:44vh !important;
+                    max-height:calc(var(--onion-vh, 1vh) * 44) !important;
+                    margin-bottom:28px !important;
                 }
 
                 #manual-img-display {
-                    max-width:86% !important;
+                    max-width:88% !important;
                     max-height:100% !important;
                 }
 
                 #manual-page-indicator {
-                    bottom:-28px !important;
+                    bottom:-24px !important;
                     font-size:12px !important;
                     padding:4px 10px !important;
                 }
 
                 .manual-page-info-row {
-                    margin:4px auto 0 auto !important;
+                    margin:0 auto 0 auto !important;
+                    gap:7px !important;
+                    max-width:90% !important;
+                }
+
+                .manual-page-info-row .manual-page-category-pill {
+                    max-width:calc(100vw - 150px) !important;
+                    padding:4px 12px !important;
+                    font-size:12px !important;
+                }
+
+                .manual-desc-toggle-btn {
+                    width:32px !important;
+                    height:32px !important;
+                    min-width:32px !important;
+                    min-height:32px !important;
+                    font-size:17px !important;
+                    line-height:26px !important;
+                }
+
+                #manual-page-desc.manual-desc-popover {
+                    bottom:48px !important;
+                    width:min(78%, 520px) !important;
+                    max-height:min(28vh, 210px) !important;
                 }
 
                 #manual-thumb-view,
                 #manual-category-view {
-                    max-height:68vh !important;
-                    padding:6px 2px 12px 2px !important;
+                    max-height:73vh !important;
+                    padding:4px 2px 12px 2px !important;
                 }
 
                 .manual-thumb-grid,
@@ -2643,18 +2672,86 @@ function createSystemUI() {
                 }
 
                 .manual-thumb-card img {
-                    height:128px !important;
+                    height:118px !important;
                 }
             }
 
 
-            #chat-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 8px 8px 0 0; padding: 5px 12px; width: fit-content; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 -2px 5px rgba(0,0,0,0.2);}
-            #chat-content { pointer-events: auto; transition: max-height 0.3s ease-in-out; overflow: hidden; display: flex; flex-direction: column; background: rgba(0, 0, 0, 0.6); border-radius: 0 8px 8px 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+            #chat-section {
+                position:fixed !important;
+                left:10px !important;
+                bottom:10px !important;
+                z-index:180 !important;
+                display:flex !important;
+                flex-direction:column !important;
+                align-items:flex-start !important;
+                max-width:min(360px, calc(100vw - 20px)) !important;
+                pointer-events:none !important;
+                visibility:visible !important;
+                opacity:1 !important;
+            }
+            #chat-toggle-btn {
+                display:block !important;
+                visibility:visible !important;
+                opacity:1 !important;
+                pointer-events:auto !important;
+                background: var(--mucha-gold);
+                color: white;
+                border: none;
+                border-radius: 8px 8px 0 0;
+                padding: 5px 12px;
+                width: fit-content;
+                cursor: pointer;
+                font-size: 12px;
+                font-weight: bold;
+                box-shadow: 0 -2px 5px rgba(0,0,0,0.2);
+            }
+            #chat-content {
+                pointer-events: auto;
+                transition: max-height 0.3s ease-in-out, opacity 0.2s ease-in-out;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+                background: rgba(0, 0, 0, 0.6);
+                border-radius: 0 8px 8px 8px;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+                width:min(360px, calc(100vw - 20px));
+                max-height:190px;
+                opacity:1;
+            }
             #chat-box { max-height: 120px; overflow-y: auto; color: #fff; padding: 10px; font-size: 13px; text-shadow: 1px 1px 2px #000; }            
             #chat-input-area { display: flex; height: 35px; border-top: 1px solid rgba(255, 255, 255, 0.2); }
             #chat-input { flex-grow: 1; padding: 5px 10px; border: none; border-radius: 0 0 0 8px; font-family: inherit; font-size: 13px; background: rgba(255, 255, 255, 0.9); outline: none; color: #333; }
             #send-btn { padding: 5px 15px; background: var(--mucha-gold); color: white; border: none; border-radius: 0 0 8px 0; font-family: inherit; font-weight: bold; cursor: pointer; transition: 0.2s;}
-            .chat-collapsed #chat-content { max-height: 0px !important; border: none; box-shadow: none; }
+            .chat-collapsed #chat-content {
+                max-height:0px !important;
+                opacity:0 !important;
+                border:none !important;
+                box-shadow:none !important;
+                pointer-events:none !important;
+            }
+            .chat-collapsed #chat-toggle-btn {
+                display:block !important;
+                visibility:visible !important;
+                opacity:1 !important;
+                pointer-events:auto !important;
+            }
+            @media (max-width: 768px), (orientation: portrait) {
+                #chat-section {
+                    left:8px !important;
+                    bottom:8px !important;
+                    max-width:calc(100vw - 16px) !important;
+                    z-index:190 !important;
+                }
+                #chat-content {
+                    width:min(330px, calc(100vw - 16px)) !important;
+                    max-height:176px !important;
+                }
+                #chat-toggle-btn {
+                    font-size:12px !important;
+                    padding:6px 12px !important;
+                }
+            }
             #top-notification-bar { position: fixed; top: 0; left: 0; width: 100%; padding: 8px 0; background: rgba(0, 0, 0, 0.6); color: #fff; text-align: center; font-size: 14px; z-index: 500; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 1px 1px 2px #000; letter-spacing: 1px; }
             #online-players-container { position: fixed; right: 0px; top: 220px; z-index: 150; display: flex; align-items: flex-start; }
             #online-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 8px 0 0 8px; padding: 10px 8px; cursor: pointer; font-size: 18px; box-shadow: -2px 0 5px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; transition: background 0.3s;}
@@ -8523,8 +8620,7 @@ class MainScene extends Phaser.Scene {
         }
         if (this.sceneName === "7eonion" && this.storeManager) this.physics.add.collider(this.localPlayer.sprite, this.storeManager);
         if (this.sceneName === "partyroom" && this.partyStonesGroup) this.physics.add.collider(this.localPlayer.sprite, this.partyStonesGroup);
-        this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
-        this.applyMobileCameraComfortOffset();
+        this.followLocalPlayerCamera(0.08, 0.08);
 
         // 修正：重置文字緩存變數，避免 Phaser 重新啟動場景時因為變數殘留，導致判定相同而不更新 UI，進而使法寶提示字消失
         this.lastPromptMsg = null; this.lastPromptDrawX = null; this.lastPromptDrawY = null; this.lastPromptDrawMsg = null;
@@ -19905,16 +20001,79 @@ if (activeBubbleMsg) {
         });
     }
 
+    isMobileComfortCameraEnabled(forceReset = false) {
+        const cam = this.cameras && this.cameras.main ? this.cameras.main : null;
+        if (!cam || forceReset) return false;
+
+        const isMobilePortrait = cam.height > cam.width || cam.width <= 768;
+        if (!isMobilePortrait) return false;
+
+        const evData = window.GameLogic ? window.GameLogic.shrineEventData : null;
+        const isPurifying = !!(
+            this.sceneName === 'shrine' &&
+            evData &&
+            evData.state === 'purifying'
+        );
+
+        if (isPurifying) return false;
+        if (window.GameLogic && window.GameLogic.placingFurnitureKey) return false;
+
+        return true;
+    }
+
+    getMobileCameraVisualYOffset() {
+        const cam = this.cameras && this.cameras.main ? this.cameras.main : null;
+        if (!cam) return 0;
+
+        const rawOffset = cam.height * 0.28;
+        return Math.round(Math.max(165, Math.min(285, rawOffset)));
+    }
+
+    refreshMobileCameraFollowTarget(forceReset = false) {
+        if (!this.localPlayer || !this.localPlayer.sprite) return null;
+
+        if (!this.isMobileComfortCameraEnabled(forceReset)) {
+            return this.localPlayer.sprite;
+        }
+
+        const yOffset = this.getMobileCameraVisualYOffset();
+
+        if (!this.mobileCameraFollowTarget || !this.mobileCameraFollowTarget.active) {
+            this.mobileCameraFollowTarget = this.add.zone(
+                this.localPlayer.sprite.x,
+                this.localPlayer.sprite.y - yOffset,
+                2,
+                2
+            );
+            this.mobileCameraFollowTarget.setVisible(false);
+        }
+
+        this.mobileCameraFollowTarget.setPosition(
+            this.localPlayer.sprite.x,
+            this.localPlayer.sprite.y - yOffset
+        );
+
+        return this.mobileCameraFollowTarget;
+    }
+
+    followLocalPlayerCamera(smoothX = 0.08, smoothY = 0.08, forceReset = false) {
+        const cam = this.cameras && this.cameras.main ? this.cameras.main : null;
+        if (!cam || !this.localPlayer || !this.localPlayer.sprite) return;
+
+        const target = this.refreshMobileCameraFollowTarget(forceReset) || this.localPlayer.sprite;
+
+        if (cam.setFollowOffset) cam.setFollowOffset(0, 0);
+        cam.startFollow(target, true, smoothX, smoothY);
+    }
+
     applyMobileCameraComfortOffset(forceReset = false) {
         const cam = this.cameras && this.cameras.main ? this.cameras.main : null;
         if (!cam) return;
 
-        const isMobilePortrait = cam.height > cam.width || cam.width <= 768;
-        const shouldOffset = !forceReset && isMobilePortrait;
+        if (cam.setFollowOffset) cam.setFollowOffset(0, 0);
 
-        if (cam.setFollowOffset) {
-            cam.setFollowOffset(0, shouldOffset ? -132 : 0);
-        }
+        if (!this.localPlayer || !this.localPlayer.sprite) return;
+        this.refreshMobileCameraFollowTarget(forceReset);
     }
 
     processShrineEventLogic(time) {
@@ -21226,14 +21385,14 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
                         if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
                         window.GameLogic.placingFurnitureKey = null;
                         this.placePrompt.setVisible(false);
-                        this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
+                        this.followLocalPlayerCamera(0.08, 0.08);
                     }
                 }
             } else {
                 this.placePrompt.setVisible(false); this.localPlayer.sprite.setVelocity(vx, vy); 
                 // 修正：如果不在淨化中，才跟隨自己，避免與儀式強制鎖定的鏡頭搶奪
                 if (!isPurifying) {
-                    this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
+                    this.followLocalPlayerCamera(0.08, 0.08);
                 }
                 let absX = Math.abs(vx); let absY = Math.abs(vy); if (absX < 1) vx = 0; if (absY < 1) vy = 0;
                 if (!this.localPlayer.isShowingOff && !this.localPlayer.sprite.isPettingPrinceCat) {
