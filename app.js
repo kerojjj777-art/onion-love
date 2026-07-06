@@ -7559,8 +7559,13 @@ this.btnB.on('pointerout', () => {
         if (this.furnBtn && this.furnBtn.__onionUiSkin) targets.push(this.furnBtn.__onionUiSkin);
 
         const safeTargets = targets.filter(obj => obj && obj.setVisible);
+        const alphaTargets = safeTargets.filter(obj => obj && obj.setAlpha);
         const currentVisible = safeTargets.some(obj => !!(obj && obj.visible));
         const immediate = !!(options && options.immediate);
+
+        if (this.furnitureButtonVisibleState === visible && currentVisible === visible && !immediate) {
+            return;
+        }
 
         if (this.furnitureButtonFadeTween) {
             this.furnitureButtonFadeTween.stop();
@@ -7595,7 +7600,7 @@ this.btnB.on('pointerout', () => {
             });
 
             this.furnitureButtonFadeTween = this.tweens.add({
-                targets: safeTargets.filter(obj => obj && obj.setAlpha),
+                targets: alphaTargets,
                 alpha: 1,
                 duration: 250,
                 ease: 'Sine.easeOut',
@@ -7607,7 +7612,7 @@ this.btnB.on('pointerout', () => {
         }
 
         this.furnitureButtonFadeTween = this.tweens.add({
-            targets: safeTargets.filter(obj => obj && obj.setAlpha),
+            targets: alphaTargets,
             alpha: 0,
             duration: 250,
             ease: 'Sine.easeIn',
