@@ -2170,6 +2170,159 @@ function createSystemUI() {
                 45% { transform:scale(1.55) rotate(150deg); opacity:1; }
                 100% { transform:scale(0.2) rotate(420deg); opacity:0; }
             }
+            /* 延伸補丁2：說明書咖啡漩渦按鈕＋頁碼標籤分層＋闔書動畫＋放大檢視 X */
+            #manual-content {
+                margin-bottom:46px !important;
+            }
+            #manual-page-indicator {
+                bottom:-32px !important;
+                display:inline-flex !important;
+                align-items:center !important;
+                justify-content:center !important;
+                left:50% !important;
+                width:auto !important;
+                min-width:86px !important;
+                transform:translateX(-50%) !important;
+                padding:5px 12px !important;
+                border-radius:999px !important;
+                background:rgba(255,245,225,0.9) !important;
+                border:1px solid rgba(92,58,28,0.42) !important;
+                box-shadow:0 2px 6px rgba(0,0,0,0.12), inset 0 0 8px rgba(255,255,255,0.46) !important;
+                color:#4a2d18 !important;
+                font-size:13px !important;
+                line-height:1.2 !important;
+                white-space:nowrap !important;
+            }
+            .manual-page-category-pill {
+                display:none;
+                width:fit-content;
+                max-width:80%;
+                margin:8px auto 0 auto;
+                padding:5px 14px;
+                border-radius:999px;
+                background:linear-gradient(180deg, rgba(92,58,28,0.9), rgba(48,25,12,0.88));
+                color:#fff1d6;
+                border:1px solid rgba(255,238,206,0.72);
+                box-shadow:0 0 8px rgba(255,238,206,0.38), inset 0 0 8px rgba(255,255,255,0.12);
+                font-size:12px;
+                font-weight:bold;
+                text-align:center;
+                text-shadow:0 1px 2px rgba(0,0,0,0.75);
+                white-space:nowrap;
+                overflow:hidden;
+                text-overflow:ellipsis;
+            }
+            .manual-page-desc {
+                margin:16px auto 0 auto !important;
+                max-width:82% !important;
+                padding:10px 12px !important;
+                text-align:center !important;
+            }
+            .manual-nav-btn {
+                width:54px !important;
+                height:54px !important;
+                border-radius:50% !important;
+                border:2px solid rgba(255,244,220,0.78) !important;
+                background:
+                    radial-gradient(circle at 35% 28%, rgba(255,244,220,0.22) 0 10%, transparent 11%),
+                    radial-gradient(circle at 50% 55%, rgba(36,16,8,0.55) 0 34%, transparent 35%),
+                    linear-gradient(145deg, #7a4a24 0%, #3c1d0d 44%, #180a04 70%, #5b2d13 100%) !important;
+                color:#fff8ed !important;
+                box-shadow:0 5px 0 #170803, 0 0 12px rgba(255,245,230,0.28), inset 0 2px 4px rgba(255,240,210,0.24), inset 0 -9px 14px rgba(0,0,0,0.48) !important;
+                text-shadow:0 2px 2px rgba(0,0,0,0.78), 0 0 7px rgba(255,255,255,0.58) !important;
+                animation:none !important;
+                position:relative !important;
+                overflow:hidden !important;
+            }
+            .manual-nav-btn::before {
+                content:"" !important;
+                position:absolute !important;
+                inset:7px !important;
+                border-radius:50% !important;
+                background:
+                    conic-gradient(from 0deg, transparent 0deg 48deg, rgba(255,255,255,0.38) 64deg 94deg, transparent 116deg 188deg, rgba(255,255,255,0.28) 205deg 236deg, transparent 260deg 360deg),
+                    radial-gradient(circle at center, rgba(255,255,255,0.22), transparent 56%) !important;
+                opacity:0.72 !important;
+                animation:manual-coffee-swirl-turn 3.8s linear infinite !important;
+                pointer-events:none !important;
+                z-index:0 !important;
+            }
+            .manual-nav-btn::after {
+                content:"" !important;
+                display:none !important;
+            }
+            .manual-nav-btn:active {
+                transform:scale(0.92) !important;
+                filter:brightness(1.18);
+            }
+            .manual-nav-burst {
+                position:absolute;
+                left:50%;
+                top:50%;
+                width:8px;
+                height:8px;
+                border-radius:50%;
+                background:#ffffff !important;
+                box-shadow:0 0 8px #ffffff, 0 0 18px rgba(255,255,255,0.95), 0 0 28px rgba(255,240,210,0.72) !important;
+                pointer-events:none;
+                z-index:15;
+                animation:manual-nav-white-splash-pop 0.52s cubic-bezier(0.12, 0.85, 0.2, 1) forwards !important;
+            }
+            .manual-closing-book {
+                animation:manual-book-close 0.2s ease-in forwards !important;
+                transform-origin:left center !important;
+                pointer-events:none !important;
+                overflow:hidden !important;
+            }
+            #fullscreen-x-close {
+                position:absolute;
+                right:18px;
+                top:18px;
+                width:38px;
+                height:38px;
+                border-radius:50%;
+                border:2px solid rgba(255,255,255,0.86);
+                background:rgba(45,26,14,0.82);
+                color:#fff;
+                font-size:23px;
+                font-weight:900;
+                line-height:32px;
+                padding:0;
+                margin:0;
+                z-index:1003;
+                cursor:pointer;
+                box-shadow:0 0 12px rgba(255,255,255,0.72), inset 0 0 8px rgba(255,255,255,0.18);
+                text-shadow:0 1px 2px rgba(0,0,0,0.8);
+                touch-action:manipulation;
+            }
+            #fullscreen-x-close:active {
+                transform:scale(0.92);
+            }
+            @keyframes manual-coffee-swirl-turn {
+                100% { transform:rotate(360deg); }
+            }
+            @keyframes manual-nav-white-splash-pop {
+                0% { transform:translate(-50%, -50%) scale(0.22); opacity:1; }
+                62% { opacity:1; }
+                100% { transform:translate(calc(-50% + var(--burst-x, 0px)), calc(-50% + var(--burst-y, -40px))) scale(0.08); opacity:0; }
+            }
+            @keyframes manual-book-close {
+                0% {
+                    opacity:1;
+                    transform:perspective(900px) rotateY(0deg) scaleX(1);
+                    filter:brightness(1);
+                }
+                46% {
+                    opacity:0.9;
+                    transform:perspective(900px) rotateY(-34deg) scaleX(0.72);
+                    filter:brightness(1.14);
+                }
+                100% {
+                    opacity:0;
+                    transform:perspective(900px) rotateY(-88deg) scaleX(0.04);
+                    filter:brightness(1.28) blur(1px);
+                }
+            }
 
             #chat-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 8px 8px 0 0; padding: 5px 12px; width: fit-content; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 -2px 5px rgba(0,0,0,0.2);}
             #chat-content { pointer-events: auto; transition: max-height 0.3s ease-in-out; overflow: hidden; display: flex; flex-direction: column; background: rgba(0, 0, 0, 0.6); border-radius: 0 8px 8px 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
@@ -2292,6 +2445,7 @@ function createSystemUI() {
         </div>
         
         <div id="fullscreen-viewer" onclick="if(event.target && event.target.id === 'fullscreen-viewer') window.closeFullscreen()" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.86); z-index:1000; justify-content:center; align-items:center; cursor:pointer; overflow:hidden;">
+            <button id="fullscreen-x-close" type="button" aria-label="關閉放大檢視" onclick="event.stopPropagation(); window.closeFullscreen()">×</button>
             <div id="fullscreen-img-wrap" onclick="event.stopPropagation()" style="position:relative; width:100%; height:100%; display:flex; justify-content:center; align-items:center; overflow:hidden; cursor:default;">
                 <img id="fullscreen-img" onpointerdown="window.startFullscreenPan(event)" onpointermove="window.moveFullscreenPan(event)" onpointerup="window.endFullscreenPan(event)" onpointercancel="window.endFullscreenPan(event)" style="max-width:88%; max-height:90%; border:3px solid var(--mucha-gold); border-radius:12px; object-fit:contain; background:var(--mucha-paper); touch-action:none; user-select:none; -webkit-user-drag:none; transition:transform 0.08s linear;">
             </div>
@@ -2456,6 +2610,7 @@ function createSystemUI() {
             <div id="manual-page-title" style="font-weight:bold; color:#4a2d18; text-shadow:0 1px 0 rgba(255,238,206,0.75); margin-bottom:8px; min-height:20px; text-align:center;">未命名說明頁</div>
             <div id="manual-single-view" style="display:block;">
                 <div id="manual-content" style="display:flex; justify-content:center; align-items:center; height: 53vh; position: relative;"><button id="manual-prev-btn" class="manual-nav-btn" style="position:absolute; left:0; z-index:10;">&lt;</button><img id="manual-img-display" onclick="window.openFullscreen(this.src)" src="" alt="目前尚無說明書內容" style="max-width:80%; max-height:100%; object-fit:contain; border:2px solid rgba(92,58,28,0.5); border-radius:10px; cursor: pointer; background:#f4dfbe; box-shadow:0 6px 14px rgba(0,0,0,0.18);"><button id="manual-next-btn" class="manual-nav-btn" style="position:absolute; right:0; z-index:10;">&gt;</button><div id="manual-page-indicator" style="position:absolute; bottom: -30px; text-align:center; width:100%; font-weight:bold; color:var(--mucha-brown);">0 / 0</div></div>
+                <div id="manual-page-category" class="manual-page-category-pill"></div>
                 <div id="manual-page-desc" class="manual-page-desc"></div>
             </div>
             <div id="manual-thumb-view" style="display:none; max-height:60vh; overflow-y:auto; overflow-x:hidden; padding:4px; -webkit-overflow-scrolling:touch;"></div>
@@ -3444,20 +3599,57 @@ window.startManualDoodleJitter = function() {
     }, 520);
 };
 
-window.closeManualModal = function() {
+window.closeManualModal = function(options = {}) {
     const modal = document.getElementById('manual-modal');
-    if (modal) modal.style.display = 'none';
+
     if (window.__manualDoodleTimer) {
         clearInterval(window.__manualDoodleTimer);
         window.__manualDoodleTimer = null;
     }
+
+    if (!modal) return;
+
+    if (modal.__manualCloseTimer) {
+        clearTimeout(modal.__manualCloseTimer);
+        modal.__manualCloseTimer = null;
+    }
+
+    modal.classList.remove('manual-closing-book');
+    modal.style.pointerEvents = '';
+
+    if (options && options.immediate) {
+        modal.style.display = 'none';
+        return;
+    }
+
+    if (modal.style.display === 'none') return;
+
+    modal.style.pointerEvents = 'none';
+    void modal.offsetWidth;
+    modal.classList.add('manual-closing-book');
+
+    modal.__manualCloseTimer = setTimeout(() => {
+        modal.style.display = 'none';
+        modal.classList.remove('manual-closing-book');
+        modal.style.pointerEvents = '';
+        modal.__manualCloseTimer = null;
+        if (window.clearUiBlockersAfterModal) window.clearUiBlockersAfterModal();
+    }, 210);
 };
 
 window.openManualModal = function() {
     const modal = document.getElementById('manual-modal');
     const searchInput = document.getElementById('manual-search-input');
 
-    if (modal) modal.style.display = 'block';
+    if (modal) {
+        if (modal.__manualCloseTimer) {
+            clearTimeout(modal.__manualCloseTimer);
+            modal.__manualCloseTimer = null;
+        }
+        modal.classList.remove('manual-closing-book');
+        modal.style.pointerEvents = '';
+        modal.style.display = 'block';
+    }
 
     window.currentManualIndex = 0;
     window.manualViewMode = 'single';
@@ -3590,15 +3782,18 @@ window.renderManualCategoryMode = function() {
 window.burstManualNavParticles = function(btn) {
     if (!btn) return;
 
-    for (let i = 0; i < 18; i++) {
+    for (let i = 0; i < 22; i++) {
         const p = document.createElement('span');
         const angle = Math.random() * Math.PI * 2;
-        const dist = 30 + Math.random() * 82;
+        const dist = 28 + Math.random() * 88;
+        const size = 5 + Math.round(Math.random() * 8);
+
         p.className = 'manual-nav-burst';
         p.style.setProperty('--burst-x', `${Math.round(Math.cos(angle) * dist)}px`);
         p.style.setProperty('--burst-y', `${Math.round(Math.sin(angle) * dist)}px`);
-        p.style.width = `${6 + Math.round(Math.random() * 8)}px`;
-        p.style.height = p.style.width;
+        p.style.width = `${size}px`;
+        p.style.height = `${size}px`;
+
         btn.appendChild(p);
         setTimeout(() => {
             if (p && p.parentNode) p.parentNode.removeChild(p);
@@ -3611,6 +3806,7 @@ window.renderManualPage = function() {
     const indEl = document.getElementById('manual-page-indicator');
     const titleEl = document.getElementById('manual-page-title');
     const descEl = document.getElementById('manual-page-desc');
+    const catEl = document.getElementById('manual-page-category');
     const singleView = document.getElementById('manual-single-view');
     const thumbView = document.getElementById('manual-thumb-view');
     const categoryView = document.getElementById('manual-category-view');
@@ -3631,6 +3827,10 @@ window.renderManualPage = function() {
             imgEl.alt = '目前尚無說明書內容';
         }
         if (indEl) indEl.innerText = '0 / 0';
+        if (catEl) {
+            catEl.innerText = '';
+            catEl.style.display = 'none';
+        }
         if (titleEl) titleEl.innerText = '目前尚無說明書內容';
         if (descEl) {
             descEl.innerText = '';
@@ -3654,7 +3854,11 @@ window.renderManualPage = function() {
         imgEl.src = page.imgBase64 || '';
         imgEl.alt = pageTitle;
     }
-    if (indEl) indEl.innerText = `${window.currentManualIndex + 1} / ${total}｜${categoryName}`;
+    if (indEl) indEl.innerText = `${window.currentManualIndex + 1} / ${total}`;
+    if (catEl) {
+        catEl.innerText = `🏷️ ${categoryName}`;
+        catEl.style.display = categoryName ? 'block' : 'none';
+    }
     if (titleEl) titleEl.innerText = pageTitle;
     if (descEl) {
         descEl.innerText = pageDesc;
