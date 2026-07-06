@@ -1647,22 +1647,40 @@ function createSystemUI() {
                 color:#fff1d0;
                 box-shadow:0 0 10px rgba(255,232,160,0.65);
             }
+            body.manual-admin-panel-open::after {
+                content:"";
+                position:fixed;
+                inset:0;
+                background:rgba(38, 22, 12, 0.42);
+                backdrop-filter:blur(2px);
+                -webkit-backdrop-filter:blur(2px);
+                z-index:1190;
+                pointer-events:none;
+            }
             .manual-admin-panel {
-                position:absolute !important;
-                top:58px !important;
-                right:14px !important;
-                width:min(330px, calc(100% - 28px)) !important;
-                max-height:min(72vh, 620px) !important;
+                position:fixed !important;
+                top:50% !important;
+                left:50% !important;
+                right:auto !important;
+                width:min(92vw, 430px) !important;
+                max-height:min(82vh, calc(var(--onion-vh, 1vh) * 82)) !important;
                 overflow-y:auto !important;
                 overflow-x:hidden !important;
-                background:rgba(255,238,206,0.96);
-                border:2px dashed rgba(92,58,28,0.58);
-                border-radius:14px;
-                padding:12px;
+                background:rgba(255,238,206,0.98);
+                border:3px solid rgba(92,58,28,0.72);
+                border-radius:18px;
+                padding:14px;
                 text-align:left;
-                z-index:6 !important;
-                box-shadow:0 10px 22px rgba(0,0,0,0.32), inset 0 0 14px rgba(255,255,255,0.4);
+                z-index:1200 !important;
+                box-sizing:border-box;
+                box-shadow:0 18px 34px rgba(0,0,0,0.42), 0 0 18px rgba(255,238,206,0.42), inset 0 0 16px rgba(255,255,255,0.45);
                 -webkit-overflow-scrolling:touch;
+                transform:translate(-50%, -50%) scale(0.96);
+                animation:manual-admin-pop-in 0.22s cubic-bezier(0.18, 0.9, 0.28, 1.18) forwards;
+            }
+            @keyframes manual-admin-pop-in {
+                0% { opacity:0; transform:translate(-50%, -48%) scale(0.86); }
+                100% { opacity:1; transform:translate(-50%, -50%) scale(1); }
             }
             .manual-admin-panel input,
             .manual-admin-panel select,
@@ -2677,7 +2695,7 @@ function createSystemUI() {
                 }
             }
 
-            /* 手機版說明書位置微調：標題圖片下移、頁碼標籤說明鍵下移、說明氣泡向下浮現 */
+            /* 手機版說明書位置微調：標題圖片下移、頁碼標籤說明鍵下移、說明氣泡貼近標籤下方 */
             @media (max-width: 768px), (orientation: portrait) {
                 #manual-modal.manual-crayon-ui #manual-page-title {
                     transform:translateY(60px) !important;
@@ -2699,11 +2717,11 @@ function createSystemUI() {
                 }
 
                 #manual-modal.manual-crayon-ui #manual-page-desc.manual-desc-popover {
-                    top:calc(36vh + 212px) !important;
+                    top:calc(36vh + 184px) !important;
                     bottom:auto !important;
                     transform:translateX(-50%) !important;
                     width:min(78%, 520px) !important;
-                    max-height:min(20vh, 160px) !important;
+                    max-height:min(23vh, 180px) !important;
                 }
 
                 #manual-modal.manual-crayon-ui #manual-page-desc.manual-desc-popover::after {
@@ -2730,22 +2748,22 @@ function createSystemUI() {
             @keyframes manual-desc-bubble-drop-mobile {
                 0% {
                     opacity:0;
-                    transform:translate(-50%, -16px) scale(0.94);
+                    transform:translate(-50%, -10px) scale(0.94);
                 }
                 100% {
                     opacity:1;
-                    transform:translate(-50%, 6px) scale(1);
+                    transform:translate(-50%, 0px) scale(1);
                 }
             }
 
             @keyframes manual-desc-bubble-drop-fade-mobile {
                 0% {
                     opacity:1;
-                    transform:translate(-50%, 6px) scale(1);
+                    transform:translate(-50%, 0px) scale(1);
                 }
                 100% {
                     opacity:0;
-                    transform:translate(-50%, 22px) scale(0.94);
+                    transform:translate(-50%, 12px) scale(0.94);
                 }
             }
 
@@ -4105,6 +4123,11 @@ window.closeManualModal = function(options = {}) {
         window.hideManualDescBubble(true);
     }
 
+    if (window.manualAdminPanelOpen) {
+        window.manualAdminPanelOpen = false;
+        if (window.renderManualAdminFields) window.renderManualAdminFields();
+    }
+
     if (window.__manualDoodleTimer) {
         clearInterval(window.__manualDoodleTimer);
         window.__manualDoodleTimer = null;
@@ -4220,13 +4243,21 @@ window.renderManualAdminFields = function() {
     if (!adminArea) return;
 
     const isAdmin = window.isManualAdmin();
+    const shouldOpen = isAdmin && window.manualAdminPanelOpen;
 
     if (adminBtn) {
         adminBtn.style.display = isAdmin ? 'inline-flex' : 'none';
-        adminBtn.classList.toggle('active', isAdmin && window.manualAdminPanelOpen);
+        adminBtn.classList.toggle('active', shouldOpen);
     }
 
-    adminArea.style.display = isAdmin && window.manualAdminPanelOpen ? 'block' : 'none';
+    if (document.body) {
+        document.body.classList.toggle('manual-admin-panel-open', shouldOpen);
+        if (shouldOpen && adminArea.parentElement !== document.body) {
+            document.body.appendChild(adminArea);
+        }
+    }
+
+    adminArea.style.display = shouldOpen ? 'block' : 'none';
     if (!isAdmin) return;
 
     const page = window.manualPages[window.currentManualIndex] || null;
@@ -8587,7 +8618,7 @@ class MainScene extends Phaser.Scene {
                         window.playSFX(this, 'mimi-laugh');
                     }
 
-                    if (data.state !== 'down') {
+                    if (data.state === 'walk' || data.state === 'chase') {
                         this.startMimiWalkSFX();
                     } else {
                         this.stopMimiWalkSFX(false);
@@ -20374,23 +20405,63 @@ if (activeBubbleMsg) {
         get(ref(db, window.getServerRoomPath('cafeMimi/hp'))).then(snap => {
             let chp = snap.val() || 0;
             if (chp > 0) {
-                let newHp = chp - 1; 
-                update(ref(db, window.getServerRoomPath('cafeMimi')), { hp: newHp });
-                
+                let newHp = chp - 1;
+                let mData = window.GameLogic.cafeMimiData || {};
+                let hitUpdates = { hp: newHp };
+
+                if (newHp > 0 && mData.state === 'laughing' && mData.laughMode === 'taunt') {
+                    const safeMin = 190;
+                    const safeMax = 1858;
+                    let pUids = Object.keys(window.GameLogic.cafePlayers || {}).filter(uid => window.GameLogic.onlinePlayers && window.GameLogic.onlinePlayers[uid]);
+                    let sumX = 0;
+                    let sumY = 0;
+                    let count = 0;
+
+                    pUids.forEach(uid => {
+                        let op = this.otherPlayers && this.otherPlayers[uid] ? this.otherPlayers[uid].sprite : (uid === window.GameLogic.currentUser.uid && this.localPlayer ? this.localPlayer.sprite : null);
+                        if (op) {
+                            sumX += op.x;
+                            sumY += op.y;
+                            count++;
+                        }
+                    });
+
+                    let centerX = count > 0 ? sumX / count : 1024;
+                    let centerY = count > 0 ? sumY / count : 1024;
+                    let angle = Phaser.Math.Angle.Between(centerX, centerY, x, y) + Phaser.Math.FloatBetween(-0.55, 0.55);
+                    let testX = x + Math.cos(angle) * 430;
+                    let testY = y + Math.sin(angle) * 430;
+
+                    if (testX < safeMin || testX > safeMax || testY < safeMin || testY > safeMax) {
+                        angle = Phaser.Math.Angle.Between(x, y, 1024, 1024) + Phaser.Math.FloatBetween(-0.45, 0.45);
+                    }
+
+                    hitUpdates.state = 'chase';
+                    hitUpdates.chaseStartTime = Date.now();
+                    hitUpdates.randomAngle = angle;
+                    hitUpdates.speedBoost = 720;
+                    hitUpdates.laughMode = null;
+                }
+
+                update(ref(db, window.getServerRoomPath('cafeMimi')), hitUpdates);
                 window.playSFX(this, 'mimi-thief-stealing');
 
-    if (newHp <= 0) {
+                if (newHp <= 0) {
                     let downTime = Date.now();
                     update(ref(db, window.getServerRoomPath('cafeMimi')), {
                         state: 'down',
                         active: true,
                         downTime: downTime,
                         x: x,
-                        y: y
+                        y: y,
+                        laughMode: null,
+                        chaseStartTime: null,
+                        randomAngle: null,
+                        speedBoost: null
                     });
-                    
+
                     window.playSFX(this, 'mimi-thief-get-down');
-                    
+
                     if (this.mimiSprite) {
                         this.mimiLastDownAnimToken = downTime;
                         this.tweens.killTweensOf(this.mimiSprite);
@@ -20406,15 +20477,14 @@ if (activeBubbleMsg) {
                         });
                     }
 
-                    let mData = window.GameLogic.cafeMimiData || {}; 
-                    let baseCoins = 300 * (mData.playersInvolved || 1); 
-                    let totalValue = baseCoins + (mData.stolenPool || 0); 
+                    let baseCoins = 300 * (mData.playersInvolved || 1);
+                    let totalValue = baseCoins + (mData.stolenPool || 0);
                     let coinValue = Math.floor(totalValue / 10);
                     let dropUpdates = {};
-                    for(let i=0; i<10; i++) { 
+                    for(let i=0; i<10; i++) {
                         let cx = Phaser.Math.Clamp(x + Phaser.Math.Between(-80, 80), 100, 1948);
                         let cy = Phaser.Math.Clamp(y + Phaser.Math.Between(-80, 80) + 20, 100, 1948);
-                        dropUpdates[window.getServerRoomPath(`droppedCoins/mimi_coin_${Date.now()}_${i}`)] = { x: cx, y: cy, amount: coinValue, scene: this.sceneName }; 
+                        dropUpdates[window.getServerRoomPath(`droppedCoins/mimi_coin_${Date.now()}_${i}`)] = { x: cx, y: cy, amount: coinValue, scene: this.sceneName };
                     }
                     dropUpdates[window.getServerRoomPath('serverEvents/mimiNextSpawn')] = Date.now() + Phaser.Math.Between(600000, 900000);
                     update(ref(db), dropUpdates);
@@ -20423,8 +20493,7 @@ if (activeBubbleMsg) {
             }
         });
     }
-
-    canUseDirectSceneTap() {
+      canUseDirectSceneTap() {
         if (!window.GameLogic || !window.GameLogic.currentUser) return false;
         if (!this.localPlayer || !this.localPlayer.sprite) return false;
         if (window.GameLogic.placingFurnitureKey) return false;
@@ -21133,7 +21202,7 @@ if (activeBubbleMsg) {
                                                                 let requiredHp = Math.min(6, 2 + Math.max(1, pUids.length));
                                 let spawnX = Phaser.Math.Clamp(px - 260, 100, 1948);
                                 let spawnY = Phaser.Math.Clamp(py, 100, 1948);
-                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { active: true, x: spawnX, y: spawnY, state: 'walk', hp: requiredHp, playersInvolved: Math.max(1, pUids.length), stolenPool: 0, flipX: true, stolenUids: null });
+                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { active: true, x: spawnX, y: spawnY, state: 'walk', hp: requiredHp, playersInvolved: Math.max(1, pUids.length), stolenPool: 0, flipX: true, stolenUids: null, laughTime: null, laughMode: null, chaseStartTime: null, randomAngle: null, speedBoost: null });
                             }
                         }
                     });
@@ -21147,88 +21216,127 @@ if (activeBubbleMsg) {
                     this.lastMimiLogicTime = time;
                     let targetX = mData.x, targetY = mData.y;
                     
+                    const mimiSafeMin = 190;
+                    const mimiSafeMax = 1858;
+                    const mimiDashSpeed = 720;
+                    const mimiDashMs = 1000;
+                    const mimiPreLaughMs = 1000;
+                    const mimiTauntMs = 5000;
+                    const getMimiPlayerSprite = (uid) => {
+                        return this.otherPlayers && this.otherPlayers[uid] ? this.otherPlayers[uid].sprite : (uid === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null);
+                    };
+                    const getMimiCrowdCenter = () => {
+                        let sumX = 0;
+                        let sumY = 0;
+                        let count = 0;
+                        pUids.forEach(uid => {
+                            let op = getMimiPlayerSprite(uid);
+                            if (op) {
+                                sumX += op.x;
+                                sumY += op.y;
+                                count++;
+                            }
+                        });
+                        return count > 0 ? { x: sumX / count, y: sumY / count } : { x: 1024, y: 1024 };
+                    };
+                    const getMimiDashAngle = () => {
+                        let center = getMimiCrowdCenter();
+                        let angle = Phaser.Math.Angle.Between(center.x, center.y, mData.x, mData.y) + Phaser.Math.FloatBetween(-0.5, 0.5);
+                        let testX = mData.x + Math.cos(angle) * 430;
+                        let testY = mData.y + Math.sin(angle) * 430;
+                        if (testX < mimiSafeMin || testX > mimiSafeMax || testY < mimiSafeMin || testY > mimiSafeMax) {
+                            angle = Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024) + Phaser.Math.FloatBetween(-0.45, 0.45);
+                        }
+                        return angle;
+                    };
+
                     if (mData.state === 'walk' && mData.hp > 0) {
                         let targetUid = null; let minDist = 9999; let stolenUids = mData.stolenUids || {};
                         let stolenCount = Object.keys(stolenUids).length;
-                        
-                        let walkSpeed = (stolenCount === 0) ? 200 : 350; 
-                        
-                        pUids.forEach(uid => { if (!stolenUids[uid]) { let op = this.otherPlayers[uid] ? this.otherPlayers[uid].sprite : (uid === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null); if (op) { let d = Phaser.Math.Distance.Between(mData.x, mData.y, op.x, op.y); if (d < minDist) { minDist = d; targetUid = uid; targetX = op.x; targetY = op.y; } } } });
+
+                        let walkSpeed = (stolenCount === 0) ? 200 : 350;
+
+                        pUids.forEach(uid => { if (!stolenUids[uid]) { let op = getMimiPlayerSprite(uid); if (op) { let d = Phaser.Math.Distance.Between(mData.x, mData.y, op.x, op.y); if (d < minDist) { minDist = d; targetUid = uid; targetX = op.x; targetY = op.y; } } } });
                         if (targetUid) {
-                            if (minDist > 35) { 
-                                let angle = Phaser.Math.Angle.Between(mData.x, mData.y, targetX, targetY); 
-                                targetX = mData.x + Math.cos(angle) * (calcDelta / 1000) * walkSpeed; 
-                                targetY = mData.y + Math.sin(angle) * (calcDelta / 1000) * walkSpeed; 
-                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { x: targetX, y: targetY, flipX: (targetX > mData.x) }); 
+                            if (minDist > 35) {
+                                let angle = Phaser.Math.Angle.Between(mData.x, mData.y, targetX, targetY);
+                                targetX = Phaser.Math.Clamp(mData.x + Math.cos(angle) * (calcDelta / 1000) * walkSpeed, mimiSafeMin, mimiSafeMax);
+                                targetY = Phaser.Math.Clamp(mData.y + Math.sin(angle) * (calcDelta / 1000) * walkSpeed, mimiSafeMin, mimiSafeMax);
+                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { x: targetX, y: targetY, flipX: (targetX > mData.x) });
                             } else {
-                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { state: 'stealing', stealingFrom: targetUid }); 
+                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { state: 'stealing', stealingFrom: targetUid });
                             }
                         } else {
-                            let sumX = 0, sumY = 0; pUids.forEach(u => { let op = this.otherPlayers[u] ? this.otherPlayers[u].sprite : (u === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null); if (op) { sumX += op.x; sumY += op.y; } });
-                            let cX = sumX / pUids.length; let cY = sumY / pUids.length;
-                            
-                            let angleAway = Phaser.Math.Angle.Between(cX, cY, mData.x, mData.y);
-                            let angleToCenter = Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024);
-                            
-                            let safeX = Phaser.Math.Clamp(cX + Math.cos(angleAway) * 200, 100, 1948); let safeY = Phaser.Math.Clamp(cY + Math.sin(angleAway) * 200, 100, 1948);
-                            let distToSafe = Phaser.Math.Distance.Between(mData.x, mData.y, safeX, safeY);
-                            if (distToSafe > 20) { 
-                                let angle = Phaser.Math.Angle.Between(mData.x, mData.y, safeX, safeY); 
-                                let centerWeight = Phaser.Math.Distance.Between(mData.x, mData.y, 1024, 1024) / 1000;
-                                angle = Phaser.Math.Angle.RotateTo(angle, angleToCenter, centerWeight * 0.5);
-                                
-                                targetX = mData.x + Math.cos(angle) * (calcDelta / 1000) * 150; 
-                                targetY = mData.y + Math.sin(angle) * (calcDelta / 1000) * 150; 
-                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { x: targetX, y: targetY, flipX: (targetX > mData.x) }); 
-                            } else { 
-                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { state: 'laughing', laughTime: Date.now() }); 
-                            }
+                            update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), {
+                                state: 'laughing',
+                                laughTime: Date.now(),
+                                laughMode: 'preDash',
+                                randomAngle: getMimiDashAngle(),
+                                chaseStartTime: null,
+                                speedBoost: null
+                            });
                         }
                     } else if (mData.state === 'stealing' && mData.hp > 0) {
                         if (mData.stolenUids && mData.stolenUids[mData.stealingFrom]) {
-                            update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { state: 'walk' });
+                            update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { state: 'walk', stealingFrom: null });
                         }
                     } else if (mData.state === 'laughing' && mData.hp > 0) {
-                        if (Date.now() - mData.laughTime > 3000) {
-                            let unrobbedExist = pUids.some(uid => !(mData.stolenUids && mData.stolenUids[uid]));
-                            if (unrobbedExist) update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { state: 'walk' });
-                            else update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { state: 'chase', randomAngle: Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024) });
+                        let unrobbedExist = pUids.some(uid => !(mData.stolenUids && mData.stolenUids[uid]));
+                        if (unrobbedExist) {
+                            update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { state: 'walk', laughMode: null });
+                        } else {
+                            let nowMs = Date.now();
+                            let laughMode = mData.laughMode || 'preDash';
+                            let waitMs = laughMode === 'taunt' ? mimiTauntMs : mimiPreLaughMs;
+
+                            if (!mData.laughTime) {
+                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { laughTime: nowMs, laughMode: laughMode });
+                            } else if (nowMs - mData.laughTime > waitMs) {
+                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), {
+                                    state: 'chase',
+                                    chaseStartTime: nowMs,
+                                    randomAngle: getMimiDashAngle(),
+                                    speedBoost: mimiDashSpeed,
+                                    laughMode: null
+                                });
+                            }
                         }
                     } else if (mData.state === 'chase' && mData.hp > 0) {
                         let unrobbedExist = pUids.some(uid => !(mData.stolenUids && mData.stolenUids[uid]));
                         if (unrobbedExist) {
-                            update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { state: 'walk' });
+                            update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { state: 'walk', chaseStartTime: null, speedBoost: null });
                         } else {
-                            let minDistToPlayer = 9999; let nearestP = null;
-                            pUids.forEach(uid => {
-                                let op = this.otherPlayers[uid] ? this.otherPlayers[uid].sprite : (uid === window.GameLogic.currentUser.uid ? this.localPlayer.sprite : null);
-                                if (op) { let d = Phaser.Math.Distance.Between(mData.x, mData.y, op.x, op.y); if (d < minDistToPlayer) { minDistToPlayer = d; nearestP = op; } }
-                            });
-                            
-                            let angle = mData.randomAngle || 0;
-                            let boostSpeed = mData.speedBoost || 200; 
-                            
-                            if (nearestP && minDistToPlayer < 400) {
-                                angle = Phaser.Math.Angle.Between(nearestP.x, nearestP.y, mData.x, mData.y);
-                                angle += Phaser.Math.FloatBetween(-0.3, 0.3); 
-                            } else {
-                                let angleToCenter = Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024);
-                                angle = Phaser.Math.Angle.RotateTo(angle, angleToCenter, 0.1);
-                                if (Math.random() < 0.05) angle += Phaser.Math.FloatBetween(-0.5, 0.5); 
+                            let nowMs = Date.now();
+                            let chaseStart = mData.chaseStartTime || nowMs;
+
+                            if (!mData.chaseStartTime) {
+                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { chaseStartTime: nowMs });
                             }
-                            
-                            targetX = mData.x + Math.cos(angle) * (calcDelta / 1000) * boostSpeed; 
-                            targetY = mData.y + Math.sin(angle) * (calcDelta / 1000) * boostSpeed;
-                            
-                            if (targetX < 50 || targetX > 1998 || targetY < 50 || targetY > 1998) { 
-                                targetX = Phaser.Math.Clamp(targetX, 50, 1998); 
-                                targetY = Phaser.Math.Clamp(targetY, 50, 1998); 
-                                angle = Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024) + Phaser.Math.FloatBetween(-0.5, 0.5);
-                                boostSpeed = 500; 
+
+                            if (nowMs - chaseStart >= mimiDashMs) {
+                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), {
+                                    state: 'laughing',
+                                    laughTime: nowMs,
+                                    laughMode: 'taunt',
+                                    chaseStartTime: null,
+                                    speedBoost: null
+                                });
                             } else {
-                                boostSpeed = 200;
+                                let angle = typeof mData.randomAngle === 'number' ? mData.randomAngle : getMimiDashAngle();
+                                let speed = mData.speedBoost || mimiDashSpeed;
+                                targetX = mData.x + Math.cos(angle) * (calcDelta / 1000) * speed;
+                                targetY = mData.y + Math.sin(angle) * (calcDelta / 1000) * speed;
+
+                                if (targetX < mimiSafeMin || targetX > mimiSafeMax || targetY < mimiSafeMin || targetY > mimiSafeMax) {
+                                    angle = Phaser.Math.Angle.Between(mData.x, mData.y, 1024, 1024) + Phaser.Math.FloatBetween(-0.45, 0.45);
+                                    targetX = mData.x + Math.cos(angle) * (calcDelta / 1000) * speed;
+                                    targetY = mData.y + Math.sin(angle) * (calcDelta / 1000) * speed;
+                                }
+
+                                targetX = Phaser.Math.Clamp(targetX, mimiSafeMin, mimiSafeMax);
+                                targetY = Phaser.Math.Clamp(targetY, mimiSafeMin, mimiSafeMax);
+                                update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { x: targetX, y: targetY, flipX: (targetX > mData.x), randomAngle: angle, speedBoost: speed });
                             }
-                            update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { x: targetX, y: targetY, flipX: (targetX > mData.x), randomAngle: angle, speedBoost: boostSpeed });
                         }
                     } else if (mData.state === 'down') {
                         if (!mData.downTime) update(ref(window.GameLogic.db, window.getServerRoomPath('cafeMimi')), { downTime: Date.now() });
