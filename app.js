@@ -2099,6 +2099,7 @@ function createSystemUI() {
             .modal.modal-closing-energy {
                 animation:modal-close-energy-green 0.2s ease-in forwards !important;
             }
+            .modal.modal-closing-music::after,
             .modal.modal-closing-portal::after,
             .modal.modal-closing-profile::after,
             .modal.modal-closing-energy::after {
@@ -2108,11 +2109,26 @@ function createSystemUI() {
                 pointer-events:none !important;
                 z-index:20 !important;
             }
+            .modal.modal-closing-music::after {
+                background:
+                    radial-gradient(circle at 18% 24%, rgba(255,220,70,1) 0 3px, transparent 5px),
+                    radial-gradient(circle at 80% 22%, rgba(255,45,32,0.95) 0 4px, transparent 7px),
+                    radial-gradient(circle at 28% 78%, rgba(0,0,0,1) 0 4px, transparent 7px),
+                    radial-gradient(circle at 70% 72%, rgba(255,192,40,0.92) 0 3px, transparent 6px),
+                    radial-gradient(circle, rgba(255,40,25,0.86) 0 2px, transparent 5px),
+                    radial-gradient(circle, rgba(255,220,70,0.88) 0 2px, transparent 4px),
+                    radial-gradient(circle, rgba(0,0,0,0.96) 0 3px, transparent 6px) !important;
+                background-size:100% 100%, 100% 100%, 100% 100%, 100% 100%, 34px 34px, 46px 42px, 58px 54px !important;
+                animation:modal-close-music-particles 0.2s ease-out forwards !important;
+            }
             .modal.modal-closing-portal::after {
                 background:
+                    radial-gradient(circle at 50% 50%, rgba(0,0,0,1) 0 12%, rgba(70,0,120,0.92) 13% 22%, transparent 24%),
                     radial-gradient(circle, rgba(255,255,255,0.95) 0 2px, transparent 4px),
-                    radial-gradient(circle, rgba(180,90,255,0.95) 0 3px, transparent 6px),
-                    conic-gradient(from 0deg, transparent, rgba(255,255,255,0.75), rgba(128,0,255,0.78), transparent) !important;
+                    radial-gradient(circle, rgba(142,45,255,0.95) 0 3px, transparent 6px),
+                    radial-gradient(circle, rgba(0,0,0,0.98) 0 4px, transparent 7px),
+                    conic-gradient(from 0deg, transparent, rgba(255,255,255,0.66), rgba(128,0,255,0.78), rgba(0,0,0,0.95), transparent) !important;
+                background-size:100% 100%, 38px 38px, 52px 48px, 64px 58px, 100% 100% !important;
                 animation:modal-close-portal-particles 0.2s ease-in forwards !important;
             }
             .modal.modal-closing-profile::after {
@@ -2128,8 +2144,41 @@ function createSystemUI() {
                 animation:modal-close-energy-fill 0.2s ease-in forwards !important;
             }
             @keyframes modal-close-music-spin {
-                0% { opacity:1; transform:translate(-50%, -50%) rotate(0deg) scale(1); }
-                100% { opacity:0; transform:translate(-50%, -50%) rotate(460deg) scale(0.04); }
+                0% {
+                    opacity:1;
+                    transform:translate(-50%, -50%) scale(1);
+                    filter:brightness(1) saturate(1);
+                    clip-path:circle(75% at 50% 50%);
+                }
+                48% {
+                    opacity:0.88;
+                    transform:translate(-50%, -50%) scale(0.72);
+                    filter:brightness(1.55) saturate(1.5);
+                    clip-path:circle(52% at 50% 50%);
+                }
+                100% {
+                    opacity:0;
+                    transform:translate(-50%, -50%) scale(0.04);
+                    filter:brightness(2.4) saturate(1.8) blur(2px);
+                    clip-path:circle(4% at 50% 50%);
+                }
+            }
+            @keyframes modal-close-music-particles {
+                0% {
+                    transform:scale(0.92) rotate(0deg);
+                    opacity:0.96;
+                    filter:brightness(1.1);
+                }
+                48% {
+                    transform:scale(1.16) rotate(18deg);
+                    opacity:1;
+                    filter:brightness(1.45);
+                }
+                100% {
+                    transform:scale(0.12) rotate(70deg);
+                    opacity:0;
+                    filter:brightness(2.2) blur(1px);
+                }
             }
             @keyframes modal-close-magic-melt {
                 0% { opacity:1; transform:translate(-50%, -50%) scale(1); filter:blur(0) brightness(1); clip-path:polygon(0 0, 100% 0, 100% 100%, 0 100%); }
@@ -2137,12 +2186,41 @@ function createSystemUI() {
                 100% { opacity:0; transform:translate(-50%, -30%) scaleX(0.72) scaleY(0.08); filter:blur(6px) brightness(1.6); clip-path:polygon(0 86%, 100% 86%, 92% 100%, 8% 100%); }
             }
             @keyframes modal-close-portal-spiral {
-                0% { opacity:1; transform:translate(-50%, -50%) rotate(0deg) scale(1); filter:brightness(1); }
-                100% { opacity:0; transform:translate(-50%, -50%) rotate(-420deg) scale(0.03); filter:brightness(2.4) blur(2px); }
+                0% {
+                    opacity:1;
+                    transform:translate(-50%, -50%) rotate(0deg) scale(1);
+                    filter:brightness(1);
+                    clip-path:circle(78% at 50% 50%);
+                }
+                48% {
+                    opacity:0.9;
+                    transform:translate(-50%, -50%) rotate(-42deg) scale(0.74);
+                    filter:brightness(1.7);
+                    clip-path:circle(52% at 50% 50%);
+                }
+                100% {
+                    opacity:0;
+                    transform:translate(-50%, -50%) rotate(-120deg) scale(0.035);
+                    filter:brightness(2.7) blur(2px);
+                    clip-path:circle(4% at 50% 50%);
+                }
             }
             @keyframes modal-close-portal-particles {
-                0% { transform:scale(1.18) rotate(0deg); opacity:0.95; }
-                100% { transform:scale(0.08) rotate(-260deg); opacity:0; }
+                0% {
+                    transform:scale(1.28) rotate(0deg);
+                    opacity:0.95;
+                    filter:brightness(1);
+                }
+                42% {
+                    transform:scale(0.82) rotate(-42deg);
+                    opacity:1;
+                    filter:brightness(1.7);
+                }
+                100% {
+                    transform:scale(0.04) rotate(-155deg);
+                    opacity:0;
+                    filter:brightness(2.6) blur(1px);
+                }
             }
             @keyframes modal-close-phone-fold {
                 0% { opacity:1; transform:translate(-50%, -50%) perspective(700px) rotateX(0deg) scale(1); }
@@ -7446,7 +7524,7 @@ this.btnB.on('pointerout', () => {
                 mainScene.localPlayer.isSweeping
             );
 
-            this.setStandardActionButtonsVisible(!isSweepingNow);
+            this.setStandardActionButtonsVisible(!isSweepingNow, { immediate: isSweepingNow });
             this.setSweepButtonVisible(isSweepingNow);
             this.statusContainer.setVisible(true);
             if (this.partyDash) this.partyDash.setVisible(false);
@@ -7469,36 +7547,55 @@ this.btnB.on('pointerout', () => {
         if (isStatusActive) { if (!this.statusBlinkTween) { this.statusText.setColor('#ff0000'); this.statusText.setShadow(0, 0, '#ffffff', 8, true, true); this.statusBlinkTween = this.tweens.add({ targets: this.statusText, alpha: 0.3, yoyo: true, repeat: -1, duration: 500 }); } } else { if (this.statusBlinkTween) { this.statusBlinkTween.stop(); this.statusBlinkTween = null; this.statusText.setAlpha(1); this.statusText.setColor('#3e2723'); this.statusText.setShadow(0, 0, '#000', 0, false, false); } }
     }
 
-    setStandardActionButtonsVisible(visible) {
+    setStandardActionButtonsVisible(visible, options = {}) {
         [this.btnA, this.txtA, this.btnB, this.txtB, this.itemBtn, this.itemText].forEach(obj => {
             if (obj && obj.setVisible) obj.setVisible(visible);
         });
-        this.setFurnitureActionButtonVisible(visible);
+        this.setFurnitureActionButtonVisible(visible, options);
     }
 
-    setFurnitureActionButtonVisible(visible) {
+    setFurnitureActionButtonVisible(visible, options = {}) {
         const targets = [this.furnBtn, this.furnText];
         if (this.furnBtn && this.furnBtn.__onionUiSkin) targets.push(this.furnBtn.__onionUiSkin);
 
-        const safeTargets = targets.filter(obj => obj && obj.setVisible && obj.setAlpha);
-        const currentVisible = !!(this.furnBtn && this.furnBtn.visible);
-
-        if (this.furnitureButtonVisibleState === visible && currentVisible === visible) return;
-        this.furnitureButtonVisibleState = visible;
+        const safeTargets = targets.filter(obj => obj && obj.setVisible);
+        const currentVisible = safeTargets.some(obj => !!(obj && obj.visible));
+        const immediate = !!(options && options.immediate);
 
         if (this.furnitureButtonFadeTween) {
             this.furnitureButtonFadeTween.stop();
             this.furnitureButtonFadeTween = null;
         }
 
+        if (!visible && immediate) {
+            safeTargets.forEach(obj => {
+                if (obj.setAlpha) obj.setAlpha(0);
+                obj.setVisible(false);
+            });
+            this.furnitureButtonVisibleState = false;
+            return;
+        }
+
+        if (this.furnitureButtonVisibleState === visible && currentVisible === visible) {
+            if (!visible) {
+                safeTargets.forEach(obj => {
+                    if (obj.setAlpha) obj.setAlpha(0);
+                    obj.setVisible(false);
+                });
+            }
+            return;
+        }
+
+        this.furnitureButtonVisibleState = visible;
+
         if (visible) {
             safeTargets.forEach(obj => {
                 obj.setVisible(true);
-                obj.setAlpha(0);
+                if (obj.setAlpha) obj.setAlpha(0);
             });
 
             this.furnitureButtonFadeTween = this.tweens.add({
-                targets: safeTargets,
+                targets: safeTargets.filter(obj => obj && obj.setAlpha),
                 alpha: 1,
                 duration: 250,
                 ease: 'Sine.easeOut',
@@ -7510,7 +7607,7 @@ this.btnB.on('pointerout', () => {
         }
 
         this.furnitureButtonFadeTween = this.tweens.add({
-            targets: safeTargets,
+            targets: safeTargets.filter(obj => obj && obj.setAlpha),
             alpha: 0,
             duration: 250,
             ease: 'Sine.easeIn',
@@ -7520,7 +7617,6 @@ this.btnB.on('pointerout', () => {
             }
         });
     }
-
     setSweepButtonVisible(visible) {
         const changed = this.sweepButtonVisibleState !== visible;
         this.sweepButtonVisibleState = visible;
