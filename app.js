@@ -147,11 +147,101 @@ window.updateCurrentRoomLabel = function() {
 };
 // ====== 入口房間共用工具結束 ======
 
+window.fullscreenZoom = 1;
+window.fullscreenPanX = 0;
+window.fullscreenPanY = 0;
+window.fullscreenPanState = null;
+
+window.applyFullscreenTransform = function() {
+    const img = document.getElementById('fullscreen-img');
+    if (!img) return;
+    img.style.transform = `translate(${window.fullscreenPanX}px, ${window.fullscreenPanY}px) scale(${window.fullscreenZoom})`;
+    img.style.cursor = window.fullscreenZoom > 1.01 ? 'grab' : 'default';
+};
+
 window.openFullscreen = function(src) {
     if (!src || src.endsWith('null') || src === '') return;
-    document.getElementById('fullscreen-img').src = src; document.getElementById('fullscreen-viewer').style.display = 'flex';
+
+    const viewer = document.getElementById('fullscreen-viewer');
+    const img = document.getElementById('fullscreen-img');
+    const slider = document.getElementById('fullscreen-zoom-slider');
+
+    window.fullscreenZoom = 1;
+    window.fullscreenPanX = 0;
+    window.fullscreenPanY = 0;
+    window.fullscreenPanState = null;
+
+    if (slider) slider.value = 100;
+    if (img) {
+        img.src = src;
+        img.style.transformOrigin = 'center center';
+    }
+    window.applyFullscreenTransform();
+
+    if (viewer) viewer.style.display = 'flex';
 };
-window.closeFullscreen = function() { document.getElementById('fullscreen-viewer').style.display = 'none'; };
+
+window.closeFullscreen = function() {
+    const viewer = document.getElementById('fullscreen-viewer');
+    if (viewer) viewer.style.display = 'none';
+    window.fullscreenPanState = null;
+};
+
+window.setFullscreenZoom = function(val) {
+    const nextZoom = Math.max(1, Math.min(4.2, Number(val || 100) / 100));
+    window.fullscreenZoom = nextZoom;
+
+    if (nextZoom <= 1.01) {
+        window.fullscreenPanX = 0;
+        window.fullscreenPanY = 0;
+    }
+
+    window.applyFullscreenTransform();
+};
+
+window.startFullscreenPan = function(e) {
+    if (!e) return;
+    e.stopPropagation();
+    if (e.preventDefault) e.preventDefault();
+
+    if (window.fullscreenZoom <= 1.01) return;
+
+    const img = document.getElementById('fullscreen-img');
+    if (img && img.setPointerCapture && e.pointerId !== undefined) {
+        try { img.setPointerCapture(e.pointerId); } catch (_) {}
+    }
+
+    window.fullscreenPanState = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        baseX: window.fullscreenPanX || 0,
+        baseY: window.fullscreenPanY || 0
+    };
+
+    if (img) img.style.cursor = 'grabbing';
+};
+
+window.moveFullscreenPan = function(e) {
+    const st = window.fullscreenPanState;
+    if (!st || !e) return;
+    if (st.pointerId !== undefined && e.pointerId !== undefined && st.pointerId !== e.pointerId) return;
+
+    e.stopPropagation();
+    if (e.preventDefault) e.preventDefault();
+
+    window.fullscreenPanX = st.baseX + (e.clientX - st.startX);
+    window.fullscreenPanY = st.baseY + (e.clientY - st.startY);
+    window.applyFullscreenTransform();
+};
+
+window.endFullscreenPan = function(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    window.fullscreenPanState = null;
+
+    const img = document.getElementById('fullscreen-img');
+    if (img) img.style.cursor = window.fullscreenZoom > 1.01 ? 'grab' : 'default';
+};
 
 window.updateBGMVolume = function(val) {
     let volText = document.getElementById('bgm-vol-text');
@@ -1337,13 +1427,17 @@ function createSystemUI() {
             #manual-modal.manual-crayon-ui::before {
                 content:"";
                 position:absolute;
-                inset:-8%;
+                inset:-10%;
                 background:
-                    repeating-linear-gradient(8deg, rgba(92,58,28,0.13) 0 2px, transparent 3px 18px),
-                    repeating-linear-gradient(-14deg, rgba(255,236,196,0.11) 0 1px, transparent 2px 22px),
+                    repeating-linear-gradient(8deg, rgba(92,58,28,0.11) 0 2px, transparent 3px 18px),
+                    repeating-linear-gradient(-14deg, rgba(255,236,196,0.12) 0 1px, transparent 2px 22px),
+                    repeating-linear-gradient(24deg, rgba(255,145,190,0.16) 0 2px, transparent 3px 42px),
+                    repeating-linear-gradient(-28deg, rgba(125,190,255,0.15) 0 2px, transparent 4px 48px),
+                    repeating-linear-gradient(43deg, rgba(255,226,92,0.15) 0 2px, transparent 4px 46px),
+                    repeating-linear-gradient(-52deg, rgba(132,218,142,0.14) 0 2px, transparent 5px 52px),
                     radial-gradient(circle at 18% 22%, rgba(255,232,190,0.18), transparent 28%),
                     radial-gradient(circle at 82% 70%, rgba(112,72,36,0.12), transparent 32%);
-                opacity:0.86;
+                opacity:0.88;
                 pointer-events:none;
                 z-index:0;
                 animation:manual-crayon-drift 7.5s ease-in-out infinite alternate;
@@ -1352,7 +1446,10 @@ function createSystemUI() {
                 content:"";
                 position:absolute;
                 inset:0;
-                background:linear-gradient(135deg, rgba(255,246,225,0.16), transparent 42%, rgba(96,58,30,0.09));
+                background:
+                    linear-gradient(135deg, rgba(255,246,225,0.16), transparent 42%, rgba(96,58,30,0.09)),
+                    radial-gradient(circle at 22% 80%, rgba(255,170,210,0.12), transparent 30%),
+                    radial-gradient(circle at 78% 24%, rgba(138,198,255,0.13), transparent 30%);
                 pointer-events:none;
                 z-index:0;
                 animation:manual-paper-breathe 5.8s ease-in-out infinite alternate;
@@ -1365,14 +1462,63 @@ function createSystemUI() {
                 color:#4f321d !important;
                 text-shadow:0 1px 0 rgba(255,238,206,0.85), 0 0 8px rgba(126,75,36,0.22);
             }
+            .manual-pastel-line-field {
+                position:absolute !important;
+                inset:0 !important;
+                overflow:hidden !important;
+                pointer-events:none !important;
+                z-index:0 !important;
+            }
+            .manual-pastel-line-field span {
+                position:absolute;
+                display:block;
+                width:var(--line-w, 190px);
+                height:var(--line-h, 4px);
+                left:var(--line-left, 20%);
+                top:var(--line-top, 20%);
+                border-radius:999px;
+                opacity:0.34;
+                background:var(--line-color, rgba(255,145,190,0.55));
+                filter:blur(0.15px);
+                transform:rotate(var(--line-rot, 8deg));
+                animation:manual-pastel-doodle var(--line-speed, 6s) ease-in-out infinite alternate;
+                animation-delay:var(--line-delay, 0s);
+            }
             @keyframes manual-crayon-drift {
                 0% { transform:translate(-2px, 1px) rotate(-0.18deg); opacity:0.78; }
                 50% { transform:translate(2px, -1px) rotate(0.14deg); opacity:0.9; }
                 100% { transform:translate(-1px, 2px) rotate(-0.08deg); opacity:0.84; }
             }
+            @keyframes manual-pastel-doodle {
+                0% { transform:translate(-2px, 1px) rotate(var(--line-rot, 8deg)) scaleX(0.94); opacity:0.22; }
+                45% { transform:translate(2px, -1px) rotate(calc(var(--line-rot, 8deg) + 1.5deg)) scaleX(1.03); opacity:0.42; }
+                100% { transform:translate(-1px, 2px) rotate(calc(var(--line-rot, 8deg) - 1deg)) scaleX(0.98); opacity:0.32; }
+            }
             @keyframes manual-paper-breathe {
                 0% { opacity:0.44; }
                 100% { opacity:0.72; }
+            }
+            .manual-top-tools {
+                display:flex;
+                align-items:center;
+                gap:8px;
+                flex-shrink:0;
+                min-width:0;
+            }
+            #manual-search-input {
+                width:min(30vw, 230px);
+                min-width:118px;
+                padding:8px 10px;
+                border-radius:999px;
+                border:2px solid rgba(92,58,28,0.52);
+                background:rgba(255,247,232,0.88);
+                color:#4a2d18;
+                font-family:inherit;
+                outline:none;
+                box-shadow:inset 0 0 8px rgba(255,255,255,0.45);
+            }
+            #manual-search-input:focus {
+                box-shadow:0 0 10px rgba(255,232,160,0.65), inset 0 0 8px rgba(255,255,255,0.52);
             }
             .manual-mode-btn {
                 width:34px;
@@ -1390,6 +1536,12 @@ function createSystemUI() {
                 background:#6b3f1f;
                 color:#fff1d0;
                 box-shadow:0 0 12px rgba(255,232,160,0.75), inset 0 0 8px rgba(0,0,0,0.25);
+            }
+            .manual-admin-toggle-btn {
+                display:none;
+                background:linear-gradient(180deg, #7a201f, #4b0f0f) !important;
+                color:#fff3e6 !important;
+                border-color:rgba(255,236,205,0.9) !important;
             }
             .manual-thumb-grid {
                 display:grid;
@@ -1422,6 +1574,56 @@ function createSystemUI() {
                 line-height:1.35;
                 word-break:break-word;
             }
+            .manual-thumb-desc {
+                margin-top:4px;
+                font-size:11px;
+                color:#6d4b32;
+                line-height:1.35;
+                display:-webkit-box;
+                -webkit-line-clamp:2;
+                -webkit-box-orient:vertical;
+                overflow:hidden;
+            }
+            .manual-page-desc {
+                margin:10px auto 0 auto;
+                max-width:80%;
+                min-height:22px;
+                padding:8px 10px;
+                border-radius:10px;
+                background:rgba(255,241,215,0.62);
+                color:#5b351d;
+                font-size:13px;
+                line-height:1.45;
+                text-align:left;
+                white-space:pre-wrap;
+                box-shadow:inset 0 0 8px rgba(255,255,255,0.36);
+            }
+            .manual-folder-grid {
+                display:grid;
+                grid-template-columns:repeat(2, minmax(0, 1fr));
+                gap:12px;
+            }
+            .manual-folder-card {
+                min-height:78px;
+                border-radius:16px;
+                border:2px solid rgba(92,58,28,0.52);
+                background:linear-gradient(180deg, rgba(255,238,206,0.9), rgba(238,195,124,0.8));
+                color:#4a2d18;
+                font-weight:bold;
+                font-size:15px;
+                cursor:pointer;
+                box-shadow:0 5px 12px rgba(0,0,0,0.16), inset 0 0 12px rgba(255,255,255,0.35);
+                display:flex;
+                flex-direction:column;
+                align-items:center;
+                justify-content:center;
+                gap:5px;
+                touch-action:manipulation;
+            }
+            .manual-folder-card span:first-child {
+                font-size:28px;
+                filter:drop-shadow(0 0 5px rgba(255,255,255,0.7));
+            }
             .manual-category-tabs {
                 display:grid;
                 grid-template-columns:repeat(2, minmax(0, 1fr));
@@ -1446,14 +1648,25 @@ function createSystemUI() {
                 box-shadow:0 0 10px rgba(255,232,160,0.65);
             }
             .manual-admin-panel {
-                background:rgba(255,238,206,0.62);
-                border:2px dashed rgba(92,58,28,0.46);
-                border-radius:12px;
+                position:absolute !important;
+                top:58px !important;
+                right:14px !important;
+                width:min(330px, calc(100% - 28px)) !important;
+                max-height:min(72vh, 620px) !important;
+                overflow-y:auto !important;
+                overflow-x:hidden !important;
+                background:rgba(255,238,206,0.96);
+                border:2px dashed rgba(92,58,28,0.58);
+                border-radius:14px;
                 padding:12px;
                 text-align:left;
+                z-index:6 !important;
+                box-shadow:0 10px 22px rgba(0,0,0,0.32), inset 0 0 14px rgba(255,255,255,0.4);
+                -webkit-overflow-scrolling:touch;
             }
             .manual-admin-panel input,
-            .manual-admin-panel select {
+            .manual-admin-panel select,
+            .manual-admin-panel textarea {
                 width:100%;
                 box-sizing:border-box;
                 padding:8px;
@@ -1463,6 +1676,63 @@ function createSystemUI() {
                 background:#fff7e8;
                 color:#4a2d18;
                 font-family:inherit;
+            }
+            .manual-admin-panel textarea {
+                min-height:82px;
+                resize:vertical;
+                line-height:1.45;
+            }
+            .manual-nav-btn {
+                width:48px;
+                height:48px;
+                border-radius:50% !important;
+                background:radial-gradient(circle at 35% 28%, #ffb0a4 0%, #8d1e1c 48%, #4a0909 100%) !important;
+                border:3px solid rgba(255,232,215,0.88) !important;
+                color:#fff7f0 !important;
+                font-size:26px !important;
+                font-weight:900 !important;
+                padding:0 !important;
+                box-shadow:0 6px 0 #3b0505, 0 0 12px rgba(255,255,255,0.42), inset 0 2px 4px rgba(255,255,255,0.55), inset 0 -8px 12px rgba(55,0,0,0.52) !important;
+                text-shadow:0 2px 2px rgba(0,0,0,0.72);
+                overflow:visible;
+                pointer-events:auto;
+            }
+            .manual-nav-btn::before {
+                content:"";
+                position:absolute;
+                inset:-28px -12px 8px -12px;
+                background:
+                    radial-gradient(circle, rgba(255,255,255,0.95) 0 2px, transparent 4px),
+                    radial-gradient(circle, rgba(255,255,255,0.75) 0 1px, transparent 3px);
+                background-size:18px 34px, 26px 42px;
+                animation:manual-button-spark-rise 1.6s linear infinite;
+                opacity:0.55;
+                pointer-events:none;
+            }
+            .manual-nav-btn:active {
+                transform:scale(0.94);
+                box-shadow:0 3px 0 #3b0505, 0 0 18px rgba(255,235,220,0.72), inset 0 2px 8px rgba(55,0,0,0.42) !important;
+            }
+            .manual-nav-burst {
+                position:absolute;
+                left:50%;
+                top:50%;
+                width:6px;
+                height:6px;
+                border-radius:50%;
+                background:#ffffff;
+                box-shadow:0 0 8px #ffffff, 0 0 14px #ffe6d8;
+                pointer-events:none;
+                animation:manual-nav-burst-pop 0.52s ease-out forwards;
+            }
+            @keyframes manual-button-spark-rise {
+                0% { transform:translateY(18px); opacity:0; }
+                22% { opacity:0.72; }
+                100% { transform:translateY(-42px); opacity:0; }
+            }
+            @keyframes manual-nav-burst-pop {
+                0% { transform:translate(-50%, -50%) scale(0.2); opacity:1; }
+                100% { transform:translate(calc(-50% + var(--burst-x, 0px)), calc(-50% + var(--burst-y, -40px))) scale(0.05); opacity:0; }
             }
             .modal.catalog-theme-opening {
                 animation:catalog-theme-fade-in 0.25s ease-out forwards !important;
@@ -1794,8 +2064,13 @@ function createSystemUI() {
             </div>
         </div>
         
-        <div id="fullscreen-viewer" onclick="window.closeFullscreen()" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; cursor:pointer;">
-            <img id="fullscreen-img" style="max-width:90%; max-height:90%; border:3px solid var(--mucha-gold); border-radius:12px; object-fit:contain; background:var(--mucha-paper);">
+        <div id="fullscreen-viewer" onclick="if(event.target && event.target.id === 'fullscreen-viewer') window.closeFullscreen()" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.86); z-index:1000; justify-content:center; align-items:center; cursor:pointer; overflow:hidden;">
+            <div id="fullscreen-img-wrap" onclick="event.stopPropagation()" style="position:relative; width:100%; height:100%; display:flex; justify-content:center; align-items:center; overflow:hidden; cursor:default;">
+                <img id="fullscreen-img" onpointerdown="window.startFullscreenPan(event)" onpointermove="window.moveFullscreenPan(event)" onpointerup="window.endFullscreenPan(event)" onpointercancel="window.endFullscreenPan(event)" style="max-width:88%; max-height:90%; border:3px solid var(--mucha-gold); border-radius:12px; object-fit:contain; background:var(--mucha-paper); touch-action:none; user-select:none; -webkit-user-drag:none; transition:transform 0.08s linear;">
+            </div>
+            <div id="fullscreen-zoom-panel" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" style="position:absolute; right:18px; top:50%; transform:translateY(-50%); height:min(58vh, 420px); width:44px; border-radius:999px; background:rgba(255,244,220,0.86); border:2px solid var(--mucha-gold); box-shadow:0 0 12px rgba(255,255,255,0.45), 0 6px 16px rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; z-index:1002;">
+                <input id="fullscreen-zoom-slider" type="range" min="100" max="420" value="100" orient="vertical" oninput="window.setFullscreenZoom(this.value)" style="height:86%; width:28px; writing-mode:vertical-rl; direction:rtl; accent-color:#8b1f1f; touch-action:none;">
+            </div>
         </div>
         <div id="ingame-confirm" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:var(--mucha-paper); border:3px solid var(--mucha-gold); padding:20px; z-index:400; border-radius:12px; text-align:center; box-shadow: 0 10px 25px rgba(0,0,0,0.8);">
             <div style="margin-bottom:15px; color:var(--mucha-brown); font-weight:bold; font-size:16px;">確定要收起裝備嗎？</div>
@@ -1924,30 +2199,50 @@ function createSystemUI() {
         </div>
 
         <div id="manual-modal" class="modal manual-crayon-ui" style="width: 90%; max-width: none; height: 90vh; max-height: none; top: 5%; left: 5%; transform: none; box-sizing: border-box; z-index: 260;">
+            <div class="manual-pastel-line-field" aria-hidden="true">
+                <span style="--line-left:5%; --line-top:18%; --line-w:190px; --line-color:rgba(255,145,190,0.55); --line-rot:8deg; --line-speed:6.2s; --line-delay:0s;"></span>
+                <span style="--line-left:42%; --line-top:12%; --line-w:230px; --line-color:rgba(125,190,255,0.5); --line-rot:-9deg; --line-speed:7.4s; --line-delay:0.4s;"></span>
+                <span style="--line-left:68%; --line-top:25%; --line-w:160px; --line-color:rgba(255,226,92,0.55); --line-rot:16deg; --line-speed:6.8s; --line-delay:0.9s;"></span>
+                <span style="--line-left:12%; --line-top:55%; --line-w:260px; --line-color:rgba(132,218,142,0.48); --line-rot:-14deg; --line-speed:8s; --line-delay:1.2s;"></span>
+                <span style="--line-left:55%; --line-top:67%; --line-w:210px; --line-color:rgba(255,145,190,0.42); --line-rot:6deg; --line-speed:7.1s; --line-delay:1.7s;"></span>
+                <span style="--line-left:26%; --line-top:82%; --line-w:240px; --line-color:rgba(125,190,255,0.42); --line-rot:19deg; --line-speed:7.8s; --line-delay:2.1s;"></span>
+                <span style="--line-left:74%; --line-top:78%; --line-w:150px; --line-color:rgba(132,218,142,0.46); --line-rot:-22deg; --line-speed:6.6s; --line-delay:2.6s;"></span>
+                <span style="--line-left:3%; --line-top:36%; --line-w:140px; --line-color:rgba(255,226,92,0.48); --line-rot:28deg; --line-speed:8.4s; --line-delay:3s;"></span>
+            </div>
             <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; border-bottom: 2px solid rgba(92,58,28,0.55); padding-bottom: 10px; margin-bottom: 10px;">
-                <h3 style="margin:0; color: var(--mucha-green); border-bottom: none; padding-bottom: 0;">📖 說明書</h3>
-                <div id="manual-mode-switcher" style="display:flex; gap:6px; flex-shrink:0;">
-                    <button id="manual-mode-single" class="manual-mode-btn active" title="單頁翻閱" onclick="window.setManualMode('single')">📄</button>
-                    <button id="manual-mode-thumbs" class="manual-mode-btn" title="全部縮圖" onclick="window.setManualMode('thumbs')">▦</button>
-                    <button id="manual-mode-tags" class="manual-mode-btn" title="分類標籤" onclick="window.setManualMode('tags')">🏷️</button>
+                <h3 style="margin:0; color: var(--mucha-green); border-bottom: none; padding-bottom: 0; flex-shrink:0;">📖 說明書</h3>
+                <div class="manual-top-tools">
+                    <input id="manual-search-input" type="text" placeholder="搜尋標題、標籤、內文" oninput="window.searchManualPages(this.value)">
+                    <div id="manual-mode-switcher" style="display:flex; gap:6px; flex-shrink:0;">
+                        <button id="manual-mode-single" class="manual-mode-btn active" title="單頁翻閱" onclick="window.setManualMode('single')">📄</button>
+                        <button id="manual-mode-thumbs" class="manual-mode-btn" title="全部縮圖" onclick="window.setManualMode('thumbs')">▦</button>
+                        <button id="manual-mode-tags" class="manual-mode-btn" title="分類標籤" onclick="window.setManualMode('tags')">🏷️</button>
+                        <button id="manual-admin-toggle" class="manual-mode-btn manual-admin-toggle-btn" title="管理者設定" onclick="window.toggleManualAdminPanel()">⚙️</button>
+                    </div>
                 </div>
             </div>
             <div id="manual-page-title" style="font-weight:bold; color:#4a2d18; text-shadow:0 1px 0 rgba(255,238,206,0.75); margin-bottom:8px; min-height:20px; text-align:center;">未命名說明頁</div>
             <div id="manual-single-view" style="display:block;">
-                <div id="manual-content" style="display:flex; justify-content:center; align-items:center; height: 58vh; position: relative;"><button id="manual-prev-btn" class="btn-secondary" style="position:absolute; left:0; z-index:10; font-size:24px; padding:10px 15px;">&lt;</button><img id="manual-img-display" onclick="window.openFullscreen(this.src)" src="" alt="目前尚無說明書內容" style="max-width:80%; max-height:100%; object-fit:contain; border:2px solid rgba(92,58,28,0.5); border-radius:10px; cursor: pointer; background:#f4dfbe; box-shadow:0 6px 14px rgba(0,0,0,0.18);"><button id="manual-next-btn" class="btn-secondary" style="position:absolute; right:0; z-index:10; font-size:24px; padding:10px 15px;">&gt;</button><div id="manual-page-indicator" style="position:absolute; bottom: -30px; text-align:center; width:100%; font-weight:bold; color:var(--mucha-brown);">0 / 0</div></div>
+                <div id="manual-content" style="display:flex; justify-content:center; align-items:center; height: 53vh; position: relative;"><button id="manual-prev-btn" class="manual-nav-btn" style="position:absolute; left:0; z-index:10;">&lt;</button><img id="manual-img-display" onclick="window.openFullscreen(this.src)" src="" alt="目前尚無說明書內容" style="max-width:80%; max-height:100%; object-fit:contain; border:2px solid rgba(92,58,28,0.5); border-radius:10px; cursor: pointer; background:#f4dfbe; box-shadow:0 6px 14px rgba(0,0,0,0.18);"><button id="manual-next-btn" class="manual-nav-btn" style="position:absolute; right:0; z-index:10;">&gt;</button><div id="manual-page-indicator" style="position:absolute; bottom: -30px; text-align:center; width:100%; font-weight:bold; color:var(--mucha-brown);">0 / 0</div></div>
+                <div id="manual-page-desc" class="manual-page-desc"></div>
             </div>
             <div id="manual-thumb-view" style="display:none; max-height:60vh; overflow-y:auto; overflow-x:hidden; padding:4px; -webkit-overflow-scrolling:touch;"></div>
             <div id="manual-category-view" style="display:none; max-height:60vh; overflow-y:auto; overflow-x:hidden; padding:4px; -webkit-overflow-scrolling:touch;">
                 <div id="manual-category-tabs" class="manual-category-tabs"></div>
                 <div id="manual-category-pages"></div>
             </div>
-            <div id="manual-admin-area" class="manual-admin-panel" style="display:none; margin-top: 42px;">
-                <div style="font-weight:bold; color:#5b351d; margin-bottom:8px; text-align:center;">管理者設定</div>
+            <div id="manual-admin-area" class="manual-admin-panel" style="display:none;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
+                    <div style="font-weight:bold; color:#5b351d;">管理者設定</div>
+                    <button class="btn-secondary" style="padding:4px 8px; font-size:12px;" onclick="window.toggleManualAdminPanel(false)">關閉</button>
+                </div>
                 <label style="font-size:12px; font-weight:bold;">目前頁面標題</label>
                 <input type="text" id="manual-title-input" placeholder="輸入這一頁的標題">
+                <label style="font-size:12px; font-weight:bold;">目前頁面內文描述</label>
+                <textarea id="manual-desc-input" placeholder="輸入這一頁的補充說明、操作訣竅或注意事項"></textarea>
                 <label style="font-size:12px; font-weight:bold;">目前頁面分類</label>
                 <select id="manual-category-select"></select>
-                <button class="btn-primary" style="width:100%; margin:4px 0 10px 0;" onclick="window.updateManualPageMeta()">儲存目前頁面標題與分類</button>
+                <button class="btn-primary" style="width:100%; margin:4px 0 10px 0;" onclick="window.updateManualPageMeta()">儲存目前頁面標題、內文與分類</button>
                 <label style="font-size:12px; font-weight:bold;">新增／改名分類</label>
                 <input type="text" id="manual-category-name-input" placeholder="輸入分類名稱，例如：大廳操作">
                 <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
@@ -2784,6 +3079,9 @@ window.manualPages = []; window.currentManualIndex = 0;
 window.manualViewMode = 'single';
 window.manualCategories = {};
 window.selectedManualCategoryId = 'uncategorized';
+window.manualSearchKeyword = '';
+window.manualCategoryFilterActive = false;
+window.manualAdminPanelOpen = false;
 
 window.isManualAdmin = function() {
     const user = window.GameLogic && window.GameLogic.currentUser ? window.GameLogic.currentUser : null;
@@ -2805,6 +3103,10 @@ window.getManualPageTitle = function(page, idx = null) {
     if (title) return title;
     if (idx !== null && idx !== undefined) return `未命名說明頁 ${Number(idx) + 1}`;
     return '未命名說明頁';
+};
+
+window.getManualPageDesc = function(page) {
+    return page && page.description ? String(page.description) : '';
 };
 
 window.getManualCategoryName = function(categoryId) {
@@ -2832,19 +3134,74 @@ window.getManualCategoryOptions = function() {
     });
 };
 
+window.pageMatchesManualSearch = function(page, idx, keyword) {
+    const kw = String(keyword || '').trim().toLowerCase();
+    if (!kw) return true;
+
+    const title = window.getManualPageTitle(page, idx).toLowerCase();
+    const desc = window.getManualPageDesc(page).toLowerCase();
+    const categoryName = window.getManualCategoryName(page && page.categoryId ? page.categoryId : 'uncategorized').toLowerCase();
+
+    return title.includes(kw) || desc.includes(kw) || categoryName.includes(kw);
+};
+
+window.getManualVisibleItems = function() {
+    const pages = Array.isArray(window.manualPages) ? window.manualPages : [];
+    const keyword = String(window.manualSearchKeyword || '').trim();
+
+    return pages
+        .map((page, index) => ({ page, index }))
+        .filter(item => {
+            const categoryId = item.page.categoryId || 'uncategorized';
+            if (window.manualCategoryFilterActive && categoryId !== window.selectedManualCategoryId) return false;
+            return window.pageMatchesManualSearch(item.page, item.index, keyword);
+        });
+};
+
 window.openManualModal = function() {
     const modal = document.getElementById('manual-modal');
-    const adminArea = document.getElementById('manual-admin-area');
+    const searchInput = document.getElementById('manual-search-input');
+
     if (modal) modal.style.display = 'block';
+
     window.currentManualIndex = 0;
     window.manualViewMode = 'single';
-    if (adminArea) adminArea.style.display = window.isManualAdmin() ? 'block' : 'none';
+    window.manualSearchKeyword = '';
+    window.manualCategoryFilterActive = false;
+    window.manualAdminPanelOpen = false;
+
+    if (searchInput) searchInput.value = '';
+
     window.renderManualPage();
 };
 
 window.setManualMode = function(mode) {
     if (!['single', 'thumbs', 'tags'].includes(mode)) mode = 'single';
+
     window.manualViewMode = mode;
+
+    if (mode === 'single' || mode === 'tags') {
+        window.manualCategoryFilterActive = false;
+    }
+
+    window.renderManualPage();
+};
+
+window.searchManualPages = function(keyword) {
+    window.manualSearchKeyword = String(keyword || '').trim();
+    window.manualCategoryFilterActive = false;
+
+    if (window.manualSearchKeyword) {
+        window.manualViewMode = 'thumbs';
+    }
+
+    window.renderManualPage();
+};
+
+window.openManualCategoryFolder = function(categoryId) {
+    window.selectedManualCategoryId = categoryId || 'uncategorized';
+    window.manualCategoryFilterActive = true;
+    window.manualViewMode = 'thumbs';
     window.renderManualPage();
 };
 
@@ -2856,19 +3213,34 @@ window.jumpToManualPage = function(idx) {
     window.renderManualPage();
 };
 
+window.toggleManualAdminPanel = function(forceState = null) {
+    if (!window.isManualAdmin()) return;
+    window.manualAdminPanelOpen = forceState === null ? !window.manualAdminPanelOpen : !!forceState;
+    window.renderManualAdminFields();
+};
+
 window.renderManualAdminFields = function() {
     const adminArea = document.getElementById('manual-admin-area');
+    const adminBtn = document.getElementById('manual-admin-toggle');
     if (!adminArea) return;
 
     const isAdmin = window.isManualAdmin();
-    adminArea.style.display = isAdmin ? 'block' : 'none';
+
+    if (adminBtn) {
+        adminBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+        adminBtn.classList.toggle('active', isAdmin && window.manualAdminPanelOpen);
+    }
+
+    adminArea.style.display = isAdmin && window.manualAdminPanelOpen ? 'block' : 'none';
     if (!isAdmin) return;
 
     const page = window.manualPages[window.currentManualIndex] || null;
     const titleInput = document.getElementById('manual-title-input');
+    const descInput = document.getElementById('manual-desc-input');
     const categorySelect = document.getElementById('manual-category-select');
 
     if (titleInput) titleInput.value = page ? (page.title || '') : '';
+    if (descInput) descInput.value = page ? (page.description || '') : '';
 
     if (categorySelect) {
         const currentCategoryId = page && page.categoryId ? page.categoryId : 'uncategorized';
@@ -2884,7 +3256,7 @@ window.renderManualThumbCards = function(pages, targetEl) {
     const sourcePages = Array.isArray(pages) ? pages : [];
 
     if (sourcePages.length === 0) {
-        targetEl.innerHTML = `<div style="text-align:center; color:#5b351d; font-weight:bold; padding:20px;">目前沒有說明頁</div>`;
+        targetEl.innerHTML = `<div style="text-align:center; color:#5b351d; font-weight:bold; padding:20px;">目前沒有符合條件的說明頁</div>`;
         return;
     }
 
@@ -2892,9 +3264,11 @@ window.renderManualThumbCards = function(pages, targetEl) {
         const page = item.page || item;
         const idx = item.index !== undefined ? item.index : window.manualPages.indexOf(page);
         const title = window.getManualPageTitle(page, idx);
+        const desc = window.getManualPageDesc(page);
         return `<div class="manual-thumb-card" onclick="window.jumpToManualPage(${idx})">
             <img src="${page.imgBase64 || ''}" alt="${window.escapeManualHtml(title)}">
             <div class="manual-thumb-title">${window.escapeManualHtml(title)}</div>
+            ${desc ? `<div class="manual-thumb-desc">${window.escapeManualHtml(desc)}</div>` : ''}
         </div>`;
     }).join('')}</div>`;
 };
@@ -2905,27 +3279,38 @@ window.renderManualCategoryMode = function() {
     if (!tabsEl || !pagesEl) return;
 
     const cats = window.getManualCategoryOptions();
-    if (!cats.some(cat => cat.id === window.selectedManualCategoryId)) {
-        window.selectedManualCategoryId = 'uncategorized';
+
+    tabsEl.innerHTML = '';
+    pagesEl.innerHTML = `<div class="manual-folder-grid">${cats.map(cat => {
+        const count = (window.manualPages || []).filter(page => (page.categoryId || 'uncategorized') === cat.id).length;
+        return `<button class="manual-folder-card" onclick="window.openManualCategoryFolder('${window.escapeManualHtml(cat.id)}')">
+            <span>📁</span>
+            <span>${window.escapeManualHtml(cat.name)}</span>
+            <small>${count} 頁</small>
+        </button>`;
+    }).join('')}</div>`;
+};
+
+window.burstManualNavParticles = function(btn) {
+    if (!btn) return;
+
+    for (let i = 0; i < 10; i++) {
+        const p = document.createElement('span');
+        p.className = 'manual-nav-burst';
+        p.style.setProperty('--burst-x', `${Math.round((Math.random() - 0.5) * 74)}px`);
+        p.style.setProperty('--burst-y', `${Math.round(-28 - Math.random() * 54)}px`);
+        btn.appendChild(p);
+        setTimeout(() => {
+            if (p && p.parentNode) p.parentNode.removeChild(p);
+        }, 560);
     }
-
-    tabsEl.innerHTML = cats.map(cat => {
-        const active = cat.id === window.selectedManualCategoryId ? 'active' : '';
-        return `<button class="manual-category-tab ${active}" onclick="window.selectedManualCategoryId='${window.escapeManualHtml(cat.id)}'; window.renderManualPage();">${window.escapeManualHtml(cat.name)}</button>`;
-    }).join('');
-
-    const selectedId = window.selectedManualCategoryId || 'uncategorized';
-    const filtered = window.manualPages
-        .map((page, index) => ({ page, index }))
-        .filter(item => (item.page.categoryId || 'uncategorized') === selectedId);
-
-    window.renderManualThumbCards(filtered, pagesEl);
 };
 
 window.renderManualPage = function() {
     const imgEl = document.getElementById('manual-img-display');
     const indEl = document.getElementById('manual-page-indicator');
     const titleEl = document.getElementById('manual-page-title');
+    const descEl = document.getElementById('manual-page-desc');
     const singleView = document.getElementById('manual-single-view');
     const thumbView = document.getElementById('manual-thumb-view');
     const categoryView = document.getElementById('manual-category-view');
@@ -2947,6 +3332,10 @@ window.renderManualPage = function() {
         }
         if (indEl) indEl.innerText = '0 / 0';
         if (titleEl) titleEl.innerText = '目前尚無說明書內容';
+        if (descEl) {
+            descEl.innerText = '';
+            descEl.style.display = 'none';
+        }
         if (thumbView) window.renderManualThumbCards([], thumbView);
         if (categoryView) window.renderManualCategoryMode();
         window.renderManualAdminFields();
@@ -2958,6 +3347,7 @@ window.renderManualPage = function() {
 
     const page = window.manualPages[window.currentManualIndex];
     const pageTitle = window.getManualPageTitle(page, window.currentManualIndex);
+    const pageDesc = window.getManualPageDesc(page);
     const categoryName = window.getManualCategoryName(page.categoryId || 'uncategorized');
 
     if (imgEl) {
@@ -2966,9 +3356,14 @@ window.renderManualPage = function() {
     }
     if (indEl) indEl.innerText = `${window.currentManualIndex + 1} / ${total}｜${categoryName}`;
     if (titleEl) titleEl.innerText = pageTitle;
+    if (descEl) {
+        descEl.innerText = pageDesc;
+        descEl.style.display = pageDesc ? 'block' : 'none';
+    }
 
     if (thumbView && window.manualViewMode === 'thumbs') {
-        window.renderManualThumbCards(window.manualPages.map((p, index) => ({ page: p, index })), thumbView);
+        const items = window.getManualVisibleItems();
+        window.renderManualThumbCards(items, thumbView);
     }
 
     if (categoryView && window.manualViewMode === 'tags') {
@@ -2979,6 +3374,8 @@ window.renderManualPage = function() {
 };
 
 document.getElementById('manual-prev-btn').addEventListener('click', () => {
+    window.burstManualNavParticles(document.getElementById('manual-prev-btn'));
+
     const total = Array.isArray(window.manualPages) ? window.manualPages.length : 0;
     if (total <= 1) {
         window.currentManualIndex = 0;
@@ -2991,6 +3388,8 @@ document.getElementById('manual-prev-btn').addEventListener('click', () => {
 });
 
 document.getElementById('manual-next-btn').addEventListener('click', () => {
+    window.burstManualNavParticles(document.getElementById('manual-next-btn'));
+
     const total = Array.isArray(window.manualPages) ? window.manualPages.length : 0;
     if (total <= 1) {
         window.currentManualIndex = 0;
@@ -3009,8 +3408,10 @@ window.uploadManualPage = function() {
     if (!file) return alert("請選擇圖片檔案！");
 
     const titleInput = document.getElementById('manual-title-input');
+    const descInput = document.getElementById('manual-desc-input');
     const categorySelect = document.getElementById('manual-category-select');
     const title = titleInput && titleInput.value.trim() ? titleInput.value.trim() : '';
+    const description = descInput && descInput.value.trim() ? descInput.value.trim() : '';
     const categoryId = categorySelect && categorySelect.value ? categorySelect.value : 'uncategorized';
 
     const reader = new FileReader();
@@ -3027,6 +3428,7 @@ window.uploadManualPage = function() {
                 imgBase64: cvs.toDataURL('image/jpeg', 0.8),
                 timestamp: Date.now(),
                 title,
+                description,
                 categoryId
             }).then(() => {
                 alert('上傳成功！');
@@ -3044,15 +3446,19 @@ window.updateManualPageMeta = function() {
     if (!page || !page.key) return alert("目前沒有可編輯的說明頁。");
 
     const titleInput = document.getElementById('manual-title-input');
+    const descInput = document.getElementById('manual-desc-input');
     const categorySelect = document.getElementById('manual-category-select');
     const title = titleInput ? titleInput.value.trim() : '';
+    const description = descInput ? descInput.value.trim() : '';
     const categoryId = categorySelect && categorySelect.value ? categorySelect.value : 'uncategorized';
 
     update(ref(window.GameLogic.db, `manuals/${page.key}`), {
         title,
+        description,
         categoryId
     }).then(() => {
         page.title = title;
+        page.description = description;
         page.categoryId = categoryId;
         window.renderManualPage();
         alert('說明頁資料已更新！');
@@ -5031,7 +5437,13 @@ window.addEventListener('pointerdown', (e) => {
     if (!e.target.closest('#action-menu') && e.target.tagName !== 'CANVAS') { actionMenu.style.display = 'none'; } 
     if (e.target.tagName === 'CANVAS') { 
         // 修正2：點擊背景時，不要關閉投票介面與強制召喚介面
-        document.querySelectorAll('.modal:not(#voting-modal):not(#forced-summon-modal)').forEach(m => m.style.display = 'none'); 
+        document.querySelectorAll('.modal:not(#voting-modal):not(#forced-summon-modal)').forEach(m => {
+            if (m.id === 'furniture-catalog-modal' && m.style.display !== 'none' && typeof window.closeFurnitureCatalogModal === 'function') {
+                window.closeFurnitureCatalogModal();
+            } else {
+                m.style.display = 'none';
+            }
+        }); 
         window.GameLogic.isShopping = false; 
         // 【修正】確保點擊背景關閉介面時，同步觸發大粉蔥的完整清理與狀態復原
         if (typeof window.closeRewardModal === 'function' && window.GameLogic.activeGiftBox) {
@@ -5162,7 +5574,7 @@ onAuthStateChanged(auth, async (user) => {
         pmUnreadUnsubscribe = onValue(ref(db, `users/${user.uid}/unreadPMs`), snap => {
         window.normalizeUnreadPMs(snap.val() || {});
         });
-        onValue(ref(db, 'manuals'), snap => { const data = snap.val(); window.manualPages = []; if (data) { Object.keys(data).forEach(key => { const item = data[key] || {}; if (!item.imgBase64) return; window.manualPages.push({ key: key, imgBase64: item.imgBase64, timestamp: item.timestamp || 0, title: item.title || '', categoryId: item.categoryId || 'uncategorized' }); }); window.manualPages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); } window.renderManualPage(); });
+        onValue(ref(db, 'manuals'), snap => { const data = snap.val(); window.manualPages = []; if (data) { Object.keys(data).forEach(key => { const item = data[key] || {}; if (!item.imgBase64) return; window.manualPages.push({ key: key, imgBase64: item.imgBase64, timestamp: item.timestamp || 0, title: item.title || '', description: item.description || '', categoryId: item.categoryId || 'uncategorized' }); }); window.manualPages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); } window.renderManualPage(); });
         onValue(ref(db, 'manualCategories'), snap => { window.manualCategories = snap.val() || {}; window.renderManualPage(); });
         if (cafeFurnitureUnsubscribe) { cafeFurnitureUnsubscribe(); cafeFurnitureUnsubscribe = null; }
         cafeFurnitureUnsubscribe = onValue(ref(db, window.getServerRoomPath('cafeFurniture')), snap => {
