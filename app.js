@@ -2529,6 +2529,124 @@ function createSystemUI() {
                 100% { opacity:0; transform:translate(-50%, 14px) scale(0.94); }
             }
 
+            @media (max-width: 768px), (orientation: portrait) {
+                #manual-modal.manual-crayon-ui {
+                    width:96vw !important;
+                    height:92vh !important;
+                    top:4vh !important;
+                    left:2vw !important;
+                    padding:12px 12px 14px 12px !important;
+                    max-height:none !important;
+                    overflow:hidden !important;
+                }
+
+                #manual-modal.manual-crayon-ui > div[style*="border-bottom"] {
+                    position:relative !important;
+                    min-height:92px !important;
+                    padding:0 42px 46px 0 !important;
+                    margin-bottom:4px !important;
+                    align-items:flex-start !important;
+                }
+
+                #manual-modal.manual-crayon-ui > div[style*="border-bottom"] > h3 {
+                    font-size:17px !important;
+                    line-height:34px !important;
+                    white-space:nowrap !important;
+                }
+
+                #manual-modal .manual-top-tools {
+                    position:static !important;
+                    display:block !important;
+                    min-width:0 !important;
+                    width:100% !important;
+                }
+
+                #manual-search-input {
+                    position:absolute !important;
+                    top:0 !important;
+                    right:44px !important;
+                    width:min(48vw, 210px) !important;
+                    min-width:138px !important;
+                    height:34px !important;
+                    padding:6px 10px !important;
+                    font-size:13px !important;
+                    box-sizing:border-box !important;
+                }
+
+                #manual-mode-switcher {
+                    position:absolute !important;
+                    left:50% !important;
+                    bottom:8px !important;
+                    transform:translateX(-50%) !important;
+                    display:flex !important;
+                    justify-content:center !important;
+                    gap:9px !important;
+                    width:auto !important;
+                    max-width:calc(100vw - 42px) !important;
+                    z-index:7 !important;
+                }
+
+                .manual-mode-btn {
+                    width:38px !important;
+                    height:38px !important;
+                    min-width:38px !important;
+                    min-height:38px !important;
+                    font-size:18px !important;
+                    display:inline-flex !important;
+                    align-items:center !important;
+                    justify-content:center !important;
+                    padding:0 !important;
+                }
+
+                #manual-page-title {
+                    display:block;
+                    margin:6px auto 6px auto !important;
+                    min-height:24px !important;
+                    max-width:88% !important;
+                    font-size:21px !important;
+                    line-height:1.25 !important;
+                    font-weight:900 !important;
+                    text-align:center !important;
+                    color:#3f2412 !important;
+                    text-shadow:0 1px 0 rgba(255,238,206,0.9), 0 0 8px rgba(255,245,220,0.46) !important;
+                }
+
+                #manual-content {
+                    height:56vh !important;
+                    margin-bottom:38px !important;
+                }
+
+                #manual-img-display {
+                    max-width:86% !important;
+                    max-height:100% !important;
+                }
+
+                #manual-page-indicator {
+                    bottom:-28px !important;
+                    font-size:12px !important;
+                    padding:4px 10px !important;
+                }
+
+                .manual-page-info-row {
+                    margin:4px auto 0 auto !important;
+                }
+
+                #manual-thumb-view,
+                #manual-category-view {
+                    max-height:68vh !important;
+                    padding:6px 2px 12px 2px !important;
+                }
+
+                .manual-thumb-grid,
+                .manual-folder-grid {
+                    gap:10px !important;
+                }
+
+                .manual-thumb-card img {
+                    height:128px !important;
+                }
+            }
+
 
             #chat-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 8px 8px 0 0; padding: 5px 12px; width: fit-content; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 -2px 5px rgba(0,0,0,0.2);}
             #chat-content { pointer-events: auto; transition: max-height 0.3s ease-in-out; overflow: hidden; display: flex; flex-direction: column; background: rgba(0, 0, 0, 0.6); border-radius: 0 8px 8px 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
@@ -4103,6 +4221,17 @@ window.renderManualPage = function() {
     if (thumbView) thumbView.style.display = window.manualViewMode === 'thumbs' ? 'block' : 'none';
     if (categoryView) categoryView.style.display = window.manualViewMode === 'tags' ? 'block' : 'none';
 
+    const manualModal = document.getElementById('manual-modal');
+    if (manualModal) {
+        manualModal.classList.toggle('manual-mode-single', window.manualViewMode === 'single');
+        manualModal.classList.toggle('manual-mode-thumbs', window.manualViewMode === 'thumbs');
+        manualModal.classList.toggle('manual-mode-tags', window.manualViewMode === 'tags');
+    }
+
+    if (titleEl) {
+        titleEl.style.display = window.manualViewMode === 'single' ? 'block' : 'none';
+    }
+
     const total = Array.isArray(window.manualPages) ? window.manualPages.length : 0;
     if (total === 0) {
         if (imgEl) {
@@ -4496,23 +4625,58 @@ window.attemptJoinShrine = function() {
 };
 
 window.acceptSummon = function() {
-    document.getElementById('forced-summon-modal').style.display = 'none';
-    // 修正死碼：變數參照錯誤，原本的全域計時器為 globalSummonInterval
-    if (window.globalSummonInterval) { clearInterval(window.globalSummonInterval); window.globalSummonInterval = null; }
-    
+    const forcedModal = document.getElementById('forced-summon-modal');
+    if (forcedModal) forcedModal.style.display = 'none';
+
     get(ref(window.GameLogic.db, window.getServerRoomPath('shrineEvents/current'))).then(snap => {
         let ev = snap.val();
+
         // 雙重驗證：如果點擊按鈕時已經超時或儀式已經開始，則拒絕進入
         if (ev && ev.state && ev.state !== 'finished' && ev.state !== 'none') {
             let elapsed = Date.now() - (ev.startTime || 0);
             if (elapsed > 60000 || ev.state !== 'summoned') {
-                alert("已經正在進行儀式，請下次再來。"); return;
+                alert("已經正在進行儀式，請下次再來。");
+                return;
             }
         }
-        window.startShrineRitual(); window.switchScene('shrine');
+
+        // 受邀者接受召喚後，只關閉彈窗，不清除右方倒數。
+        // 若本機計時器已因舊流程被清掉，則用神龕事件 startTime 補接倒數，讓受邀者與發起人一致。
+        if (ev && ev.state === 'summoned') {
+            const summonStartTime = ev.startTime || Date.now();
+
+            const updateAcceptedSummonCountdown = () => {
+                const remain = 60 - Math.floor((Date.now() - summonStartTime) / 1000);
+
+                if (remain <= 0) {
+                    window.GameLogic.globalSummonCountdown = 0;
+                    if (window.globalSummonInterval) {
+                        clearInterval(window.globalSummonInterval);
+                        window.globalSummonInterval = null;
+                    }
+                } else {
+                    window.GameLogic.globalSummonCountdown = remain;
+                    const tEl = document.getElementById('summon-timer');
+                    if (tEl) tEl.innerText = remain;
+                }
+
+                if (window.updateOnlinePlayersUI) window.updateOnlinePlayersUI();
+            };
+
+            if (!window.globalSummonInterval) {
+                updateAcceptedSummonCountdown();
+                window.globalSummonInterval = setInterval(updateAcceptedSummonCountdown, 1000);
+            } else {
+                const remain = 60 - Math.floor((Date.now() - summonStartTime) / 1000);
+                window.GameLogic.globalSummonCountdown = Math.max(0, remain);
+                if (window.updateOnlinePlayersUI) window.updateOnlinePlayersUI();
+            }
+        }
+
+        window.startShrineRitual();
+        window.switchScene('shrine');
     });
 };
-
 let voteTarget = null; let voteTalisman = null;
 window.selectVoteTarget = function(uid) { 
     if (voteTarget === uid) {
@@ -7788,8 +7952,10 @@ this.btnB.on('pointerout', () => {
         this.expBarBg.clear().fillStyle(0x3e2723, 0.8).fillRoundedRect(bgW * 0.5 - expW / 2, expY - expH / 2, expW, expH, 4); this.expLiquid.setPosition(bgW * 0.5 - expW / 2, expY).setScale(1, expH / 16); this.expText.setPosition(bgW * 0.5, expY).setFontSize(`${Math.max(10, 13 * scaleRatio)}px`);
         this.statusText.setPosition(bgW * 0.32, -bgH * 0.30).setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); this.equipText.setPosition(bgW * 0.75, -bgH * 0.30).setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); this.statusToggleBtn.setPosition(bgW, -bgH * 0.30);
         let clusterX = gameSize.width - 90;
-        let clusterY = gameSize.height - bottomOffset - 70 + (isPortrait ? 24 : 0);
-        clusterY = Math.min(clusterY, gameSize.height - 92);
+        const mobileButtonYOffset = isPortrait ? 58 : 0;
+        const mobileButtonSafeBottom = isPortrait ? 86 : 92;
+        let clusterY = gameSize.height - bottomOffset - 70 + mobileButtonYOffset;
+        clusterY = Math.min(clusterY, gameSize.height - mobileButtonSafeBottom);
         let d = 55; 
         // 修正1：為 A 鍵與給西按鈕補上定位點，呈現正菱形排列，互不重疊
         this.btnA.setPosition(clusterX + d, clusterY); this.txtA.setPosition(this.btnA.x, this.btnA.y);
@@ -19747,7 +19913,7 @@ if (activeBubbleMsg) {
         const shouldOffset = !forceReset && isMobilePortrait;
 
         if (cam.setFollowOffset) {
-            cam.setFollowOffset(0, shouldOffset ? -72 : 0);
+            cam.setFollowOffset(0, shouldOffset ? -132 : 0);
         }
     }
 
