@@ -1943,7 +1943,234 @@ function createSystemUI() {
                 }
             }
 
-            #chat-section { display: flex; position: absolute; top: 60px; left: 10px; width: 190px; flex-direction: column; z-index: 100; pointer-events: none; }
+            /* 延伸補丁：說明書花朵翻頁＋隨機蠟筆線條＋各介面關閉動畫 */
+            #manual-modal.manual-crayon-ui {
+                padding-top:18px !important;
+            }
+            #manual-modal .manual-pastel-line-field span {
+                height:var(--line-h, 7px) !important;
+                border-radius:999px !important;
+                background:linear-gradient(90deg, transparent 0%, var(--line-color, rgba(255,145,190,0.58)) 18%, rgba(255,255,255,0.82) 50%, var(--line-color, rgba(255,145,190,0.58)) 82%, transparent 100%) !important;
+                box-shadow:0 0 8px var(--line-color, rgba(255,145,190,0.58)), 0 0 15px rgba(255,255,255,0.32) !important;
+                opacity:0.48 !important;
+                animation:manual-random-crayon-shiver var(--line-speed, 1.2s) steps(2, end) infinite alternate !important;
+                transform-origin:center center !important;
+            }
+            @keyframes manual-random-crayon-shiver {
+                0% { transform:translate(var(--shake-x1, -2px), var(--shake-y1, 1px)) rotate(var(--line-rot, 0deg)) scaleX(var(--line-scale1, 0.96)); filter:blur(0.1px) brightness(1); }
+                33% { transform:translate(var(--shake-x2, 2px), var(--shake-y2, -1px)) rotate(calc(var(--line-rot, 0deg) + var(--shake-r1, 1.6deg))) scaleX(var(--line-scale2, 1.04)); filter:blur(0.25px) brightness(1.16); }
+                66% { transform:translate(var(--shake-x3, -1px), var(--shake-y3, 2px)) rotate(calc(var(--line-rot, 0deg) - var(--shake-r2, 1.2deg))) scaleX(var(--line-scale3, 0.99)); filter:blur(0.05px) brightness(0.96); }
+                100% { transform:translate(var(--shake-x4, 1px), var(--shake-y4, -2px)) rotate(calc(var(--line-rot, 0deg) + var(--shake-r3, 0.8deg))) scaleX(var(--line-scale4, 1.02)); filter:blur(0.2px) brightness(1.12); }
+            }
+            .manual-page-desc {
+                text-align:center !important;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                white-space:pre-wrap;
+            }
+            .manual-x-close {
+                position:absolute !important;
+                right:10px !important;
+                top:10px !important;
+                width:34px !important;
+                height:34px !important;
+                border-radius:50% !important;
+                border:2px solid rgba(92,58,28,0.72) !important;
+                background:radial-gradient(circle at 35% 30%, #fff4dc 0%, #d9a05f 48%, #6b3518 100%) !important;
+                color:#4a1d12 !important;
+                font-size:20px !important;
+                font-weight:900 !important;
+                line-height:29px !important;
+                padding:0 !important;
+                margin:0 !important;
+                box-shadow:0 0 10px rgba(255,240,210,0.68), 0 4px 9px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.72) !important;
+                z-index:8 !important;
+                cursor:pointer;
+            }
+            .manual-x-close:active {
+                transform:scale(0.92);
+            }
+            .manual-nav-btn {
+                width:58px !important;
+                height:58px !important;
+                border-radius:50% !important;
+                border:none !important;
+                color:#fff9ef !important;
+                font-size:25px !important;
+                font-weight:900 !important;
+                padding:0 !important;
+                background:
+                    radial-gradient(circle at 50% 50%, #ffe6ba 0 14%, #d6362d 15% 23%, transparent 24%),
+                    radial-gradient(circle at 50% 10%, #ff7b71 0 20%, transparent 21%),
+                    radial-gradient(circle at 88% 32%, #e43631 0 20%, transparent 21%),
+                    radial-gradient(circle at 74% 84%, #b91620 0 21%, transparent 22%),
+                    radial-gradient(circle at 26% 84%, #e44a3a 0 21%, transparent 22%),
+                    radial-gradient(circle at 12% 32%, #ff6c62 0 20%, transparent 21%) !important;
+                box-shadow:0 0 14px rgba(229,35,35,0.62), 0 6px 10px rgba(0,0,0,0.3), inset 0 0 10px rgba(255,240,210,0.45) !important;
+                text-shadow:0 2px 2px rgba(80,0,0,0.8), 0 0 7px rgba(255,255,255,0.85) !important;
+                overflow:visible !important;
+                pointer-events:auto !important;
+                animation:manual-flower-button-breathe 1.9s ease-in-out infinite alternate;
+            }
+            .manual-nav-btn::before {
+                content:"" !important;
+                position:absolute !important;
+                inset:-42px !important;
+                background:
+                    radial-gradient(circle, rgba(255,64,64,0.95) 0 2px, transparent 4px),
+                    radial-gradient(circle, rgba(255,20,20,0.72) 0 1px, transparent 3px),
+                    radial-gradient(circle, rgba(255,150,120,0.82) 0 2px, transparent 5px) !important;
+                background-size:31px 37px, 42px 31px, 53px 49px !important;
+                animation:manual-red-spark-random-float 2.2s ease-in-out infinite alternate !important;
+                opacity:0.72 !important;
+                pointer-events:none !important;
+                z-index:-1;
+            }
+            .manual-nav-btn::after {
+                content:"✦";
+                position:absolute;
+                left:50%;
+                top:50%;
+                transform:translate(-50%, -50%);
+                font-size:13px;
+                color:#fff0c8;
+                text-shadow:0 0 7px #fff, 0 0 12px #ff6c62;
+                pointer-events:none;
+            }
+            .manual-nav-btn:active {
+                transform:scale(0.9) rotate(-5deg) !important;
+                filter:brightness(1.2);
+            }
+            .manual-nav-burst {
+                position:absolute;
+                left:50%;
+                top:50%;
+                width:9px;
+                height:9px;
+                border-radius:50%;
+                background:#ff2b2b;
+                box-shadow:0 0 9px #fff, 0 0 18px #ff2525, 0 0 26px #ffb1a7;
+                pointer-events:none;
+                z-index:15;
+                animation:manual-nav-red-burst-pop 0.52s cubic-bezier(0.12, 0.85, 0.2, 1) forwards;
+            }
+            @keyframes manual-flower-button-breathe {
+                0% { filter:brightness(0.98) saturate(1); }
+                100% { filter:brightness(1.16) saturate(1.24); }
+            }
+            @keyframes manual-red-spark-random-float {
+                0% { transform:translate(-7px, 4px) rotate(-8deg) scale(0.96); opacity:0.42; }
+                28% { transform:translate(9px, -6px) rotate(13deg) scale(1.08); opacity:0.82; }
+                64% { transform:translate(-3px, -10px) rotate(-18deg) scale(1.02); opacity:0.62; }
+                100% { transform:translate(8px, 5px) rotate(10deg) scale(1.12); opacity:0.86; }
+            }
+            @keyframes manual-nav-red-burst-pop {
+                0% { transform:translate(-50%, -50%) scale(0.35); opacity:1; }
+                72% { opacity:0.92; }
+                100% { transform:translate(calc(-50% + var(--burst-x, 0px)), calc(-50% + var(--burst-y, -40px))) scale(0.08); opacity:0; }
+            }
+            .modal.modal-closing-music,
+            .modal.modal-closing-magic,
+            .modal.modal-closing-portal,
+            .modal.modal-closing-phone,
+            .modal.modal-closing-profile,
+            .modal.modal-closing-energy {
+                pointer-events:none !important;
+                overflow:hidden !important;
+                transform-origin:center center !important;
+            }
+            .modal.modal-closing-music {
+                animation:modal-close-music-spin 0.2s ease-in forwards !important;
+            }
+            .modal.modal-closing-magic {
+                animation:modal-close-magic-melt 0.2s ease-in forwards !important;
+            }
+            .modal.modal-closing-portal {
+                animation:modal-close-portal-spiral 0.2s ease-in forwards !important;
+            }
+            .modal.modal-closing-phone {
+                animation:modal-close-phone-fold 0.2s cubic-bezier(0.36, 0, 0.88, 0.28) forwards !important;
+                transform-origin:center bottom !important;
+            }
+            .modal.modal-closing-profile {
+                animation:modal-close-profile-pop 0.2s ease-in forwards !important;
+            }
+            .modal.modal-closing-energy {
+                animation:modal-close-energy-green 0.2s ease-in forwards !important;
+            }
+            .modal.modal-closing-portal::after,
+            .modal.modal-closing-profile::after,
+            .modal.modal-closing-energy::after {
+                content:"" !important;
+                position:absolute !important;
+                inset:-20% !important;
+                pointer-events:none !important;
+                z-index:20 !important;
+            }
+            .modal.modal-closing-portal::after {
+                background:
+                    radial-gradient(circle, rgba(255,255,255,0.95) 0 2px, transparent 4px),
+                    radial-gradient(circle, rgba(180,90,255,0.95) 0 3px, transparent 6px),
+                    conic-gradient(from 0deg, transparent, rgba(255,255,255,0.75), rgba(128,0,255,0.78), transparent) !important;
+                animation:modal-close-portal-particles 0.2s ease-in forwards !important;
+            }
+            .modal.modal-closing-profile::after {
+                background:
+                    radial-gradient(circle at 50% 50%, rgba(255,255,255,1) 0 3px, transparent 5px),
+                    radial-gradient(circle, rgba(255,255,255,0.9) 0 2px, transparent 4px),
+                    radial-gradient(circle, rgba(190,220,255,0.7) 0 1px, transparent 3px) !important;
+                background-size:100% 100%, 36px 36px, 52px 48px !important;
+                animation:modal-close-profile-particles 0.2s ease-out forwards !important;
+            }
+            .modal.modal-closing-energy::after {
+                background:radial-gradient(circle, rgba(80,255,80,1) 0 42%, rgba(20,255,20,0.75) 43% 62%, transparent 64%) !important;
+                animation:modal-close-energy-fill 0.2s ease-in forwards !important;
+            }
+            @keyframes modal-close-music-spin {
+                0% { opacity:1; transform:translate(-50%, -50%) rotate(0deg) scale(1); }
+                100% { opacity:0; transform:translate(-50%, -50%) rotate(460deg) scale(0.04); }
+            }
+            @keyframes modal-close-magic-melt {
+                0% { opacity:1; transform:translate(-50%, -50%) scale(1); filter:blur(0) brightness(1); clip-path:polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+                55% { opacity:0.72; transform:translate(-50%, -44%) scaleX(0.92) scaleY(1.08); filter:blur(1px) brightness(1.25); clip-path:polygon(0 0, 100% 0, 92% 78%, 75% 100%, 59% 75%, 42% 100%, 25% 76%, 8% 100%); }
+                100% { opacity:0; transform:translate(-50%, -30%) scaleX(0.72) scaleY(0.08); filter:blur(6px) brightness(1.6); clip-path:polygon(0 86%, 100% 86%, 92% 100%, 8% 100%); }
+            }
+            @keyframes modal-close-portal-spiral {
+                0% { opacity:1; transform:translate(-50%, -50%) rotate(0deg) scale(1); filter:brightness(1); }
+                100% { opacity:0; transform:translate(-50%, -50%) rotate(-420deg) scale(0.03); filter:brightness(2.4) blur(2px); }
+            }
+            @keyframes modal-close-portal-particles {
+                0% { transform:scale(1.18) rotate(0deg); opacity:0.95; }
+                100% { transform:scale(0.08) rotate(-260deg); opacity:0; }
+            }
+            @keyframes modal-close-phone-fold {
+                0% { opacity:1; transform:translate(-50%, -50%) perspective(700px) rotateX(0deg) scale(1); }
+                42% { opacity:0.9; transform:translate(-50%, -50%) perspective(700px) rotateX(76deg) scaleY(0.42); }
+                72% { opacity:0.58; transform:translate(-50%, -38%) perspective(700px) rotateX(88deg) scale(0.34); }
+                100% { opacity:0; transform:translate(-50%, -16%) perspective(700px) rotateX(88deg) scale(0.08); }
+            }
+            @keyframes modal-close-profile-pop {
+                0% { opacity:1; transform:translate(-50%, -50%) scale(1); filter:brightness(1); }
+                55% { opacity:1; transform:translate(-50%, -50%) scale(0.12); filter:brightness(2.2); box-shadow:0 0 30px rgba(255,255,255,1) !important; }
+                100% { opacity:0; transform:translate(-50%, -50%) scale(0.02); filter:brightness(3) blur(2px); }
+            }
+            @keyframes modal-close-profile-particles {
+                0% { transform:scale(0.2); opacity:0; }
+                45% { transform:scale(0.65); opacity:1; }
+                100% { transform:scale(1.65); opacity:0; }
+            }
+            @keyframes modal-close-energy-green {
+                0% { opacity:1; transform:translate(-50%, -50%) rotate(0deg) scale(1); filter:brightness(1); }
+                46% { opacity:1; transform:translate(-50%, -50%) rotate(140deg) scale(1.04); filter:brightness(1.8); }
+                100% { opacity:0; transform:translate(-50%, -50%) rotate(420deg) scale(0.04); filter:brightness(2.5); }
+            }
+            @keyframes modal-close-energy-fill {
+                0% { transform:scale(0.05) rotate(0deg); opacity:0; }
+                45% { transform:scale(1.55) rotate(150deg); opacity:1; }
+                100% { transform:scale(0.2) rotate(420deg); opacity:0; }
+            }
+
             #chat-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 8px 8px 0 0; padding: 5px 12px; width: fit-content; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 -2px 5px rgba(0,0,0,0.2);}
             #chat-content { pointer-events: auto; transition: max-height 0.3s ease-in-out; overflow: hidden; display: flex; flex-direction: column; background: rgba(0, 0, 0, 0.6); border-radius: 0 8px 8px 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
             #chat-box { max-height: 120px; overflow-y: auto; color: #fff; padding: 10px; font-size: 13px; text-shadow: 1px 1px 2px #000; }            
@@ -2060,7 +2287,7 @@ function createSystemUI() {
                 <p style="font-size:12px; color:#99ff99; margin:0 0 10px 0;">(睡覺時每分鐘賺取3馬德幣)</p>
                 <div style="font-size:28px; font-weight:bold; color:#ffcc00; text-shadow:0 0 10px #ffcc00; margin-bottom:15px;">💰 <span id="energy-bank-val">0</span></div>
                 <button class="btn-primary" style="width:80%; font-size:16px; padding:10px; background: #006600; border: 1px solid #00ff00; color: #fff; box-shadow: 0 0 8px #00ff00; border-radius: 8px; font-weight: bold;" onclick="window.claimEnergyBank()">領取入帳</button>
-                <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%; background: #003300; border: 1px solid #009900; color: #ccffcc; border-radius: 8px;" onclick="document.getElementById('energy-modal').style.display='none'">關閉</button>
+                <button class="close-modal-btn btn-secondary" style="margin-top: 15px; width: 100%; background: #003300; border: 1px solid #009900; color: #ccffcc; border-radius: 8px;" onclick="window.closeInventoryChildModal ? window.closeInventoryChildModal('energy-modal') : document.getElementById('energy-modal').style.display='none'">關閉</button>
             </div>
         </div>
         
@@ -2194,22 +2421,27 @@ function createSystemUI() {
                         <input type="range" id="sfx-volume" min="0" max="100" value="100" style="width: 100%; margin-top: 5px;" oninput="window.updateSFXVolume(this.value)">
                     </div>
                 </div>
-                <button class="close-modal-btn" style="margin-top: 20px; width: 60%; border-radius: 4px; padding: 10px; background: #222; border: 2px solid #ffd700; color: #ffd700; font-weight: bold; text-shadow: 1px 1px 0px #000;" onclick="document.getElementById('settings-modal').style.display='none'">關閉播放器</button>
+                <button class="close-modal-btn" style="margin-top: 20px; width: 60%; border-radius: 4px; padding: 10px; background: #222; border: 2px solid #ffd700; color: #ffd700; font-weight: bold; text-shadow: 1px 1px 0px #000;" onclick="window.closeInventoryChildModal ? window.closeInventoryChildModal('settings-modal') : document.getElementById('settings-modal').style.display='none'">關閉播放器</button>
             </div>
         </div>
 
         <div id="manual-modal" class="modal manual-crayon-ui" style="width: 90%; max-width: none; height: 90vh; max-height: none; top: 5%; left: 5%; transform: none; box-sizing: border-box; z-index: 260;">
+            <button class="manual-x-close" type="button" aria-label="關閉說明書" onclick="window.closeManualModal ? window.closeManualModal() : document.getElementById('manual-modal').style.display='none'">×</button>
             <div class="manual-pastel-line-field" aria-hidden="true">
-                <span style="--line-left:5%; --line-top:18%; --line-w:190px; --line-color:rgba(255,145,190,0.55); --line-rot:8deg; --line-speed:6.2s; --line-delay:0s;"></span>
-                <span style="--line-left:42%; --line-top:12%; --line-w:230px; --line-color:rgba(125,190,255,0.5); --line-rot:-9deg; --line-speed:7.4s; --line-delay:0.4s;"></span>
-                <span style="--line-left:68%; --line-top:25%; --line-w:160px; --line-color:rgba(255,226,92,0.55); --line-rot:16deg; --line-speed:6.8s; --line-delay:0.9s;"></span>
-                <span style="--line-left:12%; --line-top:55%; --line-w:260px; --line-color:rgba(132,218,142,0.48); --line-rot:-14deg; --line-speed:8s; --line-delay:1.2s;"></span>
-                <span style="--line-left:55%; --line-top:67%; --line-w:210px; --line-color:rgba(255,145,190,0.42); --line-rot:6deg; --line-speed:7.1s; --line-delay:1.7s;"></span>
-                <span style="--line-left:26%; --line-top:82%; --line-w:240px; --line-color:rgba(125,190,255,0.42); --line-rot:19deg; --line-speed:7.8s; --line-delay:2.1s;"></span>
-                <span style="--line-left:74%; --line-top:78%; --line-w:150px; --line-color:rgba(132,218,142,0.46); --line-rot:-22deg; --line-speed:6.6s; --line-delay:2.6s;"></span>
-                <span style="--line-left:3%; --line-top:36%; --line-w:140px; --line-color:rgba(255,226,92,0.48); --line-rot:28deg; --line-speed:8.4s; --line-delay:3s;"></span>
+                <span style="--line-left:5%; --line-top:18%; --line-w:190px; --line-h:7px; --line-color:rgba(255,145,190,0.58); --line-rot:8deg; --line-speed:1.05s; --line-delay:0s;"></span>
+                <span style="--line-left:42%; --line-top:12%; --line-w:230px; --line-h:6px; --line-color:rgba(125,190,255,0.55); --line-rot:-9deg; --line-speed:1.28s; --line-delay:0.1s;"></span>
+                <span style="--line-left:68%; --line-top:25%; --line-w:160px; --line-h:8px; --line-color:rgba(255,226,92,0.62); --line-rot:16deg; --line-speed:0.96s; --line-delay:0.2s;"></span>
+                <span style="--line-left:12%; --line-top:55%; --line-w:260px; --line-h:7px; --line-color:rgba(132,218,142,0.54); --line-rot:-14deg; --line-speed:1.22s; --line-delay:0.3s;"></span>
+                <span style="--line-left:55%; --line-top:67%; --line-w:210px; --line-h:5px; --line-color:rgba(255,145,190,0.48); --line-rot:6deg; --line-speed:1.14s; --line-delay:0.4s;"></span>
+                <span style="--line-left:26%; --line-top:82%; --line-w:240px; --line-h:7px; --line-color:rgba(125,190,255,0.48); --line-rot:19deg; --line-speed:1.32s; --line-delay:0.5s;"></span>
+                <span style="--line-left:74%; --line-top:78%; --line-w:150px; --line-h:6px; --line-color:rgba(132,218,142,0.54); --line-rot:-22deg; --line-speed:1.02s; --line-delay:0.6s;"></span>
+                <span style="--line-left:3%; --line-top:36%; --line-w:140px; --line-h:8px; --line-color:rgba(255,226,92,0.56); --line-rot:28deg; --line-speed:1.18s; --line-delay:0.7s;"></span>
+                <span style="--line-left:33%; --line-top:31%; --line-w:180px; --line-h:5px; --line-color:rgba(255,120,170,0.5); --line-rot:-31deg; --line-speed:0.92s; --line-delay:0.8s;"></span>
+                <span style="--line-left:79%; --line-top:48%; --line-w:170px; --line-h:6px; --line-color:rgba(122,205,255,0.5); --line-rot:34deg; --line-speed:1.2s; --line-delay:0.9s;"></span>
+                <span style="--line-left:18%; --line-top:71%; --line-w:155px; --line-h:7px; --line-color:rgba(255,238,105,0.52); --line-rot:-7deg; --line-speed:1.08s; --line-delay:1s;"></span>
+                <span style="--line-left:60%; --line-top:88%; --line-w:200px; --line-h:5px; --line-color:rgba(130,230,150,0.48); --line-rot:11deg; --line-speed:1.26s; --line-delay:1.1s;"></span>
             </div>
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; border-bottom: 2px solid rgba(92,58,28,0.55); padding-bottom: 10px; margin-bottom: 10px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; border-bottom: 2px solid rgba(92,58,28,0.55); padding: 0 36px 10px 0; margin-bottom: 10px;">
                 <h3 style="margin:0; color: var(--mucha-green); border-bottom: none; padding-bottom: 0; flex-shrink:0;">📖 說明書</h3>
                 <div class="manual-top-tools">
                     <input id="manual-search-input" type="text" placeholder="搜尋標題、標籤、內文" oninput="window.searchManualPages(this.value)">
@@ -2252,7 +2484,6 @@ function createSystemUI() {
                 <hr style="border:1px dashed rgba(92,58,28,0.35); margin:12px 0;">
                 <input type="file" id="manual-file" accept="image/*" style="margin-bottom: 10px;"><br><button class="btn-primary" onclick="window.uploadManualPage()">上傳新頁面</button><button class="btn-danger" onclick="window.deleteManualPage()">刪除此頁</button><div style="margin-top: 10px;"><button class="btn-secondary" onclick="window.moveManualPage(-1)">前移頁面</button><button class="btn-secondary" onclick="window.moveManualPage(1)">後移頁面</button></div>
             </div>
-            <button class="close-modal-btn btn-secondary" style="margin-top: 18px; width: 100%;" onclick="document.getElementById('manual-modal').style.display='none'">關閉說明書</button>
         </div>
         
         <div id="portal-modal" class="modal" style="z-index: 260; padding: 0; width: 280px; height: 440px; box-sizing: border-box;">
@@ -2271,7 +2502,7 @@ function createSystemUI() {
                     <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); window.switchScene('farm'); document.getElementById('portal-modal').style.display='none';">🌱 我的蔥田</button>
                     <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); window.switchScene('7eonion'); document.getElementById('portal-modal').style.display='none';">🏪 7-EONION</button>
                 </div>
-                <button class="close-modal-btn btn-secondary" style="margin-top: 25px; width: 70%; border-radius: 20px; position:relative; z-index:10;" onclick="document.getElementById('portal-modal').style.display='none'">關閉傳送門</button>
+                <button class="close-modal-btn btn-secondary" style="margin-top: 25px; width: 70%; border-radius: 20px; position:relative; z-index:10;" onclick="window.closeInventoryChildModal ? window.closeInventoryChildModal('portal-modal') : document.getElementById('portal-modal').style.display='none'">關閉傳送門</button>
             </div>
         </div>
 
@@ -2331,7 +2562,7 @@ function createSystemUI() {
             <h3 style="color: #fff; margin-top: 0; border-bottom: 2px solid #00aaff; padding-bottom: 10px; position:relative; z-index:1; text-shadow: 0 0 5px #00aaff;">✨ 法寶庫存</h3>
             <div class="magic-grid" id="magic-grid-container" style="position:relative; z-index:1;"></div>
             <div id="magic-desc" style="position:relative; z-index:1; margin-top: 15px; font-size: 13px; color: #fff; text-align: left; min-height: 60px; max-height: 170px; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; touch-action:pan-y; background: rgba(0, 31, 63, 0.85); padding: 10px; border-radius: 6px; border: 1px solid #00aaff; box-shadow: 0 0 10px rgba(0,170,255,0.3); line-height: 1.45;">點擊法寶查看說明...</div>
-            <button class="close-modal-btn btn-secondary" style="position:relative; z-index:1; margin-top: 15px; width: 100%;" onclick="document.getElementById('magic-modal').style.display='none'">關上法寶庫</button>
+            <button class="close-modal-btn btn-secondary" style="position:relative; z-index:1; margin-top: 15px; width: 100%;" onclick="window.closeInventoryChildModal ? window.closeInventoryChildModal('magic-modal') : document.getElementById('magic-modal').style.display='none'">關上法寶庫</button>
         </div>
         <div id="magic-menu-blocker" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; z-index: 290; pointer-events: auto; touch-action: none;" onpointerdown="event.stopPropagation(); event.preventDefault(); window.closeQuickMenu();" ontouchstart="event.stopPropagation(); event.preventDefault(); window.closeQuickMenu();"></div>
         <div id="quick-select-menu" onpointerdown="event.stopPropagation()" ontouchmove="event.stopPropagation()" onwheel="event.stopPropagation()">
@@ -3158,6 +3389,70 @@ window.getManualVisibleItems = function() {
         });
 };
 
+window.randomizeManualDoodles = function() {
+    const modal = document.getElementById('manual-modal');
+    if (!modal || modal.style.display === 'none') return;
+
+    const colors = [
+        'rgba(255,145,190,0.62)',
+        'rgba(125,190,255,0.58)',
+        'rgba(255,226,92,0.62)',
+        'rgba(132,218,142,0.56)',
+        'rgba(255,170,120,0.56)',
+        'rgba(190,150,255,0.54)'
+    ];
+
+    modal.querySelectorAll('.manual-pastel-line-field span').forEach((line, idx) => {
+        const baseLeft = 4 + ((idx * 17 + Math.random() * 9) % 88);
+        const baseTop = 8 + ((idx * 23 + Math.random() * 14) % 82);
+        const width = 120 + Math.round(Math.random() * 165);
+        const height = 4 + Math.round(Math.random() * 5);
+        const rot = Math.round((Math.random() * 70 - 35) * 10) / 10;
+        const speed = (0.72 + Math.random() * 0.72).toFixed(2);
+        const color = colors[Math.floor(Math.random() * colors.length)];
+
+        line.style.setProperty('--line-left', `${baseLeft}%`);
+        line.style.setProperty('--line-top', `${baseTop}%`);
+        line.style.setProperty('--line-w', `${width}px`);
+        line.style.setProperty('--line-h', `${height}px`);
+        line.style.setProperty('--line-rot', `${rot}deg`);
+        line.style.setProperty('--line-speed', `${speed}s`);
+        line.style.setProperty('--line-color', color);
+
+        for (let i = 1; i <= 4; i++) {
+            line.style.setProperty(`--shake-x${i}`, `${Math.round(Math.random() * 10 - 5)}px`);
+            line.style.setProperty(`--shake-y${i}`, `${Math.round(Math.random() * 10 - 5)}px`);
+            line.style.setProperty(`--line-scale${i}`, `${(0.92 + Math.random() * 0.18).toFixed(2)}`);
+        }
+        line.style.setProperty('--shake-r1', `${(0.5 + Math.random() * 2.2).toFixed(1)}deg`);
+        line.style.setProperty('--shake-r2', `${(0.5 + Math.random() * 2.2).toFixed(1)}deg`);
+        line.style.setProperty('--shake-r3', `${(0.5 + Math.random() * 2.2).toFixed(1)}deg`);
+    });
+};
+
+window.startManualDoodleJitter = function() {
+    if (window.__manualDoodleTimer) clearInterval(window.__manualDoodleTimer);
+    window.randomizeManualDoodles();
+    window.__manualDoodleTimer = setInterval(() => {
+        const modal = document.getElementById('manual-modal');
+        if (!modal || modal.style.display === 'none') {
+            clearInterval(window.__manualDoodleTimer);
+            window.__manualDoodleTimer = null;
+            return;
+        }
+        window.randomizeManualDoodles();
+    }, 520);
+};
+
+window.closeManualModal = function() {
+    const modal = document.getElementById('manual-modal');
+    if (modal) modal.style.display = 'none';
+    if (window.__manualDoodleTimer) {
+        clearInterval(window.__manualDoodleTimer);
+        window.__manualDoodleTimer = null;
+    }
+};
+
 window.openManualModal = function() {
     const modal = document.getElementById('manual-modal');
     const searchInput = document.getElementById('manual-search-input');
@@ -3172,6 +3467,7 @@ window.openManualModal = function() {
 
     if (searchInput) searchInput.value = '';
 
+    window.startManualDoodleJitter();
     window.renderManualPage();
 };
 
@@ -3294,11 +3590,15 @@ window.renderManualCategoryMode = function() {
 window.burstManualNavParticles = function(btn) {
     if (!btn) return;
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 18; i++) {
         const p = document.createElement('span');
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 30 + Math.random() * 82;
         p.className = 'manual-nav-burst';
-        p.style.setProperty('--burst-x', `${Math.round((Math.random() - 0.5) * 74)}px`);
-        p.style.setProperty('--burst-y', `${Math.round(-28 - Math.random() * 54)}px`);
+        p.style.setProperty('--burst-x', `${Math.round(Math.cos(angle) * dist)}px`);
+        p.style.setProperty('--burst-y', `${Math.round(Math.sin(angle) * dist)}px`);
+        p.style.width = `${6 + Math.round(Math.random() * 8)}px`;
+        p.style.height = p.style.width;
         btn.appendChild(p);
         setTimeout(() => {
             if (p && p.parentNode) p.parentNode.removeChild(p);
@@ -4285,6 +4585,33 @@ window.prepareModalSwitchAnimation = function(modal, mode) {
     }, 270);
 };
 
+window.getInventoryChildCloseClass = function(modal) {
+    if (!modal || !modal.id) return 'inventory-child-closing';
+
+    const map = {
+        'settings-modal': 'modal-closing-music',
+        'magic-modal': 'modal-closing-magic',
+        'portal-modal': 'modal-closing-portal',
+        'phone-modal': 'modal-closing-phone',
+        'view-profile-modal': 'modal-closing-profile',
+        'energy-modal': 'modal-closing-energy'
+    };
+
+    return map[modal.id] || 'inventory-child-closing';
+};
+
+window.getInventoryChildCloseClasses = function() {
+    return [
+        'inventory-child-closing',
+        'modal-closing-music',
+        'modal-closing-magic',
+        'modal-closing-portal',
+        'modal-closing-phone',
+        'modal-closing-profile',
+        'modal-closing-energy'
+    ];
+};
+
 window.closeInventoryChildModal = function(modalOrId, options = {}) {
     const modal = typeof modalOrId === 'string'
         ? document.getElementById(modalOrId)
@@ -4294,13 +4621,15 @@ window.closeInventoryChildModal = function(modalOrId, options = {}) {
 
     const immediate = !!options.immediate;
     const afterClose = typeof options.afterClose === 'function' ? options.afterClose : null;
+    const closeClass = window.getInventoryChildCloseClass(modal);
+    const closeClasses = window.getInventoryChildCloseClasses();
 
     if (modal.__inventoryChildCloseTimer) {
         clearTimeout(modal.__inventoryChildCloseTimer);
         modal.__inventoryChildCloseTimer = null;
     }
 
-    modal.classList.remove('modal-switch-enter', 'modal-switch-exit', 'inventory-child-closing');
+    modal.classList.remove('modal-switch-enter', 'modal-switch-exit', ...closeClasses);
 
     if (immediate || modal.style.display === 'none') {
         modal.style.display = 'none';
@@ -4313,18 +4642,18 @@ window.closeInventoryChildModal = function(modalOrId, options = {}) {
     const computed = window.getComputedStyle(modal);
     const baseTransform = computed.transform && computed.transform !== 'none'
         ? computed.transform
-        : 'translate(0, 0)';
+        : (modal.id === 'manual-modal' ? 'none' : 'translate(-50%, -50%)');
 
     modal.style.setProperty('--modal-switch-base-transform', baseTransform);
     modal.style.pointerEvents = 'none';
 
     void modal.offsetWidth;
 
-    modal.classList.add('inventory-child-closing');
+    modal.classList.add(closeClass);
 
     modal.__inventoryChildCloseTimer = setTimeout(() => {
         modal.style.display = 'none';
-        modal.classList.remove('inventory-child-closing', 'modal-switch-enter', 'modal-switch-exit');
+        modal.classList.remove('modal-switch-enter', 'modal-switch-exit', ...closeClasses);
         modal.style.removeProperty('--modal-switch-base-transform');
         modal.style.pointerEvents = '';
         modal.__inventoryChildCloseTimer = null;
@@ -5438,8 +5767,16 @@ window.addEventListener('pointerdown', (e) => {
     if (e.target.tagName === 'CANVAS') { 
         // 修正2：點擊背景時，不要關閉投票介面與強制召喚介面
         document.querySelectorAll('.modal:not(#voting-modal):not(#forced-summon-modal)').forEach(m => {
-            if (m.id === 'furniture-catalog-modal' && m.style.display !== 'none' && typeof window.closeFurnitureCatalogModal === 'function') {
+            if (!m || m.style.display === 'none') return;
+
+            if (m.id === 'furniture-catalog-modal' && typeof window.closeFurnitureCatalogModal === 'function') {
                 window.closeFurnitureCatalogModal();
+            } else if (m.id === 'manual-modal' && typeof window.closeManualModal === 'function') {
+                window.closeManualModal();
+            } else if (m.id === 'view-profile-modal' && typeof window.closeProfileModal === 'function') {
+                window.closeProfileModal();
+            } else if (['settings-modal', 'magic-modal', 'portal-modal', 'phone-modal', 'energy-modal'].includes(m.id) && typeof window.closeInventoryChildModal === 'function') {
+                window.closeInventoryChildModal(m);
             } else {
                 m.style.display = 'none';
             }
