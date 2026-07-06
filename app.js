@@ -1757,15 +1757,20 @@ function createSystemUI() {
                 overflow:hidden !important;
             }
             #furniture-catalog-modal.shrine-taiji-ui::before {
-                content:"☯";
+                content:"";
                 position:absolute;
                 left:50%;
                 top:50%;
+                width:260px;
+                height:260px;
                 transform:translate(-50%, -50%);
-                font-size:260px;
-                line-height:1;
-                color:rgba(255,255,255,0.32);
-                text-shadow:0 0 22px rgba(255,255,255,0.42), 0 0 28px rgba(0,0,0,0.95);
+                border-radius:50%;
+                background:
+                    radial-gradient(circle at 50% 25%, #000000 0 16%, #ffffff 17% 18%, transparent 19%),
+                    radial-gradient(circle at 50% 75%, #ffffff 0 16%, #000000 17% 18%, transparent 19%),
+                    linear-gradient(90deg, #ffffff 0 50%, #000000 50% 100%);
+                box-shadow:0 0 22px rgba(255,255,255,0.42), 0 0 28px rgba(0,0,0,0.95);
+                opacity:0.36;
                 pointer-events:none;
                 z-index:0;
                 animation:shrine-taiji-spin 14s linear infinite;
@@ -2685,7 +2690,7 @@ function createSystemUI() {
         
         <div id="top-notification-bar">系統通知：歡迎來到洋蔥愛！</div>
         <div id="action-menu" class="action-menu"><button id="view-profile-btn">洋蔥身分證</button></div>
-        <div id="online-players-container"><button id="online-toggle-btn">👥</button><div id="online-list-wrapper"><div id="online-players-list"></div></div></div>
+        <div id="online-players-container" class="online-collapsed"><button id="online-toggle-btn">👥</button><div id="online-list-wrapper"><div id="online-players-list"></div></div></div>
         <div id="purchase-success-msg" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:#ffcc00; font-size:48px; z-index:400; font-weight:bold; text-align:center; pointer-events:none; -webkit-text-stroke: 2px #d4af37;">你大撒幣！</div>
         <div id="login-screen">
             <h2 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">入館登記</h2>
@@ -2910,7 +2915,7 @@ function createSystemUI() {
         </div>
         <div id="party-red-flash"></div>
 
-        <div id="game-layout-container"><div id="phaser-app"></div><div id="chat-section"><button id="chat-toggle-btn">收起對話 ▲</button><div id="chat-content"><div id="chat-box"></div><div id="chat-input-area"><input type="text" id="chat-input" placeholder="說點什麼..."><button id="send-btn">發送</button></div></div></div></div>
+        <div id="game-layout-container"><div id="phaser-app"></div><div id="chat-section" class="chat-collapsed"><button id="chat-toggle-btn">展開對話 ▼</button><div id="chat-content"><div id="chat-box"></div><div id="chat-input-area"><input type="text" id="chat-input" placeholder="說點什麼..."><button id="send-btn">發送</button></div></div></div></div>
         
         <div id="magic-modal" class="modal" style="z-index: 260; width: 85%; max-width: 340px; max-height:82vh; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; touch-action:pan-y; position:relative;">
             <div class="water-drop" style="left: 15%; animation-duration: 2s; animation-delay: 0.1s;"></div>
@@ -3096,7 +3101,7 @@ function createSystemUI() {
                 </div>
 
                 <div id="rps-bet-input-area" style="width:100%; text-align:center; display:flex; flex-direction:column; align-items:center;">
-                    <input type="range" id="rps-bet-slider" min="0" max="100" value="0" style="width:100%; margin:10px 0;">
+                    <input type="range" id="rps-bet-slider" min="0" max="100" value="0" style="width:100%; margin:10px 0; touch-action:none; -webkit-user-select:none; user-select:none;">
                     <h1 style="color:#00ff00; margin:10px 0;">💰 <span id="rps-bet-display">0</span></h1>
                     <button class="btn-primary" id="rps-bet-confirm-btn" style="margin-top:10px; font-size:20px; padding:10px 30px;" onclick="window.confirmRpsBet()">下注</button>
                 </div>
@@ -4555,15 +4560,33 @@ window.submitVote = function() {
 window.clickSpamBtn = function() {
     if (window.GameLogic.shrineEventData && window.GameLogic.shrineEventData.state === 'purifying') {
         let currentClicks = window.GameLogic.myPurifyClicks || 0;
-        currentClicks++; window.GameLogic.myPurifyClicks = currentClicks;
-        set(ref(db, window.getServerRoomPath(`shrineEvents/current/clicks/${window.GameLogic.currentUser.uid}`)), currentClicks);
+        currentClicks++;
+        window.GameLogic.myPurifyClicks = currentClicks;
+
+        const now = Date.now();
+        const uid = window.GameLogic.currentUser.uid;
+        const updates = {};
+        updates[window.getServerRoomPath(`shrineEvents/current/clicks/${uid}`)] = currentClicks;
+
+        // 節流同步施咒動態：不用每一下都寫 Firebase，避免高頻污染。
+        if (!window.GameLogic.lastPurifyCastSyncAt || now - window.GameLogic.lastPurifyCastSyncAt > 140) {
+            window.GameLogic.lastPurifyCastSyncAt = now;
+            updates[window.getServerRoomPath(`shrineEvents/current/purifyCasts/${uid}`)] = now;
+
+            if (window.GameLogic.currentScene === 'shrine') {
+                updates[window.getServerRoomPath(`shrinePlayers/${uid}/magicCastAt`)] = now;
+            }
+        }
+
+        update(ref(db), updates);
+
         let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
         if (ms) {
-            if (!window.GameLogic.muteSFX && currentClicks % 5 === 0) window.playSFX(ms, 'minimum_laser'); 
-            if (ms.shootRainbowLaser) ms.shootRainbowLaser(); // 觸發彩虹激光發射
-            
+            if (!window.GameLogic.muteSFX && currentClicks % 5 === 0) window.playSFX(ms, 'minimum_laser');
+            if (ms.shootRainbowLaser) ms.shootRainbowLaser(ms.localPlayer ? ms.localPlayer.sprite : null);
+
             if (ms.localPlayer && ms.localPlayer.isSeated) {
-                ms.localPlayer.magicClickTime = Date.now();
+                ms.localPlayer.magicClickTime = now;
                 ms.localPlayer.sprite.play('purify-magic', true);
             }
         }
@@ -7581,7 +7604,16 @@ this.btnB.on('pointerout', () => {
                 mainScene.localPlayer.isSweeping
             );
 
-            this.setStandardActionButtonsVisible(!isSweepingNow, { immediate: isSweepingNow });
+            const evData = window.GameLogic ? window.GameLogic.shrineEventData : null;
+            const isShrinePurifying = !!(
+                window.GameLogic.currentScene === 'shrine' &&
+                evData &&
+                evData.state === 'purifying'
+            );
+
+            const shouldHideStandardButtons = isSweepingNow || isShrinePurifying;
+
+            this.setStandardActionButtonsVisible(!shouldHideStandardButtons, { immediate: shouldHideStandardButtons });
             this.setSweepButtonVisible(isSweepingNow);
             this.statusContainer.setVisible(true);
             if (this.partyDash) this.partyDash.setVisible(false);
@@ -7755,7 +7787,10 @@ this.btnB.on('pointerout', () => {
         let expY = -bgH * 0.12 + 4; let expW = bgW * 0.50; let expH = 22 * scaleRatio; this.expBarWidth = expW;
         this.expBarBg.clear().fillStyle(0x3e2723, 0.8).fillRoundedRect(bgW * 0.5 - expW / 2, expY - expH / 2, expW, expH, 4); this.expLiquid.setPosition(bgW * 0.5 - expW / 2, expY).setScale(1, expH / 16); this.expText.setPosition(bgW * 0.5, expY).setFontSize(`${Math.max(10, 13 * scaleRatio)}px`);
         this.statusText.setPosition(bgW * 0.32, -bgH * 0.30).setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); this.equipText.setPosition(bgW * 0.75, -bgH * 0.30).setFontSize(`${Math.max(16, 20 * scaleRatio)}px`); this.statusToggleBtn.setPosition(bgW, -bgH * 0.30);
-        let clusterX = gameSize.width - 90; let clusterY = gameSize.height - bottomOffset - 70; let d = 55; 
+        let clusterX = gameSize.width - 90;
+        let clusterY = gameSize.height - bottomOffset - 70 + (isPortrait ? 24 : 0);
+        clusterY = Math.min(clusterY, gameSize.height - 92);
+        let d = 55; 
         // 修正1：為 A 鍵與給西按鈕補上定位點，呈現正菱形排列，互不重疊
         this.btnA.setPosition(clusterX + d, clusterY); this.txtA.setPosition(this.btnA.x, this.btnA.y);
         this.btnB.setPosition(clusterX, clusterY + d); this.txtB.setPosition(this.btnB.x, this.btnB.y);
@@ -8323,6 +8358,7 @@ class MainScene extends Phaser.Scene {
         if (this.sceneName === "7eonion" && this.storeManager) this.physics.add.collider(this.localPlayer.sprite, this.storeManager);
         if (this.sceneName === "partyroom" && this.partyStonesGroup) this.physics.add.collider(this.localPlayer.sprite, this.partyStonesGroup);
         this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
+        this.applyMobileCameraComfortOffset();
 
         // 修正：重置文字緩存變數，避免 Phaser 重新啟動場景時因為變數殘留，導致判定相同而不更新 UI，進而使法寶提示字消失
         this.lastPromptMsg = null; this.lastPromptDrawX = null; this.lastPromptDrawY = null; this.lastPromptDrawMsg = null;
@@ -19674,16 +19710,45 @@ if (activeBubbleMsg) {
         if (success) { let rays = this.add.graphics().setDepth(195); rays.fillStyle(0xffffff, 0.3); for (let i=0; i<10; i++) { rays.fillTriangle( this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.localPlayer.sprite.x - 500 + Math.random()*1000, this.localPlayer.sprite.y - 800, this.localPlayer.sprite.x - 500 + Math.random()*1000, this.localPlayer.sprite.y - 800 ); } this.tweens.add({ targets: rays, alpha: 0, duration: 3000, onComplete: () => rays.destroy() }); }
     }
 
-    // 新增：向屎王發射彩虹雷射
-    shootRainbowLaser() {
-        if (!this.pooBoss || !this.localPlayer || !this.localPlayer.sprite) return;
-        let startX = this.localPlayer.sprite.x; let startY = this.localPlayer.sprite.y - 20;
-        let endX = this.pooBoss.x; let endY = this.pooBoss.y + 30;
+    // 新增：向屎王發射彩虹雷射，可指定施法者，讓其他玩家也能同步看見光束。
+    shootRainbowLaser(sourceSprite = null) {
+        if (!this.pooBoss) return;
+
+        const caster = sourceSprite || (this.localPlayer ? this.localPlayer.sprite : null);
+        if (!caster) return;
+
+        let startX = caster.x;
+        let startY = caster.y - 20;
+        let endX = this.pooBoss.x;
+        let endY = this.pooBoss.y + 30;
         let colors = [0xff0000, 0xff7f00, 0xffff00, 0x00ff00, 0x0000ff, 0x4b0082, 0x8b00ff];
         let color = Phaser.Utils.Array.GetRandom(colors);
         let laser = this.add.graphics().setDepth(205);
-        laser.lineStyle(6, color, 1); laser.beginPath(); laser.moveTo(startX, startY); laser.lineTo(endX, endY); laser.strokePath();
-        this.tweens.add({ targets: laser, alpha: 0, duration: 250, onComplete: () => laser.destroy() });
+
+        laser.lineStyle(6, color, 1);
+        laser.beginPath();
+        laser.moveTo(startX, startY);
+        laser.lineTo(endX, endY);
+        laser.strokePath();
+
+        this.tweens.add({
+            targets: laser,
+            alpha: 0,
+            duration: 250,
+            onComplete: () => laser.destroy()
+        });
+    }
+
+    applyMobileCameraComfortOffset(forceReset = false) {
+        const cam = this.cameras && this.cameras.main ? this.cameras.main : null;
+        if (!cam) return;
+
+        const isMobilePortrait = cam.height > cam.width || cam.width <= 768;
+        const shouldOffset = !forceReset && isMobilePortrait;
+
+        if (cam.setFollowOffset) {
+            cam.setFollowOffset(0, shouldOffset ? -72 : 0);
+        }
     }
 
     processShrineEventLogic(time) {
@@ -19722,6 +19787,7 @@ if (activeBubbleMsg) {
             if (this.cameras.main.zoom !== 1) {
                 this.cameras.main.setZoom(1);
                 this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
+                this.applyMobileCameraComfortOffset();
             }
             return;
         }
@@ -19792,9 +19858,9 @@ if (activeBubbleMsg) {
             }
             
             if (this.pooBoss && this.furnitureSprites['altar']) {
-                // 修正4：鏡頭改為追蹤屎王，讓大家看清楚 Boss 的模樣
+                // 鏡頭追蹤屎王，但保持原本比例，不再縮小畫面。
+                if (this.cameras.main.zoom !== 1) this.cameras.main.setZoom(1);
                 this.cameras.main.startFollow(this.pooBoss, true, 0.05, 0.05);
-                if (this.cameras.main.zoom !== 0.85) this.cameras.main.zoomTo(0.85, 1000, 'Sine.easeInOut', true);
 
                 let targetSprite = (eventData.targetUid === window.GameLogic.currentUser.uid) ? this.localPlayer.sprite : (this.otherPlayers[eventData.targetUid] ? this.otherPlayers[eventData.targetUid].sprite : this.furnitureSprites['altar'].sprite);
                 let ax = targetSprite.x; let ay = targetSprite.y;
@@ -21315,11 +21381,22 @@ if (dist < 30) {
                             op.sprite.play('purify-target', true);
                             if (this.furnitureSprites['altar']) { op.sprite.x = this.furnitureSprites['altar'].sprite.x; op.sprite.y = this.furnitureSprites['altar'].sprite.y + 40; }
                         } else { 
-                            // 修正：透過 Firebase 的點擊次數差值，判斷其他玩家是否正在狂點
+                            // 透過 Firebase 的點擊次數差值與 purifyCasts 時間戳，判斷其他玩家是否正在施咒。
                             let pClicks = evData.clicks ? (evData.clicks[uid] || 0) : 0;
-                            if (op.lastClicks !== pClicks) { op.lastClicks = pClicks; op.magicClickTime = Date.now(); }
-                            
-                            if (op.magicClickTime && Date.now() - op.magicClickTime < 300) {
+                            let castAt = evData.purifyCasts ? (evData.purifyCasts[uid] || 0) : 0;
+
+                            if (op.lastClicks !== pClicks) {
+                                op.lastClicks = pClicks;
+                                op.magicClickTime = Date.now();
+                            }
+
+                            if (castAt && op.lastRemoteCastAt !== castAt) {
+                                op.lastRemoteCastAt = castAt;
+                                op.magicClickTime = Date.now();
+                                if (this.shootRainbowLaser) this.shootRainbowLaser(op.sprite);
+                            }
+
+                            if (op.magicClickTime && Date.now() - op.magicClickTime < 360) {
                                 op.sprite.play('purify-magic', true);
                             } else {
                                 op.sprite.play('seat-idle', true);
@@ -21988,6 +22065,47 @@ window.syncRpsState = function(roomId) {
                         
                         slider.oninput = function() { document.getElementById('rps-bet-display').innerText = this.value; };
                         slider.onchange = function() { document.getElementById('rps-bet-display').innerText = this.value; };
+
+                        if (!slider.__onionMobileDragBound) {
+                            slider.__onionMobileDragBound = true;
+
+                            const setRpsBetFromPointer = (evt) => {
+                                if (!evt) return;
+                                if (evt.preventDefault) evt.preventDefault();
+                                if (evt.stopPropagation) evt.stopPropagation();
+
+                                const rect = slider.getBoundingClientRect();
+                                const x = Math.max(rect.left, Math.min(rect.right, evt.clientX || 0));
+                                const ratio = rect.width > 0 ? (x - rect.left) / rect.width : 0;
+                                const min = Number(slider.min || 0);
+                                const max = Number(slider.max || 100);
+                                const nextVal = Math.round(min + ratio * (max - min));
+
+                                slider.value = String(nextVal);
+                                document.getElementById('rps-bet-display').innerText = slider.value;
+                            };
+
+                            slider.addEventListener('pointerdown', (evt) => {
+                                slider.__onionDragging = true;
+                                try {
+                                    if (slider.setPointerCapture && evt.pointerId !== undefined) slider.setPointerCapture(evt.pointerId);
+                                } catch (_) {}
+                                setRpsBetFromPointer(evt);
+                            }, { passive: false });
+
+                            slider.addEventListener('pointermove', (evt) => {
+                                if (!slider.__onionDragging) return;
+                                setRpsBetFromPointer(evt);
+                            }, { passive: false });
+
+                            const stopRpsBetDrag = (evt) => {
+                                if (evt && evt.stopPropagation) evt.stopPropagation();
+                                slider.__onionDragging = false;
+                            };
+
+                            slider.addEventListener('pointerup', stopRpsBetDrag, { passive: false });
+                            slider.addEventListener('pointercancel', stopRpsBetDrag, { passive: false });
+                        }
                     });
                 }
                 
