@@ -2531,10 +2531,11 @@ function createSystemUI() {
 
             @media (max-width: 768px), (orientation: portrait) {
                 #manual-modal.manual-crayon-ui {
-                    width:96vw !important;
-                    height:96vh !important;
-                    top:2vh !important;
-                    left:2vw !important;
+                    width:min(90vw, 390px) !important;
+                    height:84vh !important;
+                    top:50% !important;
+                    left:50% !important;
+                    transform:translate(-50%, -50%) !important;
                     padding:8px 10px 10px 10px !important;
                     max-height:none !important;
                     overflow:hidden !important;
@@ -2542,15 +2543,15 @@ function createSystemUI() {
 
                 #manual-modal.manual-crayon-ui > div[style*="border-bottom"] {
                     position:relative !important;
-                    min-height:68px !important;
-                    padding:0 42px 34px 0 !important;
+                    min-height:64px !important;
+                    padding:0 42px 32px 0 !important;
                     margin-bottom:2px !important;
                     align-items:flex-start !important;
                 }
 
                 #manual-modal.manual-crayon-ui > div[style*="border-bottom"] > h3 {
-                    font-size:16px !important;
-                    line-height:30px !important;
+                    font-size:15px !important;
+                    line-height:28px !important;
                     white-space:nowrap !important;
                 }
 
@@ -2564,34 +2565,34 @@ function createSystemUI() {
                 #manual-search-input {
                     position:absolute !important;
                     top:0 !important;
-                    right:42px !important;
-                    width:min(50vw, 210px) !important;
-                    min-width:136px !important;
-                    height:32px !important;
-                    padding:5px 10px !important;
-                    font-size:13px !important;
+                    right:40px !important;
+                    width:min(48vw, 190px) !important;
+                    min-width:126px !important;
+                    height:30px !important;
+                    padding:5px 9px !important;
+                    font-size:12px !important;
                     box-sizing:border-box !important;
                 }
 
                 #manual-mode-switcher {
                     position:absolute !important;
                     left:50% !important;
-                    bottom:3px !important;
+                    bottom:2px !important;
                     transform:translateX(-50%) !important;
                     display:flex !important;
                     justify-content:center !important;
-                    gap:8px !important;
+                    gap:7px !important;
                     width:auto !important;
-                    max-width:calc(100vw - 40px) !important;
+                    max-width:calc(100vw - 52px) !important;
                     z-index:7 !important;
                 }
 
                 .manual-mode-btn {
-                    width:36px !important;
-                    height:36px !important;
-                    min-width:36px !important;
-                    min-height:36px !important;
-                    font-size:17px !important;
+                    width:34px !important;
+                    height:34px !important;
+                    min-width:34px !important;
+                    min-height:34px !important;
+                    font-size:16px !important;
                     display:inline-flex !important;
                     align-items:center !important;
                     justify-content:center !important;
@@ -2605,11 +2606,11 @@ function createSystemUI() {
 
                 #manual-page-title {
                     display:block;
-                    margin:2px auto 4px auto !important;
-                    min-height:22px !important;
+                    margin:1px auto 3px auto !important;
+                    min-height:20px !important;
                     max-width:90% !important;
-                    font-size:20px !important;
-                    line-height:1.18 !important;
+                    font-size:18px !important;
+                    line-height:1.15 !important;
                     font-weight:900 !important;
                     text-align:center !important;
                     color:#3f2412 !important;
@@ -2617,20 +2618,20 @@ function createSystemUI() {
                 }
 
                 #manual-content {
-                    height:44vh !important;
-                    max-height:calc(var(--onion-vh, 1vh) * 44) !important;
-                    margin-bottom:28px !important;
+                    height:36vh !important;
+                    max-height:calc(var(--onion-vh, 1vh) * 36) !important;
+                    margin-bottom:26px !important;
                 }
 
                 #manual-img-display {
-                    max-width:88% !important;
+                    max-width:86% !important;
                     max-height:100% !important;
                 }
 
                 #manual-page-indicator {
-                    bottom:-24px !important;
+                    bottom:-22px !important;
                     font-size:12px !important;
-                    padding:4px 10px !important;
+                    padding:3px 10px !important;
                 }
 
                 .manual-page-info-row {
@@ -2640,39 +2641,39 @@ function createSystemUI() {
                 }
 
                 .manual-page-info-row .manual-page-category-pill {
-                    max-width:calc(100vw - 150px) !important;
-                    padding:4px 12px !important;
-                    font-size:12px !important;
+                    max-width:calc(100vw - 170px) !important;
+                    padding:4px 11px !important;
+                    font-size:11px !important;
                 }
 
                 .manual-desc-toggle-btn {
-                    width:32px !important;
-                    height:32px !important;
-                    min-width:32px !important;
-                    min-height:32px !important;
-                    font-size:17px !important;
-                    line-height:26px !important;
+                    width:31px !important;
+                    height:31px !important;
+                    min-width:31px !important;
+                    min-height:31px !important;
+                    font-size:16px !important;
+                    line-height:25px !important;
                 }
 
                 #manual-page-desc.manual-desc-popover {
-                    bottom:48px !important;
+                    bottom:46px !important;
                     width:min(78%, 520px) !important;
-                    max-height:min(28vh, 210px) !important;
+                    max-height:min(26vh, 190px) !important;
                 }
 
                 #manual-thumb-view,
                 #manual-category-view {
-                    max-height:73vh !important;
-                    padding:4px 2px 12px 2px !important;
+                    max-height:62vh !important;
+                    padding:4px 2px 10px 2px !important;
                 }
 
                 .manual-thumb-grid,
                 .manual-folder-grid {
-                    gap:10px !important;
+                    gap:9px !important;
                 }
 
                 .manual-thumb-card img {
-                    height:118px !important;
+                    height:104px !important;
                 }
             }
 
@@ -2680,7 +2681,8 @@ function createSystemUI() {
             #chat-section {
                 position:fixed !important;
                 left:10px !important;
-                bottom:10px !important;
+                top:42px !important;
+                bottom:auto !important;
                 z-index:180 !important;
                 display:flex !important;
                 flex-direction:column !important;
@@ -2704,7 +2706,7 @@ function createSystemUI() {
                 cursor: pointer;
                 font-size: 12px;
                 font-weight: bold;
-                box-shadow: 0 -2px 5px rgba(0,0,0,0.2);
+                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             }
             #chat-content {
                 pointer-events: auto;
@@ -2739,7 +2741,8 @@ function createSystemUI() {
             @media (max-width: 768px), (orientation: portrait) {
                 #chat-section {
                     left:8px !important;
-                    bottom:8px !important;
+                    top:42px !important;
+                    bottom:auto !important;
                     max-width:calc(100vw - 16px) !important;
                     z-index:190 !important;
                 }
@@ -20025,8 +20028,9 @@ if (activeBubbleMsg) {
         const cam = this.cameras && this.cameras.main ? this.cameras.main : null;
         if (!cam) return 0;
 
-        const rawOffset = cam.height * 0.28;
-        return Math.round(Math.max(165, Math.min(285, rawOffset)));
+        // 手機版玩家原本已偏下成功，但實測太低；整體往上約 100px。
+        const rawOffset = (cam.height * 0.28) - 100;
+        return Math.round(Math.max(80, Math.min(190, rawOffset)));
     }
 
     refreshMobileCameraFollowTarget(forceReset = false) {
