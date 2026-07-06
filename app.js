@@ -2309,20 +2309,143 @@ function createSystemUI() {
             @keyframes manual-book-close {
                 0% {
                     opacity:1;
-                    transform:perspective(900px) rotateY(0deg) scaleX(1);
+                    transform:scaleX(1);
                     filter:brightness(1);
+                    clip-path:inset(0 0 0 0 round 12px);
                 }
                 46% {
-                    opacity:0.9;
-                    transform:perspective(900px) rotateY(-34deg) scaleX(0.72);
+                    opacity:0.92;
+                    transform:scaleX(0.34);
                     filter:brightness(1.14);
+                    clip-path:inset(0 19% 0 19% round 8px);
                 }
                 100% {
                     opacity:0;
-                    transform:perspective(900px) rotateY(-88deg) scaleX(0.04);
-                    filter:brightness(1.28) blur(1px);
+                    transform:scaleX(0.012);
+                    filter:brightness(1.35) blur(1px);
+                    clip-path:inset(0 49.4% 0 49.4% round 2px);
                 }
             }
+
+            /* 延伸補丁3：說明書描述收納按鈕＋半透明文字氣泡＋中央闔書動畫 */
+            #manual-single-view {
+                position:relative !important;
+            }
+            .manual-page-info-row {
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                gap:8px;
+                width:fit-content;
+                max-width:82%;
+                margin:8px auto 0 auto;
+                position:relative;
+                z-index:6;
+            }
+            .manual-page-info-row .manual-page-category-pill {
+                margin:0 !important;
+                max-width:calc(100vw - 170px) !important;
+            }
+            .manual-desc-toggle-btn {
+                width:34px;
+                height:34px;
+                min-width:34px;
+                min-height:34px;
+                border-radius:50%;
+                border:2px solid rgba(255,244,220,0.88);
+                background:radial-gradient(circle at 35% 28%, #fff8ec 0%, #c99a63 45%, #5d3318 100%);
+                color:#3a1c0c;
+                box-shadow:0 0 10px rgba(255,244,220,0.58), 0 3px 7px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.68);
+                font-size:18px;
+                line-height:28px;
+                padding:0;
+                margin:0;
+                cursor:pointer;
+                touch-action:manipulation;
+                transform-origin:center center;
+            }
+            .manual-desc-toggle-btn.has-desc {
+                animation:manual-desc-book-pulse 1.55s ease-in-out infinite alternate;
+            }
+            .manual-desc-toggle-btn:disabled {
+                opacity:0.42;
+                filter:grayscale(0.45);
+                cursor:not-allowed;
+                animation:none;
+            }
+            .manual-desc-toggle-btn:active:not(:disabled) {
+                transform:scale(0.9);
+            }
+            #manual-page-desc.manual-desc-popover {
+                display:none;
+                position:absolute !important;
+                left:50%;
+                bottom:58px;
+                width:min(72%, 520px);
+                max-height:min(30vh, 230px);
+                overflow-y:auto;
+                overflow-x:hidden;
+                padding:12px 14px !important;
+                border-radius:18px;
+                background:rgba(255,255,255,0.78) !important;
+                color:#3b2414 !important;
+                border:2px solid rgba(255,255,255,0.86);
+                box-shadow:0 0 16px rgba(255,255,255,0.58), 0 8px 18px rgba(0,0,0,0.18), inset 0 0 12px rgba(255,255,255,0.42);
+                backdrop-filter:blur(5px);
+                -webkit-backdrop-filter:blur(5px);
+                text-align:center !important;
+                line-height:1.55;
+                font-size:13px;
+                white-space:pre-wrap;
+                z-index:20;
+                pointer-events:auto;
+            }
+            #manual-page-desc.manual-desc-popover::after {
+                content:"";
+                position:absolute;
+                left:50%;
+                bottom:-9px;
+                width:16px;
+                height:16px;
+                background:rgba(255,255,255,0.78);
+                border-right:2px solid rgba(255,255,255,0.86);
+                border-bottom:2px solid rgba(255,255,255,0.86);
+                transform:translateX(-50%) rotate(45deg);
+                box-shadow:4px 4px 8px rgba(0,0,0,0.06);
+            }
+            #manual-page-desc.manual-desc-popover.show {
+                display:block !important;
+                animation:manual-desc-bubble-rise 0.2s cubic-bezier(0.18, 0.9, 0.28, 1) forwards;
+            }
+            #manual-page-desc.manual-desc-popover.hiding {
+                display:block !important;
+                animation:manual-desc-bubble-fade 0.16s ease-in forwards;
+            }
+            .manual-closing-book {
+                animation:manual-book-close 0.2s ease-in forwards !important;
+                transform-origin:center center !important;
+                pointer-events:none !important;
+                overflow:hidden !important;
+            }
+            @keyframes manual-desc-book-pulse {
+                0% {
+                    filter:brightness(0.98);
+                    box-shadow:0 0 8px rgba(255,244,220,0.45), 0 3px 7px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.62);
+                }
+                100% {
+                    filter:brightness(1.18);
+                    box-shadow:0 0 15px rgba(255,255,255,0.84), 0 3px 7px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.72);
+                }
+            }
+            @keyframes manual-desc-bubble-rise {
+                0% { opacity:0; transform:translate(-50%, 18px) scale(0.94); }
+                100% { opacity:1; transform:translate(-50%, -4px) scale(1); }
+            }
+            @keyframes manual-desc-bubble-fade {
+                0% { opacity:1; transform:translate(-50%, -4px) scale(1); }
+                100% { opacity:0; transform:translate(-50%, 14px) scale(0.94); }
+            }
+
 
             #chat-toggle-btn { pointer-events: auto; background: var(--mucha-gold); color: white; border: none; border-radius: 8px 8px 0 0; padding: 5px 12px; width: fit-content; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 -2px 5px rgba(0,0,0,0.2);}
             #chat-content { pointer-events: auto; transition: max-height 0.3s ease-in-out; overflow: hidden; display: flex; flex-direction: column; background: rgba(0, 0, 0, 0.6); border-radius: 0 8px 8px 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
@@ -2610,8 +2733,11 @@ function createSystemUI() {
             <div id="manual-page-title" style="font-weight:bold; color:#4a2d18; text-shadow:0 1px 0 rgba(255,238,206,0.75); margin-bottom:8px; min-height:20px; text-align:center;">未命名說明頁</div>
             <div id="manual-single-view" style="display:block;">
                 <div id="manual-content" style="display:flex; justify-content:center; align-items:center; height: 53vh; position: relative;"><button id="manual-prev-btn" class="manual-nav-btn" style="position:absolute; left:0; z-index:10;">&lt;</button><img id="manual-img-display" onclick="window.openFullscreen(this.src)" src="" alt="目前尚無說明書內容" style="max-width:80%; max-height:100%; object-fit:contain; border:2px solid rgba(92,58,28,0.5); border-radius:10px; cursor: pointer; background:#f4dfbe; box-shadow:0 6px 14px rgba(0,0,0,0.18);"><button id="manual-next-btn" class="manual-nav-btn" style="position:absolute; right:0; z-index:10;">&gt;</button><div id="manual-page-indicator" style="position:absolute; bottom: -30px; text-align:center; width:100%; font-weight:bold; color:var(--mucha-brown);">0 / 0</div></div>
-                <div id="manual-page-category" class="manual-page-category-pill"></div>
-                <div id="manual-page-desc" class="manual-page-desc"></div>
+                <div class="manual-page-info-row">
+                    <div id="manual-page-category" class="manual-page-category-pill"></div>
+                    <button id="manual-desc-toggle-btn" class="manual-desc-toggle-btn" type="button" aria-label="查看本頁說明" onclick="window.toggleManualDescBubble ? window.toggleManualDescBubble(event) : null">📖</button>
+                </div>
+                <div id="manual-page-desc" class="manual-page-desc manual-desc-popover" onclick="event.stopPropagation()"></div>
             </div>
             <div id="manual-thumb-view" style="display:none; max-height:60vh; overflow-y:auto; overflow-x:hidden; padding:4px; -webkit-overflow-scrolling:touch;"></div>
             <div id="manual-category-view" style="display:none; max-height:60vh; overflow-y:auto; overflow-x:hidden; padding:4px; -webkit-overflow-scrolling:touch;">
@@ -3602,6 +3728,10 @@ window.startManualDoodleJitter = function() {
 window.closeManualModal = function(options = {}) {
     const modal = document.getElementById('manual-modal');
 
+    if (window.hideManualDescBubble) {
+        window.hideManualDescBubble(true);
+    }
+
     if (window.__manualDoodleTimer) {
         clearInterval(window.__manualDoodleTimer);
         window.__manualDoodleTimer = null;
@@ -3649,6 +3779,10 @@ window.openManualModal = function() {
         modal.classList.remove('manual-closing-book');
         modal.style.pointerEvents = '';
         modal.style.display = 'block';
+    }
+
+    if (window.hideManualDescBubble) {
+        window.hideManualDescBubble(true);
     }
 
     window.currentManualIndex = 0;
@@ -3801,11 +3935,77 @@ window.burstManualNavParticles = function(btn) {
     }
 };
 
+window.hideManualDescBubble = function(immediate = false) {
+    const bubble = document.getElementById('manual-page-desc');
+    if (!bubble) return;
+
+    if (bubble.__manualDescHideTimer) {
+        clearTimeout(bubble.__manualDescHideTimer);
+        bubble.__manualDescHideTimer = null;
+    }
+
+    if (immediate) {
+        bubble.classList.remove('show', 'hiding');
+        bubble.style.display = 'none';
+        return;
+    }
+
+    if (!bubble.classList.contains('show') && bubble.style.display !== 'block') return;
+
+    bubble.classList.remove('show');
+    bubble.classList.add('hiding');
+
+    bubble.__manualDescHideTimer = setTimeout(() => {
+        bubble.classList.remove('hiding');
+        bubble.style.display = 'none';
+        bubble.__manualDescHideTimer = null;
+    }, 170);
+};
+
+window.toggleManualDescBubble = function(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (e && e.preventDefault) e.preventDefault();
+
+    const bubble = document.getElementById('manual-page-desc');
+    const btn = document.getElementById('manual-desc-toggle-btn');
+    if (!bubble || !btn || btn.disabled) return;
+
+    const text = (bubble.innerText || '').trim();
+    if (!text) return;
+
+    if (bubble.classList.contains('show')) {
+        window.hideManualDescBubble();
+        return;
+    }
+
+    if (bubble.__manualDescHideTimer) {
+        clearTimeout(bubble.__manualDescHideTimer);
+        bubble.__manualDescHideTimer = null;
+    }
+
+    bubble.classList.remove('hiding');
+    bubble.style.display = 'block';
+    void bubble.offsetWidth;
+    bubble.classList.add('show');
+};
+
+document.addEventListener('pointerdown', (e) => {
+    const bubble = document.getElementById('manual-page-desc');
+    const btn = document.getElementById('manual-desc-toggle-btn');
+    if (!bubble || !bubble.classList.contains('show')) return;
+
+    const target = e.target;
+    if ((bubble && bubble.contains(target)) || (btn && btn.contains(target))) return;
+
+    window.hideManualDescBubble();
+}, true);
+
 window.renderManualPage = function() {
     const imgEl = document.getElementById('manual-img-display');
     const indEl = document.getElementById('manual-page-indicator');
     const titleEl = document.getElementById('manual-page-title');
     const descEl = document.getElementById('manual-page-desc');
+    const descBtn = document.getElementById('manual-desc-toggle-btn');
     const catEl = document.getElementById('manual-page-category');
     const singleView = document.getElementById('manual-single-view');
     const thumbView = document.getElementById('manual-thumb-view');
@@ -3832,8 +4032,13 @@ window.renderManualPage = function() {
             catEl.style.display = 'none';
         }
         if (titleEl) titleEl.innerText = '目前尚無說明書內容';
+        if (descBtn) {
+            descBtn.disabled = true;
+            descBtn.classList.remove('has-desc');
+        }
         if (descEl) {
             descEl.innerText = '';
+            descEl.classList.remove('show', 'hiding');
             descEl.style.display = 'none';
         }
         if (thumbView) window.renderManualThumbCards([], thumbView);
@@ -3860,9 +4065,15 @@ window.renderManualPage = function() {
         catEl.style.display = categoryName ? 'block' : 'none';
     }
     if (titleEl) titleEl.innerText = pageTitle;
+    if (descBtn) {
+        descBtn.disabled = !pageDesc;
+        descBtn.classList.toggle('has-desc', !!pageDesc);
+        descBtn.title = pageDesc ? '查看本頁說明' : '本頁沒有補充說明';
+    }
     if (descEl) {
-        descEl.innerText = pageDesc;
-        descEl.style.display = pageDesc ? 'block' : 'none';
+        descEl.innerText = pageDesc || '';
+        descEl.classList.remove('show', 'hiding');
+        descEl.style.display = 'none';
     }
 
     if (thumbView && window.manualViewMode === 'thumbs') {
