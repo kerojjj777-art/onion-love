@@ -1699,7 +1699,7 @@ function createSystemUI() {
             <div style="font-weight: bold; color: #87ceeb; margin-bottom: 0px; font-size: 13px; text-shadow: 0 0 3px #000, 0 0 5px #000; letter-spacing: 1px;">左右滑動或點擊法寶選定</div>
             <div id="quick-items-container"></div>
         </div>
-        <div id="prince-cat-menu" onpointerdown="event.stopPropagation()" ontouchmove="event.stopPropagation()" onwheel="event.stopPropagation()" style="display:none; position:absolute; bottom:145px; left:50%; transform:translateX(-50%); z-index:305; pointer-events:auto; align-items:center; justify-content:center;">
+        <div id="prince-cat-menu" onpointerdown="event.stopPropagation()" ontouchmove="event.stopPropagation()" onwheel="event.stopPropagation()" style="display:none; position:fixed; top:40%; left:50%; bottom:auto; transform:translate(-50%, -50%); z-index:305; pointer-events:auto; align-items:center; justify-content:center;">
             <div onclick="window.selectPrinceCatInteraction && window.selectPrinceCatInteraction('pet')" style="width:82px; height:82px; border-radius:50%; background:rgba(255,240,245,0.96); border:3px solid #ff80ab; box-shadow:0 0 18px rgba(255,128,171,0.9); color:#ad1457; font-weight:bold; display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none;">
                 摸摸
             </div>
@@ -3021,7 +3021,13 @@ window.useItem = function(itemName) {
             document.getElementById('inventory-modal').style.display = 'none';
 
             if (itemName === '喵罐頭') {
-                sendBubble("已拿出喵罐頭，靠近王子麵按A餵食。");
+                const mainScene = window.GameLogic.phaserGame
+                    ? window.GameLogic.phaserGame.scene.getScene('MainScene')
+                    : null;
+                if (mainScene) {
+                    mainScene.lastWaterPromptMsg = null;
+                    mainScene.lastWaterDrawMsg = null;
+                }
             }
 
             return;
@@ -16311,29 +16317,67 @@ showPrinceCatFriendshipHint(count, customText = null) {
     if (!cam) return;
 
     const x = cam.width / 2;
-    const y = cam.height - (cam.height > cam.width ? 150 : 105);
+    const y = Math.max(72, Math.floor(cam.height * 0.32));
 
     const hint = this.add.text(x, y, text, {
-        fontSize: '22px',
+        fontSize: '25px',
         fontFamily: 'Arial, sans-serif',
         fontStyle: 'bold',
-        color: '#fff8d6',
-        stroke: '#5d4037',
+        color: '#ff4fb8',
+        stroke: '#fff4a8',
         strokeThickness: 5,
         align: 'center'
     }).setOrigin(0.5).setDepth(9990).setScrollFactor(0).setAlpha(0);
+
+    hint.setShadow(0, 0, '#ff4fb8', 16, true, true);
+
+    for (let i = 0; i < 5; i++) {
+        const angle = Phaser.Math.DegToRad(-110 + i * 55 + Phaser.Math.Between(-10, 10));
+        const dist = Phaser.Math.Between(42, 78);
+        const particle = this.add.text(
+            x + Phaser.Math.Between(-10, 10),
+            y + Phaser.Math.Between(-6, 8),
+            '✦',
+            {
+                fontSize: `${Phaser.Math.Between(18, 24)}px`,
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold',
+                color: '#ffe34d',
+                stroke: '#ffffff',
+                strokeThickness: 3
+            }
+        ).setOrigin(0.5).setDepth(9989).setScrollFactor(0).setAlpha(1);
+
+        particle.setShadow(0, 0, '#ffd400', 12, true, true);
+
+        this.tweens.add({
+            targets: particle,
+            x: particle.x + Math.cos(angle) * dist,
+            y: particle.y + Math.sin(angle) * dist,
+            alpha: 0,
+            scale: 0.18,
+            angle: Phaser.Math.Between(-70, 70),
+            duration: 620,
+            ease: 'Cubic.easeOut',
+            onComplete: () => {
+                if (particle && particle.destroy) particle.destroy();
+            }
+        });
+    }
 
     this.tweens.add({
         targets: hint,
         alpha: 1,
         y: y - 8,
+        scale: 1.08,
         duration: 180,
         ease: 'Cubic.easeOut',
         onComplete: () => {
             this.tweens.add({
                 targets: hint,
-                y: y - 28,
+                y: y - 32,
                 alpha: 0,
+                scale: 0.96,
                 duration: 850,
                 delay: 520,
                 ease: 'Cubic.easeIn',
@@ -19038,7 +19082,7 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
 
                 if (window.GameLogic.armedItemState) {
                     let itemName = window.GameLogic.armedItemName || '水球';
-                    this._cachedLockOnMsg = itemName === '喵罐頭' ? "靠近王子麵按A餵食" : "按A施放" + itemName; 
+                    this._cachedLockOnMsg = itemName === '喵罐頭' ? "已拿出喵罐頭，靠近王子麵按A餵食" : "按A施放" + itemName; 
                     let lockOnDist = (window.GameLogic.energyActive && (window.GameLogic.myProfile.energy || 0) > 0) ? 350 : 150; 
                     this._cachedLockTargetUid = null; this._cachedLockTargetSprite = null; this._cachedIsDummy = false; this._cachedIsMimi = false;
                     for (let uid in this.otherPlayers) { let op = this.otherPlayers[uid].sprite; let d = Phaser.Math.Distance.Between(px, py, op.x, op.y); if (d < lockOnDist) { lockOnDist = d; this._cachedLockTargetUid = uid; this._cachedLockTargetSprite = op; this._cachedIsDummy = false; this._cachedIsMimi = false; } }
