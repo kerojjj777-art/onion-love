@@ -18195,17 +18195,122 @@ entity.showOffRainbowTween = this.tweens.add({
         for (let i = 0; i < 7; i++) { this.time.delayedCall(i * 500, () => { let x = cam.scrollX + Phaser.Math.Between(100, cam.width - 100); let y = cam.scrollY + Phaser.Math.Between(100, cam.height - 100); let mixColors = [Phaser.Utils.Array.GetRandom(colors), Phaser.Utils.Array.GetRandom(colors), Phaser.Utils.Array.GetRandom(colors)]; let emitter = this.add.particles(x, y, 'fw-particle', { speed: { min: 200, max: 450 }, angle: { min: 0, max: 360 }, scale: { start: 2, end: 0 }, blendMode: 'ADD', tint: mixColors, lifespan: { min: 1500, max: 3000 }, gravityY: 150, quantity: 100 }); emitter.setDepth(200); emitter.explode(); let flash = this.add.circle(x, y, 150, mixColors[0], 0.5).setDepth(199).setBlendMode('ADD'); this.tweens.add({ targets: flash, alpha: 0, scale: 2.5, duration: 600, onComplete: () => flash.destroy() }); this.time.delayedCall(3000, () => emitter.destroy()); }); }
     }
     spawnTrash() {
-        if (!this.isCafe) return; let playerCount = Object.keys(window.GameLogic.cafePlayers || {}).length || 1; let limits = [10, 12, 15, 17, 20]; let maxTrash = limits[Math.min(playerCount - 1, 4)]; let spawnChance = 0.3 + (playerCount * 0.1); let currentTrashCount = this.trashes.length;
-        if (Math.random() < spawnChance && currentTrashCount < maxTrash) { 
-    let tx = Phaser.Math.Between(150, 1898); 
-    let ty = Phaser.Math.Between(150, 1898); 
-    let isOld = Math.random() < 0.05; 
+        if (!this.isCafe) return;
+
+        let playerCount = Object.keys(window.GameLogic.cafePlayers || {}).length || 1;
+        let limits = [10, 12, 15, 17, 20];
+        let maxTrash = limits[Math.min(playerCount - 1, 4)];
+        let spawnChance = 0.3 + (playerCount * 0.1);
+        let currentTrashCount = this.trashes.length;
+
+        if (Math.random() >= spawnChance || currentTrashCount >= maxTrash) return;
+
+        const margin = 36;
+        const spawnMin = 150;
+        const spawnMax = 1898;
+        const maxTry = 45;
+
+        const getFurnitureDefaultSize = (key) => {
+            if (!key) return { w: 120, h: 120 };
+            if (key.includes('giftbox')) return { w: 120, h: 120 };
+            if (key.includes('scoreboard')) return { w: 300, h: 300 };
+            if (key.includes('solochicken')) return { w: 140, h: 140 };
+            if (key.includes('fridge')) return { w: 130, h: 170 };
+            if (key.includes('memory')) return { w: 120, h: 120 };
+            if (key.includes('shrine')) return { w: 160, h: 160 };
+            if (key.includes('dummy')) return { w: 90, h: 110 };
+            return { w: 120, h: 120 };
+        };
+
+        const toFiniteNumber = (val, fallback = 0) => {
+            if (val === undefined || val === null || val === '') return fallback;
+            const n = Number(val);
+            return Number.isFinite(n) ? n : fallback;
+        };
+
+        const getFurnitureAvoidRects = () => {
+            const rects = [];
+            const used = {};
+            const sourceData = window.GameLogic.cafeFurniture || {};
+            const spriteMap = this.furnitureSprites || {};
+
+            const addRect = (key, data = {}, sprite = null) => {
+                if (!key || used[key]) return;
+                used[key] = true;
+
+                const fallback = getFurnitureDefaultSize(key);
+                const x = toFiniteNumber(sprite && sprite.x, toFiniteNumber(data.x, NaN));
+                const y = toFiniteNumber(sprite && sprite.y, toFiniteNumber(data.y, NaN));
+
+                if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+                const scaleX = toFiniteNumber(data.scaleX, toFiniteNumber(data.scale, 1));
+                const scaleY = toFiniteNumber(data.scaleY, toFiniteNumber(data.scale, 1));
+                const rawW = toFiniteNumber(
+                    sprite && sprite.displayWidth,
+                    toFiniteNumber(data.displayWidth, toFiniteNumber(data.width, fallback.w * scaleX))
+                );
+                const rawH = toFiniteNumber(
+                    sprite && sprite.displayHeight,
+                    toFiniteNumber(data.displayHeight, toFiniteNumber(data.height, fallback.h * scaleY))
+                );
+                const w = Math.max(40, Math.abs(rawW || fallback.w));
+                const h = Math.max(40, Math.abs(rawH || fallback.h));
+
+                rects.push({
+                    left: x - w / 2 - margin,
+                    right: x + w / 2 + margin,
+                    top: y - h / 2 - margin,
+                    bottom: y + h / 2 + margin
+                });
+            };
+
+            Object.keys(sourceData).forEach(key => {
+                const fd = sourceData[key] || {};
+                const f = spriteMap[key] || null;
+                addRect(key, fd, f && f.sprite ? f.sprite : null);
+            });
+
+            Object.keys(spriteMap).forEach(key => {
+                const f = spriteMap[key];
+                if (!f || !f.sprite) return;
+                addRect(key, sourceData[key] || {}, f.sprite);
+            });
+
+            return rects;
+        };
+
+        const isPointInsideFurniture = (x, y, rects) => {
+            return rects.some(rect => (
+                x >= rect.left &&
+                x <= rect.right &&
+                y >= rect.top &&
+                y <= rect.bottom
+            ));
+        };
+
+        const avoidRects = getFurnitureAvoidRects();
+        let spawnPoint = null;
+
+        for (let i = 0; i < maxTry; i++) {
+            let tx = Phaser.Math.Between(spawnMin, spawnMax);
+            let ty = Phaser.Math.Between(spawnMin, spawnMax);
+
+            if (!isPointInsideFurniture(tx, ty, avoidRects)) {
+                spawnPoint = { x: tx, y: ty };
+                break;
+            }
+        }
+
+        // 家俱太多或位置太密時，安全略過本次生成，避免無限重抽或卡死。
+        if (!spawnPoint) return;
+
+        let isOld = Math.random() < 0.05;
         push(ref(window.GameLogic.db, window.getServerRoomPath('cafeTrashes')), {
-        x: tx, 
-        y: ty, 
-        type: isOld ? 'old' : 'normal' 
-    }); 
-}
+            x: spawnPoint.x,
+            y: spawnPoint.y,
+            type: isOld ? 'old' : 'normal'
+        });
     }
     updateQTEBar(progress) {
         if (!this.qteBar) return;
