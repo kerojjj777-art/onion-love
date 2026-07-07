@@ -8301,6 +8301,9 @@ class MainScene extends Phaser.Scene {
         this.soloRocketJoystickInner = null;
         this.soloRocketJoystickHandlers = null;
         this.soloRocketDomUiIds = ['chat-section', 'online-players-container', 'top-notification-bar', 'action-menu', 'quick-select-menu', 'prince-cat-menu', 'magic-menu-blocker', 'party-minimized-list'];
+        this.soloRocketDifficultyKey = 'normal';
+        this.soloRocketRunDifficultyKey = 'normal';
+        this.soloRocketTutorialDifficultyButtons = [];
 
         // 階段3：教學介面、開場演出、結尾演出與輸入鎖定狀態
         this.soloRocketGameplayStarted = false;
@@ -11661,6 +11664,99 @@ if (!data.scoreHandled && data.attacker) {
         }
     }
 
+    getSoloRocketDifficultyConfigs() {
+        return {
+            cake: {
+                key: 'cake',
+                label: '小蛋糕',
+                note: '休閒練習',
+                moonBudgetCap: 300,
+                moonShardLimit: 1,
+                maxMonsters: 120,
+                monsterSpawnDelayScale: 1,
+                asteroidExtraBudget: 0,
+                spinCooldownMs: 1500,
+                bossHp: 100,
+                bossMissileIntervalMs: 8000,
+                monsterBulletCount: 1,
+                monsterMaxShots: 1
+            },
+            normal: {
+                key: 'normal',
+                label: '有點強',
+                note: '標準挑戰',
+                moonBudgetCap: 600,
+                moonShardLimit: 2,
+                maxMonsters: 120,
+                monsterSpawnDelayScale: 1,
+                asteroidExtraBudget: 25,
+                spinCooldownMs: 3000,
+                bossHp: 138,
+                bossMissileIntervalMs: 5000,
+                monsterBulletCount: 3,
+                monsterMaxShots: 0
+            },
+            crazy: {
+                key: 'crazy',
+                label: '瘋掉',
+                note: '高手高報酬',
+                moonBudgetCap: 800,
+                moonShardLimit: 3,
+                maxMonsters: 150,
+                monsterSpawnDelayScale: 0.78,
+                asteroidExtraBudget: 55,
+                spinCooldownMs: 1000,
+                bossHp: 160,
+                bossMissileIntervalMs: 5000,
+                monsterBulletCount: 3,
+                monsterMaxShots: 0
+            }
+        };
+    }
+
+    getSoloRocketDifficultyKey(key = null) {
+        const configs = this.getSoloRocketDifficultyConfigs();
+        const candidate = key || this.soloRocketRunDifficultyKey || this.soloRocketDifficultyKey || 'normal';
+        return configs[candidate] ? candidate : 'normal';
+    }
+
+    getSoloRocketDifficultyConfig(key = null) {
+        const configs = this.getSoloRocketDifficultyConfigs();
+        const safeKey = this.getSoloRocketDifficultyKey(key);
+        return configs[safeKey] || configs.normal;
+    }
+
+    setSoloRocketDifficulty(key) {
+        const cfg = this.getSoloRocketDifficultyConfig(key);
+        this.soloRocketDifficultyKey = cfg.key;
+        if (!this.soloRocketGameplayStarted) {
+            this.soloRocketRunDifficultyKey = cfg.key;
+        }
+        return cfg;
+    }
+
+    applySoloRocketDifficultyForRun(key = null) {
+        const cfg = this.getSoloRocketDifficultyConfig(key || this.soloRocketDifficultyKey || 'normal');
+        this.soloRocketRunDifficultyKey = cfg.key;
+        this.soloRocketMaxMonsters = cfg.maxMonsters;
+        this.soloRocketAsteroidExtraBudget = cfg.asteroidExtraBudget;
+        this.soloRocketSpinCooldownMs = cfg.spinCooldownMs;
+        this.soloRocketBossMissileIntervalMs = cfg.bossMissileIntervalMs;
+
+        if (!this.soloRocketBossSpawned) {
+            this.soloRocketBossMaxHp = cfg.bossHp;
+            this.soloRocketBossHp = cfg.bossHp;
+        }
+
+        return cfg;
+    }
+
+    getSoloRocketMoonShardLimit() {
+        const cfg = this.getSoloRocketDifficultyConfig(this.soloRocketRunDifficultyKey || this.soloRocketDifficultyKey || 'normal');
+        return Math.max(1, Number(cfg.moonShardLimit || 2));
+    }
+
+  
     startSoloRocketCruise() {
         if (this.soloRocketCruiseActive || !this.localPlayer || !this.localPlayer.sprite) return;
 
@@ -11681,8 +11777,10 @@ if (!data.scoreHandled && data.attacker) {
             this.soloRocketStartTime = 0;
             this.soloRocketDurationMs = 157000;
             this.soloRocketLifeValue = 100;
-            this.soloRocketMaxMonsters = 120;
+            this.soloRocketDifficultyKey = 'normal';
+            this.soloRocketRunDifficultyKey = 'normal';
             this.resetSoloRocketStage4State();
+            this.applySoloRocketDifficultyForRun('normal');
             this.soloRocketRunSummary = null;
             this.soloRocketMoonBudget = 0;
             this.soloRocketMoonBudgetLeft = 0;
@@ -11727,7 +11825,7 @@ if (!data.scoreHandled && data.attacker) {
         const cam = this.cameras.main;
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
         const panelW = Math.min(rect.w - 28, 430);
-        const panelH = Math.min(rect.h - 30, 500);
+        const panelH = Math.min(rect.h - 30, 560);
         const px = rect.centerX - panelW / 2;
         const py = rect.centerY - panelH / 2;
 
@@ -11760,7 +11858,7 @@ if (!data.scoreHandled && data.attacker) {
             '曾經登上月球的宇宙洋蔥如是說\n\n' +
             '搖桿或鍵盤方向鍵控制方向\n' +
             '「發射」(空白鍵) 擊殺宇宙雞雞\n' +
-            '「旋轉」(ALT鍵) 可掃開一切[冷卻3秒]\n' +
+            '「旋轉」(ALT鍵) 可掃開一切[冷卻依難度]\n' +
             '「放大絕」(Enter) 發射打中10次東西才會出現\n\n' +
             '勇敢飛向月球吧!!!\n' +
             '找到玉兔星人好好國民外交一番\n' +
@@ -11775,7 +11873,95 @@ if (!data.scoreHandled && data.attacker) {
             }
         ).setOrigin(0.5, 0);
 
-        const btnY = py + panelH - 56;
+        const difficultyTitle = this.add.text(rect.centerX, py + panelH - 166, '選擇本局難度', {
+            fontSize: '14px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#f4d6ff',
+            stroke: '#250033',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+
+        const difficultyHint = this.add.text(rect.centerX, py + panelH - 80, '', {
+            fontSize: '12px',
+            fontFamily: 'Arial, sans-serif',
+            color: '#eaffff',
+            stroke: '#000000',
+            strokeThickness: 3,
+            align: 'center',
+            wordWrap: { width: panelW - 34 }
+        }).setOrigin(0.5);
+
+        const difficultyKeys = ['cake', 'normal', 'crazy'];
+        const difficultyButtonObjects = [];
+        const difficultyButtonStates = [];
+        const diffBtnW = Math.min(104, Math.floor((panelW - 54) / 3));
+        const diffBtnH = 34;
+        const diffGap = 9;
+        const diffTotalW = diffBtnW * 3 + diffGap * 2;
+        const diffStartX = rect.centerX - diffTotalW / 2 + diffBtnW / 2;
+        const diffBtnY = py + panelH - 126;
+
+        const refreshDifficultyButtons = () => {
+            const currentCfg = this.getSoloRocketDifficultyConfig(this.soloRocketDifficultyKey || 'normal');
+
+            difficultyButtonStates.forEach(state => {
+                const selected = state.key === currentCfg.key;
+                state.bg.setFillStyle(selected ? 0x7b1cff : 0x21002f, selected ? 0.95 : 0.72);
+                state.bg.setStrokeStyle(selected ? 4 : 2, selected ? 0xffccff : 0x9d52ff, selected ? 1 : 0.78);
+                state.bg.setAlpha(selected ? 1 : 0.82);
+                state.txt.setColor(selected ? '#ffffff' : '#d9b3ff');
+                state.txt.setScale(selected ? 1.06 : 1);
+                state.glow.setVisible(selected);
+            });
+
+            difficultyHint.setText(
+                `本局難度：${currentCfg.label}｜旅費上限 ${currentCfg.moonBudgetCap}｜月光碎片 ${currentCfg.moonShardLimit} 個`
+            );
+        };
+
+        difficultyKeys.forEach((key, idx) => {
+            const cfg = this.getSoloRocketDifficultyConfig(key);
+            const x = diffStartX + idx * (diffBtnW + diffGap);
+
+            const glow = this.add.circle(x, diffBtnY, diffBtnW * 0.55, 0xb85cff, 0.24)
+                .setBlendMode(Phaser.BlendModes.ADD)
+                .setVisible(false);
+
+            const bg = this.add.rectangle(x, diffBtnY, diffBtnW, diffBtnH, 0x21002f, 0.72)
+                .setStrokeStyle(2, 0x9d52ff, 0.78)
+                .setInteractive({ useHandCursor: true });
+
+            const txt = this.add.text(x, diffBtnY, cfg.label, {
+                fontSize: rect.w < 420 ? '12px' : '13px',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold',
+                color: '#d9b3ff',
+                stroke: '#000000',
+                strokeThickness: 3
+            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+            const hit = this.add.zone(x, diffBtnY, diffBtnW + 10, diffBtnH + 18)
+                .setInteractive({ useHandCursor: true });
+
+            const chooseDifficulty = (pointer, localX, localY, event) => {
+                if (event && event.stopPropagation) event.stopPropagation();
+                this.setSoloRocketDifficulty(key);
+                refreshDifficultyButtons();
+            };
+
+            [bg, txt, hit].forEach(obj => {
+                obj.on('pointerdown', chooseDifficulty);
+                obj.on('pointerup', chooseDifficulty);
+            });
+
+            difficultyButtonStates.push({ key, bg, txt, glow });
+            difficultyButtonObjects.push(glow, bg, txt, hit);
+        });
+
+        refreshDifficultyButtons();
+
+        const btnY = py + panelH - 40;
         const btnW = 180;
         const btnH = 46;
         const hitW = btnW + 42;
@@ -11852,7 +12038,7 @@ if (!data.scoreHandled && data.attacker) {
         this.input.on('pointerdown', this.soloRocketTutorialPointerHandler);
         this.input.on('pointerup', this.soloRocketTutorialPointerHandler);
 
-        container.add([fullBlocker, panel, title, body, btnBg, btnText, startHit]);
+        container.add([fullBlocker, panel, title, body, difficultyTitle, difficultyHint, ...difficultyButtonObjects, btnBg, btnText, startHit]);
     }
 
     clearSoloRocketTutorial() {
@@ -11880,6 +12066,7 @@ if (!data.scoreHandled && data.attacker) {
         if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished || this.soloRocketGameplayStarted) return;
 
         this.clearSoloRocketTutorial();
+        this.applySoloRocketDifficultyForRun(this.soloRocketDifficultyKey || 'normal');
 
         this.soloRocketGameplayStarted = true;
         this.soloRocketTutorialActive = false;
@@ -12742,20 +12929,22 @@ if (!data.scoreHandled && data.attacker) {
     resetSoloRocketStage4State() {
         this.clearSoloRocketStage4Objects(true);
         if (this.clearSoloRocketStage6Objects) this.clearSoloRocketStage6Objects(true);
+        const diffCfg = this.getSoloRocketDifficultyConfig(this.soloRocketRunDifficultyKey || this.soloRocketDifficultyKey || 'normal');
+
         this.soloRocketMonsterSpawnedCount = 0;
         this.soloRocketMonsterSpawnActive = false;
         this.soloRocketMonsterSpawnStopped = false;
-        this.soloRocketMaxMonsters = 120;
+        this.soloRocketMaxMonsters = diffCfg.maxMonsters;
         this.soloRocketMonsterBullets = [];
         this.soloRocketAsteroids = [];
         this.soloRocketAsteroidSpawnActive = false;
         this.soloRocketAsteroidSpawnStopped = false;
         this.soloRocketAsteroidNextSpawnAt = 12000;
-        this.soloRocketAsteroidExtraBudget = 25;
+        this.soloRocketAsteroidExtraBudget = diffCfg.asteroidExtraBudget;
         this.soloRocketAsteroidExtraNextAt = 64000;
         this.soloRocketLastFireAt = 0;
         this.soloRocketLastSpinAt = 0;
-        this.soloRocketSpinCooldownMs = 3000;
+        this.soloRocketSpinCooldownMs = diffCfg.spinCooldownMs;
         this.soloRocketSpinActive = false;
         this.__soloRocketSpinInvincibleUntil = 0;
         this.__soloRocketSpinWasCooling = false;
@@ -12879,8 +13068,10 @@ if (!data.scoreHandled && data.attacker) {
         this.soloRocketBossLastMissileAt = 0;
 
         if (resetFlags) {
-            this.soloRocketBossHp = 138;
-            this.soloRocketBossMaxHp = 138;
+            const diffCfg = this.getSoloRocketDifficultyConfig(this.soloRocketRunDifficultyKey || this.soloRocketDifficultyKey || 'normal');
+            this.soloRocketBossHp = diffCfg.bossHp;
+            this.soloRocketBossMaxHp = diffCfg.bossHp;
+            this.soloRocketBossMissileIntervalMs = diffCfg.bossMissileIntervalMs;
             this.soloRocketBossSpawned = false;
             this.soloRocketBossKilled = false;
             this.soloRocketBossPunished = false;
@@ -13102,10 +13293,13 @@ if (!data.scoreHandled && data.attacker) {
         if (this.soloRocketBossSpawned || this.soloRocketBossKilled) return;
 
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const diffCfg = this.getSoloRocketDifficultyConfig(this.soloRocketRunDifficultyKey || this.soloRocketDifficultyKey || 'normal');
+
         this.soloRocketBossSpawned = true;
         this.soloRocketBossEntering = true;
-        this.soloRocketBossMaxHp = 138;
+        this.soloRocketBossMaxHp = diffCfg.bossHp;
         this.soloRocketBossHp = this.soloRocketBossMaxHp;
+        this.soloRocketBossMissileIntervalMs = diffCfg.bossMissileIntervalMs;
 
         try {
             if (this.soloRocketMonsterSpawnTimer) this.soloRocketMonsterSpawnTimer.remove(false);
@@ -13687,7 +13881,9 @@ if (!data.scoreHandled && data.attacker) {
             return;
         }
 
-        const nextDelay = Number.isFinite(delayMs) ? delayMs : Phaser.Math.Between(1200, 2500);
+        const diffCfg = this.getSoloRocketDifficultyConfig(this.soloRocketRunDifficultyKey || this.soloRocketDifficultyKey || 'normal');
+        const rawDelay = Number.isFinite(delayMs) ? delayMs : Phaser.Math.Between(1200, 2500);
+        const nextDelay = Math.max(180, Math.floor(rawDelay * (Number(diffCfg.monsterSpawnDelayScale || 1))));
         this.soloRocketMonsterSpawnTimer = this.time.delayedCall(nextDelay, () => {
             this.soloRocketMonsterSpawnTimer = null;
 
@@ -13711,6 +13907,7 @@ if (!data.scoreHandled && data.attacker) {
         }
 
         const rect = this.soloRocketSafeRect || this.getSoloRocketSafeRect();
+        const diffCfg = this.getSoloRocketDifficultyConfig(this.soloRocketRunDifficultyKey || this.soloRocketDifficultyKey || 'normal');
         const size = Phaser.Math.Between(38, 52);
         const spawnFromTop = Math.random() < 0.72;
         const spawnX = Phaser.Math.Between(Math.floor(rect.x + size), Math.floor(rect.x + rect.w - size));
@@ -13751,6 +13948,8 @@ if (!data.scoreHandled && data.attacker) {
         monster.__soloRocketFloatPhase = Math.random() * Math.PI * 2;
         monster.__soloRocketFloatOffset = 0;
         monster.__soloRocketNextShotAt = Date.now() + Phaser.Math.Between(900, 1800);
+        monster.__soloRocketShotCount = 0;
+        monster.__soloRocketMaxShots = Math.max(0, Number(diffCfg.monsterMaxShots || 0));
 
         if (!spawnFromTop) {
             const warpMs = 1300;
@@ -14527,7 +14726,10 @@ if (!data.scoreHandled && data.attacker) {
     fireSoloRocketMonsterBulletBurst(monster) {
         if (!monster || !monster.active || monster.__soloRocketDead || monster.__soloRocketSpawnPending || !this.soloRocketContainer) return;
 
-        for (let i = 0; i < 3; i++) {
+        const diffCfg = this.getSoloRocketDifficultyConfig(this.soloRocketRunDifficultyKey || this.soloRocketDifficultyKey || 'normal');
+        const bulletCount = Phaser.Math.Clamp(Math.floor(Number(diffCfg.monsterBulletCount || 3)), 1, 3);
+
+        for (let i = 0; i < bulletCount; i++) {
             this.time.delayedCall(i * 145, () => {
                 if (!monster || !monster.active || monster.__soloRocketDead || monster.__soloRocketSpawnPending || !this.soloRocketCruiseActive || this.soloRocketCruiseFinished) return;
 
@@ -14607,8 +14809,21 @@ if (!data.scoreHandled && data.attacker) {
             monster.__soloRocketFloatOffset = nextOffset;
 
             if (now >= (monster.__soloRocketNextShotAt || 0)) {
-                this.fireSoloRocketMonsterBulletBurst(monster);
-                monster.__soloRocketNextShotAt = now + Phaser.Math.Between(1650, 2850);
+                const maxShots = Math.max(0, Number(monster.__soloRocketMaxShots || 0));
+                const shotCount = Math.max(0, Number(monster.__soloRocketShotCount || 0));
+
+                if (!maxShots || shotCount < maxShots) {
+                    this.fireSoloRocketMonsterBulletBurst(monster);
+                    monster.__soloRocketShotCount = shotCount + 1;
+
+                    if (maxShots && monster.__soloRocketShotCount >= maxShots) {
+                        monster.__soloRocketNextShotAt = Number.POSITIVE_INFINITY;
+                    } else {
+                        monster.__soloRocketNextShotAt = now + Phaser.Math.Between(1650, 2850);
+                    }
+                } else {
+                    monster.__soloRocketNextShotAt = Number.POSITIVE_INFINITY;
+                }
             }
 
             const passedPlayerLine = (monster.__soloRocketVy || 0) > 0 && monster.y > (monster.__soloRocketTargetY || rect.centerY) + 150;
@@ -16151,10 +16366,14 @@ if (!data.scoreHandled && data.attacker) {
             (!bossPunished ? 50 : 0) +
             Math.floor(Math.min(80, life * 0.8));
 
-        const budgetCap = lifeZero ? 80 : 400;
+        const diffCfg = this.getSoloRocketDifficultyConfig(this.soloRocketRunDifficultyKey || this.soloRocketDifficultyKey || 'normal');
+        const budgetCap = lifeZero ? Math.min(80, diffCfg.moonBudgetCap) : diffCfg.moonBudgetCap;
         moonBudget = Phaser.Math.Clamp(Math.floor(moonBudget), 0, budgetCap);
 
         return {
+            difficultyKey: diffCfg.key,
+            difficultyLabel: diffCfg.label,
+            moonShardLimit: diffCfg.moonShardLimit,
             score,
             life,
             monsterKills,
@@ -16176,7 +16395,7 @@ if (!data.scoreHandled && data.attacker) {
         this.soloRocketResultContainer = result;
 
         const panelW = Math.min(rect.w - 34, 400);
-        const panelH = 382;
+        const panelH = 422;
         const px = rect.centerX - panelW / 2;
         const py = rect.centerY - panelH / 2;
 
@@ -16234,8 +16453,10 @@ if (!data.scoreHandled && data.attacker) {
         }).setOrigin(0.5);
 
         const resultText = [
+            `本局難度：${summary.difficultyLabel || '有點強'}`,
             `本趟分數：${summary.score}`,
-            `月球旅費：${summary.moonBudget} 馬德幣`,
+            `月球旅費：${summary.moonBudget} 馬德幣 / 上限 ${summary.budgetCap}`,
+            `月光碎片本趟可購買：${summary.moonShardLimit || 2} 個`,
             `剩餘生命：${summary.life}%`,
             `擊殺小怪獸：${summary.monsterKills}`,
             `躲過/清除隕石：${summary.asteroidsDodged}`,
@@ -16280,7 +16501,8 @@ if (!data.scoreHandled && data.attacker) {
             {
                 name: '月光碎片',
                 price: 150,
-                limitOne: true,
+                limitOne: false,
+                limitByRun: true,
                 key: 'solo-rocket-item-moon-shard',
                 fallback: '🌙',
                 desc: '月亮掉下來的一小角，據說集滿100個\n可以再來找玉兔兌換神秘物品。'
@@ -16326,9 +16548,13 @@ if (!data.scoreHandled && data.attacker) {
                 : 0
         );
 
+        const limitText = item.name === '月光碎片'
+            ? ` / ${this.getSoloRocketMoonShardLimit()}`
+            : '';
+
         return {
             title: `${item.name}，＄${item.price}旅費`,
-            stats: `持有：${this.getSoloRocketMoonItemOwnedCount(item.name)}　本趟已購買：${Math.max(0, boughtThisRun)}`,
+            stats: `持有：${this.getSoloRocketMoonItemOwnedCount(item.name)}　本趟已購買：${Math.max(0, boughtThisRun)}${limitText}`,
             desc: item.desc || ''
         };
     }
@@ -17119,8 +17345,10 @@ if (!data.scoreHandled && data.attacker) {
             }
         }
 
+        const shopDiffCfg = this.getSoloRocketDifficultyConfig(this.soloRocketRunDifficultyKey || this.soloRocketDifficultyKey || 'normal');
+
         this.soloRocketRabbitShopBudgetText = this.add.text(rect.centerX, budgetY,
-            `月球旅費剩餘：${currentMoonBudgetLeft}`, {
+            `月球旅費剩餘：${currentMoonBudgetLeft}｜${shopDiffCfg.label}`, {
             fontSize: rect.w < 420 ? '16px' : '18px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
@@ -17157,7 +17385,7 @@ if (!data.scoreHandled && data.attacker) {
         }
 
         const subtitle = this.add.text(rect.centerX, rect.y + 62,
-            '點選伴手禮查看資訊，沒花完的旅費會匯回馬德幣帳戶。', {
+            `點選伴手禮查看資訊，沒花完的旅費會匯回馬德幣帳戶。\n月光碎片本趟可購買：${shopDiffCfg.moonShardLimit} 個`, {
             fontSize: '12px',
             fontFamily: 'Arial, sans-serif',
             color: '#ffffff',
@@ -17275,15 +17503,16 @@ if (!data.scoreHandled && data.attacker) {
 
         if (selectedItem) {
             const qty = (this.soloRocketMoonShopPurchases && this.soloRocketMoonShopPurchases[selectedItem.name]) || 0;
-            const alreadyLimited = !!(selectedItem.limitOne && qty >= 1);
+            const itemLimit = selectedItem.name === '月光碎片' ? this.getSoloRocketMoonShardLimit() : (selectedItem.limitOne ? 1 : 0);
+            const alreadyLimited = !!(itemLimit && qty >= itemLimit);
             const canAfford = (this.soloRocketMoonBudgetLeft || 0) >= selectedItem.price;
             const canBuy = canAfford && !alreadyLimited && !this.soloRocketMoonShopFinalizing && !this.soloRocketMoonShopFinalized;
-            const buttonLabel = alreadyLimited ? '本趟已購買' : (canAfford ? '購買' : '旅費不足');
+            const buttonLabel = alreadyLimited ? '本趟已達上限' : (canAfford ? '購買' : '旅費不足');
             const itemInfo = this.makeSoloRocketMoonShopInfo
                 ? this.makeSoloRocketMoonShopInfo(selectedItem)
                 : {
                     title: `${selectedItem.name}，＄${selectedItem.price}旅費`,
-                    stats: `持有：0　本趟已購買：${qty}`,
+                    stats: `持有：0　本趟已購買：${qty}${itemLimit ? ' / ' + itemLimit : ''}`,
                     desc: selectedItem.desc || ''
                 };
 
@@ -17657,9 +17886,11 @@ if (!data.scoreHandled && data.attacker) {
         this.soloRocketMoonShopPurchases = this.soloRocketMoonShopPurchases || {};
         const currentQty = Number(this.soloRocketMoonShopPurchases[item.name] || 0);
 
-        if (item.limitOne && currentQty >= 1) {
+        const itemLimit = item.name === '月光碎片' ? this.getSoloRocketMoonShardLimit() : (item.limitOne ? 1 : 0);
+
+        if (itemLimit && currentQty >= itemLimit) {
             this.renderSoloRocketRabbitShop();
-            showRabbitSpeech('玉兔：月光碎片本趟只能帶一片喔。', 24);
+            showRabbitSpeech(`玉兔：${item.name}本趟最多只能帶 ${itemLimit} 個喔。`, 24);
             this.bounceSoloRocketRabbitShopkeeper();
             return;
         }
@@ -17852,6 +18083,7 @@ if (!data.scoreHandled && data.attacker) {
             .map(name => `${name} × ${Number(data.purchases[name] || 0)}`);
 
         const bodyLines = [
+            `本局難度：${data.summary.difficultyLabel || '有點強'}`,
             `本趟分數：${data.summary.score}`,
             `原始月球旅費：${data.originalBudget}`,
             `玉兔伴手禮花費：${data.spent}`,
@@ -17993,6 +18225,8 @@ if (!data.scoreHandled && data.attacker) {
         this.soloRocketMoonShopFinalized = false;
         this.soloRocketMoonShopFinalizing = false;
         this.soloRocketMoonFinalResult = null;
+        this.soloRocketDifficultyKey = 'normal';
+        this.soloRocketRunDifficultyKey = 'normal';
         this.soloRocketFireButtonState = null;
         this.soloRocketSpinButtonState = null;
         this.soloRocketSpinCooldownFill = null;
