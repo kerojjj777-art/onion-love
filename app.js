@@ -584,8 +584,104 @@ function createSystemUI() {
             }
             .purchase-blackhole-slider-wrap { margin: 14px 0 10px 0; color:#d8ffdc; }
             .purchase-blackhole-row { display:flex; justify-content:space-between; align-items:center; font-size:13px; margin-bottom:6px; }
+            .purchase-owned-box {
+                margin: -2px 0 10px 0;
+                padding: 7px 10px;
+                border-radius: 10px;
+                background: rgba(0, 0, 0, 0.5);
+                border: 1px solid rgba(126, 255, 126, 0.42);
+                color: #d8ffdc;
+                font-size: 13px;
+                font-weight: bold;
+                text-align: center;
+                box-shadow: 0 0 10px rgba(57,255,20,0.18), inset 0 0 10px rgba(57,255,20,0.08);
+            }
             #purchase-qty { color:#d8ff65 !important; text-shadow:0 0 8px rgba(57,255,20,0.85); }
+            .purchase-slider-control-row {
+                display: grid;
+                grid-template-columns: 42px minmax(0, 1fr) 42px;
+                gap: 8px;
+                align-items: center;
+                margin-top: 6px;
+            }
+            .purchase-qty-step-btn {
+                width: 42px;
+                height: 42px;
+                border-radius: 50%;
+                border: 2px solid rgba(216, 255, 101, 0.92);
+                background: radial-gradient(circle at 35% 28%, #f5fff0 0%, #39ff14 38%, #113f18 100%);
+                color: #021006;
+                font-size: 24px;
+                font-weight: 900;
+                line-height: 34px;
+                padding: 0;
+                cursor: pointer;
+                touch-action: manipulation;
+                box-shadow: 0 0 13px rgba(57,255,20,0.72), 0 0 16px rgba(157,82,255,0.34), inset 0 1px 0 rgba(255,255,255,0.65);
+                text-shadow: 0 1px 0 rgba(255,255,255,0.65);
+            }
+            .purchase-qty-step-btn:disabled {
+                opacity: 0.42;
+                filter: grayscale(0.5);
+                cursor: not-allowed;
+                box-shadow: none;
+            }
+            .purchase-qty-step-btn:active:not(:disabled) {
+                transform: scale(0.92);
+            }
             #purchase-slider { width:100%; accent-color:#39ff14; touch-action:pan-x; }
+            .purchase-qty-input-wrap {
+                margin-top: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                color: #d8ffdc;
+                font-size: 13px;
+                font-weight: bold;
+            }
+            #purchase-qty-input {
+                width: 86px;
+                padding: 8px 10px;
+                border-radius: 10px;
+                border: 2px solid rgba(191,116,255,0.72);
+                background: rgba(0,0,0,0.72);
+                color: #d8ff65;
+                font-size: 18px;
+                font-weight: 900;
+                text-align: center;
+                box-sizing: border-box;
+                outline: none;
+                box-shadow: 0 0 10px rgba(57,255,20,0.28), 0 0 10px rgba(173,80,255,0.24), inset 0 0 8px rgba(0,0,0,0.55);
+                text-shadow: 0 0 8px rgba(57,255,20,0.75);
+            }
+            #purchase-qty-input:focus {
+                border-color: rgba(216,255,101,0.95);
+                box-shadow: 0 0 15px rgba(57,255,20,0.58), 0 0 14px rgba(173,80,255,0.42), inset 0 0 8px rgba(0,0,0,0.55);
+            }
+            #purchase-modal.purchase-blackhole-ui .purchase-checkout-btn {
+                background: linear-gradient(180deg, #7dff7a 0%, #18b83b 45%, #044f18 100%) !important;
+                color: #f7fff3 !important;
+                border: 2px solid rgba(216,255,101,0.95) !important;
+                border-radius: 12px !important;
+                font-weight: 900 !important;
+                box-shadow: 0 0 14px rgba(57,255,20,0.82), 0 0 22px rgba(57,255,20,0.34), inset 0 1px 0 rgba(255,255,255,0.55) !important;
+                text-shadow: 0 1px 2px rgba(0,0,0,0.72), 0 0 8px rgba(216,255,101,0.72);
+            }
+            #purchase-modal.purchase-blackhole-ui .purchase-cancel-btn {
+                background: linear-gradient(180deg, #c790ff 0%, #7a2de2 48%, #250742 100%) !important;
+                color: #fff5ff !important;
+                border: 2px solid rgba(218,184,255,0.95) !important;
+                border-radius: 12px !important;
+                font-weight: 900 !important;
+                box-shadow: 0 0 14px rgba(173,80,255,0.82), 0 0 22px rgba(173,80,255,0.34), inset 0 1px 0 rgba(255,255,255,0.42) !important;
+                text-shadow: 0 1px 2px rgba(0,0,0,0.78), 0 0 8px rgba(218,184,255,0.72);
+            }
+            #purchase-modal.purchase-blackhole-ui .purchase-checkout-btn:active,
+            #purchase-modal.purchase-blackhole-ui .purchase-cancel-btn:active {
+                transform: scale(0.96);
+                filter: brightness(1.12);
+            }
             #purchase-slider::-webkit-slider-runnable-track {
                 height: 8px;
                 border-radius:999px;
@@ -3334,20 +3430,29 @@ function createSystemUI() {
             <div class="purchase-blackhole-layer">
                 <h3 id="purchase-title">購買</h3>
                 <div id="purchase-desc" class="purchase-blackhole-desc"></div>
+                <div id="purchase-owned" class="purchase-owned-box">🎒 目前持有：0 個</div>
                 <div class="purchase-blackhole-slider-wrap">
                     <div class="purchase-blackhole-row">
                         <span>購買數量</span>
                         <strong id="purchase-qty">1</strong>
                     </div>
-                    <input id="purchase-slider" type="range" min="1" max="1" value="1" oninput="window.updatePurchaseSlider(this.value)">
+                    <div class="purchase-slider-control-row">
+                        <button id="purchase-minus-btn" class="purchase-qty-step-btn" type="button" onclick="window.adjustPurchaseQty(-1)">－</button>
+                        <input id="purchase-slider" type="range" min="1" max="1" value="1" oninput="window.updatePurchaseSlider(this.value)">
+                        <button id="purchase-plus-btn" class="purchase-qty-step-btn" type="button" onclick="window.adjustPurchaseQty(1)">＋</button>
+                    </div>
+                    <div class="purchase-qty-input-wrap">
+                        <span>直接輸入數量</span>
+                        <input id="purchase-qty-input" type="number" inputmode="numeric" pattern="[0-9]*" min="1" max="1" value="1" oninput="window.handlePurchaseQtyInput(this.value)" onchange="window.updatePurchaseSlider(this.value)" onblur="window.updatePurchaseSlider(this.value)">
+                    </div>
                     <div id="purchase-max-hint" style="margin-top:6px; font-size:12px; color:#9dffb0; text-align:right;">最多可買 1 個</div>
                 </div>
                 <div style="margin-bottom:15px; font-size:16px;">
                     <span class="purchase-total-box">總計：<strong id="purchase-total" class="purchase-total-value">20</strong> 馬德幣</span>
                 </div>
                 <div class="modal-btns">
-                    <button class="btn-primary" onclick="window.confirmPurchase()">結帳</button>
-                    <button class="btn-secondary" onclick="document.getElementById('purchase-modal').style.display='none'">取消</button>
+                    <button class="btn-primary purchase-checkout-btn" onclick="window.confirmPurchase()">結帳</button>
+                    <button class="btn-secondary purchase-cancel-btn" onclick="document.getElementById('purchase-modal').style.display='none'">取消</button>
                 </div>
             </div>
         </div>
@@ -6607,10 +6712,14 @@ window.openPurchaseModal = function(name, price) {
         return;
     }
 
+    const inventory = (window.GameLogic.myProfile && window.GameLogic.myProfile.inventory) ? window.GameLogic.myProfile.inventory : {};
+    const ownedQty = Math.max(0, Math.floor(Number(inventory[name] || 0) || 0));
+
     window.currentPurchaseItem = name;
     window.currentPurchasePrice = price;
     window.currentPurchaseQty = 1;
     window.currentPurchaseMaxQty = Math.max(1, maxQty);
+    window.currentPurchaseOwnedQty = ownedQty;
 
     document.getElementById('purchase-title').innerText = `購買 ${name}`;
 
@@ -6629,11 +6738,21 @@ window.openPurchaseModal = function(name, price) {
 
     document.getElementById('purchase-desc').innerText = desc;
 
+    const ownedEl = document.getElementById('purchase-owned');
+    if (ownedEl) ownedEl.innerText = `🎒 目前持有：${ownedQty} 個`;
+
     const slider = document.getElementById('purchase-slider');
     if (slider) {
         slider.min = 1;
         slider.max = window.currentPurchaseMaxQty;
         slider.value = 1;
+    }
+
+    const qtyInput = document.getElementById('purchase-qty-input');
+    if (qtyInput) {
+        qtyInput.min = 1;
+        qtyInput.max = window.currentPurchaseMaxQty;
+        qtyInput.value = 1;
     }
 
     const maxHint = document.getElementById('purchase-max-hint');
@@ -6643,19 +6762,50 @@ window.openPurchaseModal = function(name, price) {
     document.getElementById('purchase-modal').style.display = 'block';
 };
 
+window.handlePurchaseQtyInput = function(value) {
+    if (String(value || '').trim() === '') return;
+    window.updatePurchaseSlider(value);
+};
+
 window.updatePurchaseSlider = function(value) {
-    const maxQty = Math.max(1, Number(window.currentPurchaseMaxQty || Math.floor((window.GameLogic.myProfile.coins || 0) / window.currentPurchasePrice) || 1));
-    const qty = Math.min(maxQty, Math.max(1, Math.floor(Number(value) || 1)));
+    const price = Math.max(1, Number(window.currentPurchasePrice || 1));
+    const currentCoins = window.GameLogic.myProfile.coins || 0;
+    const maxQty = Math.max(1, Math.floor(Number(window.currentPurchaseMaxQty || Math.floor(currentCoins / price) || 1)));
+    const rawQty = Number(value);
+    const fallbackQty = window.currentPurchaseQty || 1;
+    const baseQty = Number.isFinite(rawQty) ? rawQty : fallbackQty;
+    const qty = Math.min(maxQty, Math.max(1, Math.floor(baseQty)));
 
     window.currentPurchaseQty = qty;
+    window.currentPurchaseMaxQty = maxQty;
 
     const slider = document.getElementById('purchase-slider');
-    if (slider && Number(slider.value) !== qty) slider.value = qty;
+    if (slider) {
+        slider.min = 1;
+        slider.max = maxQty;
+        if (Number(slider.value) !== qty) slider.value = qty;
+    }
+
+    const qtyInput = document.getElementById('purchase-qty-input');
+    if (qtyInput) {
+        qtyInput.min = 1;
+        qtyInput.max = maxQty;
+        if (String(qtyInput.value) !== String(qty)) qtyInput.value = qty;
+    }
 
     const qtyEl = document.getElementById('purchase-qty');
     if (qtyEl) qtyEl.innerText = qty;
 
-    const total = qty * window.currentPurchasePrice;
+    const minusBtn = document.getElementById('purchase-minus-btn');
+    if (minusBtn) minusBtn.disabled = qty <= 1;
+
+    const plusBtn = document.getElementById('purchase-plus-btn');
+    if (plusBtn) plusBtn.disabled = qty >= maxQty;
+
+    const maxHint = document.getElementById('purchase-max-hint');
+    if (maxHint) maxHint.innerText = `依目前馬德幣最多可買 ${maxQty} 個`;
+
+    const total = qty * price;
     const totalEl = document.getElementById('purchase-total');
     if (totalEl) {
         totalEl.innerText = total;
