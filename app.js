@@ -6970,11 +6970,19 @@ window.renderStoreTab = function(tab = 'magic') {
             ? `<div class="${item.spriteClass}"></div>`
             : `<img src="${item.img || 'memory.png'}" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">`;
 
+        const furnitureDefForCard = item.category === 'furniture' && window.getFurnitureDefinition
+            ? window.getFurnitureDefinition(item.key || item.name)
+            : null;
+        const furnitureInventoryForCard = (window.GameLogic.myProfile && window.GameLogic.myProfile.furnitureInventory) ? window.GameLogic.myProfile.furnitureInventory : {};
+        const rawFurnitureOwnedForCard = Math.max(0, Math.floor(Number(furnitureInventoryForCard[item.key || item.name] || 0) || 0));
+        const ownedLabel = item.category === 'furniture'
+            ? `<span style="font-size:11px; color:#d8ffdc; font-weight:bold; margin-top:2px;">持有 ${furnitureDefForCard && furnitureDefForCard.defaultOwned ? Math.max(1, rawFurnitureOwnedForCard) : rawFurnitureOwnedForCard}</span>`
+            : '';
         const extraLabel = item.category === 'furniture' && item.rotatable
             ? `<span style="font-size:11px; color:#8dff8a; font-weight:bold; margin-top:2px;">可轉向</span>`
             : '';
 
-        div.innerHTML = `${iconHtml}<span style="margin-top:5px;">${item.name}</span><span style="font-size:12px; font-weight:bold;">${item.price} 馬德幣</span>${extraLabel}`;
+        div.innerHTML = `${iconHtml}<span style="margin-top:5px;">${item.name}</span><span style="font-size:12px; font-weight:bold;">${item.price} 馬德幣</span>${ownedLabel}${extraLabel}`;
         div.onclick = () => window.openPurchaseModal(item.name, item.price, {
             category: item.category || safeTab,
             key: item.key || item.name,
@@ -6999,8 +7007,12 @@ window.openPurchaseModal = function(name, price, options = {}) {
 
     const inventory = (window.GameLogic.myProfile && window.GameLogic.myProfile.inventory) ? window.GameLogic.myProfile.inventory : {};
     const furnitureInventory = (window.GameLogic.myProfile && window.GameLogic.myProfile.furnitureInventory) ? window.GameLogic.myProfile.furnitureInventory : {};
+    const furnitureDefForOwned = purchaseCategory === 'furniture' && window.getFurnitureDefinition
+        ? window.getFurnitureDefinition(itemKey)
+        : null;
+    const rawFurnitureOwnedQty = Math.max(0, Math.floor(Number(furnitureInventory[itemKey] || 0) || 0));
     const ownedQty = purchaseCategory === 'furniture'
-        ? Math.max(0, Math.floor(Number(furnitureInventory[itemKey] || 0) || 0))
+        ? (furnitureDefForOwned && furnitureDefForOwned.defaultOwned ? Math.max(1, rawFurnitureOwnedQty) : rawFurnitureOwnedQty)
         : Math.max(0, Math.floor(Number(inventory[name] || 0) || 0));
 
     window.currentPurchaseItem = name;
@@ -9408,7 +9420,7 @@ this.events.on('action_A_short', () => {
         return;
     }
     if (this.localPlayer.isSleeping) { 
-                this.localPlayer.isSleeping = false; this.sleepTopBg.setVisible(false); this.sleepTopText.setVisible(false); this.sleepBotBg.setVisible(false); this.sleepBotText.setVisible(false); this.localPlayer.sprite.play('idle'); 
+                this.localPlayer.isSleeping = false; this.sleepTopBg.setVisible(false); this.sleepTopText.setVisible(false); this.sleepBotBg.setVisible(false); this.sleepBotText.setVisible(false); this.localPlayer.sprite.setAngle(0).setFlipX(false).play('idle'); 
                 if (this.sound.get('onion-sleep')) this.sound.stopByKey('onion-sleep');
                 window.playSFX(this, 'sleep-wakeup');
                 
@@ -9446,7 +9458,8 @@ this.events.on('action_A_short', () => {
             if (this.localPlayer.isSeated) return;
             if (this.sceneName === 'shrine') { for (let key in this.furnitureSprites) { if (key === 'altar') { let f = this.furnitureSprites[key]; if (f.sprite.isLocked && Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y) < 150) { document.getElementById('summon-confirm-modal').style.display = 'block'; return; } } } }
             if (this.sceneName === 'doghouse') { for (let key in this.furnitureSprites) { if (key.includes('bed')) { let f = this.furnitureSprites[key]; if (f.sprite.isLocked && Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y) < 90) { 
-                this.localPlayer.isSleeping = true; this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y); this.localPlayer.sprite.play('sleep', true); 
+                const sleepAnchor = this.getDoghouseBedInteractionAnchor(f);
+                this.localPlayer.isSleeping = true; this.localPlayer.sprite.setVelocity(0, 0); this.localPlayer.sprite.setPosition(sleepAnchor.x, sleepAnchor.y); this.localPlayer.sprite.setAngle(sleepAnchor.sleepAngle || 0).setFlipX(false).play('sleep', true); 
                 this.sleepTopText.setVisible(true).setPosition(f.sprite.x, f.sprite.y - 100); this.sleepBotText.setVisible(true).setPosition(f.sprite.x, f.sprite.y - 65); this.sleepBotBg.setVisible(true); 
                 let bounds = this.sleepBotText.getBounds(); let w = bounds.width + 16, h = bounds.height + 12; let x = this.sleepBotText.x - w/2, y = this.sleepBotText.y - h/2; 
                 this.sleepBotBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(x, y, w, h, 8).strokeRoundedRect(x, y, w, h, 8); 
@@ -9468,14 +9481,14 @@ this.events.on('action_A_short', () => {
                 let gTween = this.tweens.add({ targets: gImg, alpha: 0.4, yoyo: true, repeat: -1, duration: 400 });
 
                 // 修正：躺床時同步記錄床的精準座標，確保下次登入就在床上
-                window.GameLogic.myProfile.lastX = f.sprite.x;
-                window.GameLogic.myProfile.lastY = f.sprite.y;
+                window.GameLogic.myProfile.lastX = sleepAnchor.x;
+                window.GameLogic.myProfile.lastY = sleepAnchor.y;
 
                 // 強制等待 Firebase 回傳存檔成功的 Promise 訊號，並儲存精準座標
                 update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { 
                     sleepStartTime: window.GameLogic.myProfile.sleepStartTime,
-                    lastX: f.sprite.x,
-                    lastY: f.sprite.y
+                    lastX: sleepAnchor.x,
+                    lastY: sleepAnchor.y
                 }).then(() => {
                     gText.setText('蔥電飽已接上 zzZ').setColor('#b2ff59');
                     gTween.stop(); gImg.setAlpha(1);
@@ -21088,19 +21101,27 @@ if (activeBubbleMsg) {
     getDoghouseBedInteractionAnchor(f) {
         const direction = (f && f.direction) || (f && f.sprite && f.sprite._onionFurnitureDirection) || 'front';
 
-        // 目前床鋪只有單張圖，互動點先固定於家具中心，避免素材不足時偏移錯位。
-        // 未來若補四方向床鋪圖，可在此依 direction 微調睡覺位置與提示位置。
+        // 目前床鋪只有單張圖，互動點先固定於家具中心。
+        // sleepAngle 會讓洋蔥睡覺精靈圖跟著床鋪方向同步旋轉，未來補四方向睡覺圖時可在此改成 setTexture。
         const offsets = {
             front: { x: 0, y: 0 },
             right: { x: 0, y: 0 },
             back: { x: 0, y: 0 },
             left: { x: 0, y: 0 }
         };
+        const sleepAngles = {
+            front: 0,
+            right: 90,
+            back: 180,
+            left: 270
+        };
 
         const off = offsets[direction] || offsets.front;
         return {
             x: f.sprite.x + off.x,
-            y: f.sprite.y + off.y
+            y: f.sprite.y + off.y,
+            direction,
+            sleepAngle: sleepAngles[direction] || 0
         };
     }
   
@@ -23234,17 +23255,28 @@ function openFurnitureCatalog() {
                 if (isRotatable) tags.push(`<span class="doghouse-furniture-tag rotatable">可轉向</span>`);
                 (def.tags || []).forEach(tag => tags.push(`<span class="doghouse-furniture-tag">${tag}</span>`));
 
+                const statusText = placedData.locked ? '已擺設' : (placedData.locked === false ? '擺放中' : '未擺設');
+                const placeLabel = placedData.locked ? '重新擺設' : (placedData.locked === false ? '繼續擺設' : '擺設家俱');
+                const canStow = placedData.locked === true || placedData.locked === false;
+                const buttonGrid = canStow ? '1fr 1fr' : '1fr';
+                const stowButton = canStow
+                    ? `<button class="doghouse-place-btn" type="button" style="background:linear-gradient(180deg, #f3b0a2, #8f2f24); color:#fff8f0;" onclick="window.stowDoghouseFurniture && window.stowDoghouseFurniture('${def.key}')">收起家俱</button>`
+                    : '';
+
                 detail.innerHTML = `
                     <div class="doghouse-furniture-detail-head">
                         <img src="${def.img || 'memory.png'}" alt="${def.name || '家具'}">
                         <div>
                             <div class="doghouse-furniture-detail-title">${def.name || '未命名家具'}</div>
-                            <div style="font-size:12px; color:#6d3b22; margin-top:3px;">持有：${displayQty}　狀態：${placedData.locked ? '已擺設' : (placedData.locked === false ? '擺放中' : '未擺設')}</div>
+                            <div style="font-size:12px; color:#6d3b22; margin-top:3px;">持有：${displayQty}　狀態：${statusText}</div>
                         </div>
                     </div>
                     <div style="font-size:13px; line-height:1.55; white-space:pre-wrap;">${def.desc || '尚未設定描述。'}</div>
                     <div class="doghouse-furniture-tags">${tags.join('') || '<span class="doghouse-furniture-tag">一般家具</span>'}</div>
-                    <button class="doghouse-place-btn" type="button" onclick="window.startDoghouseFurniturePlacement && window.startDoghouseFurniturePlacement('${def.key}')">${placedData.locked ? '重新擺設' : '擺設'}</button>
+                    <div style="display:grid; grid-template-columns:${buttonGrid}; gap:8px; margin-top:10px;">
+                        <button class="doghouse-place-btn" type="button" style="margin-top:0;" onclick="window.startDoghouseFurniturePlacement && window.startDoghouseFurniturePlacement('${def.key}')">${placeLabel}</button>
+                        ${stowButton}
+                    </div>
                 `;
                 detail.classList.add('show');
             };
@@ -23398,6 +23430,41 @@ window.startDoghouseFurniturePlacement = function(furnitureKey) {
             sendBubble(def.rotatable ? "移動家具中，點家具可轉向，按 A 放下。" : "移動家具中，按 A 放下。");
         })
         .catch(err => console.warn('Firebase 狗窩家具擺設啟動失敗:', err));
+};
+
+window.stowDoghouseFurniture = function(furnitureKey) {
+    if (!window.GameLogic || window.GameLogic.currentScene !== 'doghouse' || !window.GameLogic.currentUser) return;
+
+    const def = window.getFurnitureDefinition ? window.getFurnitureDefinition(furnitureKey) : { key: furnitureKey };
+    const key = def.key || furnitureKey;
+    const path = `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}`;
+
+    if (window.GameLogic.placingFurnitureKey === key) {
+        if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput();
+        window.GameLogic.placingFurnitureKey = null;
+    }
+
+    if (window.GameLogic.doghouseFurniture && window.GameLogic.doghouseFurniture[key]) {
+        delete window.GameLogic.doghouseFurniture[key];
+    }
+
+    if (window.closeFurnitureCatalogModal) window.closeFurnitureCatalogModal();
+    else {
+        const modal = document.getElementById('furniture-catalog-modal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    remove(ref(window.GameLogic.db, path))
+        .then(() => {
+            sendBubble(`${def.name || '家具'}已收起，仍保留在家具庫。`);
+            if (window.GameLogic.phaserGame) {
+                const scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
+                if (scene && scene.localPlayer && scene.localPlayer.sprite) {
+                    scene.cameras.main.startFollow(scene.localPlayer.sprite, true, 0.08, 0.08);
+                }
+            }
+        })
+        .catch(err => console.warn('Firebase 狗窩家具收起失敗:', err));
 };
 
 window.showFurnitureCatalogModal = function() {
