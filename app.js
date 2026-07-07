@@ -11442,17 +11442,56 @@ if (!data.scoreHandled && data.attacker) {
     hideSoloRocketLobbyUi() {
         if (!this.soloRocketPrevUiState) this.soloRocketPrevUiState = { dom: {}, phaser: {}, cameras: {} };
 
-        this.soloRocketDomUiIds.forEach(id => {
+        const rememberDomUiState = (id, el) => {
+            if (!el || (id in this.soloRocketPrevUiState.dom)) return;
+
+            this.soloRocketPrevUiState.dom[id] = {
+                display: el.style.getPropertyValue('display'),
+                displayPriority: el.style.getPropertyPriority('display'),
+                visibility: el.style.getPropertyValue('visibility'),
+                visibilityPriority: el.style.getPropertyPriority('visibility'),
+                pointerEvents: el.style.getPropertyValue('pointer-events'),
+                pointerEventsPriority: el.style.getPropertyPriority('pointer-events'),
+                opacity: el.style.getPropertyValue('opacity'),
+                opacityPriority: el.style.getPropertyPriority('opacity')
+            };
+        };
+
+        const forceHideDomUi = (id) => {
             const el = document.getElementById(id);
             if (!el) return;
-            if (!(id in this.soloRocketPrevUiState.dom)) this.soloRocketPrevUiState.dom[id] = el.style.display;
-            el.style.display = 'none';
-        });
+
+            rememberDomUiState(id, el);
+
+            // #chat-section 等大廳常駐 UI 在 CSS 內有 display:flex !important，
+            // 這裡必須用 setProperty(..., 'important') 才能確實壓過原規則。
+            el.style.setProperty('display', 'none', 'important');
+            el.style.setProperty('visibility', 'hidden', 'important');
+            el.style.setProperty('pointer-events', 'none', 'important');
+            el.style.setProperty('opacity', '0', 'important');
+        };
+
+        (this.soloRocketDomUiIds || []).forEach(forceHideDomUi);
 
         const uiScene = this.scene.manager.getScene('UIScene');
         if (!uiScene) return;
 
-        const hideKeys = ['statusContainer', 'btnA', 'txtA', 'btnB', 'txtB', 'furnBtn', 'furnText', 'itemBtn', 'itemText', 'partyDash'];
+        const hideKeys = [
+            'statusContainer',
+            'btnA',
+            'txtA',
+            'btnB',
+            'txtB',
+            'furnBtn',
+            'furnText',
+            'itemBtn',
+            'itemText',
+            'sweepBtn',
+            'sweepText',
+            'sweepBtnGlow',
+            'partyDash'
+        ];
+
         hideKeys.forEach(key => {
             const obj = uiScene[key];
             if (!obj || !obj.setVisible) return;
@@ -11477,11 +11516,36 @@ if (!data.scoreHandled && data.attacker) {
     }
 
     restoreSoloRocketLobbyUi() {
-        const prev = this.soloRocketPrevUiState || { dom: {}, phaser: {} };
+        const prev = this.soloRocketPrevUiState || { dom: {}, phaser: {}, cameras: {} };
+
+        const restoreDomStyleProperty = (el, prop, value, priority) => {
+            if (!el) return;
+            if (value === undefined || value === null || value === '') {
+                el.style.removeProperty(prop);
+            } else {
+                el.style.setProperty(prop, value, priority || '');
+            }
+        };
 
         Object.keys(prev.dom || {}).forEach(id => {
             const el = document.getElementById(id);
-            if (el) el.style.display = prev.dom[id];
+            if (!el) return;
+
+            const state = prev.dom[id];
+
+            // 相容舊版暫存格式：舊版只存 display 字串。
+            if (typeof state === 'string') {
+                restoreDomStyleProperty(el, 'display', state, '');
+                el.style.removeProperty('visibility');
+                el.style.removeProperty('pointer-events');
+                el.style.removeProperty('opacity');
+                return;
+            }
+
+            restoreDomStyleProperty(el, 'display', state.display, state.displayPriority);
+            restoreDomStyleProperty(el, 'visibility', state.visibility, state.visibilityPriority);
+            restoreDomStyleProperty(el, 'pointer-events', state.pointerEvents, state.pointerEventsPriority);
+            restoreDomStyleProperty(el, 'opacity', state.opacity, state.opacityPriority);
         });
 
         const uiScene = this.scene.manager.getScene('UIScene');
@@ -11490,15 +11554,6 @@ if (!data.scoreHandled && data.attacker) {
                 const obj = uiScene[key];
                 if (obj && obj.setVisible) obj.setVisible(!!prev.phaser[key]);
             });
-            if (uiScene.btnA && uiScene.btnA.setVisible) uiScene.btnA.setVisible(true);
-            if (uiScene.txtA && uiScene.txtA.setVisible) uiScene.txtA.setVisible(true);
-            if (uiScene.btnB && uiScene.btnB.setVisible) uiScene.btnB.setVisible(true);
-            if (uiScene.txtB && uiScene.txtB.setVisible) uiScene.txtB.setVisible(true);
-            if (uiScene.furnBtn && uiScene.furnBtn.setVisible) uiScene.furnBtn.setVisible(true);
-            if (uiScene.furnText && uiScene.furnText.setVisible) uiScene.furnText.setVisible(true);
-            if (uiScene.itemBtn && uiScene.itemBtn.setVisible) uiScene.itemBtn.setVisible(true);
-            if (uiScene.itemText && uiScene.itemText.setVisible) uiScene.itemText.setVisible(true);
-            if (uiScene.statusContainer && uiScene.statusContainer.setVisible) uiScene.statusContainer.setVisible(true);
         }
 
         if (this.minimap && prev.cameras && ('minimap' in prev.cameras)) {
