@@ -10673,18 +10673,26 @@ if (!data.scoreHandled && data.attacker) {
         updateMoonStaffRabbitPositions();
 
         // 角色全身：爆竹式大面積金光噴灑。
-        this.moonStaffBlessingEmitter = this.add.particles(targetX, targetY - 18, 'fw-particle', {
-            speed: { min: 120, max: 440 },
-            angle: { min: 0, max: 360 },
-            scale: { start: 1.55, end: 0 },
-            alpha: { start: 1, end: 0 },
-            tint: [0xffffff, 0xfff59d, 0xffd54f, 0xff9800, 0xff7043],
-            blendMode: 'ADD',
-            lifespan: { min: 650, max: 1450 },
-            quantity: 12,
-            frequency: 42
-        }).setDepth(989);
-        if (casterSprite && casterSprite.active) this.moonStaffBlessingEmitter.startFollow(casterSprite, 0, -18);
+        // 若有施放者 sprite，粒子發射器必須先放在 0,0 再 startFollow；
+        // 避免 targetX / targetY 與 follow 座標重複相加，導致特效出現在遠方。
+        const hasMoonStaffCasterSprite = !!(casterSprite && casterSprite.active);
+        this.moonStaffBlessingEmitter = this.add.particles(
+            hasMoonStaffCasterSprite ? 0 : targetX,
+            hasMoonStaffCasterSprite ? 0 : targetY - 18,
+            'fw-particle',
+            {
+                speed: { min: 120, max: 440 },
+                angle: { min: 0, max: 360 },
+                scale: { start: 1.55, end: 0 },
+                alpha: { start: 1, end: 0 },
+                tint: [0xffffff, 0xfff59d, 0xffd54f, 0xff9800, 0xff7043],
+                blendMode: 'ADD',
+                lifespan: { min: 650, max: 1450 },
+                quantity: 12,
+                frequency: 42
+            }
+        ).setDepth(989);
+        if (hasMoonStaffCasterSprite) this.moonStaffBlessingEmitter.startFollow(casterSprite, 0, -18);
         this.moonStaffBlessingEmitters.push(this.moonStaffBlessingEmitter);
 
         // 月球持續散發旋轉顆粒。
