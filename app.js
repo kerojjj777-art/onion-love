@@ -8593,6 +8593,10 @@ class BootScene extends Phaser.Scene {
         this.load.audio('onion-sleep', 'onion-sleep.mp3');
         this.load.audio('sleep-wakeup', 'sleep-wakeup-rooster-call.mp3');
         this.load.spritesheet('onion-clean', 'onion-clean.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-sleep', 'onion-sleeping.png', { frameWidth: 75, frameHeight: 75 });
+        this.load.image('onion-sit-cushion-front', 'onion-sit-on-cushion-front.png');
+        this.load.image('onion-sit-cushion-face-left', 'onion-sit-on-cushion-face-left.png');
+        this.load.image('onion-sit-cushion-back', 'onion-sit-on-cushion-back.png');
+        this.load.image('onion-sit-cushion-face-right', 'onion-sit-on-cushion-face-right.png');
         // 新增：載入蔥電飽充電器精靈圖
         this.load.spritesheet('sleep-charger', 'sleep_onion_bao_charger.png', { frameWidth: 90, frameHeight: 90 });
         this.load.spritesheet('prince-cat-walk-right-sheet', 'pet-cat-wzm-walk-right.png', { frameWidth: 100, frameHeight: 100 });
@@ -10080,6 +10084,14 @@ class MainScene extends Phaser.Scene {
                     savePayload.furnitureKey = fd.furnitureKey || key;
                     savePayload.direction = this.getFurnitureDirection(key, { ...fd, direction: f.direction || fd.direction });
                     savePayload.rotatable = this.isFurnitureRotatable(key, fd);
+
+                    if (this.wouldDoghouseInteractiveFurnitureOverlap(key, f, { ...fd, ...savePayload })) {
+                        f.sprite.isLocked = false;
+                        window.GameLogic.placingFurnitureKey = key;
+                        this.placePrompt.setPosition(f.sprite.x, f.sprite.y - 80).setVisible(true);
+                        sendBubble("這裡和其他互動家具重疊了，換個位置擺吧！");
+                        return;
+                    }
                 }
 
                 update(ref(window.GameLogic.db, path), savePayload);
@@ -10137,59 +10149,17 @@ this.events.on('action_A_short', () => {
                 }
                 return;
             }
-            if (this.localPlayer.isSeated) return;
+            if (this.localPlayer.isSeated) {
+                if (this.sceneName === 'doghouse') {
+                    this.stopDoghouseCushionSitting();
+                    return;
+                }
+                return;
+            }
             if (this.sceneName === 'shrine') { for (let key in this.furnitureSprites) { if (key === 'altar') { let f = this.furnitureSprites[key]; if (f.sprite.isLocked && Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y) < 150) { document.getElementById('summon-confirm-modal').style.display = 'block'; return; } } } }
-            if (this.sceneName === 'doghouse') { for (let key in this.furnitureSprites) { if (key.includes('bed')) { let f = this.furnitureSprites[key]; if (f.sprite.isLocked && Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, f.sprite.x, f.sprite.y) < 90) { 
-                const sleepAnchor = this.getDoghouseBedInteractionAnchor(f);
-                this.localPlayer.isSleeping = true; this.localPlayer.sprite.setVelocity(0, 0); this.localPlayer.sprite.setPosition(sleepAnchor.x, sleepAnchor.y); this.localPlayer.sprite.setAngle(sleepAnchor.sleepAngle || 0).setFlipX(false).play('sleep', true); 
-                this.sleepTopText.setVisible(true).setPosition(f.sprite.x, f.sprite.y - 100); this.sleepBotText.setVisible(true).setPosition(f.sprite.x, f.sprite.y - 65); this.sleepBotBg.setVisible(true); 
-                let bounds = this.sleepBotText.getBounds(); let w = bounds.width + 16, h = bounds.height + 12; let x = this.sleepBotText.x - w/2, y = this.sleepBotText.y - h/2; 
-                this.sleepBotBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(x, y, w, h, 8).strokeRoundedRect(x, y, w, h, 8); 
-                let vol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100; 
-                if (vol > 0) { if (this.sound.get('onion-sleep')) this.sound.play('onion-sleep', {loop: true, volume: vol}); else this.sound.add('onion-sleep', {loop: true, volume: vol}).play(); } 
-                window.GameLogic.myProfile.sleepStartTime = Date.now(); 
-                localStorage.setItem('onion_sleepStartTime', window.GameLogic.myProfile.sleepStartTime);
-                
-                // 視覺等待防呆：繪製綠色提示框與精靈圖
-                let cam = this.cameras.main;
-                let guardContainer = this.add.container(cam.scrollX + cam.width/2, cam.scrollY + cam.height/2).setDepth(1000);
-                let gBg = this.add.graphics().fillStyle(0x1b5e20, 0.95).fillRoundedRect(-120, -80, 240, 160, 16).lineStyle(4, 0x8bc34a).strokeRoundedRect(-120, -80, 240, 160, 16);
-                let gImg = this.add.sprite(0, -20, 'sleep-charger').setScale(0.8);
-                gImg.play('charger-anim');
-                let gText = this.add.text(0, 45, '蔥電飽連結中...', { fontSize: '18px', color: '#ffffff', fontStyle: 'bold', fontFamily: 'Arial' }).setOrigin(0.5);
-                guardContainer.add([gBg, gImg, gText]);
-                
-                // 動畫：連結中閃爍
-                let gTween = this.tweens.add({ targets: gImg, alpha: 0.4, yoyo: true, repeat: -1, duration: 400 });
-
-                // 修正：躺床時同步記錄床的精準座標，確保下次登入就在床上
-                window.GameLogic.myProfile.lastX = sleepAnchor.x;
-                window.GameLogic.myProfile.lastY = sleepAnchor.y;
-
-                // 強制等待 Firebase 回傳存檔成功的 Promise 訊號，並儲存精準座標
-                update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { 
-                    sleepStartTime: window.GameLogic.myProfile.sleepStartTime,
-                    lastX: sleepAnchor.x,
-                    lastY: sleepAnchor.y
-                }).then(() => {
-                    gText.setText('蔥電飽已接上 zzZ').setColor('#b2ff59');
-                    gTween.stop(); gImg.setAlpha(1);
-                    window.playSFX(this, 'sleep-onion-bao-charge');
-                    
-                    // 電流噴發粒子
-                    let emitter = this.add.particles(cam.scrollX + cam.width/2, cam.scrollY + cam.height/2 - 20, 'fw-particle', {
-                        speed: { min: 50, max: 150 }, scale: { start: 1, end: 0 },
-                        tint: [0x8bc34a, 0x00ff00], blendMode: 'ADD', lifespan: 800, quantity: 30
-                    }).setDepth(1001);
-                    emitter.explode();
-                    
-                    this.time.delayedCall(1500, () => {
-                        guardContainer.destroy(); emitter.destroy();
-                        sendBubble("開始掛機充電囉..."); 
-                    });
-                });
-                return; 
-            } } } }
+            if (this.sceneName === 'doghouse') {
+                if (this.tryUseNearestDoghouseInteractiveFurniture()) return;
+            }
 
            if (window.GameLogic.armedItemState === 'ready') {
                 let itemName = window.GameLogic.armedItemName || '水球';
@@ -10825,6 +10795,11 @@ this.events.on('action_B', () => {
             }
 
             if (this.localPlayer.isSleeping) return;
+
+            if (this.sceneName === 'doghouse' && this.localPlayer.isSeated) {
+                this.stopDoghouseCushionSitting();
+                return;
+            }
             
             if (this.sceneName === 'shrine') { 
                 if (this.localPlayer.isSeated) { 
@@ -21757,9 +21732,9 @@ if (activeBubbleMsg) {
         f.direction = direction;
         f.sprite._onionFurnitureDirection = direction;
 
-        // 第一版只有 doghouse-bed.png 單張圖，因此先用 Phaser 角度呈現方向。
+        // 第一版只有單張床圖，因此床類先用 Phaser 角度呈現方向；坐墊與地毯保持原圖角度。
         // 已保留 direction 狀態，未來補四方向素材時只要在這裡改成 setTexture 即可。
-        if (key && key.includes('bed')) {
+        if (this.isDoghouseBedFurniture(key, f)) {
             const angleByDirection = { front: 0, right: 90, back: 180, left: 270 };
             f.sprite.setAngle(angleByDirection[direction] || 0);
         } else {
@@ -21847,6 +21822,289 @@ if (activeBubbleMsg) {
             sleepAngle: sleepAngles[direction] || 0
         };
     }
+
+    getDoghouseFurnitureType(key, fOrData = {}) {
+        const data = fOrData && fOrData.sprite ? (fOrData.furnitureDef || {}) : (fOrData || {});
+        const def = this.getFurnitureDefinitionForRuntime(key, data);
+        const type = (fOrData && fOrData.furnitureType) || (data && data.furnitureType) || (def && def.furnitureType) || '';
+
+        if (type) return type;
+        if (String(key || '').includes('bed')) return 'bed';
+        if (String(key || '').includes('cushion')) return 'cushion';
+
+        return 'general';
+    }
+
+    isDoghouseBedFurniture(key, fOrData = {}) {
+        if (this.sceneName !== 'doghouse') return false;
+        return this.getDoghouseFurnitureType(key, fOrData) === 'bed' || String(key || '').includes('bed');
+    }
+
+    isDoghouseCushionFurniture(key, fOrData = {}) {
+        if (this.sceneName !== 'doghouse') return false;
+        return this.getDoghouseFurnitureType(key, fOrData) === 'cushion' || String(key || '').includes('cushion');
+    }
+
+    isDoghouseInteractiveFurniture(key, fOrData = {}) {
+        const type = this.getDoghouseFurnitureType(key, fOrData);
+        return type === 'bed' || type === 'cushion' || String(key || '').includes('bed') || String(key || '').includes('cushion');
+    }
+
+    getDoghouseFurnitureBounds(key, f, data = {}) {
+        const spec = this.getFurnitureDisplaySpec ? this.getFurnitureDisplaySpec(key, data) : {};
+        const sprite = f && f.sprite ? f.sprite : null;
+        const centerX = Number.isFinite(Number(data && data.x)) ? Number(data.x) : (sprite ? sprite.x : 0);
+        const centerY = Number.isFinite(Number(data && data.y)) ? Number(data.y) : (sprite ? sprite.y : 0);
+        const width = Number.isFinite(Number(data && data.width)) && Number(data.width) > 0
+            ? Number(data.width)
+            : (Number.isFinite(Number(spec && spec.width)) && Number(spec.width) > 0
+                ? Number(spec.width)
+                : (sprite && Number.isFinite(Number(sprite.displayWidth)) && Number(sprite.displayWidth) > 0 ? Number(sprite.displayWidth) : 80));
+        const height = Number.isFinite(Number(data && data.height)) && Number(data.height) > 0
+            ? Number(data.height)
+            : (Number.isFinite(Number(spec && spec.height)) && Number(spec.height) > 0
+                ? Number(spec.height)
+                : (sprite && Number.isFinite(Number(sprite.displayHeight)) && Number(sprite.displayHeight) > 0 ? Number(sprite.displayHeight) : 80));
+
+        return {
+            left: centerX - width / 2,
+            right: centerX + width / 2,
+            top: centerY - height / 2,
+            bottom: centerY + height / 2,
+            width,
+            height
+        };
+    }
+
+    doDoghouseFurnitureBoundsOverlap(a, b) {
+        if (!a || !b) return false;
+        return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    }
+
+    wouldDoghouseInteractiveFurnitureOverlap(placingKey, placingF, placingData = {}) {
+        if (this.sceneName !== 'doghouse') return false;
+        if (!this.isDoghouseInteractiveFurniture(placingKey, placingF || placingData)) return false;
+
+        const placingBounds = this.getDoghouseFurnitureBounds(placingKey, placingF, placingData);
+
+        for (const otherKey in this.furnitureSprites) {
+            if (!Object.prototype.hasOwnProperty.call(this.furnitureSprites, otherKey)) continue;
+            if (otherKey === placingKey) continue;
+
+            const otherF = this.furnitureSprites[otherKey];
+            if (!otherF || otherF === placingF || !otherF.sprite || !otherF.sprite.active) continue;
+            if (!otherF.sprite.isLocked) continue;
+            if (!this.isDoghouseInteractiveFurniture(otherKey, otherF)) continue;
+
+            const otherData = (window.GameLogic && window.GameLogic.doghouseFurniture && window.GameLogic.doghouseFurniture[otherKey]) ? window.GameLogic.doghouseFurniture[otherKey] : {};
+            const otherBounds = this.getDoghouseFurnitureBounds(otherKey, otherF, otherData);
+
+            if (this.doDoghouseFurnitureBoundsOverlap(placingBounds, otherBounds)) return true;
+        }
+
+        return false;
+    }
+
+    getDoghouseCushionSitTextureKey(direction = 'front') {
+        const dir = direction || 'front';
+        if (dir === 'right') return 'onion-sit-cushion-face-left';
+        if (dir === 'back') return 'onion-sit-cushion-back';
+        if (dir === 'left') return 'onion-sit-cushion-face-right';
+        return 'onion-sit-cushion-front';
+    }
+
+    applyDoghouseCushionSittingVisual() {
+        if (!this.localPlayer || !this.localPlayer.sprite || this.sceneName !== 'doghouse') return false;
+
+        const direction = this.localPlayer.seatedCushionDirection || 'front';
+        const textureKey = this.getDoghouseCushionSitTextureKey(direction);
+
+        this.localPlayer.sprite.setVelocity(0, 0);
+        this.localPlayer.sprite.setAngle(0).setFlipX(false);
+
+        if (this.textures && this.textures.exists(textureKey)) {
+            this.localPlayer.sprite.setTexture(textureKey);
+        } else if (this.anims && this.anims.exists('idle')) {
+            this.localPlayer.sprite.play('idle', true);
+        }
+
+        if (this.localPlayer.seatedCushionX !== undefined && this.localPlayer.seatedCushionY !== undefined) {
+            this.localPlayer.sprite.setPosition(this.localPlayer.seatedCushionX, this.localPlayer.seatedCushionY);
+        }
+
+        return true;
+    }
+
+    startDoghouseCushionSitting(key, f) {
+        if (this.sceneName !== 'doghouse') return false;
+        if (!this.isDoghouseCushionFurniture(key, f)) return false;
+        if (!f || !f.sprite || !f.sprite.active || !f.sprite.isLocked) return false;
+        if (!this.localPlayer || !this.localPlayer.sprite) return false;
+        if (this.localPlayer.isSleeping || this.localPlayer.isSweeping) return false;
+
+        const direction = this.getFurnitureDirection(key, {
+            ...(f.furnitureDef || {}),
+            direction: f.direction || (f.sprite && f.sprite._onionFurnitureDirection) || 'front'
+        });
+
+        this.localPlayer.isSeated = true;
+        this.localPlayer.seatedFurnitureKey = key;
+        this.localPlayer.seatedCushionDirection = direction;
+        this.localPlayer.seatedCushionX = f.sprite.x;
+        this.localPlayer.seatedCushionY = f.sprite.y;
+        this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y);
+
+        this.applyDoghouseCushionSittingVisual();
+        sendBubble("坐下來休息一下。");
+        return true;
+    }
+
+    stopDoghouseCushionSitting() {
+        if (!this.localPlayer || !this.localPlayer.sprite) return false;
+        if (this.sceneName !== 'doghouse' || !this.localPlayer.isSeated) return false;
+
+        this.localPlayer.isSeated = false;
+        this.localPlayer.seatedFurnitureKey = null;
+        this.localPlayer.seatedCushionDirection = null;
+        this.localPlayer.seatedCushionX = null;
+        this.localPlayer.seatedCushionY = null;
+        this.localPlayer.sprite.setAngle(0).setFlipX(false);
+
+        if (this.anims && this.anims.exists('idle')) this.localPlayer.sprite.play('idle', true);
+        return true;
+    }
+
+    hasDoghouseCushionExitInput() {
+        if (this.sceneName !== 'doghouse' || !this.localPlayer || !this.localPlayer.isSeated) return false;
+        if (this.hasCanvasDirectionalMovement && this.hasCanvasDirectionalMovement()) return true;
+        if (document.activeElement && document.activeElement.tagName === 'INPUT') return false;
+
+        return !!(
+            this.cursors &&
+            (
+                this.cursors.left.isDown ||
+                this.cursors.right.isDown ||
+                this.cursors.up.isDown ||
+                this.cursors.down.isDown
+            )
+        );
+    }
+
+    startDoghouseSleepingFromFurniture(key, f) {
+        if (this.sceneName !== 'doghouse') return false;
+        if (!this.isDoghouseBedFurniture(key, f)) return false;
+        if (!f || !f.sprite || !f.sprite.active || !f.sprite.isLocked) return false;
+        if (!this.localPlayer || !this.localPlayer.sprite) return false;
+        if (this.localPlayer.isSeated || this.localPlayer.isSweeping) return false;
+
+        const sleepAnchor = this.getDoghouseBedInteractionAnchor(f);
+        this.localPlayer.isSleeping = true;
+        this.localPlayer.sprite.setVelocity(0, 0);
+        this.localPlayer.sprite.setPosition(sleepAnchor.x, sleepAnchor.y);
+        this.localPlayer.sprite.setAngle(sleepAnchor.sleepAngle || 0).setFlipX(false).play('sleep', true);
+
+        this.sleepTopText.setVisible(true).setPosition(f.sprite.x, f.sprite.y - 100);
+        this.sleepBotText.setVisible(true).setPosition(f.sprite.x, f.sprite.y - 65);
+        this.sleepBotBg.setVisible(true);
+
+        let bounds = this.sleepBotText.getBounds();
+        let w = bounds.width + 16;
+        let h = bounds.height + 12;
+        let x = this.sleepBotText.x - w / 2;
+        let y = this.sleepBotText.y - h / 2;
+        this.sleepBotBg.clear().fillStyle(0xf4ecd8, 0.95).lineStyle(2, 0xc5a059, 1).fillRoundedRect(x, y, w, h, 8).strokeRoundedRect(x, y, w, h, 8);
+
+        let vol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 100) / 100;
+        if (vol > 0) {
+            if (this.sound.get('onion-sleep')) this.sound.play('onion-sleep', { loop: true, volume: vol });
+            else this.sound.add('onion-sleep', { loop: true, volume: vol }).play();
+        }
+
+        window.GameLogic.myProfile.sleepStartTime = Date.now();
+        localStorage.setItem('onion_sleepStartTime', window.GameLogic.myProfile.sleepStartTime);
+
+        let cam = this.cameras.main;
+        let guardContainer = this.add.container(cam.scrollX + cam.width / 2, cam.scrollY + cam.height / 2).setDepth(1000);
+        let gBg = this.add.graphics().fillStyle(0x1b5e20, 0.95).fillRoundedRect(-120, -80, 240, 160, 16).lineStyle(4, 0x8bc34a).strokeRoundedRect(-120, -80, 240, 160, 16);
+        let gImg = this.add.sprite(0, -20, 'sleep-charger').setScale(0.8);
+        gImg.play('charger-anim');
+        let gText = this.add.text(0, 45, '蔥電飽連結中...', { fontSize: '18px', color: '#ffffff', fontStyle: 'bold', fontFamily: 'Arial' }).setOrigin(0.5);
+        guardContainer.add([gBg, gImg, gText]);
+
+        let gTween = this.tweens.add({ targets: gImg, alpha: 0.4, yoyo: true, repeat: -1, duration: 400 });
+
+        window.GameLogic.myProfile.lastX = sleepAnchor.x;
+        window.GameLogic.myProfile.lastY = sleepAnchor.y;
+
+        update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), {
+            sleepStartTime: window.GameLogic.myProfile.sleepStartTime,
+            lastX: sleepAnchor.x,
+            lastY: sleepAnchor.y
+        }).then(() => {
+            gText.setText('蔥電飽已接上 zzZ').setColor('#b2ff59');
+            gTween.stop();
+            gImg.setAlpha(1);
+            window.playSFX(this, 'sleep-onion-bao-charge');
+
+            let emitter = this.add.particles(cam.scrollX + cam.width / 2, cam.scrollY + cam.height / 2 - 20, 'fw-particle', {
+                speed: { min: 50, max: 150 },
+                scale: { start: 1, end: 0 },
+                tint: [0x8bc34a, 0x00ff00],
+                blendMode: 'ADD',
+                lifespan: 800,
+                quantity: 30
+            }).setDepth(1001);
+            emitter.explode();
+
+            this.time.delayedCall(1500, () => {
+                if (guardContainer && guardContainer.active) guardContainer.destroy();
+                if (emitter && emitter.active) emitter.destroy();
+                sendBubble("開始掛機充電囉...");
+            });
+        }).catch(err => {
+            console.warn('Firebase 睡覺狀態存檔失敗:', err);
+            if (guardContainer && guardContainer.active) guardContainer.destroy();
+        });
+
+        return true;
+    }
+
+    tryUseDoghouseInteractiveFurniture(key, f) {
+        if (this.isDoghouseBedFurniture(key, f)) return this.startDoghouseSleepingFromFurniture(key, f);
+        if (this.isDoghouseCushionFurniture(key, f)) return this.startDoghouseCushionSitting(key, f);
+        return false;
+    }
+
+    tryUseNearestDoghouseInteractiveFurniture() {
+        if (this.sceneName !== 'doghouse' || !this.localPlayer || !this.localPlayer.sprite) return false;
+
+        let nearestKey = null;
+        let nearestF = null;
+        let nearestDist = 90;
+
+        for (const key in this.furnitureSprites) {
+            const f = this.furnitureSprites[key];
+            if (!f || !f.sprite || !f.sprite.active || !f.sprite.isLocked) continue;
+            if (!this.isDoghouseInteractiveFurniture(key, f)) continue;
+
+            const dist = Phaser.Math.Distance.Between(
+                this.localPlayer.sprite.x,
+                this.localPlayer.sprite.y,
+                f.sprite.x,
+                f.sprite.y
+            );
+
+            if (dist < nearestDist) {
+                nearestDist = dist;
+                nearestKey = key;
+                nearestF = f;
+            }
+        }
+
+        if (!nearestKey || !nearestF) return false;
+        return this.tryUseDoghouseInteractiveFurniture(nearestKey, nearestF);
+    }
+  
   
     createFurniture(key, data) { 
     data = data || {};
@@ -22657,21 +22915,22 @@ if (activeBubbleMsg) {
     }
 
     handleDoghouseBedDirectInteraction(key, f) {
-        if (this.sceneName !== 'doghouse' || !key || !key.includes('bed')) return false;
+        if (this.sceneName !== 'doghouse') return false;
         if (!f || !f.sprite || !f.sprite.active || !f.sprite.isLocked) return false;
         if (!this.localPlayer || !this.localPlayer.sprite) return false;
-        if (this.localPlayer.isSeated || this.localPlayer.isSweeping) return false;
+        if (this.localPlayer.isSweeping) return false;
 
         if (this.localPlayer.isSleeping) {
             this.events.emit('action_A_short');
             return true;
         }
 
-        const anchor = this.getDoghouseBedInteractionAnchor(f);
-        this.localPlayer.sprite.setVelocity(0, 0);
-        this.localPlayer.sprite.setPosition(anchor.x, anchor.y);
-        this.events.emit('action_A_short');
-        return true;
+        if (this.localPlayer.isSeated) {
+            this.stopDoghouseCushionSitting();
+            return true;
+        }
+
+        return this.tryUseDoghouseInteractiveFurniture(key, f);
     }
 
     handleShrineSeatDirectInteraction(key, f) {
@@ -23359,12 +23618,13 @@ if (activeBubbleMsg) {
         // 修正2：確保進入狗窩後，等到家具完全載入並產生實體後，再把睡覺的玩家放到床上
         if (this.sceneName === 'doghouse' && window.GameLogic.myProfile.sleepStartTime > 0 && !this.sleepInitDone && this.localPlayer) {
             for (let key in this.furnitureSprites) {
-                if (key.includes('bed') && this.furnitureSprites[key].sprite.isLocked) {
+                const f = this.furnitureSprites[key];
+                if (this.isDoghouseBedFurniture(key, f) && f.sprite && f.sprite.isLocked) {
                     this.sleepInitDone = true;
-                    let f = this.furnitureSprites[key];
+                    const sleepAnchor = this.getDoghouseBedInteractionAnchor(f);
                     this.localPlayer.isSleeping = true;
-                    this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y);
-                    this.localPlayer.sprite.play('sleep', true);
+                    this.localPlayer.sprite.setPosition(sleepAnchor.x, sleepAnchor.y);
+                    this.localPlayer.sprite.setAngle(sleepAnchor.sleepAngle || 0).setFlipX(false).play('sleep', true);
                     this.localPlayer.sprite.setAlpha(1);
                     this.sleepTopText.setVisible(true).setPosition(f.sprite.x, f.sprite.y - 100);
                     this.sleepBotText.setVisible(true).setPosition(f.sprite.x, f.sprite.y - 65);
@@ -23487,7 +23747,13 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
             this.localPlayer.sprite.setVelocity(0, 0); this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
         } else if (this.localPlayer.isSeated) {
             this.localPlayer.sprite.setVelocity(0, 0); this.smartPromptBg.setVisible(false); this.smartPromptText.setVisible(false);
-            if (isPurifying) {
+            if (this.sceneName === 'doghouse') {
+                if (this.hasDoghouseCushionExitInput()) {
+                    this.stopDoghouseCushionSitting();
+                } else {
+                    this.applyDoghouseCushionSittingVisual();
+                }
+            } else if (isPurifying) {
                 if (evData.targetUid === window.GameLogic.currentUser.uid) {
                     if (this.furnitureSprites['altar']) this.localPlayer.sprite.setPosition(this.furnitureSprites['altar'].sprite.x, this.furnitureSprites['altar'].sprite.y + 40);
                     this.localPlayer.sprite.play('purify-target', true);
@@ -23622,7 +23888,8 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
                             else if (key.includes('fridge')) this._cachedPromptMsg = "按A打開冰箱"; 
                             else if (key.includes('shrine')) this._cachedPromptMsg = "按A參拜神龕"; 
                             else if (key.includes('dummy')) this._cachedPromptMsg = "假人洋蔥 (裝飾中)"; 
-                            else if (key.includes('bed')) this._cachedPromptMsg = "按A歐歐睏"; 
+                            else if (this.isDoghouseBedFurniture(key, f)) this._cachedPromptMsg = "按A歐歐睏"; 
+                            else if (this.isDoghouseCushionFurniture(key, f)) this._cachedPromptMsg = "按A坐下休息"; 
                             else if (key.includes('scoreboard')) this._cachedPromptMsg = "按A查看洋蔥王排行榜"; 
                             else if (key.includes('solochicken')) this._cachedPromptMsg = "按A打開獨樂雞";
                             else this._cachedPromptMsg = "按A打開回憶錄"; 
@@ -24182,6 +24449,13 @@ window.stowDoghouseFurniture = function(furnitureKey) {
 
     if (window.GameLogic.doghouseFurniture && window.GameLogic.doghouseFurniture[key]) {
         delete window.GameLogic.doghouseFurniture[key];
+    }
+
+    if (window.GameLogic.phaserGame) {
+        const scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
+        if (scene && scene.localPlayer && scene.localPlayer.seatedFurnitureKey === key && scene.stopDoghouseCushionSitting) {
+            scene.stopDoghouseCushionSitting();
+        }
     }
 
     if (window.closeFurnitureCatalogModal) window.closeFurnitureCatalogModal();
