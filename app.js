@@ -7490,6 +7490,8 @@ class BootScene extends Phaser.Scene {
         this.load.audio('solo-rocket-monster-boss-chicken-die', 'solo-rocket-monster-boss-chicken-die.mp3');
         this.load.audio('solo-rocket-turn-cd-recharge', 'solo-rocket-turn-cd-recharge.mp3');
         this.load.audio('solo-rocket-big-attack', 'solo-rocket-big-attack.mp3');
+        this.load.audio('solo-rocket-result-counting', 'solo-rocket-result-counting.mp3');
+        this.load.audio('solo-rocket-result-tada', 'solo-rocket-result-tada.mp3');
         // 補丁 6-1：玉兔伴手禮店 placeholder 素材。缺檔時商店會使用 Phaser fallback，不讓副本黑頻。
         this.load.image('solo-rocket-rabbit-shop-bg', 'solo-rocket-rabbit-shop-bg.png');
         this.load.image('solo-rocket-rabbit-shopkeeper', 'solo-rocket-rabbit-shopkeeper.png');
@@ -8275,6 +8277,8 @@ class MainScene extends Phaser.Scene {
         this.soloRocketContainer = null;
         this.soloRocketUiContainer = null;
         this.soloRocketResultContainer = null;
+        this.soloRocketResultRevealTimers = [];
+        this.soloRocketResultShopReady = false;
         this.soloRocketPlayer = null;
         this.soloRocketBg = null;
         this.soloRocketStars = [];
@@ -11920,6 +11924,36 @@ if (!data.scoreHandled && data.attacker) {
             );
         };
 
+        const chooseDifficultyByKey = (key, event = null) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+            const cfg = this.setSoloRocketDifficulty(key);
+            refreshDifficultyButtons();
+            return cfg;
+        };
+
+        const getDifficultyKeyFromPointer = (pointer) => {
+            if (!pointer) return null;
+            const pxNow = Number(pointer.x);
+            const pyNow = Number(pointer.y);
+            if (!Number.isFinite(pxNow) || !Number.isFinite(pyNow)) return null;
+
+            for (let idx = 0; idx < difficultyKeys.length; idx++) {
+                const key = difficultyKeys[idx];
+                const x = diffStartX + idx * (diffBtnW + diffGap);
+                const hitW = diffBtnW + 16;
+                const hitH = diffBtnH + 22;
+                const inButton =
+                    pxNow >= x - hitW / 2 &&
+                    pxNow <= x + hitW / 2 &&
+                    pyNow >= diffBtnY - hitH / 2 &&
+                    pyNow <= diffBtnY + hitH / 2;
+
+                if (inButton) return key;
+            }
+
+            return null;
+        };
+
         difficultyKeys.forEach((key, idx) => {
             const cfg = this.getSoloRocketDifficultyConfig(key);
             const x = diffStartX + idx * (diffBtnW + diffGap);
@@ -11945,9 +11979,7 @@ if (!data.scoreHandled && data.attacker) {
                 .setInteractive({ useHandCursor: true });
 
             const chooseDifficulty = (pointer, localX, localY, event) => {
-                if (event && event.stopPropagation) event.stopPropagation();
-                this.setSoloRocketDifficulty(key);
-                refreshDifficultyButtons();
+                chooseDifficultyByKey(key, event);
             };
 
             [bg, txt, hit].forEach(obj => {
@@ -12020,6 +12052,13 @@ if (!data.scoreHandled && data.attacker) {
 
         const tryStartFromPointer = (pointer, localX, localY, event) => {
             if (event && event.stopPropagation) event.stopPropagation();
+
+            const difficultyKey = getDifficultyKeyFromPointer(pointer);
+            if (difficultyKey) {
+                chooseDifficultyByKey(difficultyKey, event);
+                return;
+            }
+
             if (isPointInStart(pointer)) start(pointer, localX, localY, event);
         };
 
@@ -16323,6 +16362,16 @@ if (!data.scoreHandled && data.attacker) {
 
     destroySoloRocketResultOverlay() {
         try {
+            (this.soloRocketResultRevealTimers || []).forEach(function(timer) {
+                try {
+                    if (timer && timer.remove) timer.remove(false);
+                } catch (_) {}
+            });
+        } catch (_) {}
+        this.soloRocketResultRevealTimers = [];
+        this.soloRocketResultShopReady = false;
+
+        try {
             if (this.soloRocketResultClickCatcher) this.soloRocketResultClickCatcher.destroy();
         } catch (_) {}
         try {
@@ -16393,21 +16442,24 @@ if (!data.scoreHandled && data.attacker) {
 
         const result = this.add.container(0, 0).setDepth(9800).setScrollFactor(0);
         this.soloRocketResultContainer = result;
+        this.soloRocketResultRevealTimers = [];
+        this.soloRocketResultShopReady = false;
 
-        const panelW = Math.min(rect.w - 34, 400);
-        const panelH = 422;
+        const panelW = Math.min(rect.w - 34, 430);
+        const panelH = Math.min(rect.h - 24, 540);
         const px = rect.centerX - panelW / 2;
         const py = rect.centerY - panelH / 2;
 
         let didEnterShop = false;
         const enterShop = (pointer, localX, localY, event) => {
             if (event && event.stopPropagation) event.stopPropagation();
+            if (!this.soloRocketResultShopReady) return;
             if (didEnterShop) return;
             didEnterShop = true;
             this.openSoloRocketRabbitShop();
         };
 
-        const shopBtnHit = { x: rect.centerX, y: py + panelH - 58, w: 270, h: 84 };
+        const shopBtnHit = { x: rect.centerX, y: py + panelH - 44, w: 286, h: 78 };
 
         const clickCatcher = this.add.zone(
             this.cameras.main.width / 2,
@@ -16423,6 +16475,7 @@ if (!data.scoreHandled && data.attacker) {
 
         const handleClick = (pointer, localX, localY, event) => {
             if (event && event.stopPropagation) event.stopPropagation();
+            if (!this.soloRocketResultShopReady) return;
             if (!pointer) return;
 
             const inShopBtn =
@@ -16443,7 +16496,7 @@ if (!data.scoreHandled && data.attacker) {
         bg.lineStyle(2, 0x8a2be2, 0.9).strokeRoundedRect(px + 8, py + 8, panelW - 16, panelH - 16, 14);
 
         const titleText = summary.bossKilled ? '魔王擊破！' : '抵達月球邊境';
-        const title = this.add.text(rect.centerX, py + 42, titleText, {
+        const title = this.add.text(rect.centerX, py + 36, titleText, {
             fontSize: '28px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
@@ -16452,50 +16505,154 @@ if (!data.scoreHandled && data.attacker) {
             strokeThickness: 5
         }).setOrigin(0.5);
 
-        const resultText = [
-            `本局難度：${summary.difficultyLabel || '有點強'}`,
-            `本趟分數：${summary.score}`,
-            `月球旅費：${summary.moonBudget} 馬德幣 / 上限 ${summary.budgetCap}`,
-            `月光碎片本趟可購買：${summary.moonShardLimit || 2} 個`,
-            `剩餘生命：${summary.life}%`,
-            `擊殺小怪獸：${summary.monsterKills}`,
-            `躲過/清除隕石：${summary.asteroidsDodged}`,
-            `成功旋轉抵消：${summary.spinDodges}`,
-            `魔王狀態：${summary.bossKilled ? '魔王擊破' : '未擊破'}`
-        ].join('\n');
+        const resultLines = [
+            { text: `本局難度：${summary.difficultyLabel || '有點強'}`, fontSize: '17px', color: '#eaffff' },
+            { text: `通關狀態：${summary.lifeZero ? '生命歸零' : titleText}`, fontSize: '17px', color: '#ffffff' },
+            { text: `月光碎片本趟可購買：${summary.moonShardLimit || 2} 個`, fontSize: '17px', color: '#eaffff' },
+            { text: `剩餘生命：${summary.life}%`, fontSize: '17px', color: '#eaffff' },
+            { text: `擊殺小怪獸：${summary.monsterKills}`, fontSize: '17px', color: '#eaffff' },
+            { text: `躲過/清除隕石：${summary.asteroidsDodged}`, fontSize: '17px', color: '#eaffff' },
+            { text: `成功旋轉抵消：${summary.spinDodges}`, fontSize: '17px', color: '#eaffff' },
+            { text: `魔王狀態：${summary.bossKilled ? '魔王擊破' : '未擊破'}`, fontSize: '17px', color: '#eaffff' },
+            { text: `本趟分數：${summary.score}`, fontSize: '22px', color: '#fff7b8', glow: true },
+            { text: `月球旅費：${summary.moonBudget} 馬德幣 / 上限 ${summary.budgetCap}`, fontSize: '23px', color: '#ffe66d', glow: true }
+        ];
 
-        const body = this.add.text(rect.centerX, py + 88, resultText, {
-            fontSize: '17px',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold',
-            color: '#eaffff',
-            stroke: '#000000',
-            strokeThickness: 4,
-            lineSpacing: 8,
-            align: 'left'
-        }).setOrigin(0.5, 0);
+        const bodyObjects = [];
+        const normalStep = Math.max(24, Math.min(30, (panelH - 190) / Math.max(1, resultLines.length)));
+        let lineY = py + 78;
 
-        const btnBg = this.add.rectangle(rect.centerX, shopBtnHit.y, 228, 48, 0xffffff, 1)
+        resultLines.forEach((line, idx) => {
+            if (idx === resultLines.length - 2) lineY += 7;
+
+            const obj = this.add.text(rect.centerX, lineY, '', {
+                fontSize: line.fontSize,
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold',
+                color: line.color,
+                stroke: '#000000',
+                strokeThickness: line.glow ? 5 : 4,
+                align: 'center',
+                wordWrap: { width: panelW - 32 }
+            })
+                .setOrigin(0.5)
+                .setVisible(false)
+                .setAlpha(0);
+
+            if (line.glow) {
+                obj.setShadow(0, 0, idx === resultLines.length - 1 ? '#ffe66d' : '#fff0a8', 18, true, true);
+            }
+
+            bodyObjects.push(obj);
+            lineY += line.glow ? normalStep + 9 : normalStep;
+        });
+
+        const btnBg = this.add.rectangle(rect.centerX, shopBtnHit.y, 238, 48, 0xffffff, 1)
             .setStrokeStyle(3, 0xffd36a, 1)
-            .setInteractive({ useHandCursor: true });
+            .setAlpha(0);
 
         const btnText = this.add.text(rect.centerX, shopBtnHit.y, '前往玉兔伴手禮店', {
             fontSize: '18px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#000000'
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        }).setOrigin(0.5).setAlpha(0);
 
-        const btnHit = this.add.zone(shopBtnHit.x, shopBtnHit.y, shopBtnHit.w, shopBtnHit.h)
-            .setInteractive({ useHandCursor: true });
+        const btnHit = this.add.zone(shopBtnHit.x, shopBtnHit.y, shopBtnHit.w, shopBtnHit.h);
 
-        [btnBg, btnText, btnHit].forEach(obj => {
-            obj.on('pointerdown', enterShop);
-            obj.on('pointerup', enterShop);
+        const enableShopButton = () => {
+            if (!btnBg || !btnText || !btnHit || !btnBg.active || !btnText.active || !btnHit.active) return;
+
+            this.soloRocketResultShopReady = true;
+            btnBg.setInteractive({ useHandCursor: true });
+            btnText.setInteractive({ useHandCursor: true });
+            btnHit.setInteractive({ useHandCursor: true });
+
+            [btnBg, btnText, btnHit].forEach(obj => {
+                obj.off('pointerdown', enterShop);
+                obj.off('pointerup', enterShop);
+                obj.on('pointerdown', enterShop);
+                obj.on('pointerup', enterShop);
+            });
+
+            if (this.tweens) {
+                this.tweens.add({
+                    targets: [btnBg, btnText],
+                    alpha: 1,
+                    y: `-=4`,
+                    duration: 320,
+                    ease: 'Back.easeOut'
+                });
+            } else {
+                btnBg.setAlpha(1);
+                btnText.setAlpha(1);
+            }
+        };
+
+        const addResultTimer = (delay, callback) => {
+            if (!this.time || !callback) return null;
+            const timer = this.time.delayedCall(delay, callback);
+            this.soloRocketResultRevealTimers.push(timer);
+            return timer;
+        };
+
+        const glitchLine = (target, finalText, duration = 440) => {
+            if (!target || !target.active) return;
+            const glyphs = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ#$%&!?@';
+            const steps = Math.max(1, Math.floor(duration / 44));
+            let step = 0;
+
+            target.setVisible(true);
+            target.setAlpha(1);
+
+            const update = () => {
+                if (!target || !target.active) return;
+                step += 1;
+
+                const progress = Phaser.Math.Clamp(step / steps, 0, 1);
+                const lockedCount = Math.floor(finalText.length * progress);
+                let nextText = '';
+
+                for (let i = 0; i < finalText.length; i++) {
+                    const ch = finalText[i];
+                    const shouldKeep = i < lockedCount || ch === ' ' || ch === '：' || ch === '/' || ch === '%' || ch === '｜';
+                    nextText += shouldKeep ? ch : glyphs.charAt(Phaser.Math.Between(0, glyphs.length - 1));
+                }
+
+                target.setText(progress >= 1 ? finalText : nextText);
+
+                if (progress < 1) {
+                    addResultTimer(44, update);
+                } else {
+                    target.setText(finalText);
+                }
+            };
+
+            update();
+        };
+
+        result.add([bg, title, ...bodyObjects, btnBg, btnText, btnHit]);
+
+        if (this.cache && this.cache.audio && this.cache.audio.exists('solo-rocket-result-counting')) {
+            window.playSFX(this, 'solo-rocket-result-counting');
+        }
+
+        const revealInterval = Math.min(600, Math.floor(5400 / Math.max(1, resultLines.length - 1)));
+        resultLines.forEach((line, idx) => {
+            addResultTimer(idx * revealInterval, () => {
+                glitchLine(bodyObjects[idx], line.text, line.glow ? 520 : 420);
+            });
         });
 
-        result.add([bg, title, body, btnBg, btnText, btnHit]);
+        addResultTimer(6000, () => {
+            if (this.cache && this.cache.audio && this.cache.audio.exists('solo-rocket-result-tada')) {
+                window.playSFX(this, 'solo-rocket-result-tada');
+            }
+        });
+
+        addResultTimer(6500, enableShopButton);
     }
+
     getSoloRocketMoonShopItems() {
         return [
             {
@@ -18140,6 +18297,16 @@ if (!data.scoreHandled && data.attacker) {
         } catch (_) {}
         this.soloRocketTimer = null;
 
+        try {
+            (this.soloRocketResultRevealTimers || []).forEach(function(timer) {
+                try {
+                    if (timer && timer.remove) timer.remove(false);
+                } catch (_) {}
+            });
+        } catch (_) {}
+        this.soloRocketResultRevealTimers = [];
+        this.soloRocketResultShopReady = false;
+
         this.stopSoloRocketBgm();
         if (this.destroySoloRocketDynamicJoystick) this.destroySoloRocketDynamicJoystick(true);
         if (this.stopSoloRocketRabbitShopBgm) this.stopSoloRocketRabbitShopBgm();
@@ -18192,6 +18359,8 @@ if (!data.scoreHandled && data.attacker) {
         this.soloRocketUiContainer = null;
         this.soloRocketResultContainer = null;
         this.soloRocketResultClickCatcher = null;
+        this.soloRocketResultRevealTimers = [];
+        this.soloRocketResultShopReady = false;
         this.soloRocketRabbitShopContainer = null;
         this.soloRocketRabbitShopBudgetText = null;
         this.soloRocketRabbitShopMessage = null;
