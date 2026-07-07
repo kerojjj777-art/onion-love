@@ -7489,12 +7489,108 @@ window.ONION_SHOP_CATALOG = {
         }
     ]
 };
+window.FURNITURE_LAYER_KIND_SPECS = {
+    bigCarpet: {
+        furnitureType: 'bigCarpet',
+        width: 350,
+        height: 350,
+        layerKind: 'bigCarpet',
+        depth: 2
+    },
+    smallCarpet: {
+        furnitureType: 'smallCarpet',
+        width: 200,
+        height: 200,
+        layerKind: 'smallCarpet',
+        depth: 3
+    },
+    cushion: {
+        furnitureType: 'cushion',
+        width: 80,
+        height: 80,
+        layerKind: 'cushion',
+        depth: 4
+    },
+    bed: {
+        furnitureType: 'bed',
+        width: 120,
+        height: 120,
+        layerKind: 'interactive',
+        depth: 5
+    },
+    general: {
+        furnitureType: 'general',
+        width: null,
+        height: null,
+        layerKind: 'general',
+        depth: 5
+    }
+};
+
+window.inferFurnitureTypeFromDefinition = function(def = {}, fallbackKey = '') {
+    const safeKey = String((def && def.key) || fallbackKey || '').replace(/_\d+$/, '');
+    const name = String((def && def.name) || '');
+    const tags = Array.isArray(def && def.tags) ? def.tags.join(' ') : '';
+
+    if (safeKey.startsWith('carpet_big_') || tags.includes('大地毯類') || name.includes('大地毯')) return 'bigCarpet';
+    if (safeKey.startsWith('carpet_small_') || tags.includes('小地毯類') || name.includes('小地毯')) return 'smallCarpet';
+    if (safeKey.startsWith('cushion_') || tags.includes('坐墊類') || name.includes('坐墊')) return 'cushion';
+    if (safeKey === 'bed' || safeKey.startsWith('bed_') || tags.includes('床類') || name.includes('床')) return 'bed';
+
+    return 'general';
+};
+
+window.normalizeFurnitureDefinition = function(def = {}, fallbackKey = '') {
+    const safeKey = String((def && def.key) || fallbackKey || '').replace(/_\d+$/, '');
+    const inferredType = (def && def.furnitureType) || window.inferFurnitureTypeFromDefinition(def, safeKey);
+    const specs = window.FURNITURE_LAYER_KIND_SPECS || {};
+    const spec = specs[inferredType] || specs.general || {};
+
+    const rawWidth = Number(def && def.width);
+    const rawHeight = Number(def && def.height);
+    const rawDepth = Number(def && def.depth);
+
+    return {
+        ...def,
+        key: safeKey || (def && def.key) || fallbackKey,
+        category: (def && def.category) || 'furniture',
+        scene: (def && def.scene) || 'doghouse',
+        name: (def && def.name) || safeKey || fallbackKey || '未命名家具',
+        img: (def && def.img) || 'memory.png',
+        desc: (def && def.desc) || '尚未設定描述的家具。',
+        tags: Array.isArray(def && def.tags) ? def.tags : [],
+        rotatable: !!(def && def.rotatable),
+        defaultOwned: !!(def && def.defaultOwned),
+        defaultDirection: (def && def.defaultDirection) || 'front',
+        directions: Array.isArray(def && def.directions) && def.directions.length ? def.directions : ['front'],
+        furnitureType: inferredType || 'general',
+        width: Number.isFinite(rawWidth) && rawWidth > 0 ? rawWidth : (Number.isFinite(Number(spec.width)) && Number(spec.width) > 0 ? Number(spec.width) : null),
+        height: Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : (Number.isFinite(Number(spec.height)) && Number(spec.height) > 0 ? Number(spec.height) : null),
+        layerKind: (def && def.layerKind) || spec.layerKind || 'general',
+        depth: Number.isFinite(rawDepth) ? rawDepth : (Number.isFinite(Number(spec.depth)) ? Number(spec.depth) : 5)
+    };
+};
+
+if (window.FURNITURE_DEFS) {
+    Object.keys(window.FURNITURE_DEFS).forEach(key => {
+        window.FURNITURE_DEFS[key] = window.normalizeFurnitureDefinition(window.FURNITURE_DEFS[key], key);
+    });
+}
+
+if (window.ONION_SHOP_CATALOG && Array.isArray(window.ONION_SHOP_CATALOG.furniture)) {
+    window.ONION_SHOP_CATALOG.furniture = window.ONION_SHOP_CATALOG.furniture.map(item => {
+        const safeKey = String((item && item.key) || '').replace(/_\d+$/, '');
+        const baseDef = (window.FURNITURE_DEFS && window.FURNITURE_DEFS[safeKey]) ? window.FURNITURE_DEFS[safeKey] : {};
+        return window.normalizeFurnitureDefinition({ ...baseDef, ...item }, safeKey);
+    });
+}
+
 window.getFurnitureDefinition = function(key) {
     const safeKey = String(key || '').replace(/_\d+$/, '');
     const def = (window.FURNITURE_DEFS && (window.FURNITURE_DEFS[key] || window.FURNITURE_DEFS[safeKey])) || null;
-    if (def) return def;
+    if (def) return window.normalizeFurnitureDefinition(def, safeKey);
 
-    return {
+    return window.normalizeFurnitureDefinition({
         key: safeKey || key,
         category: 'furniture',
         scene: 'doghouse',
@@ -7506,7 +7602,7 @@ window.getFurnitureDefinition = function(key) {
         defaultOwned: false,
         defaultDirection: 'front',
         directions: ['front']
-    };
+    }, safeKey || key);
 };
 
 window.getShopItemDef = function(nameOrKey, category = null) {
@@ -8442,6 +8538,17 @@ class BootScene extends Phaser.Scene {
         this.load.plugin('rexvirtualjoystickplugin', 'https://cdn.jsdelivr.net/gh/rexrainbow/phaser3-rex-notes@master/dist/rexvirtualjoystickplugin.min.js', true);
         this.load.image('bgCafe', 'cafe-bg.jpg'); this.load.image('bgDoghouse', 'doghouse-bg.jpg'); this.load.image('bgFarm', 'farm-bg.jpg'); this.load.image('bgShrine', 'shrine-bg.jpg'); 
         this.load.image('fridge', 'fridge.png'); this.load.image('memory', 'memory.png'); this.load.image('shrine', 'shrine.png'); this.load.image('doghouse-bed', 'doghouse-bed.png'); 
+        try {
+            const furnitureDefsToLoad = window.FURNITURE_DEFS || {};
+            Object.keys(furnitureDefsToLoad).forEach(fKey => {
+                const def = window.getFurnitureDefinition ? window.getFurnitureDefinition(fKey) : furnitureDefsToLoad[fKey];
+                if (!def || def.scene !== 'doghouse' || !def.img || !def.key) return;
+                if (this.textures && this.textures.exists(def.key)) return;
+                this.load.image(def.key, def.img);
+            });
+        } catch (err) {
+            console.warn('狗窩家具素材載入補強失敗：', err);
+        }
         this.load.spritesheet('onion-skin', 'onion-skin-sprite.png', { frameWidth: 50, frameHeight: 50 }); this.load.spritesheet('onion-skin-old', 'onion-skin-old-sprite.png', { frameWidth: 65, frameHeight: 65 });
         this.load.image('onion', 'onion-sprite.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-down', 'onion-down.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-up', 'onion-up.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-walk', 'onion-right.png', { frameWidth: 75, frameHeight: 75 }); this.load.spritesheet('onion-idle', 'onion-idle.png', { frameWidth: 75, frameHeight: 75 });
         
@@ -21602,6 +21709,47 @@ if (activeBubbleMsg) {
         };
     }
 
+    getFurnitureDisplaySpec(key, data = {}) {
+        const def = this.getFurnitureDefinitionForRuntime(key, data);
+        const rawWidth = Number(data && data.width);
+        const rawHeight = Number(data && data.height);
+        const rawDepth = Number(data && data.depth);
+
+        return {
+            furnitureType: (data && data.furnitureType) || (def && def.furnitureType) || 'general',
+            layerKind: (data && data.layerKind) || (def && def.layerKind) || 'general',
+            width: Number.isFinite(rawWidth) && rawWidth > 0 ? rawWidth : Number(def && def.width),
+            height: Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : Number(def && def.height),
+            depth: Number.isFinite(rawDepth) ? rawDepth : (Number.isFinite(Number(def && def.depth)) ? Number(def.depth) : 5)
+        };
+    }
+
+    applyFurnitureDisplaySpec(f, key, data = {}) {
+        if (!f || !f.sprite || !f.sprite.active) return;
+        if (this.sceneName !== 'doghouse') return;
+
+        const def = this.getFurnitureDefinitionForRuntime(key, data);
+        if (!def || def.scene !== 'doghouse' || def.category !== 'furniture') return;
+
+        const spec = this.getFurnitureDisplaySpec(key, data);
+        const displayWidth = Number(spec.width);
+        const displayHeight = Number(spec.height);
+        const displayDepth = Number(spec.depth);
+
+        f.furnitureType = spec.furnitureType || 'general';
+        f.layerKind = spec.layerKind || 'general';
+        f.displayWidth = Number.isFinite(displayWidth) && displayWidth > 0 ? displayWidth : null;
+        f.displayHeight = Number.isFinite(displayHeight) && displayHeight > 0 ? displayHeight : null;
+
+        if (Number.isFinite(displayWidth) && displayWidth > 0 && Number.isFinite(displayHeight) && displayHeight > 0) {
+            f.sprite.setDisplaySize(displayWidth, displayHeight);
+        }
+
+        f.sprite.setDepth(Number.isFinite(displayDepth) ? displayDepth : 5);
+        f.sprite._onionFurnitureType = f.furnitureType;
+        f.sprite._onionFurnitureLayerKind = f.layerKind;
+    }
+
     applyFurnitureDirectionVisual(f, key, data = {}) {
         if (!f || !f.sprite || !f.sprite.active) return;
 
@@ -21704,9 +21852,20 @@ if (activeBubbleMsg) {
     data = data || {};
     const isGiftBox = key.includes('giftbox');
     const fDef = this.getFurnitureDefinitionForRuntime(key, data);
+    const furnitureTextureKey = fDef && fDef.key ? fDef.key : key;
+    const hasDoghouseFurnitureTexture = !!(
+        this.sceneName === 'doghouse' &&
+        fDef &&
+        fDef.scene === 'doghouse' &&
+        fDef.img &&
+        furnitureTextureKey &&
+        this.textures &&
+        this.textures.exists(furnitureTextureKey)
+    );
 
     let imgKey = 'memory';
     if (isGiftBox) imgKey = 'gift-box-stay';
+    else if (hasDoghouseFurnitureTexture) imgKey = furnitureTextureKey;
     else if (key.includes('scoreboard')) imgKey = 'hall-screen';
     else if (key.includes('solochicken')) imgKey = 'solochicken';
     else if (key.includes('fridge')) imgKey = 'fridge';
@@ -21716,6 +21875,7 @@ if (activeBubbleMsg) {
     else if (key === 'altar') imgKey = 'shrine-altar';
     else if (key.startsWith('seat_')) imgKey = 'shrine-seat';
     else if (fDef && fDef.imgKey) imgKey = fDef.imgKey;
+
     let f = { sprite: this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true) }; 
     f.isGiftBox = isGiftBox;
     f.furnitureDef = fDef;
@@ -21743,8 +21903,9 @@ if (activeBubbleMsg) {
     }
 
     f.sprite.isLocked = data.locked;
+    this.applyFurnitureDisplaySpec(f, key, data);
     this.applyFurnitureDirectionVisual(f, key, data);
-    this.bindDirectSceneTap(f.sprite, 'furniture', () => ({ key, f }));  
+    this.bindDirectSceneTap(f.sprite, 'furniture', () => ({ key, f }));    
         if (imgKey === 'hall-screen') {
             f.sprite.setOrigin(0.5, 0.5); // 靜態圖不需播放動畫
 
