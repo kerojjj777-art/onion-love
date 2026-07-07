@@ -2027,6 +2027,141 @@ function createSystemUI() {
                 border:1px solid rgba(255,216,172,0.78) !important;
                 box-shadow:inset 0 0 12px rgba(60,22,18,0.62), 0 5px 12px rgba(0,0,0,0.28);
             }
+
+            /* 家具系統整理包：商店分頁＋狗窩家具庫格狀描述 */
+            .store-blackhole-tabs {
+                display:grid;
+                grid-template-columns:repeat(2, minmax(0, 1fr));
+                gap:8px;
+                margin:0 0 12px 0;
+                position:relative;
+                z-index:2;
+            }
+            .store-blackhole-tab {
+                min-height:38px;
+                border-radius:999px;
+                border:1px solid rgba(126,255,126,0.62);
+                background:rgba(0,0,0,0.62);
+                color:#d8ffdc;
+                font-weight:900;
+                cursor:pointer;
+                box-shadow:0 0 10px rgba(57,255,20,0.22), inset 0 0 10px rgba(57,255,20,0.08);
+                touch-action:manipulation;
+            }
+            .store-blackhole-tab.active {
+                background:linear-gradient(180deg, rgba(126,255,126,0.92), rgba(23,116,48,0.95));
+                color:#021006;
+                border-color:rgba(216,255,101,0.95);
+                box-shadow:0 0 16px rgba(57,255,20,0.62), 0 0 14px rgba(173,80,255,0.26);
+                text-shadow:0 1px 0 rgba(255,255,255,0.52);
+            }
+            .store-empty-hint,
+            .doghouse-furniture-empty {
+                grid-column:1 / -1;
+                padding:14px 10px;
+                border-radius:12px;
+                background:rgba(0,0,0,0.46);
+                border:1px dashed rgba(255,236,205,0.5);
+                color:#fff3e6;
+                font-size:13px;
+                line-height:1.45;
+                text-align:center;
+            }
+            #furniture-catalog-modal.doghouse-furniture-library-ui {
+                max-height:min(82vh, calc(var(--onion-vh, 1vh) * 82)) !important;
+                overflow-y:auto !important;
+                overflow-x:hidden !important;
+                -webkit-overflow-scrolling:touch;
+                overscroll-behavior:contain;
+                touch-action:pan-y;
+            }
+            #furniture-catalog-modal.doghouse-furniture-library-ui #catalog-list {
+                max-height:min(42vh, calc(var(--onion-vh, 1vh) * 42));
+                overflow-y:auto;
+                overflow-x:hidden;
+                padding:3px;
+                -webkit-overflow-scrolling:touch;
+                overscroll-behavior:contain;
+                touch-action:pan-y;
+            }
+            .doghouse-furniture-detail-card {
+                display:none;
+                margin-top:12px;
+                padding:12px;
+                border-radius:14px;
+                background:rgba(255,244,220,0.82);
+                border:2px solid rgba(255,220,178,0.86);
+                color:#4a2417;
+                text-align:left;
+                box-shadow:0 0 12px rgba(255,220,178,0.32), inset 0 0 12px rgba(255,255,255,0.38);
+            }
+            .doghouse-furniture-detail-card.show {
+                display:block;
+            }
+            .doghouse-furniture-detail-head {
+                display:flex;
+                align-items:center;
+                gap:10px;
+                margin-bottom:8px;
+            }
+            .doghouse-furniture-detail-head img {
+                width:58px;
+                height:58px;
+                object-fit:contain;
+                flex-shrink:0;
+                filter:drop-shadow(0 3px 5px rgba(0,0,0,0.25));
+            }
+            .doghouse-furniture-detail-title {
+                font-weight:900;
+                font-size:16px;
+                color:#4a2417;
+                text-shadow:0 1px 0 rgba(255,255,255,0.62);
+            }
+            .doghouse-furniture-tags {
+                display:flex;
+                flex-wrap:wrap;
+                gap:6px;
+                margin:8px 0;
+            }
+            .doghouse-furniture-tag {
+                display:inline-flex;
+                align-items:center;
+                min-height:22px;
+                padding:3px 9px;
+                border-radius:999px;
+                background:rgba(95,54,30,0.82);
+                color:#fff3e6;
+                font-size:12px;
+                font-weight:bold;
+                border:1px solid rgba(255,236,205,0.7);
+            }
+            .doghouse-furniture-tag.rotatable {
+                background:linear-gradient(180deg, #8dff8a, #1c9c38);
+                color:#05240c;
+                border-color:#d6ffb8;
+                box-shadow:0 0 9px rgba(106,255,112,0.62);
+            }
+            .doghouse-place-btn {
+                width:100%;
+                margin-top:10px;
+                padding:10px 12px;
+                border-radius:12px;
+                border:2px solid rgba(255,244,220,0.92);
+                background:linear-gradient(180deg, #ffd99a, #a85d28);
+                color:#3a1b0c;
+                font-weight:900;
+                cursor:pointer;
+                box-shadow:0 4px 10px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.58);
+                touch-action:manipulation;
+            }
+            @media (max-width: 768px), (orientation: portrait) {
+                #furniture-catalog-modal.doghouse-furniture-library-ui #catalog-list {
+                    max-height:min(46vh, calc(var(--onion-vh, 1vh) * 46));
+                }
+                .doghouse-furniture-detail-card {
+                    font-size:13px;
+                }
+            }
             .modal.modal-switch-exit {
                 animation:modal-switch-exit 0.25s ease-in forwards !important;
                 pointer-events:none !important;
@@ -3412,17 +3547,11 @@ function createSystemUI() {
             </div>
             <div class="store-blackhole-body">
                 <h3 class="store-blackhole-title" style="margin-top:0;">🏪 7-EONION 便利商店</h3>
-                <div id="store-list" class="catalog-grid store-blackhole-list">
-                    <div class="catalog-item" onclick="window.openPurchaseModal('水球', 20)"><div class="sprite-waterball"></div><span style="margin-top:5px;">水球</span><span style="font-size:12px; font-weight:bold;">20 馬德幣</span></div>
-                    <div class="catalog-item" onclick="window.openPurchaseModal('煙火', 100)"><img src="shop-fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin-top:5px;">煙火</span><span style="font-size:12px; font-weight:bold;">100 馬德幣</span></div>
-                    <div class="catalog-item" onclick="window.openPurchaseModal('蔥友機', 20)"><img src="playroom-onion-friend-plane.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin-top:5px;">蔥友機</span><span style="font-size:12px; font-weight:bold;">20 馬德幣</span></div>
-                    <div class="catalog-item" onclick="window.openPurchaseModal('派對喇叭', 150)"><img src="tools-onion-party-trumpet.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin-top:5px;">派對喇叭</span><span style="font-size:12px; font-weight:bold;">150 馬德幣</span></div>
-                    <div class="catalog-item" onclick="window.openPurchaseModal('喵罐頭', 5000)">
-                        <img src="shop-pet-cat-can.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">
-                        <span style="margin-top:5px;">喵罐頭</span>
-                        <span style="font-size:12px; font-weight:bold;">5000 馬德幣</span>
-                    </div>
+                <div class="store-blackhole-tabs">
+                    <button id="store-tab-magic" class="store-blackhole-tab active" type="button" onclick="window.renderStoreTab && window.renderStoreTab('magic')">法寶</button>
+                    <button id="store-tab-furniture" class="store-blackhole-tab" type="button" onclick="window.renderStoreTab && window.renderStoreTab('furniture')">家俱</button>
                 </div>
+                <div id="store-list" class="catalog-grid store-blackhole-list"></div>
                 <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="document.getElementById('store-modal').style.display='none'; window.GameLogic.isShopping = false;">離開商店</button>
             </div>
         </div>
@@ -6703,9 +6832,165 @@ window.sendPM = async function() {
     }
 };
 // ====== 洋蔥手機：目前在線＋最近私訊（房間隔離版）結束 ======
-window.openPurchaseModal = function(name, price) {
+// ====== 商店／家具資料最小增量：法寶與家俱分頁共用定義 ======
+window.FURNITURE_DIRECTION_ORDER = ['front', 'right', 'back', 'left'];
+window.FURNITURE_DIRECTION_LABELS = {
+    front: '正面',
+    right: '右向',
+    back: '背面',
+    left: '左向'
+};
+
+window.FURNITURE_DEFS = {
+    bed: {
+        key: 'bed',
+        category: 'furniture',
+        scene: 'doghouse',
+        name: '狗窩床鋪',
+        img: 'doghouse-bed.png',
+        desc: '我的狗窩裡最重要的休息家具。靠近後按 A 或直接點擊床鋪可以睡覺充電，擺設時點擊床鋪本體可以切換方向。',
+        tags: ['可睡覺'],
+        rotatable: true,
+        defaultOwned: true,
+        defaultDirection: 'front',
+        directions: ['front', 'right', 'back', 'left']
+    }
+};
+
+window.ONION_SHOP_CATALOG = {
+    magic: [
+        {
+            key: '水球',
+            name: '水球',
+            price: 20,
+            category: 'magic',
+            spriteClass: 'sprite-waterball',
+            desc: '聽說洋蔥都躲在大廳裡面玩水球大戰，為了讓我可以賺更多錢，我在水球裡加了魔法，被擊中的對象也會噴錢，然後他們就會.....一直噴錢，一直撿錢，來找我花錢!!! 嘿嘿嘿...'
+        },
+        {
+            key: '煙火',
+            name: '煙火',
+            price: 100,
+            category: 'magic',
+            img: 'shop-fireworks.png',
+            desc: '曾經聽我朋友說他的同事們很奇怪，遇到好事就要說『咻蹦～』還要搭配放煙火手勢，我都懶得講話所以做了這個神奇的煙火拿來賣，畫面漂亮((還可以攻擊別人))多麼棒～'
+        },
+        {
+            key: '蔥友機',
+            name: '蔥友機',
+            price: 20,
+            category: 'magic',
+            img: 'playroom-onion-friend-plane.png',
+            desc: '那些洋蔥好像平常太互相傷害了，是時候來點友情的昇華。'
+        },
+        {
+            key: '派對喇叭',
+            name: '派對喇叭',
+            price: 150,
+            category: 'magic',
+            img: 'tools-onion-party-trumpet.png',
+            desc: '上次有一顆洋蔥跑來跟我說：『可不可以不要再賣紙飛機了』，我以為他是被射怕了，殊不知他請我搞一個更大的！戰意的號角隨時響起，讓洋蔥開拓新戰場的絕妙好商品來嘍！'
+        },
+        {
+            key: '喵罐頭',
+            name: '喵罐頭',
+            price: 5000,
+            category: 'magic',
+            img: 'shop-pet-cat-can.png',
+            desc: '沒聽過洋蔥還會養小動物的。\n\n這世界上只有喵星人能撫慰洋蔥人的心。按 B 打開罐罐，靠近王子麵後按 A 餵食。每日前三次餵食可提升王子麵羈絆，之後王子麵會表示：夠了。'
+        }
+    ],
+    furniture: [
+        {
+            key: 'bed',
+            name: '狗窩床鋪',
+            price: 300,
+            category: 'furniture',
+            img: 'doghouse-bed.png',
+            desc: '狗窩專用床鋪家具。購買後會進入家具庫；在我的狗窩打開「家俱」後，可從家具描述框按「擺設」。',
+            rotatable: true,
+            tags: ['狗窩家具', '可睡覺']
+        }
+    ]
+};
+
+window.getFurnitureDefinition = function(key) {
+    const safeKey = String(key || '').replace(/_\d+$/, '');
+    const def = (window.FURNITURE_DEFS && (window.FURNITURE_DEFS[key] || window.FURNITURE_DEFS[safeKey])) || null;
+    if (def) return def;
+
+    return {
+        key: safeKey || key,
+        category: 'furniture',
+        scene: 'doghouse',
+        name: safeKey || key || '未命名家具',
+        img: 'memory.png',
+        desc: '尚未設定描述的家具。',
+        tags: [],
+        rotatable: false,
+        defaultOwned: false,
+        defaultDirection: 'front',
+        directions: ['front']
+    };
+};
+
+window.getShopItemDef = function(nameOrKey, category = null) {
+    const groups = category ? [category] : Object.keys(window.ONION_SHOP_CATALOG || {});
+    for (const group of groups) {
+        const found = (window.ONION_SHOP_CATALOG[group] || []).find(item => item.name === nameOrKey || item.key === nameOrKey);
+        if (found) return found;
+    }
+    return null;
+};
+
+window.renderStoreTab = function(tab = 'magic') {
+    const safeTab = tab === 'furniture' ? 'furniture' : 'magic';
+    window.currentStoreTab = safeTab;
+
+    const list = document.getElementById('store-list');
+    const magicTab = document.getElementById('store-tab-magic');
+    const furnitureTab = document.getElementById('store-tab-furniture');
+
+    if (magicTab) magicTab.classList.toggle('active', safeTab === 'magic');
+    if (furnitureTab) furnitureTab.classList.toggle('active', safeTab === 'furniture');
+    if (!list) return;
+
+    const items = (window.ONION_SHOP_CATALOG && window.ONION_SHOP_CATALOG[safeTab]) ? window.ONION_SHOP_CATALOG[safeTab] : [];
+    if (!items.length) {
+        list.innerHTML = `<div class="store-empty-hint">這個分頁目前還沒有商品，商店老闆還在鍛造中...</div>`;
+        return;
+    }
+
+    list.innerHTML = '';
+    items.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'catalog-item';
+
+        const iconHtml = item.spriteClass
+            ? `<div class="${item.spriteClass}"></div>`
+            : `<img src="${item.img || 'memory.png'}" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">`;
+
+        const extraLabel = item.category === 'furniture' && item.rotatable
+            ? `<span style="font-size:11px; color:#8dff8a; font-weight:bold; margin-top:2px;">可轉向</span>`
+            : '';
+
+        div.innerHTML = `${iconHtml}<span style="margin-top:5px;">${item.name}</span><span style="font-size:12px; font-weight:bold;">${item.price} 馬德幣</span>${extraLabel}`;
+        div.onclick = () => window.openPurchaseModal(item.name, item.price, {
+            category: item.category || safeTab,
+            key: item.key || item.name,
+            itemDef: item
+        });
+        list.appendChild(div);
+    });
+};
+
+window.openPurchaseModal = function(name, price, options = {}) {
+    const itemDef = options.itemDef || window.getShopItemDef(name, options.category) || null;
+    const purchaseCategory = options.category || (itemDef && itemDef.category) || 'magic';
+    const itemKey = options.key || (itemDef && itemDef.key) || name;
+    const safePrice = Math.max(1, Number(price || (itemDef && itemDef.price) || 1));
     let currentCoins = window.GameLogic.myProfile.coins || 0;
-    let maxQty = Math.floor(currentCoins / price);
+    let maxQty = Math.floor(currentCoins / safePrice);
 
     if (maxQty <= 0) {
         alert("馬德幣不足！快去打掃賺錢吧！");
@@ -6713,33 +6998,43 @@ window.openPurchaseModal = function(name, price) {
     }
 
     const inventory = (window.GameLogic.myProfile && window.GameLogic.myProfile.inventory) ? window.GameLogic.myProfile.inventory : {};
-    const ownedQty = Math.max(0, Math.floor(Number(inventory[name] || 0) || 0));
+    const furnitureInventory = (window.GameLogic.myProfile && window.GameLogic.myProfile.furnitureInventory) ? window.GameLogic.myProfile.furnitureInventory : {};
+    const ownedQty = purchaseCategory === 'furniture'
+        ? Math.max(0, Math.floor(Number(furnitureInventory[itemKey] || 0) || 0))
+        : Math.max(0, Math.floor(Number(inventory[name] || 0) || 0));
 
     window.currentPurchaseItem = name;
-    window.currentPurchasePrice = price;
+    window.currentPurchaseItemKey = itemKey;
+    window.currentPurchaseCategory = purchaseCategory;
+    window.currentPurchaseItemDef = itemDef || {};
+    window.currentPurchasePrice = safePrice;
     window.currentPurchaseQty = 1;
     window.currentPurchaseMaxQty = Math.max(1, maxQty);
     window.currentPurchaseOwnedQty = ownedQty;
 
     document.getElementById('purchase-title').innerText = `購買 ${name}`;
 
-    let desc = "";
-    if (name === '水球') {
-        desc = "聽說洋蔥都躲在大廳裡面玩水球大戰，為了讓我可以賺更多錢，我在水球裡加了魔法，被擊中的對象也會噴錢，然後他們就會.....一直噴錢，一直撿錢，來找我花錢!!! 嘿嘿嘿...";
-    } else if (name === '煙火') {
-        desc = "曾經聽我朋友說他的同事們很奇怪，遇到好事就要說『咻蹦～』還要搭配放煙火手勢，我都懶得講話所以做了這個神奇的煙火拿來賣，畫面漂亮((還可以攻擊別人))多麼棒～";
-    } else if (name === '蔥友機') {
-        desc = "那些洋蔥好像平常太互相傷害了，是時候來點友情的昇華。";
-    } else if (name === '派對喇叭') {
-        desc = "上次有一顆洋蔥跑來跟我說：『可不可以不要再賣紙飛機了』，我以為他是被射怕了，殊不知他請我搞一個更大的！戰意的號角隨時響起，讓洋蔥開拓新戰場的絕妙好商品來嘍！";
-    } else if (name === '喵罐頭') {
-        desc = "沒聽過洋蔥還會養小動物的。\n\n這世界上只有喵星人能撫慰洋蔥人的心。按 B 打開罐罐，靠近王子麵後按 A 餵食。每日前三次餵食可提升王子麵羈絆，之後王子麵會表示：夠了。";
+    let desc = itemDef && itemDef.desc ? itemDef.desc : "";
+    if (!desc) {
+        if (name === '水球') {
+            desc = "聽說洋蔥都躲在大廳裡面玩水球大戰，為了讓我可以賺更多錢，我在水球裡加了魔法，被擊中的對象也會噴錢，然後他們就會.....一直噴錢，一直撿錢，來找我花錢!!! 嘿嘿嘿...";
+        } else if (name === '煙火') {
+            desc = "曾經聽我朋友說他的同事們很奇怪，遇到好事就要說『咻蹦～』還要搭配放煙火手勢，我都懶得講話所以做了這個神奇的煙火拿來賣，畫面漂亮((還可以攻擊別人))多麼棒～";
+        } else if (name === '蔥友機') {
+            desc = "那些洋蔥好像平常太互相傷害了，是時候來點友情的昇華。";
+        } else if (name === '派對喇叭') {
+            desc = "上次有一顆洋蔥跑來跟我說：『可不可以不要再賣紙飛機了』，我以為他是被射怕了，殊不知他請我搞一個更大的！戰意的號角隨時響起，讓洋蔥開拓新戰場的絕妙好商品來嘍！";
+        } else if (name === '喵罐頭') {
+            desc = "沒聽過洋蔥還會養小動物的。\n\n這世界上只有喵星人能撫慰洋蔥人的心。按 B 打開罐罐，靠近王子麵後按 A 餵食。每日前三次餵食可提升王子麵羈絆，之後王子麵會表示：夠了。";
+        }
     }
 
     document.getElementById('purchase-desc').innerText = desc;
 
     const ownedEl = document.getElementById('purchase-owned');
-    if (ownedEl) ownedEl.innerText = `🎒 目前持有：${ownedQty} 個`;
+    if (ownedEl) ownedEl.innerText = purchaseCategory === 'furniture'
+        ? `🪑 家具庫持有：${ownedQty} 個`
+        : `🎒 目前持有：${ownedQty} 個`;
 
     const slider = document.getElementById('purchase-slider');
     if (slider) {
@@ -6821,7 +7116,65 @@ window.adjustPurchaseQty = function(delta) {
     window.updatePurchaseSlider((window.currentPurchaseQty || 1) + Number(delta || 0));
 };
 
-window.confirmPurchase = function() { let cost = window.currentPurchaseQty * window.currentPurchasePrice; if ((window.GameLogic.myProfile.coins || 0) >= cost) { window.GameLogic.myProfile.coins -= cost; window.GameLogic.myProfile.inventory = window.GameLogic.myProfile.inventory || {}; window.GameLogic.myProfile.inventory[window.currentPurchaseItem] = (window.GameLogic.myProfile.inventory[window.currentPurchaseItem] || 0) + window.currentPurchaseQty; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: window.GameLogic.myProfile.coins, inventory: window.GameLogic.myProfile.inventory }).catch(err => console.warn('Firebase 購買道具扣款失敗:', err)); document.getElementById('purchase-modal').style.display = 'none'; if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if (scene) { window.playSFX(scene, 'shop-boss-thank-you'); window.playSFX(scene, 'shop-check-buying'); } } let msgEl = document.getElementById('purchase-success-msg'); msgEl.style.display = 'block'; msgEl.classList.remove('flash-text'); void msgEl.offsetWidth; msgEl.classList.add('flash-text'); setTimeout(() => { msgEl.style.display = 'none'; }, 2000); let smBubble = document.getElementById('store-manager-bubble'); if (smBubble) { smBubble.innerText = "懂買的都是好蔥！"; setTimeout(() => { smBubble.innerText = "這顆臭洋蔥打什麼主意啊"; }, 3000); } let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins; let storeCoinsEl = document.getElementById("store-current-coins"); if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins}`; } };
+window.confirmPurchase = function() {
+    const qty = Math.max(1, Math.floor(Number(window.currentPurchaseQty || 1)));
+    const price = Math.max(1, Number(window.currentPurchasePrice || 1));
+    const cost = qty * price;
+
+    if ((window.GameLogic.myProfile.coins || 0) < cost) return;
+
+    const purchaseCategory = window.currentPurchaseCategory || 'magic';
+    const itemName = window.currentPurchaseItem;
+    const itemKey = window.currentPurchaseItemKey || itemName;
+
+    window.GameLogic.myProfile.coins -= cost;
+
+    const updatePayload = { coins: window.GameLogic.myProfile.coins };
+
+    if (purchaseCategory === 'furniture') {
+        window.GameLogic.myProfile.furnitureInventory = window.GameLogic.myProfile.furnitureInventory || {};
+        window.GameLogic.myProfile.furnitureInventory[itemKey] = (window.GameLogic.myProfile.furnitureInventory[itemKey] || 0) + qty;
+        updatePayload.furnitureInventory = window.GameLogic.myProfile.furnitureInventory;
+    } else {
+        window.GameLogic.myProfile.inventory = window.GameLogic.myProfile.inventory || {};
+        window.GameLogic.myProfile.inventory[itemName] = (window.GameLogic.myProfile.inventory[itemName] || 0) + qty;
+        updatePayload.inventory = window.GameLogic.myProfile.inventory;
+    }
+
+    update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), updatePayload)
+        .catch(err => console.warn('Firebase 購買扣款／入庫失敗:', err));
+
+    document.getElementById('purchase-modal').style.display = 'none';
+
+    if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) {
+        let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
+        if (scene) {
+            window.playSFX(scene, 'shop-boss-thank-you');
+            window.playSFX(scene, 'shop-check-buying');
+        }
+    }
+
+    let msgEl = document.getElementById('purchase-success-msg');
+    msgEl.style.display = 'block';
+    msgEl.classList.remove('flash-text');
+    void msgEl.offsetWidth;
+    msgEl.classList.add('flash-text');
+    setTimeout(() => { msgEl.style.display = 'none'; }, 2000);
+
+    let smBubble = document.getElementById('store-manager-bubble');
+    if (smBubble) {
+        smBubble.innerText = purchaseCategory === 'furniture' ? "懂擺的都是好蔥！" : "懂買的都是好蔥！";
+        setTimeout(() => { smBubble.innerText = "這顆臭洋蔥打什麼主意啊"; }, 3000);
+    }
+
+    let coinsEl = document.getElementById("vp-coins");
+    if (coinsEl) coinsEl.innerText = window.GameLogic.myProfile.coins;
+
+    let storeCoinsEl = document.getElementById("store-current-coins");
+    if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins}`;
+
+    if (window.renderStoreTab) window.renderStoreTab(window.currentStoreTab || 'magic');
+};
 
 const loginScreen = document.getElementById("login-screen"); const gameLayoutContainer = document.getElementById("game-layout-container"); const chatSection = document.getElementById("chat-section"); const actionMenu = document.getElementById("action-menu"); const viewProfileModal = document.getElementById("view-profile-modal"); const chatInput = document.getElementById("chat-input");
 if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(()=>{}); }
@@ -9009,17 +9362,33 @@ class MainScene extends Phaser.Scene {
                 let f = this.furnitureSprites[key];
                 if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
                 f.sprite.setVelocity(0, 0);
+
+                const snappedPos = this.getSnappedFurniturePosition(f.sprite.x, f.sprite.y);
+                if (this.sceneName === 'doghouse') f.sprite.setPosition(snappedPos.x, snappedPos.y);
+
                 let path = this.isCafe
                     ? window.getServerRoomPath(`cafeFurniture/${key}`)
                     : (this.sceneName === 'doghouse'
                         ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}`
                         : window.getServerRoomPath(`shrineFurniture/${key}`));
-                update(ref(window.GameLogic.db, path), {
+
+                const savePayload = {
                     locked: true,
-                    x: f.sprite.x,
-                    y: f.sprite.y,
+                    x: snappedPos.x,
+                    y: snappedPos.y,
                     ownerUid: window.GameLogic.currentUser.uid
-                });
+                };
+
+                if (this.sceneName === 'doghouse') {
+                    const furnData = window.GameLogic.doghouseFurniture || {};
+                    const fd = furnData[key] || {};
+                    savePayload.category = 'furniture';
+                    savePayload.furnitureKey = fd.furnitureKey || key;
+                    savePayload.direction = this.getFurnitureDirection(key, { ...fd, direction: f.direction || fd.direction });
+                    savePayload.rotatable = this.isFurnitureRotatable(key, fd);
+                }
+
+                update(ref(window.GameLogic.db, path), savePayload);
                 window.GameLogic.placingFurnitureKey = null;
                 this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
             }
@@ -9435,7 +9804,7 @@ if (itemName === '月光饅頭') {
             if (this.sceneName === '7eonion' && this.storeManager) { 
                 let dist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.storeManager.x, this.storeManager.y); 
                 if (dist < 150) { 
-                    window.GameLogic.isShopping = true; let storeCoinsEl = document.getElementById('store-current-coins'); if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins || 0}`; document.getElementById('store-modal').style.display = 'block'; return; 
+                    window.GameLogic.isShopping = true; let storeCoinsEl = document.getElementById('store-current-coins'); if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins || 0}`; document.getElementById('store-modal').style.display = 'block'; return;
                 } 
             }
             if (this.sceneName === 'playroom' && this.rpsMachine) { 
@@ -20607,8 +20976,138 @@ if (activeBubbleMsg) {
     entity.bubbleContainer.setVisible(false); 
 } 
     }
+
+    getFurnitureDefinitionForRuntime(key, data = {}) {
+        if (window.getFurnitureDefinition) {
+            const def = window.getFurnitureDefinition((data && data.furnitureKey) || key);
+            if (def) return def;
+        }
+
+        return {
+            key,
+            rotatable: false,
+            defaultDirection: 'front',
+            directions: ['front'],
+            img: 'memory.png'
+        };
+    }
+
+    getFurnitureDirection(key, data = {}) {
+        const def = this.getFurnitureDefinitionForRuntime(key, data);
+        const dir = data && data.direction ? data.direction : (def.defaultDirection || 'front');
+        const dirs = Array.isArray(def.directions) && def.directions.length ? def.directions : (window.FURNITURE_DIRECTION_ORDER || ['front', 'right', 'back', 'left']);
+        return dirs.includes(dir) ? dir : (dirs[0] || 'front');
+    }
+
+    isFurnitureRotatable(key, data = {}) {
+        const def = this.getFurnitureDefinitionForRuntime(key, data);
+        return !!((data && data.rotatable) || (def && def.rotatable));
+    }
+
+    getSnappedFurniturePosition(x, y) {
+        if (this.sceneName !== 'doghouse') return { x, y };
+
+        const grid = 12;
+        return {
+            x: Math.round(Number(x || 0) / grid) * grid,
+            y: Math.round(Number(y || 0) / grid) * grid
+        };
+    }
+
+    applyFurnitureDirectionVisual(f, key, data = {}) {
+        if (!f || !f.sprite || !f.sprite.active) return;
+
+        const direction = this.getFurnitureDirection(key, data);
+        f.direction = direction;
+        f.sprite._onionFurnitureDirection = direction;
+
+        // 第一版只有 doghouse-bed.png 單張圖，因此先用 Phaser 角度呈現方向。
+        // 已保留 direction 狀態，未來補四方向素材時只要在這裡改成 setTexture 即可。
+        if (key && key.includes('bed')) {
+            const angleByDirection = { front: 0, right: 90, back: 180, left: 270 };
+            f.sprite.setAngle(angleByDirection[direction] || 0);
+        } else {
+            f.sprite.setAngle(0);
+        }
+    }
+
+    getNextFurnitureDirection(key, data = {}) {
+        const def = this.getFurnitureDefinitionForRuntime(key, data);
+        const dirs = Array.isArray(def.directions) && def.directions.length
+            ? def.directions
+            : (window.FURNITURE_DIRECTION_ORDER || ['front', 'right', 'back', 'left']);
+
+        const current = this.getFurnitureDirection(key, data);
+        const idx = Math.max(0, dirs.indexOf(current));
+        return dirs[(idx + 1) % dirs.length] || 'front';
+    }
+
+    rotatePlacingFurnitureByTap(key, f) {
+        const placingKey = window.GameLogic ? window.GameLogic.placingFurnitureKey : null;
+        if (!placingKey || placingKey !== key) return false;
+        if (!f || !f.sprite || !f.sprite.active) return false;
+
+        const furnData = this.isCafe
+            ? window.GameLogic.cafeFurniture
+            : (this.sceneName === 'doghouse'
+                ? (window.GameLogic.doghouseFurniture || {})
+                : (this.sceneName === 'shrine'
+                    ? (window.GameLogic.shrineFurniture || {})
+                    : {}));
+
+        const fd = (furnData && furnData[key]) ? furnData[key] : {};
+        if (!this.isFurnitureRotatable(key, fd)) {
+            sendBubble("這件家具目前不能轉向。");
+            return true;
+        }
+
+        const nextDirection = this.getNextFurnitureDirection(key, { ...fd, direction: f.direction || fd.direction });
+        f.direction = nextDirection;
+        f.sprite._onionFurnitureDirection = nextDirection;
+        this.applyFurnitureDirectionVisual(f, key, { ...fd, direction: nextDirection });
+
+        if (furnData && furnData[key]) {
+            furnData[key].direction = nextDirection;
+            furnData[key].rotatable = true;
+        }
+
+        const path = this.isCafe
+            ? window.getServerRoomPath(`cafeFurniture/${key}`)
+            : (this.sceneName === 'doghouse'
+                ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}`
+                : window.getServerRoomPath(`shrineFurniture/${key}`));
+
+        update(ref(window.GameLogic.db, path), { direction: nextDirection, rotatable: true })
+            .catch(err => console.warn('Firebase 家具轉向存檔失敗:', err));
+
+        const labelMap = window.FURNITURE_DIRECTION_LABELS || {};
+        sendBubble(`家具方向：${labelMap[nextDirection] || nextDirection}`);
+        return true;
+    }
+
+    getDoghouseBedInteractionAnchor(f) {
+        const direction = (f && f.direction) || (f && f.sprite && f.sprite._onionFurnitureDirection) || 'front';
+
+        // 目前床鋪只有單張圖，互動點先固定於家具中心，避免素材不足時偏移錯位。
+        // 未來若補四方向床鋪圖，可在此依 direction 微調睡覺位置與提示位置。
+        const offsets = {
+            front: { x: 0, y: 0 },
+            right: { x: 0, y: 0 },
+            back: { x: 0, y: 0 },
+            left: { x: 0, y: 0 }
+        };
+
+        const off = offsets[direction] || offsets.front;
+        return {
+            x: f.sprite.x + off.x,
+            y: f.sprite.y + off.y
+        };
+    }
+  
     createFurniture(key, data) { 
+    data = data || {};
     const isGiftBox = key.includes('giftbox');
+    const fDef = this.getFurnitureDefinitionForRuntime(key, data);
 
     let imgKey = 'memory';
     if (isGiftBox) imgKey = 'gift-box-stay';
@@ -20620,8 +21119,10 @@ if (activeBubbleMsg) {
     else if (key.includes('bed')) imgKey = 'doghouse-bed';
     else if (key === 'altar') imgKey = 'shrine-altar';
     else if (key.startsWith('seat_')) imgKey = 'shrine-seat';
+    else if (fDef && fDef.imgKey) imgKey = fDef.imgKey;
     let f = { sprite: this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true) }; 
     f.isGiftBox = isGiftBox;
+    f.furnitureDef = fDef;
 
     if (isGiftBox) {
         f.sprite.setDisplaySize(120, 120);
@@ -20646,6 +21147,7 @@ if (activeBubbleMsg) {
     }
 
     f.sprite.isLocked = data.locked;
+    this.applyFurnitureDirectionVisual(f, key, data);
     this.bindDirectSceneTap(f.sprite, 'furniture', () => ({ key, f }));  
         if (imgKey === 'hall-screen') {
             f.sprite.setOrigin(0.5, 0.5); // 靜態圖不需播放動畫
@@ -21245,8 +21747,21 @@ if (activeBubbleMsg) {
         const dragThreshold = 12;
         const cooldownMs = 380;
 
+        const getSafePayload = () => {
+            return typeof getPayload === 'function' ? (getPayload() || {}) : {};
+        };
+
+        const getPlacingSelfPayload = () => {
+            if (type !== 'furniture' || !window.GameLogic || !window.GameLogic.placingFurnitureKey) return null;
+            const payload = getSafePayload();
+            if (!payload || payload.key !== window.GameLogic.placingFurnitureKey) return null;
+            return payload;
+        };
+
         sprite.on('pointerdown', (pointer) => {
-            if (!this.canUseDirectSceneTap()) {
+            const placingSelfPayload = getPlacingSelfPayload();
+
+            if (!placingSelfPayload && !this.canUseDirectSceneTap()) {
                 sprite._onionDirectTapState = null;
                 return;
             }
@@ -21255,7 +21770,9 @@ if (activeBubbleMsg) {
                 pointerId: pointer.id,
                 startX: pointer.x,
                 startY: pointer.y,
-                moved: false
+                moved: false,
+                placingSelfTap: !!placingSelfPayload,
+                placingSelfPayload
             };
             this.pendingDirectObjectTap = sprite._onionDirectTapState;
         });
@@ -21301,11 +21818,19 @@ if (activeBubbleMsg) {
             const movedDist = Math.sqrt(dx * dx + dy * dy);
 
             if (state.moved || movedDist > dragThreshold) return;
+
+            if (state.placingSelfTap) {
+                const payload = state.placingSelfPayload || getPlacingSelfPayload();
+                this.markDirectSceneTapConsumed(pointer);
+                if (payload && payload.key) this.rotatePlacingFurnitureByTap(payload.key, payload.f || this.furnitureSprites[payload.key]);
+                return;
+            }
+
             if (!this.canUseDirectSceneTap()) return;
             if (this.lastDirectSceneTapAt && Date.now() - this.lastDirectSceneTapAt < cooldownMs) return;
 
             this.markDirectSceneTapConsumed(pointer);
-            const payload = typeof getPayload === 'function' ? (getPayload() || {}) : {};
+            const payload = getSafePayload();
             this.handleDirectSceneObjectTap(type, payload, sprite);
         });
     }
@@ -21315,6 +21840,7 @@ if (activeBubbleMsg) {
         window.GameLogic.isShopping = true;
         const storeCoinsEl = document.getElementById('store-current-coins');
         if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${window.GameLogic.myProfile.coins || 0}`;
+        if (window.renderStoreTab) window.renderStoreTab(window.currentStoreTab || 'magic');
         const storeModal = document.getElementById('store-modal');
         if (storeModal) storeModal.style.display = 'block';
         return true;
@@ -21384,8 +21910,9 @@ if (activeBubbleMsg) {
             return true;
         }
 
+        const anchor = this.getDoghouseBedInteractionAnchor(f);
         this.localPlayer.sprite.setVelocity(0, 0);
-        this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y);
+        this.localPlayer.sprite.setPosition(anchor.x, anchor.y);
         this.events.emit('action_A_short');
         return true;
     }
@@ -22501,6 +23028,8 @@ if (dist < 30) {
             if (!this.furnitureSprites[key]) this.furnitureSprites[key] = this.createFurniture(key, fd);
             let f = this.furnitureSprites[key];
             f.sprite.isLocked = fd.locked;
+            const nextDirection = this.getFurnitureDirection(key, fd || {});
+            if (f.direction !== nextDirection) this.applyFurnitureDirectionVisual(f, key, fd || {});
             if(window.GameLogic.placingFurnitureKey !== key) {
                 f.sprite.x = Phaser.Math.Linear(f.sprite.x, fd.x, 0.3);
                 f.sprite.y = Phaser.Math.Linear(f.sprite.y, fd.y, 0.3);
@@ -22644,59 +23173,137 @@ if (dist < 30) {
 function initPhaser() { const config = { type: Phaser.AUTO, parent: 'phaser-app', width: '100%', height: '100%', backgroundColor: '#1a1008', scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH }, input: { activePointers: 3 }, physics: { default: 'arcade', arcade: { debug: false } }, scene: [ BootScene, MainScene, UIScene ] }; window.GameLogic.phaserGame = new Phaser.Game(config); }
 
 function openFurnitureCatalog() {
-    const modal = document.getElementById('furniture-catalog-modal'); const list = document.getElementById('catalog-list'); const title = document.getElementById('catalog-title');
-    if (modal) {
-        modal.classList.remove('furniture-wood-ui', 'shrine-taiji-ui', 'room-roof-ui', 'catalog-theme-opening', 'catalog-theme-closing');
-        if (window.GameLogic.currentScene === "cafe") modal.classList.add('furniture-wood-ui');
-        else if (window.GameLogic.currentScene === "doghouse") modal.classList.add('room-roof-ui');
-        else if (window.GameLogic.currentScene === "shrine") modal.classList.add('shrine-taiji-ui');
+    const modal = document.getElementById('furniture-catalog-modal');
+    const list = document.getElementById('catalog-list');
+    const title = document.getElementById('catalog-title');
+    if (!modal || !list || !title) return;
+
+    let detail = document.getElementById('catalog-detail');
+    if (!detail) {
+        detail = document.createElement('div');
+        detail.id = 'catalog-detail';
+        detail.className = 'doghouse-furniture-detail-card';
+        list.insertAdjacentElement('afterend', detail);
     }
+
+    modal.classList.remove('furniture-wood-ui', 'shrine-taiji-ui', 'room-roof-ui', 'doghouse-furniture-library-ui', 'catalog-theme-opening', 'catalog-theme-closing');
+    list.className = 'catalog-grid';
     list.innerHTML = "";
+    detail.className = 'doghouse-furniture-detail-card';
+    detail.innerHTML = "";
+
     let items = [];
-    if (window.GameLogic.currentScene === "cafe") { 
-        title.innerText = "📦 大廳家俱目錄"; 
-        items = [ 
-            { key: 'giftbox', name: '🎁 領獎大粉蔥', img: 'gift-box-stay.png' }, 
-            { key: 'scoreboard', name: '🏆 戰況看板', img: 'hall-screen-in-list.png' }, 
+    if (window.GameLogic.currentScene === "cafe") {
+        modal.classList.add('furniture-wood-ui');
+        title.innerText = "📦 大廳家俱目錄";
+        items = [
+            { key: 'giftbox', name: '🎁 領獎大粉蔥', img: 'gift-box-stay.png' },
+            { key: 'scoreboard', name: '🏆 戰況看板', img: 'hall-screen-in-list.png' },
             { key: 'solochicken', name: '獨樂雞', img: 'me_play_cock.png' },
-            { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' }, 
-            { key: 'memory', name: '📖 洋蔥回憶錄', img: 'memory.png' }, 
-            { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' }, 
-            { key: 'dummy', name: '🧍 假人洋蔥', img: 'dummy.png' } 
-        ]; 
+            { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' },
+            { key: 'memory', name: '📖 洋蔥回憶錄', img: 'memory.png' },
+            { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' },
+            { key: 'dummy', name: '🧍 假人洋蔥', img: 'dummy.png' }
+        ];
     }
-    else if (window.GameLogic.currentScene === "doghouse") { title.innerText = "🏠 房間家具擺設"; items = [ { key: 'bed', name: '🛏️ 狗窩床鋪', img: 'doghouse-bed.png' } ]; }
-    else if (window.GameLogic.currentScene === "shrine") { 
-        title.innerText = "☯️ 神龕法器目錄"; 
-        items = [ 
-            { key: 'altar', name: '🌀 呼蔥祭壇', img: 'shrine-altar.png', unique: true }, 
+    else if (window.GameLogic.currentScene === "doghouse") {
+        modal.classList.add('room-roof-ui', 'doghouse-furniture-library-ui');
+        title.innerText = "🏠 房間家具庫";
+        list.className = 'catalog-grid doghouse-furniture-grid';
+
+        const furnitureInventory = (window.GameLogic.myProfile && window.GameLogic.myProfile.furnitureInventory) ? window.GameLogic.myProfile.furnitureInventory : {};
+        const placedDoghouseFurniture = window.GameLogic.doghouseFurniture || {};
+        const allDefs = Object.values(window.FURNITURE_DEFS || {}).filter(def => def.scene === 'doghouse');
+        items = allDefs.filter(def => {
+            const boughtQty = Number(furnitureInventory[def.key] || 0);
+            const alreadyPlaced = !!placedDoghouseFurniture[def.key];
+            return def.defaultOwned || boughtQty > 0 || alreadyPlaced;
+        });
+
+        if (!items.length) {
+            list.innerHTML = `<div class="doghouse-furniture-empty">目前還沒有可擺設的家具。可以之後到 7-EONION 的「家俱」分頁購買。</div>`;
+        } else {
+            const renderDoghouseDetail = (item) => {
+                const def = window.getFurnitureDefinition ? window.getFurnitureDefinition(item.key) : item;
+                const boughtQty = Number(furnitureInventory[def.key] || 0);
+                const displayQty = def.defaultOwned ? Math.max(1, boughtQty) : boughtQty;
+                const placedData = placedDoghouseFurniture[def.key] || {};
+                const isRotatable = !!(def.rotatable || placedData.rotatable);
+
+                const tags = [];
+                if (isRotatable) tags.push(`<span class="doghouse-furniture-tag rotatable">可轉向</span>`);
+                (def.tags || []).forEach(tag => tags.push(`<span class="doghouse-furniture-tag">${tag}</span>`));
+
+                detail.innerHTML = `
+                    <div class="doghouse-furniture-detail-head">
+                        <img src="${def.img || 'memory.png'}" alt="${def.name || '家具'}">
+                        <div>
+                            <div class="doghouse-furniture-detail-title">${def.name || '未命名家具'}</div>
+                            <div style="font-size:12px; color:#6d3b22; margin-top:3px;">持有：${displayQty}　狀態：${placedData.locked ? '已擺設' : (placedData.locked === false ? '擺放中' : '未擺設')}</div>
+                        </div>
+                    </div>
+                    <div style="font-size:13px; line-height:1.55; white-space:pre-wrap;">${def.desc || '尚未設定描述。'}</div>
+                    <div class="doghouse-furniture-tags">${tags.join('') || '<span class="doghouse-furniture-tag">一般家具</span>'}</div>
+                    <button class="doghouse-place-btn" type="button" onclick="window.startDoghouseFurniturePlacement && window.startDoghouseFurniturePlacement('${def.key}')">${placedData.locked ? '重新擺設' : '擺設'}</button>
+                `;
+                detail.classList.add('show');
+            };
+
+            items.forEach((item, idx) => {
+                const def = window.getFurnitureDefinition ? window.getFurnitureDefinition(item.key) : item;
+                const boughtQty = Number(furnitureInventory[def.key] || 0);
+                const displayQty = def.defaultOwned ? Math.max(1, boughtQty) : boughtQty;
+
+                let div = document.createElement('div');
+                div.className = 'catalog-item';
+                div.innerHTML = `<img src="${def.img || 'memory.png'}"><span>${def.name || '未命名家具'}</span><span style="font-size:11px; margin-top:3px;">持有 ${displayQty}</span>${def.rotatable ? '<span style="font-size:11px; color:#8dff8a; font-weight:bold; margin-top:2px;">可轉向</span>' : ''}`;
+                div.onclick = () => renderDoghouseDetail(def);
+                list.appendChild(div);
+
+                if (idx === 0) setTimeout(() => renderDoghouseDetail(def), 0);
+            });
+        }
+
+        if (window.showFurnitureCatalogModal) window.showFurnitureCatalogModal();
+        else modal.style.display = 'block';
+        return;
+    }
+    else if (window.GameLogic.currentScene === "shrine") {
+        modal.classList.add('shrine-taiji-ui');
+        title.innerText = "☯️ 神龕法器目錄";
+        items = [
+            { key: 'altar', name: '🌀 呼蔥祭壇', img: 'shrine-altar.png', unique: true },
             { key: 'seat', name: '🧎 禁屎坐墊', img: 'shrine-no-poo-poo-seat.png', infinite: true },
-            { key: 'clear_seats', name: '🧹 回收所有坐墊', isAction: true } // 修正：補回一鍵回收選項
-        ]; 
+            { key: 'clear_seats', name: '🧹 回收所有坐墊', isAction: true }
+        ];
     }
 
     items.forEach(item => {
-        let div = document.createElement('div'); div.className = 'catalog-item'; 
+        let div = document.createElement('div');
+        div.className = 'catalog-item';
         div.innerHTML = item.isAction ? `<span style="font-size:24px; margin-bottom:5px;">${item.name.split(' ')[0]}</span><span>${item.name.split(' ')[1]}</span>` : `<img src="${item.img}"><span>${item.name}</span>`;
         div.onclick = () => {
             if (item.isAction) {
                 if (item.key === 'clear_seats') {
-                                        let seats = Object.keys(window.GameLogic.shrineFurniture || {}).filter(k => k.startsWith('seat_'));
-                    let updates = {}; seats.forEach(s => updates[window.getServerRoomPath(`shrineFurniture/${s}`)] = null);
-                    update(ref(window.GameLogic.db), updates).then(() => { 
-                        sendBubble("已回收所有禁屎坐墊！"); 
-                        if (window.closeFurnitureCatalogModal) window.closeFurnitureCatalogModal(); else modal.style.display = 'none'; 
+                    let seats = Object.keys(window.GameLogic.shrineFurniture || {}).filter(k => k.startsWith('seat_'));
+                    let updates = {};
+                    seats.forEach(s => updates[window.getServerRoomPath(`shrineFurniture/${s}`)] = null);
+                    update(ref(window.GameLogic.db), updates).then(() => {
+                        sendBubble("已回收所有禁屎坐墊！");
+                        if (window.closeFurnitureCatalogModal) window.closeFurnitureCatalogModal(); else modal.style.display = 'none';
                     });
                 }
                 return;
             }
-            
-            if (window.closeFurnitureCatalogModal) window.closeFurnitureCatalogModal(); else modal.style.display = 'none'; let isCafe = window.GameLogic.currentScene === "cafe"; let isDoghouse = window.GameLogic.currentScene === "doghouse"; let isShrine = window.GameLogic.currentScene === "shrine";
-            let targetDict = isCafe ? window.GameLogic.cafeFurniture : (isDoghouse ? window.GameLogic.doghouseFurniture : window.GameLogic.shrineFurniture);
-            let pathPrefix = isCafe ? window.getServerRoomPath('cafeFurniture/') : (isDoghouse ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/` : window.getServerRoomPath('shrineFurniture/'));
-            
+
+            if (window.closeFurnitureCatalogModal) window.closeFurnitureCatalogModal(); else modal.style.display = 'none';
+            let isCafe = window.GameLogic.currentScene === "cafe";
+            let isShrine = window.GameLogic.currentScene === "shrine";
+            let targetDict = isCafe ? window.GameLogic.cafeFurniture : window.GameLogic.shrineFurniture;
+            let pathPrefix = isCafe ? window.getServerRoomPath('cafeFurniture/') : window.getServerRoomPath('shrineFurniture/');
+
             let itemKey = item.key;
-            if (item.infinite) { 
+            if (item.infinite) {
                 if (item.key === 'seat') {
                     let seatCount = Object.keys(targetDict || {}).filter(k => k.startsWith('seat_')).length;
                     if (seatCount >= 6) {
@@ -22704,7 +23311,7 @@ function openFurnitureCatalog() {
                         return;
                     }
                 }
-                itemKey = item.key + '_' + Date.now(); 
+                itemKey = item.key + '_' + Date.now();
             }
 
             let fData = targetDict && targetDict[itemKey];
@@ -22715,21 +23322,83 @@ function openFurnitureCatalog() {
                 if(window.GameLogic.phaserGame) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if(scene && scene.localPlayer) { scene.cameras.main.startFollow(scene.localPlayer.sprite, true, 0.08, 0.08); } }
                 sendBubble("傢俱收起來了!");
             } else {
-                let pX = 1024, pY = 1024; if(window.GameLogic.phaserGame) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if(scene && scene.localPlayer) { pX = scene.localPlayer.sprite.x; pY = scene.localPlayer.sprite.y - 80; } }
+                let pX = 1024, pY = 1024;
+                if(window.GameLogic.phaserGame) {
+                    let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
+                    if(scene && scene.localPlayer) {
+                        pX = scene.localPlayer.sprite.x;
+                        pY = scene.localPlayer.sprite.y - 80;
+                    }
+                }
                 let newData = { x: pX, y: pY, locked: false, ownerUid: window.GameLogic.currentUser.uid };
-                if (isDoghouse) { window.GameLogic.doghouseFurniture = window.GameLogic.doghouseFurniture || {}; window.GameLogic.doghouseFurniture[itemKey] = newData; }
-                else if (isCafe) window.GameLogic.cafeFurniture[itemKey] = newData;
-                // 修正：為神龕加入 || {} 的防護機制，避免資料庫為空時引發 null 取值報錯卡死
-                else if (isShrine) { window.GameLogic.shrineFurniture = window.GameLogic.shrineFurniture || {}; window.GameLogic.shrineFurniture[itemKey] = newData; }
+                if (isCafe) window.GameLogic.cafeFurniture[itemKey] = newData;
+                else if (isShrine) {
+                    window.GameLogic.shrineFurniture = window.GameLogic.shrineFurniture || {};
+                    window.GameLogic.shrineFurniture[itemKey] = newData;
+                }
                 update(ref(window.GameLogic.db, pathPrefix + itemKey), newData);
                 if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput();
                 window.GameLogic.placingFurnitureKey = itemKey;
             }
-        }; list.appendChild(div);
+        };
+        list.appendChild(div);
     });
+
     if (window.showFurnitureCatalogModal) window.showFurnitureCatalogModal();
     else modal.style.display = 'block';
 }
+
+window.startDoghouseFurniturePlacement = function(furnitureKey) {
+    if (!window.GameLogic || window.GameLogic.currentScene !== 'doghouse' || !window.GameLogic.currentUser) return;
+
+    const def = window.getFurnitureDefinition ? window.getFurnitureDefinition(furnitureKey) : { key: furnitureKey, rotatable: false, defaultDirection: 'front' };
+    const path = `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${def.key}`;
+    const currentData = (window.GameLogic.doghouseFurniture || {})[def.key] || {};
+
+    let pX = Number(currentData.x);
+    let pY = Number(currentData.y);
+
+    if (!Number.isFinite(pX) || !Number.isFinite(pY)) {
+        pX = 1024;
+        pY = 1024;
+        if (window.GameLogic.phaserGame) {
+            let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
+            if (scene && scene.localPlayer && scene.localPlayer.sprite) {
+                pX = scene.localPlayer.sprite.x;
+                pY = scene.localPlayer.sprite.y - 80;
+            }
+        }
+    }
+
+    const nextData = {
+        ...currentData,
+        x: pX,
+        y: pY,
+        locked: false,
+        ownerUid: window.GameLogic.currentUser.uid,
+        category: 'furniture',
+        furnitureKey: def.key,
+        direction: currentData.direction || def.defaultDirection || 'front',
+        rotatable: !!def.rotatable
+    };
+
+    window.GameLogic.doghouseFurniture = window.GameLogic.doghouseFurniture || {};
+    window.GameLogic.doghouseFurniture[def.key] = nextData;
+
+    if (window.closeFurnitureCatalogModal) window.closeFurnitureCatalogModal();
+    else {
+        const modal = document.getElementById('furniture-catalog-modal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    update(ref(window.GameLogic.db, path), nextData)
+        .then(() => {
+            if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput();
+            window.GameLogic.placingFurnitureKey = def.key;
+            sendBubble(def.rotatable ? "移動家具中，點家具可轉向，按 A 放下。" : "移動家具中，按 A 放下。");
+        })
+        .catch(err => console.warn('Firebase 狗窩家具擺設啟動失敗:', err));
+};
 
 window.showFurnitureCatalogModal = function() {
     const modal = document.getElementById('furniture-catalog-modal');
