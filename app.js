@@ -480,6 +480,9 @@ window.getMeowlimeGrowthState = function() {
             pointerMoveHandler: null,
             pointerUpHandler: null,
             pointerCancelHandler: null,
+            pointerLeaveHandler: null,
+            lostPointerCaptureHandler: null,
+            mouseUpHandler: null,
             modalStopHandler: null,
             resizeHandler: null
         };
@@ -519,6 +522,18 @@ window.stopMeowlimeGrowthCanvas = function() {
         window.removeEventListener('pointercancel', state.pointerCancelHandler);
     }
 
+    if (state.boundCanvas && state.pointerLeaveHandler) {
+        state.boundCanvas.removeEventListener('pointerleave', state.pointerLeaveHandler);
+    }
+
+    if (state.boundCanvas && state.lostPointerCaptureHandler) {
+        state.boundCanvas.removeEventListener('lostpointercapture', state.lostPointerCaptureHandler);
+    }
+
+    if (state.mouseUpHandler) {
+        window.removeEventListener('mouseup', state.mouseUpHandler);
+    }
+
     if (state.boundModal && state.modalStopHandler) {
         state.boundModal.removeEventListener('pointerdown', state.modalStopHandler);
         state.boundModal.removeEventListener('click', state.modalStopHandler);
@@ -534,10 +549,16 @@ window.stopMeowlimeGrowthCanvas = function() {
     state.pointerMoveHandler = null;
     state.pointerUpHandler = null;
     state.pointerCancelHandler = null;
+    state.pointerLeaveHandler = null;
+    state.lostPointerCaptureHandler = null;
+    state.mouseUpHandler = null;
     state.modalStopHandler = null;
     state.resizeHandler = null;
     state.lastTs = 0;
     state.pointerId = null;
+    state.pointerDownAt = 0;
+    state.pointerStartX = 0;
+    state.pointerStartY = 0;
     state.isPointerDown = false;
     state.isHolding = false;
     state.dragging = false;
@@ -929,10 +950,15 @@ window.startMeowlimeGrowthCanvas = function() {
 
         if (state.holdTimer) clearTimeout(state.holdTimer);
         state.holdTimer = setTimeout(() => {
+            state.holdTimer = null;
             if (!state.running || !state.isPointerDown) return;
+
             state.isHolding = true;
+            state.dragging = false;
+            state.dragDX = 0;
+            state.dragDY = 0;
             state.jiggleUntil = performance.now() + 360;
-        }, 260);
+        }, 320);
     };
 
     const pointerMoveHandler = (e) => {
@@ -953,36 +979,45 @@ window.startMeowlimeGrowthCanvas = function() {
         const maxStretch = Math.max(24 * dpr, size * 0.92);
         const limitRate = rawDist > maxStretch ? maxStretch / rawDist : 1;
 
-        if (state.isHolding || (performance.now() - state.pointerDownAt > 180 && rawDist > 8 * dpr)) {
-            state.isHolding = true;
-            state.dragging = true;
-            state.dragDX = rawDX * limitRate;
-            state.dragDY = rawDY * limitRate;
+        if (!state.isHolding) {
+            return;
         }
+
+        state.dragging = rawDist > 1 * dpr;
+        state.dragDX = state.dragging ? rawDX * limitRate : 0;
+        state.dragDY = state.dragging ? rawDY * limitRate : 0;
     };
 
     const endTouch = (e) => {
-        if (!state.isPointerDown) return;
-        if (e && state.pointerId !== null && e.pointerId !== undefined && e.pointerId !== state.pointerId) return;
+        if (!state.isPointerDown && !state.isHolding && !state.dragging) return;
+
+        const activePointerId = state.pointerId;
+        if (e && activePointerId !== null && e.pointerId !== undefined && e.pointerId !== activePointerId) return;
 
         if (e && e.preventDefault) e.preventDefault();
         if (e && e.stopPropagation) e.stopPropagation();
+
+        const wasHolding = !!state.isHolding;
+        const wasDragging = !!state.dragging;
 
         if (state.holdTimer) {
             clearTimeout(state.holdTimer);
             state.holdTimer = null;
         }
 
-        if (canvas.releasePointerCapture && e && e.pointerId !== undefined) {
-            try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+        if (canvas.releasePointerCapture && activePointerId !== null && activePointerId !== undefined) {
+            try { canvas.releasePointerCapture(activePointerId); } catch (_) {}
         }
 
-        if (state.isHolding || state.dragging) {
+        if (wasHolding || wasDragging) {
             state.releaseBounceUntil = performance.now() + 760;
             state.jiggleUntil = performance.now() + 760;
         }
 
         state.pointerId = null;
+        state.pointerDownAt = 0;
+        state.pointerStartX = 0;
+        state.pointerStartY = 0;
         state.isPointerDown = false;
         state.isHolding = false;
         state.dragging = false;
@@ -1000,9 +1035,12 @@ window.startMeowlimeGrowthCanvas = function() {
     modal.addEventListener('pointerdown', stopModalEvent);
     modal.addEventListener('click', stopModalEvent);
     canvas.addEventListener('pointerdown', pointerHandler, { passive: false });
+    canvas.addEventListener('pointerleave', endTouch, { passive: false });
+    canvas.addEventListener('lostpointercapture', endTouch, { passive: false });
     window.addEventListener('pointermove', pointerMoveHandler, { passive: false });
     window.addEventListener('pointerup', endTouch, { passive: false });
     window.addEventListener('pointercancel', endTouch, { passive: false });
+    window.addEventListener('mouseup', endTouch, { passive: false });
     window.addEventListener('resize', resizeHandler);
 
     state.boundCanvas = canvas;
@@ -1011,12 +1049,138 @@ window.startMeowlimeGrowthCanvas = function() {
     state.pointerMoveHandler = pointerMoveHandler;
     state.pointerUpHandler = endTouch;
     state.pointerCancelHandler = endTouch;
+    state.pointerLeaveHandler = endTouch;
+    state.lostPointerCaptureHandler = endTouch;
+    state.mouseUpHandler = endTouch;
     state.modalStopHandler = stopModalEvent;
     state.resizeHandler = resizeHandler;
 
     canvas.style.touchAction = 'none';
     window.resizeMeowlimeGrowthCanvas(canvas);
     state.rafId = requestAnimationFrame(window.renderMeowlimeGrowthFrame);
+};
+
+window.getMeowlimeCheckinHistoryList = function() {
+    const history = (window.GameLogic && window.GameLogic.dailyMeowlime && window.GameLogic.dailyMeowlime.checkinHistory) || {};
+    if (!history || typeof history !== 'object') return [];
+
+    return Object.keys(history)
+        .map((dateKey) => {
+            const item = history[dateKey] || {};
+            return {
+                date: String(item.date || dateKey || ''),
+                createdAt: Number(item.createdAt || 0),
+                serverRoom: String(item.serverRoom || ''),
+                hasSignature: !!item.hasSignature
+            };
+        })
+        .filter(item => !!item.date)
+        .sort((a, b) => {
+            if (a.date === b.date) return a.createdAt - b.createdAt;
+            return a.date.localeCompare(b.date);
+        });
+};
+
+window.getMeowlimeStarRoomName = function(roomId) {
+    const safeRoomId = roomId ? String(roomId) : '';
+    const rooms = (window.GameLogic && window.GameLogic.serverRooms) || {};
+    if (safeRoomId && rooms[safeRoomId] && rooms[safeRoomId].name) return rooms[safeRoomId].name;
+    return safeRoomId || '未知房間';
+};
+
+window.renderMeowlimeStarMap = function() {
+    const panel = document.getElementById('meowlime-star-map-panel');
+    if (!panel) return;
+
+    const list = window.getMeowlimeCheckinHistoryList ? window.getMeowlimeCheckinHistoryList() : [];
+    const today = window.getMeowlimeTodayDateString ? window.getMeowlimeTodayDateString() : '';
+    const total = Number((window.GameLogic && window.GameLogic.dailyMeowlime && window.GameLogic.dailyMeowlime.totalCheckins) || list.length || 0);
+
+    panel.innerHTML = '';
+
+    const summary = document.createElement('div');
+    summary.className = 'meowlime-star-map-summary';
+    summary.textContent = list.length > 0
+        ? `已點亮 ${list.length} 顆簽到星星｜累積 ${Math.max(total, list.length)} 天`
+        : '還沒有簽到星星，完成一次每日簽到後就會在這裡點亮喵。';
+    panel.appendChild(summary);
+
+    const sky = document.createElement('div');
+    sky.className = 'meowlime-star-map-sky';
+    panel.appendChild(sky);
+
+    const constellationGlow = document.createElement('div');
+    constellationGlow.className = 'meowlime-star-map-core';
+    sky.appendChild(constellationGlow);
+
+    if (list.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'meowlime-star-map-empty';
+        empty.textContent = '尚未有星星資料';
+        sky.appendChild(empty);
+        return;
+    }
+
+    const detailList = document.createElement('div');
+    detailList.className = 'meowlime-star-map-list';
+
+    list.forEach((item, idx) => {
+        const dayNo = idx + 1;
+        const isToday = item.date === today;
+        const angle = (idx * 137.5) * Math.PI / 180;
+        const ring = 18 + (idx % 5) * 8 + Math.floor(idx / 5) * 2;
+        const left = Math.max(10, Math.min(90, 50 + Math.cos(angle) * ring));
+        const top = Math.max(12, Math.min(88, 50 + Math.sin(angle) * ring * 0.72));
+        const hue = (185 + idx * 43) % 360;
+        const roomName = window.getMeowlimeStarRoomName ? window.getMeowlimeStarRoomName(item.serverRoom) : (item.serverRoom || '未知房間');
+
+        const star = document.createElement('div');
+        star.className = `meowlime-star-node${isToday ? ' today' : ''}`;
+        star.style.setProperty('--star-left', `${left}%`);
+        star.style.setProperty('--star-top', `${top}%`);
+        star.style.setProperty('--star-hue', String(hue));
+        star.title = `${item.date}｜第 ${dayNo} 天｜${roomName}`;
+        star.textContent = '✦';
+        sky.appendChild(star);
+
+        const card = document.createElement('div');
+        card.className = `meowlime-star-map-card${isToday ? ' today' : ''}`;
+
+        const title = document.createElement('div');
+        title.className = 'meowlime-star-map-card-title';
+        title.textContent = isToday ? `今日星星｜第 ${dayNo} 天` : `第 ${dayNo} 天`;
+
+        const meta = document.createElement('div');
+        meta.className = 'meowlime-star-map-card-meta';
+        meta.textContent = `${item.date}｜${roomName}`;
+
+        card.appendChild(title);
+        card.appendChild(meta);
+        detailList.appendChild(card);
+    });
+
+    panel.appendChild(detailList);
+};
+
+window.setMeowlimeGrowthTab = function(tabName = 'growth') {
+    const activeTab = tabName === 'map' ? 'map' : 'growth';
+    const growthPanel = document.getElementById('meowlime-growth-panel');
+    const mapPanel = document.getElementById('meowlime-star-map-panel');
+    const growthBtn = document.getElementById('meowlime-growth-tab-capsule');
+    const mapBtn = document.getElementById('meowlime-growth-tab-map');
+
+    if (growthBtn) growthBtn.classList.toggle('active', activeTab === 'growth');
+    if (mapBtn) mapBtn.classList.toggle('active', activeTab === 'map');
+
+    if (growthPanel) growthPanel.hidden = activeTab !== 'growth';
+    if (mapPanel) mapPanel.hidden = activeTab !== 'map';
+
+    if (activeTab === 'growth') {
+        if (window.startMeowlimeGrowthCanvas) window.startMeowlimeGrowthCanvas();
+    } else {
+        if (window.stopMeowlimeGrowthCanvas) window.stopMeowlimeGrowthCanvas();
+        if (window.renderMeowlimeStarMap) window.renderMeowlimeStarMap();
+    }
 };
 
 
@@ -1031,9 +1195,12 @@ window.openMeowlimeGrowthModal = async function() {
     if (checkinModal) checkinModal.style.display = 'none';
     if (growthModal) growthModal.style.display = 'block';
 
-    if (window.startMeowlimeGrowthCanvas) window.startMeowlimeGrowthCanvas();
+    if (window.setMeowlimeGrowthTab) {
+        window.setMeowlimeGrowthTab('growth');
+    } else if (window.startMeowlimeGrowthCanvas) {
+        window.startMeowlimeGrowthCanvas();
+    }
 };
-
 window.closeMeowlimeGrowthModal = function(options = {}) {
     const shouldReturnToCheckin = options.returnToCheckin !== false;
     const growthModal = document.getElementById('meowlime-growth-modal');
@@ -1090,6 +1257,7 @@ window.applyMeowlimeDailyState = function(data = {}) {
 
     if (window.updateMeowlimeModalStatusText) window.updateMeowlimeModalStatusText();
     if (window.refreshMeowlimeVisualsInScene) window.refreshMeowlimeVisualsInScene();
+    if (window.renderMeowlimeStarMap) window.renderMeowlimeStarMap();
 };
 
 window.updateMeowlimeModalStatusText = function() {
@@ -1750,25 +1918,52 @@ function createSystemUI() {
                 display: flex;
             }
             .meowlime-stamp {
-                width: 118px;
-                height: 118px;
+                position: relative;
+                isolation: isolate;
+                width: 132px;
+                height: 132px;
                 border-radius: 50%;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                background: radial-gradient(circle at 35% 28%, rgba(255,255,255,0.88), #7cff89 30%, #0bbf4f 62%, #02782c 100%);
-                color: #003314;
-                border: 5px solid rgba(218,255,218,0.92);
-                font-size: 19px;
+                overflow: visible;
+                background:
+                    radial-gradient(circle at 34% 25%, rgba(255,255,255,0.96), rgba(255,255,255,0.18) 18%, transparent 28%),
+                    conic-gradient(from 0deg, #ff7adf, #7fffea, #fff7a8, #a7ffbd, #9d7cff, #ff7adf);
+                color: #ffffff;
+                border: 4px solid rgba(255,255,255,0.92);
+                font-size: 20px;
                 font-weight: 900;
                 text-align: center;
-                text-shadow: 0 1px 0 rgba(255,255,255,0.72);
-                box-shadow: 0 0 16px rgba(80,255,110,0.9), 0 0 30px rgba(80,255,110,0.42), inset 0 0 12px rgba(255,255,255,0.45);
+                letter-spacing: 0.5px;
+                text-shadow: 0 0 7px #ffffff, 0 0 14px #7fffea, 0 0 22px #ff87df, 0 2px 2px rgba(0,0,0,0.58);
+                box-shadow: 0 0 18px rgba(127,255,234,0.92), 0 0 32px rgba(255,135,223,0.62), 0 0 48px rgba(255,247,168,0.34), inset 0 0 18px rgba(255,255,255,0.38);
                 transform: rotate(-8deg);
+                animation: meowlime-stamp-neon-hue 1.65s linear infinite;
                 z-index: 4;
             }
+            .meowlime-stamp::before {
+                content: "";
+                position: absolute;
+                inset: -12px;
+                border-radius: 50%;
+                background: conic-gradient(from 0deg, rgba(255,122,223,0.9), rgba(127,255,234,0.85), rgba(255,247,168,0.82), rgba(157,124,255,0.85), rgba(255,122,223,0.9));
+                filter: blur(10px);
+                opacity: 0.68;
+                z-index: -1;
+                animation: meowlime-stamp-ring-spin 1.8s linear infinite;
+            }
+            .meowlime-stamp::after {
+                content: "";
+                position: absolute;
+                inset: 10px;
+                border-radius: 50%;
+                border: 2px dashed rgba(255,255,255,0.78);
+                box-shadow: inset 0 0 12px rgba(255,255,255,0.24);
+                pointer-events: none;
+            }
             .meowlime-signature-wrap.meowlime-stamped .meowlime-stamp {
-                animation: meowlime-stamp-press 0.62s cubic-bezier(0.12, 0.86, 0.2, 1.15) forwards;
+                animation: meowlime-stamp-press 0.72s cubic-bezier(0.12, 0.86, 0.2, 1.15) forwards, meowlime-stamp-neon-hue 1.05s linear infinite;
             }
             .meowlime-star-field {
                 position: absolute;
@@ -1837,10 +2032,17 @@ function createSystemUI() {
                 100% { transform: translate(34px, 34px); }
             }
             @keyframes meowlime-stamp-press {
-                0% { transform: translateY(-88px) scale(1.85) rotate(-8deg); opacity: 0; filter: brightness(1.45); }
-                48% { transform: translateY(8px) scale(0.86) rotate(-8deg); opacity: 1; filter: brightness(1.25); }
-                72% { transform: translateY(-4px) scale(1.05) rotate(-8deg); }
-                100% { transform: translateY(0) scale(1) rotate(-8deg); opacity: 1; filter: brightness(1); }
+                0% { transform: translateY(-96px) scale(1.95) rotate(-8deg); opacity: 0; filter: brightness(1.6) saturate(1.35) hue-rotate(0deg); }
+                44% { transform: translateY(10px) scale(0.82) rotate(-8deg); opacity: 1; filter: brightness(1.45) saturate(1.45) hue-rotate(80deg); }
+                68% { transform: translateY(-5px) scale(1.08) rotate(-8deg); filter: brightness(1.24) saturate(1.32) hue-rotate(160deg); }
+                100% { transform: translateY(0) scale(1) rotate(-8deg); opacity: 1; filter: brightness(1.08) saturate(1.18) hue-rotate(360deg); }
+            }
+            @keyframes meowlime-stamp-neon-hue {
+                0% { filter: hue-rotate(0deg) brightness(1.05) saturate(1.18); }
+                100% { filter: hue-rotate(360deg) brightness(1.12) saturate(1.28); }
+            }
+            @keyframes meowlime-stamp-ring-spin {
+                100% { transform: rotate(360deg); }
             }
             @keyframes meowlime-star-pop {
                 0% { transform: translate(-50%, -50%) scale(0.2) rotate(0deg); opacity: 0; }
@@ -1950,6 +2152,168 @@ function createSystemUI() {
                 font-size: 12px;
                 font-weight: bold;
                 text-shadow: 0 0 7px rgba(126,255,238,0.35);
+            }
+            .meowlime-growth-tab-row {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+                margin: 4px 0 12px 0;
+            }
+            .meowlime-growth-tab-btn {
+                min-height: 38px;
+                border-radius: 999px;
+                border: 1px solid rgba(126,255,238,0.62);
+                background: rgba(0,0,0,0.58);
+                color: #dffcff;
+                font-weight: 900;
+                cursor: pointer;
+                box-shadow: inset 0 0 10px rgba(126,255,238,0.08), 0 0 10px rgba(126,255,238,0.16);
+                touch-action: manipulation;
+            }
+            .meowlime-growth-tab-btn.active {
+                background: linear-gradient(180deg, #fff6ff, #7fffea 42%, #917cff 100%);
+                color: #061224;
+                border-color: rgba(255,255,255,0.92);
+                box-shadow: 0 0 14px rgba(126,255,238,0.72), 0 0 18px rgba(255,130,228,0.38), inset 0 1px 0 rgba(255,255,255,0.82);
+            }
+            .meowlime-growth-panel[hidden] {
+                display: none !important;
+            }
+            .meowlime-star-map-panel {
+                max-height: min(58vh, 520px);
+                overflow-y: auto;
+                overflow-x: hidden;
+                -webkit-overflow-scrolling: touch;
+                touch-action: pan-y;
+            }
+            .meowlime-star-map-summary {
+                margin-bottom: 10px;
+                padding: 9px 10px;
+                border-radius: 14px;
+                background: rgba(0,0,0,0.48);
+                border: 1px solid rgba(255,190,232,0.42);
+                color: #eafffb;
+                font-size: 12px;
+                font-weight: 900;
+                line-height: 1.45;
+                text-shadow: 0 0 8px rgba(126,255,238,0.42);
+            }
+            .meowlime-star-map-sky {
+                position: relative;
+                height: 318px;
+                min-height: 260px;
+                border-radius: 18px;
+                overflow: hidden;
+                border: 2px solid rgba(126,255,238,0.5);
+                background:
+                    radial-gradient(circle at 50% 50%, rgba(126,255,238,0.16), transparent 26%),
+                    radial-gradient(circle at 28% 22%, rgba(255,130,228,0.14), transparent 20%),
+                    radial-gradient(circle at 74% 76%, rgba(167,255,189,0.12), transparent 24%),
+                    linear-gradient(145deg, rgba(2,4,14,0.98), rgba(5,13,32,0.98) 52%, rgba(0,0,0,0.99));
+                box-shadow: inset 0 0 30px rgba(0,0,0,0.82), 0 0 18px rgba(126,255,238,0.22);
+            }
+            .meowlime-star-map-sky::before {
+                content: "";
+                position: absolute;
+                inset: -20%;
+                background:
+                    radial-gradient(circle, rgba(255,255,255,0.88) 0 1px, transparent 3px),
+                    radial-gradient(circle, rgba(126,255,238,0.58) 0 1px, transparent 4px),
+                    radial-gradient(circle, rgba(255,130,228,0.48) 0 2px, transparent 5px);
+                background-size: 38px 38px, 62px 62px, 86px 86px;
+                animation: meowlime-star-map-drift 8s linear infinite;
+                opacity: 0.58;
+                pointer-events: none;
+            }
+            .meowlime-star-map-core {
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                width: 46%;
+                height: 46%;
+                transform: translate(-50%, -50%);
+                border-radius: 50%;
+                background: radial-gradient(circle, rgba(126,255,238,0.22), rgba(255,130,228,0.12) 48%, transparent 70%);
+                filter: blur(0.2px);
+                animation: meowlime-star-map-core-pulse 2.4s ease-in-out infinite alternate;
+                pointer-events: none;
+            }
+            .meowlime-star-node {
+                position: absolute;
+                left: var(--star-left, 50%);
+                top: var(--star-top, 50%);
+                transform: translate(-50%, -50%);
+                color: hsl(var(--star-hue, 185), 100%, 76%);
+                font-size: 21px;
+                line-height: 1;
+                text-shadow: 0 0 8px currentColor, 0 0 18px currentColor, 0 0 26px rgba(255,255,255,0.72);
+                filter: drop-shadow(0 0 8px currentColor);
+                animation: meowlime-star-node-twinkle 1.8s ease-in-out infinite alternate;
+                z-index: 2;
+            }
+            .meowlime-star-node.today {
+                color: #fff7a8;
+                font-size: 30px;
+                text-shadow: 0 0 10px #fff, 0 0 22px #fff7a8, 0 0 34px #ff87df, 0 0 44px #7fffea;
+                animation: meowlime-star-today-pulse 0.95s ease-in-out infinite alternate;
+            }
+            .meowlime-star-map-empty {
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                transform: translate(-50%, -50%);
+                color: rgba(233,255,251,0.72);
+                font-size: 13px;
+                font-weight: 900;
+                text-shadow: 0 0 8px rgba(126,255,238,0.42);
+                z-index: 2;
+            }
+            .meowlime-star-map-list {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 8px;
+                margin-top: 10px;
+            }
+            .meowlime-star-map-card {
+                padding: 9px 10px;
+                border-radius: 14px;
+                background: rgba(0,0,0,0.46);
+                border: 1px solid rgba(126,255,238,0.34);
+                color: #dffcff;
+                text-align: left;
+                box-shadow: inset 0 0 12px rgba(126,255,238,0.08), 0 0 10px rgba(255,130,228,0.1);
+            }
+            .meowlime-star-map-card.today {
+                border-color: rgba(255,247,168,0.78);
+                box-shadow: 0 0 14px rgba(255,247,168,0.28), 0 0 16px rgba(255,130,228,0.18), inset 0 0 12px rgba(255,247,168,0.08);
+            }
+            .meowlime-star-map-card-title {
+                color: #a7ffbd;
+                font-size: 13px;
+                font-weight: 900;
+                text-shadow: 0 0 8px rgba(126,255,132,0.72);
+            }
+            .meowlime-star-map-card-meta {
+                margin-top: 3px;
+                color: rgba(233,255,251,0.78);
+                font-size: 12px;
+                line-height: 1.45;
+            }
+            @keyframes meowlime-star-map-drift {
+                0% { transform: translate(0, 0); filter: hue-rotate(0deg); }
+                100% { transform: translate(38px, 38px); filter: hue-rotate(360deg); }
+            }
+            @keyframes meowlime-star-map-core-pulse {
+                0% { opacity: 0.35; transform: translate(-50%, -50%) scale(0.92); }
+                100% { opacity: 0.86; transform: translate(-50%, -50%) scale(1.08); }
+            }
+            @keyframes meowlime-star-node-twinkle {
+                0% { opacity: 0.68; transform: translate(-50%, -50%) scale(0.88) rotate(-4deg); }
+                100% { opacity: 1; transform: translate(-50%, -50%) scale(1.14) rotate(5deg); }
+            }
+            @keyframes meowlime-star-today-pulse {
+                0% { transform: translate(-50%, -50%) scale(0.98); filter: brightness(1); }
+                100% { transform: translate(-50%, -50%) scale(1.22); filter: brightness(1.28); }
             }
             @keyframes meowlime-growth-grid-drift {
                 0% { transform: translate(0, 0) scale(1); filter: hue-rotate(0deg); }
@@ -5010,14 +5374,23 @@ function createSystemUI() {
         </div>
         <div id="meowlime-growth-modal" class="modal meowlime-growth-modal" style="z-index: 266;">
             <h3>看看喵萊姆</h3>
-            <div class="meowlime-growth-stage">
-                <canvas id="meowlime-growth-canvas" width="900" height="620"></canvas>
+            <div class="meowlime-growth-tab-row">
+                <button id="meowlime-growth-tab-capsule" class="meowlime-growth-tab-btn active" type="button" onclick="window.setMeowlimeGrowthTab && window.setMeowlimeGrowthTab('growth')">培育艙</button>
+                <button id="meowlime-growth-tab-map" class="meowlime-growth-tab-btn" type="button" onclick="window.setMeowlimeGrowthTab && window.setMeowlimeGrowthTab('map')">簽到星圖</button>
             </div>
-            <div class="meowlime-growth-info">
-                <div class="meowlime-growth-info-card">累積簽到：<span id="meowlime-growth-total-text">0</span> 天</div>
-                <div class="meowlime-growth-info-card">培育尺寸：<span id="meowlime-growth-size-text">20.0px</span></div>
+            <div id="meowlime-growth-panel" class="meowlime-growth-panel">
+                <div class="meowlime-growth-stage">
+                    <canvas id="meowlime-growth-canvas" width="900" height="620"></canvas>
+                </div>
+                <div class="meowlime-growth-info">
+                    <div class="meowlime-growth-info-card">累積簽到：<span id="meowlime-growth-total-text">0</span> 天</div>
+                    <div class="meowlime-growth-info-card">培育尺寸：<span id="meowlime-growth-size-text">20.0px</span></div>
+                </div>
+                <div class="meowlime-growth-hint">短按會換表情與發光；真正長按後才可拉伸喵。</div>
             </div>
-            <div class="meowlime-growth-hint">點點喵萊姆，他會果凍彈跳並換表情喵。</div>
+            <div id="meowlime-star-map-panel" class="meowlime-growth-panel meowlime-star-map-panel" hidden>
+                <div class="meowlime-star-map-summary">星圖資料載入中……</div>
+            </div>
             <button class="close-modal-btn meowlime-close-btn" style="margin-top: 12px; width: 100%;" onclick="window.closeMeowlimeGrowthModal ? window.closeMeowlimeGrowthModal({ returnToCheckin: true }) : document.getElementById('meowlime-growth-modal').style.display='none'">返回每日簽到</button>
         </div>
 
