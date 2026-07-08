@@ -3143,6 +3143,140 @@ function createSystemUI() {
             .visualizer-bar { position: absolute; bottom: 0; width: 10%; background: rgba(255,215,0,0.4); border-top: 3px solid #ffd700; animation: bounce-bar 0.5s infinite alternate ease-in; z-index: 0; pointer-events: none; }
             @keyframes bounce-bar { 0% { height: 10%; } 100% { height: 75%; } }
             
+            /* 給西設定介面：黑色金屬＋笑臉閃爍＋移動模式切換 */
+            #app-settings-modal {
+                background:
+                    radial-gradient(circle at 24% 18%, rgba(255,255,255,0.16), transparent 22%),
+                    linear-gradient(145deg, #2d3137 0%, #060708 28%, #171a1f 52%, #000000 100%) !important;
+                border:3px solid rgba(210,218,226,0.9) !important;
+                box-shadow:0 12px 28px rgba(0,0,0,0.68), 0 0 18px rgba(210,218,226,0.28), inset 0 0 28px rgba(255,255,255,0.08) !important;
+                color:#eef6ff !important;
+                overflow:hidden !important;
+            }
+            #app-settings-modal::before {
+                content:"☺ ☻ ☺ ☻ ☺ ☻ ☺ ☻ ☺ ☻";
+                position:absolute;
+                inset:-10%;
+                color:rgba(255,255,255,0.16);
+                font-size:32px;
+                letter-spacing:18px;
+                line-height:62px;
+                transform:rotate(-12deg);
+                text-shadow:0 0 12px rgba(255,255,255,0.42);
+                pointer-events:none;
+                z-index:0;
+                animation:app-settings-smile-blink 1.1s steps(2, end) infinite;
+            }
+            #app-settings-modal::after {
+                content:"";
+                position:absolute;
+                inset:0;
+                background:linear-gradient(120deg, transparent 0 34%, rgba(255,255,255,0.15) 45%, transparent 56%);
+                pointer-events:none;
+                z-index:0;
+                animation:app-settings-metal-sheen 3.2s ease-in-out infinite;
+            }
+            #app-settings-modal > * {
+                position:relative;
+                z-index:1;
+            }
+            #app-settings-modal h3 {
+                color:#ffffff !important;
+                border-bottom:1px solid rgba(210,218,226,0.7) !important;
+                text-shadow:0 0 8px rgba(255,255,255,0.82), 0 2px 3px rgba(0,0,0,0.95);
+            }
+            .app-settings-card {
+                margin:12px 0 14px 0;
+                padding:14px;
+                border-radius:16px;
+                background:rgba(0,0,0,0.56);
+                border:1px solid rgba(210,218,226,0.44);
+                box-shadow:inset 0 0 16px rgba(255,255,255,0.06), 0 0 12px rgba(255,255,255,0.08);
+            }
+            .movement-mode-switch {
+                position:relative;
+                display:grid;
+                grid-template-columns:1fr 1fr;
+                gap:0;
+                height:46px;
+                margin-top:12px;
+                border-radius:999px;
+                padding:4px;
+                background:rgba(0,0,0,0.72);
+                border:1px solid rgba(255,255,255,0.42);
+                overflow:hidden;
+                box-shadow:inset 0 0 12px rgba(0,0,0,0.86);
+            }
+            .movement-mode-liquid {
+                position:absolute;
+                top:4px;
+                left:4px;
+                width:calc(50% - 4px);
+                height:calc(100% - 8px);
+                border-radius:54% 46% 58% 42% / 48% 60% 40% 52%;
+                background:radial-gradient(circle at 32% 25%, rgba(255,255,255,0.9), rgba(112,220,255,0.78) 36%, rgba(74,128,255,0.78) 100%);
+                box-shadow:0 0 14px rgba(112,220,255,0.72), inset 0 0 12px rgba(255,255,255,0.35);
+                transition:left 0.24s ease;
+                animation:movement-liquid-wobble 1.4s ease-in-out infinite alternate;
+                z-index:0;
+            }
+            .movement-mode-switch[data-mode="joystick"] .movement-mode-liquid {
+                left:50%;
+            }
+            .movement-mode-option {
+                position:relative;
+                z-index:1;
+                border:none;
+                background:transparent !important;
+                color:rgba(255,255,255,0.72) !important;
+                font-weight:900;
+                font-family:inherit;
+                font-size:13px;
+                cursor:pointer;
+                border-radius:999px;
+                text-shadow:0 1px 2px rgba(0,0,0,0.88);
+                touch-action:manipulation;
+            }
+            .movement-mode-option.active {
+                color:#07111a !important;
+                text-shadow:0 1px 0 rgba(255,255,255,0.55);
+            }
+            .movement-mode-toast {
+                min-height:40px;
+                margin-top:12px;
+                padding:8px 10px;
+                border-radius:12px;
+                background:rgba(255,255,255,0.12);
+                color:rgba(255,255,255,0);
+                font-size:12px;
+                line-height:1.45;
+                text-align:center;
+                pointer-events:none;
+            }
+            .movement-mode-toast.show {
+                animation:movement-mode-toast-float 2.2s ease-in-out forwards;
+            }
+            @keyframes app-settings-smile-blink {
+                0% { opacity:0.18; transform:translate(-8px, 0) rotate(-12deg); }
+                50% { opacity:0.5; transform:translate(6px, -4px) rotate(-12deg); }
+                100% { opacity:0.22; transform:translate(-2px, 4px) rotate(-12deg); }
+            }
+            @keyframes app-settings-metal-sheen {
+                0%, 48% { transform:translateX(-120%); opacity:0; }
+                65% { opacity:0.75; }
+                100% { transform:translateX(120%); opacity:0; }
+            }
+            @keyframes movement-liquid-wobble {
+                0% { border-radius:54% 46% 58% 42% / 48% 60% 40% 52%; transform:scale(0.98); }
+                100% { border-radius:43% 57% 44% 56% / 58% 42% 58% 42%; transform:scale(1.03); }
+            }
+            @keyframes movement-mode-toast-float {
+                0% { opacity:0; color:rgba(255,255,255,0); transform:translateY(14px); }
+                16% { opacity:1; color:rgba(255,255,255,0.92); transform:translateY(-7px); }
+                72% { opacity:1; color:rgba(255,255,255,0.92); transform:translateY(-10px); }
+                100% { opacity:0; color:rgba(255,255,255,0); transform:translateY(-22px); }
+            }
+            
             /* 新增：蔥電飽 Modal 特效 */
             #energy-modal { background: #051a05 !important; border: 2px solid #00ff00 !important; box-shadow: 0 0 20px #00ff00, inset 0 0 30px #003300 !important; color: #ccffcc; overflow: hidden; }
             .electric-border { position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: conic-gradient(transparent, transparent, transparent, #00ff00); animation: electric-spin 2s linear infinite; opacity: 0.5; z-index: 0; pointer-events: none; }
@@ -3318,6 +3452,20 @@ function createSystemUI() {
                 </div>
                 <button class="close-modal-btn" style="margin-top: 20px; width: 60%; border-radius: 4px; padding: 10px; background: #222; border: 2px solid #ffd700; color: #ffd700; font-weight: bold; text-shadow: 1px 1px 0px #000;" onclick="window.closeInventoryChildModal ? window.closeInventoryChildModal('settings-modal') : document.getElementById('settings-modal').style.display='none'">關閉播放器</button>
             </div>
+        </div>
+
+        <div id="app-settings-modal" class="modal" style="width:min(88vw, 360px); box-sizing:border-box; z-index:260; padding:18px; position:relative;">
+            <h3 style="margin-top:0;">⚙️ 設定</h3>
+            <div class="app-settings-card">
+                <div style="font-size:15px; font-weight:900; color:#ffffff; text-shadow:0 0 8px rgba(255,255,255,0.45);">角色移動設定</div>
+                <div id="movement-mode-switch" class="movement-mode-switch" data-mode="touch">
+                    <div class="movement-mode-liquid" aria-hidden="true"></div>
+                    <button class="movement-mode-option active" type="button" data-mode="touch" onclick="window.setOnionMoveMode && window.setOnionMoveMode('touch', { announce:true })">點觸模式</button>
+                    <button class="movement-mode-option" type="button" data-mode="joystick" onclick="window.setOnionMoveMode && window.setOnionMoveMode('joystick', { announce:true })">搖桿模式</button>
+                </div>
+                <div id="movement-mode-toast" class="movement-mode-toast">　</div>
+            </div>
+            <button class="close-modal-btn btn-secondary" style="width:100%; margin-top:8px; background:#111; border:1px solid rgba(255,255,255,0.72); color:#fff; border-radius:10px; padding:10px; font-weight:bold;" onclick="window.closeInventoryChildModal ? window.closeInventoryChildModal('app-settings-modal') : document.getElementById('app-settings-modal').style.display='none'">關閉設定</button>
         </div>
 
         <div id="manual-modal" class="modal manual-crayon-ui" style="width: 90%; max-width: none; height: 90vh; max-height: none; top: 5%; left: 5%; transform: none; box-sizing: border-box; z-index: 260;">
@@ -5746,6 +5894,7 @@ window.getInventoryChildCloseClass = function(modal) {
 
     const map = {
         'settings-modal': 'modal-closing-music',
+        'app-settings-modal': 'inventory-child-closing',
         'magic-modal': 'modal-closing-magic',
         'portal-modal': 'modal-closing-portal',
         'phone-modal': 'modal-closing-phone',
@@ -5828,6 +5977,7 @@ window.installInventoryChildModalCloseGuard = function() {
         'phone-modal': true,
         'portal-modal': true,
         'settings-modal': true,
+        'app-settings-modal': true,
         'magic-modal': true,
         'manual-modal': true,
         'view-profile-modal': true,
@@ -5871,6 +6021,7 @@ window.getInventoryLinkedModalElement = function(key) {
         energy: 'energy-modal',
         profile: 'view-profile-modal',
         music: 'settings-modal',
+        app_settings: 'app-settings-modal',
         manual: 'manual-modal',
         dev: 'dev-modal'
     };
@@ -5914,6 +6065,9 @@ window.openInventoryLinkedModal = function(key) {
             window.showProfileModal(window.GameLogic.myProfile, window.GameLogic.currentUser.uid);
         } else if (key === 'music') {
             document.getElementById('settings-modal').style.display = 'block';
+        } else if (key === 'app_settings') {
+            if (window.openAppSettingsModal) window.openAppSettingsModal();
+            else document.getElementById('app-settings-modal').style.display = 'block';
         } else if (key === 'manual') {
             window.openManualModal();
         } else if (key === 'dev') {
@@ -5960,6 +6114,83 @@ window.openInventoryLinkedModal = function(key) {
 window.clickSysItem = function(key) {
     window.openInventoryLinkedModal(key);
 };
+
+window.ONION_MOVE_MODE_STORAGE_KEY = 'onion_player_move_mode_v1';
+
+window.getOnionMoveMode = function() {
+    let mode = 'touch';
+
+    try {
+        const storedMode = localStorage.getItem(window.ONION_MOVE_MODE_STORAGE_KEY);
+        if (storedMode === 'joystick' || storedMode === 'touch') mode = storedMode;
+    } catch (err) {
+        console.warn('讀取角色移動設定失敗:', err);
+    }
+
+    if (window.GameLogic) window.GameLogic.playerMoveMode = mode;
+    return mode;
+};
+
+window.showMovementModeToast = function(mode) {
+    const toast = document.getElementById('movement-mode-toast');
+    if (!toast) return;
+
+    const text = mode === 'joystick'
+        ? '搖桿模式：點擊畫面形成虛擬搖桿，透過搖桿控制洋蔥人的移動方向。'
+        : '點觸模式：以洋蔥人為中心，點擊畫面，他就會往你點的方向走。';
+
+    toast.textContent = text;
+    toast.classList.remove('show');
+    void toast.offsetWidth;
+    toast.classList.add('show');
+
+    if (window.__movementModeToastTimer) clearTimeout(window.__movementModeToastTimer);
+    window.__movementModeToastTimer = setTimeout(() => {
+        toast.classList.remove('show');
+    }, 2200);
+};
+
+window.updateAppSettingsMovementUi = function() {
+    const mode = window.getOnionMoveMode ? window.getOnionMoveMode() : 'touch';
+    const switcher = document.getElementById('movement-mode-switch');
+    if (!switcher) return;
+
+    switcher.dataset.mode = mode;
+    switcher.querySelectorAll('.movement-mode-option').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+};
+
+window.setOnionMoveMode = function(mode, options = {}) {
+    const safeMode = mode === 'joystick' ? 'joystick' : 'touch';
+
+    try {
+        localStorage.setItem(window.ONION_MOVE_MODE_STORAGE_KEY, safeMode);
+    } catch (err) {
+        console.warn('儲存角色移動設定失敗:', err);
+    }
+
+    if (window.GameLogic) window.GameLogic.playerMoveMode = safeMode;
+    if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput();
+
+    window.updateAppSettingsMovementUi();
+
+    if (options && options.announce) {
+        window.showMovementModeToast(safeMode);
+    }
+
+    return safeMode;
+};
+
+window.openAppSettingsModal = function() {
+    const modal = document.getElementById('app-settings-modal');
+    if (!modal) return;
+
+    window.updateAppSettingsMovementUi();
+    modal.style.display = 'block';
+};
+
+window.getOnionMoveMode();
 
 window.openMagicModal = function() {
     let inv = window.GameLogic.myProfile.inventory || {};
@@ -6276,7 +6507,7 @@ window.openInventoryModal = function(options = {}) {
     const list = document.getElementById('inventory-list');
     const hasUnread = Object.keys(window.GameLogic.validUnreadPMs || {}).length > 0;
     const dotHtml = hasUnread ? '<div style="position:absolute; top:5px; right:5px; width:12px; height:12px; background:red; border-radius:50%; box-shadow:0 0 5px red; z-index:10;"></div>' : '';
-    let rawItems = {}; let isEdit = window.GameLogic.inventoryEditMode; let inv = window.GameLogic.myProfile.inventory || {}; let sysKeys = ['phone', 'portal', 'profile', 'music', 'manual', 'logout', 'dev', 'magic_items']; let magicOnlyKeys = ['水球', '煙火', '蔥友機', '派對喇叭', '喵罐頭', '月光碎片', '月光法杖', '月光饅頭']; let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥' && !sysKeys.includes(k) && !magicOnlyKeys.includes(k));
+    let rawItems = {}; let isEdit = window.GameLogic.inventoryEditMode; let inv = window.GameLogic.myProfile.inventory || {}; let sysKeys = ['phone', 'portal', 'profile', 'music', 'app_settings', 'manual', 'logout', 'dev', 'magic_items']; let magicOnlyKeys = ['水球', '煙火', '蔥友機', '派對喇叭', '喵罐頭', '月光碎片', '月光法杖', '月光饅頭']; let keys = Object.keys(inv).filter(k => inv[k] > 0 && k !== '假人洋蔥' && !sysKeys.includes(k) && !magicOnlyKeys.includes(k));
     keys.forEach(k => {
         let iconHtml = (k === '水球') ? '<div class="sprite-waterball"></div>' : (k === '煙火' ? '<img src="shop-fireworks.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;">' : '<span style="font-size:24px; margin-bottom:5px;">📦</span>');
         let isUsing = ((k === '水球' || k === '煙火') && window.GameLogic.armedItemState != null && window.GameLogic.armedItemName === k);
@@ -6288,6 +6519,7 @@ window.openInventoryModal = function(options = {}) {
     rawItems['energy'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'energy\')"' : ''}><img src="sleep-onion-bao.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0;">蔥電飽</span></div>`;
     rawItems['profile'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'profile\')"' : ''}><img src="tools-id-card.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0;">洋蔥身分證</span></div>`;
     rawItems['music'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'music\')"' : ''}><div class="sprite-music-box"></div><span style="margin:5px 0;">蔥Music</span></div>`;
+    rawItems['app_settings'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'app_settings\')"' : ''}><span style="font-size:42px; line-height:50px; width:50px; height:50px; margin-bottom:5px; filter:drop-shadow(0 0 8px rgba(255,255,255,0.82));">⚙️</span><span style="margin:5px 0;">設定</span></div>`;
     rawItems['manual'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'manual\')"' : ''}><img src="tools-manual.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0;">說明書</span></div>`;
     rawItems['magic_items'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'magic_items\')"' : ''}><img src="tools-magic-weapon.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0; color:var(--mucha-brown); font-weight:bold;">法寶</span></div>`;
     rawItems['logout'] = `<div class="catalog-item" style="width: 100%; box-sizing: border-box;" ${!isEdit ? 'onclick="window.clickSysItem(\'logout\')"' : ''}><img src="tools-leave.png" style="width:50px; height:50px; object-fit:contain; margin-bottom:5px;"><span style="margin:5px 0;">登出大廳</span></div>`;if (window.GameLogic.currentUser && window.GameLogic.currentUser.email === 'onion@gmail.com') {
@@ -10094,7 +10326,8 @@ class MainScene extends Phaser.Scene {
                     const furnData = window.GameLogic.doghouseFurniture || {};
                     const fd = furnData[key] || {};
                     savePayload.category = 'furniture';
-                    savePayload.furnitureKey = fd.furnitureKey || key;
+                    savePayload.instanceId = key;
+                    savePayload.furnitureKey = fd.furnitureKey || (window.getDoghouseFurnitureBaseKey ? window.getDoghouseFurnitureBaseKey(key, fd) : key);
                     savePayload.direction = this.getFurnitureDirection(key, { ...fd, direction: f.direction || fd.direction });
                     savePayload.rotatable = this.isFurnitureRotatable(key, fd);
 
@@ -10116,6 +10349,8 @@ class MainScene extends Phaser.Scene {
                         ...savePayload
                     };
                     f.sprite.isLocked = true;
+                    if (f.sprite.clearTint) f.sprite.clearTint();
+                    f.sprite._onionRepositionHighlight = false;
                     this.syncDoghouseFurniturePointerBehavior(key, f, savePayload);
                 }
 
@@ -22157,6 +22392,109 @@ if (activeBubbleMsg) {
         return this.tryUseDoghouseInteractiveFurniture(nearestKey, nearestF);
     }
 
+    getDoghouseFurnitureBaseKeyForRuntime(key, data = {}) {
+        if (window.getDoghouseFurnitureBaseKey) {
+            return window.getDoghouseFurnitureBaseKey(key, data || {});
+        }
+
+        const def = this.getFurnitureDefinitionForRuntime(key, data || {});
+        return (data && data.furnitureKey) || (def && def.key) || key;
+    }
+
+    clearDoghouseFurnitureRepositionSelection() {
+        if (window.GameLogic) window.GameLogic.repositionDoghouseFurnitureBaseKey = null;
+
+        Object.keys(this.furnitureSprites || {}).forEach(key => {
+            const f = this.furnitureSprites[key];
+            if (!f || !f.sprite) return;
+
+            if (f.sprite._onionRepositionHighlight && f.sprite.clearTint) {
+                f.sprite.clearTint();
+            }
+
+            f.sprite._onionRepositionHighlight = false;
+            f.sprite._onionDoghouseRepositionCandidate = false;
+
+            const data = window.GameLogic && window.GameLogic.doghouseFurniture
+                ? (window.GameLogic.doghouseFurniture[key] || {})
+                : {};
+
+            if (this.sceneName === 'doghouse' && this.syncDoghouseFurniturePointerBehavior) {
+                this.syncDoghouseFurniturePointerBehavior(key, f, data);
+            }
+        });
+    }
+
+    prepareDoghouseFurnitureRepositionSelection(baseKey) {
+        if (this.sceneName !== 'doghouse') return false;
+        if (!window.GameLogic) return false;
+
+        window.GameLogic.repositionDoghouseFurnitureBaseKey = baseKey;
+
+        Object.keys(this.furnitureSprites || {}).forEach(key => {
+            const f = this.furnitureSprites[key];
+            if (!f || !f.sprite || !f.sprite.active) return;
+
+            const data = window.GameLogic.doghouseFurniture ? (window.GameLogic.doghouseFurniture[key] || {}) : {};
+            const runtimeBaseKey = this.getDoghouseFurnitureBaseKeyForRuntime(key, data);
+            if (runtimeBaseKey !== baseKey) return;
+
+            if (f.sprite.setTint) f.sprite.setTint(0x7cff7c);
+            f.sprite._onionRepositionHighlight = true;
+            this.syncDoghouseFurniturePointerBehavior(key, f, data);
+        });
+
+        return true;
+    }
+
+    trySelectDoghouseFurnitureForReposition(key, f) {
+        if (this.sceneName !== 'doghouse' || !window.GameLogic || !window.GameLogic.currentUser) return false;
+
+        const targetBaseKey = window.GameLogic.repositionDoghouseFurnitureBaseKey;
+        if (!targetBaseKey || !key || !f || !f.sprite || !f.sprite.active) return false;
+
+        const furnData = window.GameLogic.doghouseFurniture || {};
+        const currentData = furnData[key] || {};
+        const runtimeBaseKey = this.getDoghouseFurnitureBaseKeyForRuntime(key, currentData);
+
+        if (runtimeBaseKey !== targetBaseKey) return false;
+
+        if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+
+        this.clearDoghouseFurnitureRepositionSelection();
+
+        const def = this.getFurnitureDefinitionForRuntime(key, currentData);
+        const nextData = {
+            ...currentData,
+            x: f.sprite.x,
+            y: f.sprite.y,
+            locked: false,
+            ownerUid: window.GameLogic.currentUser.uid,
+            category: 'furniture',
+            instanceId: key,
+            furnitureKey: runtimeBaseKey,
+            direction: this.getFurnitureDirection(key, currentData),
+            rotatable: this.isFurnitureRotatable(key, currentData)
+        };
+
+        window.GameLogic.doghouseFurniture = window.GameLogic.doghouseFurniture || {};
+        window.GameLogic.doghouseFurniture[key] = nextData;
+        window.GameLogic.placingFurnitureKey = key;
+
+        f.sprite.isLocked = false;
+        f.sprite.setAlpha(0.6);
+        if (f.sprite.setTint) f.sprite.setTint(0x00ff66);
+        this.syncDoghouseFurniturePointerBehavior(key, f, nextData);
+
+        update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}`), nextData)
+            .then(() => {
+                sendBubble(`已選取這一個${def.name || '家具'}，移動後按 A 放下。`);
+            })
+            .catch(err => console.warn('Firebase 狗窩家具重新擺設啟動失敗:', err));
+
+        return true;
+    }
+  
       syncDoghouseFurniturePointerBehavior(key, f, data = {}) {
         if (this.sceneName !== 'doghouse' || !f || !f.sprite || !f.sprite.active) return;
 
@@ -22164,12 +22502,24 @@ if (activeBubbleMsg) {
         const isPlacingSelf = !!(window.GameLogic && window.GameLogic.placingFurnitureKey === key);
         const isLocked = data && Object.prototype.hasOwnProperty.call(data, 'locked') ? !!data.locked : !!sprite.isLocked;
         const isInteractiveFurniture = this.isDoghouseInteractiveFurniture(key, f);
-        const shouldReceiveFurnitureTap = isPlacingSelf || !isLocked || isInteractiveFurniture;
+        const baseKey = this.getDoghouseFurnitureBaseKeyForRuntime ? this.getDoghouseFurnitureBaseKeyForRuntime(key, data || {}) : ((data && data.furnitureKey) || key);
+        const repositionBaseKey = window.GameLogic ? window.GameLogic.repositionDoghouseFurnitureBaseKey : null;
+        const isRepositionCandidate = !!(repositionBaseKey && isLocked && baseKey === repositionBaseKey);
+        const shouldReceiveFurnitureTap = isPlacingSelf || isRepositionCandidate || !isLocked || isInteractiveFurniture;
 
         sprite._onionFurnitureKey = key;
         sprite._onionDirectTapType = 'furniture';
         sprite._onionDoghouseDecorativeFurniture = !isInteractiveFurniture;
+        sprite._onionDoghouseRepositionCandidate = isRepositionCandidate;
         sprite._onionCanvasMovePassThrough = !shouldReceiveFurnitureTap;
+
+        if (isRepositionCandidate) {
+            if (sprite.setTint) sprite.setTint(0x7cff7c);
+            sprite._onionRepositionHighlight = true;
+        } else if (sprite._onionRepositionHighlight && !isPlacingSelf) {
+            if (sprite.clearTint) sprite.clearTint();
+            sprite._onionRepositionHighlight = false;
+        }
 
         if (shouldReceiveFurnitureTap) {
             try {
@@ -22921,7 +23271,7 @@ if (activeBubbleMsg) {
 
             if (movedDist > dragThreshold) {
                 state.moved = true;
-                if (!this.canvasDirectionalInput || this.canvasDirectionalInput.pointerId !== pointer.id) {
+                if (state.placingSelfTap && (!this.canvasDirectionalInput || this.canvasDirectionalInput.pointerId !== pointer.id)) {
                     this.startCanvasDirectionalInput(pointer);
                 }
             }
@@ -22936,7 +23286,7 @@ if (activeBubbleMsg) {
             const movedDist = Math.sqrt(dx * dx + dy * dy);
             if (movedDist > dragThreshold) {
                 state.moved = true;
-                if (!this.canvasDirectionalInput || this.canvasDirectionalInput.pointerId !== pointer.id) {
+                if (state.placingSelfTap && (!this.canvasDirectionalInput || this.canvasDirectionalInput.pointerId !== pointer.id)) {
                     this.startCanvasDirectionalInput(pointer);
                 }
             }
@@ -23100,7 +23450,7 @@ if (activeBubbleMsg) {
 
             if (movedDist > dragThreshold) {
                 state.moved = true;
-                if (!this.canvasDirectionalInput || this.canvasDirectionalInput.pointerId !== pointer.id) {
+                if (state.placingSelfTap && (!this.canvasDirectionalInput || this.canvasDirectionalInput.pointerId !== pointer.id)) {
                     this.startCanvasDirectionalInput(pointer);
                 }
             }
@@ -23293,6 +23643,7 @@ if (activeBubbleMsg) {
         if (type === 'furniture') {
             const key = payload.key;
             const f = payload.f || (key && this.furnitureSprites ? this.furnitureSprites[key] : null);
+            if (this.trySelectDoghouseFurnitureForReposition && this.trySelectDoghouseFurnitureForReposition(key, f)) return true;
             return this.handleFurnitureDirectInteraction(key, f);
         }
 
@@ -23305,10 +23656,30 @@ if (activeBubbleMsg) {
             pointerId: null,
             pointerX: 0,
             pointerY: 0,
+            joyBaseX: 0,
+            joyBaseY: 0,
+            mode: 'touch',
             vx: 0,
             vy: 0,
-            deadZone: 24
+            deadZone: 24,
+            joystickDeadZone: 10,
+            joystickMaxDistance: 64
         };
+
+        this.canvasJoystickBase = this.add.circle(0, 0, 46, 0xffffff, 0.16)
+            .setStrokeStyle(2, 0xffffff, 0.35)
+            .setScrollFactor(0)
+            .setDepth(350)
+            .setVisible(false);
+        this.canvasJoystickKnob = this.add.circle(0, 0, 18, 0xffffff, 0.28)
+            .setStrokeStyle(2, 0xffffff, 0.48)
+            .setScrollFactor(0)
+            .setDepth(351)
+            .setVisible(false);
+
+        if (this.minimap && this.minimap.ignore) {
+            this.minimap.ignore([this.canvasJoystickBase, this.canvasJoystickKnob]);
+        }
 
         window.stopOnionCanvasDirectionalInput = () => {
             if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
@@ -23330,7 +23701,10 @@ if (activeBubbleMsg) {
                 if (Math.sqrt(dx * dx + dy * dy) > 12) {
                     pendingTap.moved = true;
                     this.pendingDirectObjectTap = null;
-                    this.startCanvasDirectionalInput(pointer);
+
+                    if (pendingTap.placingSelfTap) {
+                        this.startCanvasDirectionalInput(pointer);
+                    }
                 }
             }
 
@@ -23378,6 +23752,8 @@ if (activeBubbleMsg) {
             if (canvas && canvas.removeEventListener) {
                 canvas.removeEventListener('pointercancel', onPointerCancel);
             }
+            if (this.canvasJoystickBase && this.canvasJoystickBase.destroy) this.canvasJoystickBase.destroy();
+            if (this.canvasJoystickKnob && this.canvasJoystickKnob.destroy) this.canvasJoystickKnob.destroy();
             if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput = null;
         });
     }
@@ -23474,11 +23850,64 @@ if (activeBubbleMsg) {
         return false;
     }
 
+    shouldUseCanvasJoystickMovement() {
+        if (window.GameLogic && window.GameLogic.placingFurnitureKey) return false;
+
+        const mode = window.getOnionMoveMode ? window.getOnionMoveMode() : (window.GameLogic && window.GameLogic.playerMoveMode) || 'touch';
+        if (mode !== 'joystick') return false;
+
+        return ['cafe', 'doghouse', 'farm', 'shrine', 'playroom', '7eonion'].includes(this.sceneName);
+    }
+
+    setCanvasJoystickVisible(visible) {
+        if (this.canvasJoystickBase) this.canvasJoystickBase.setVisible(!!visible);
+        if (this.canvasJoystickKnob) this.canvasJoystickKnob.setVisible(!!visible);
+    }
+
+    updateCanvasJoystickVisual() {
+        const input = this.canvasDirectionalInput;
+        if (!input || !input.active || input.mode !== 'joystick') {
+            this.setCanvasJoystickVisible(false);
+            return;
+        }
+
+        this.setCanvasJoystickVisible(true);
+
+        if (this.canvasJoystickBase) {
+            this.canvasJoystickBase.setPosition(input.joyBaseX, input.joyBaseY);
+        }
+
+        if (this.canvasJoystickKnob) {
+            const dx = input.pointerX - input.joyBaseX;
+            const dy = input.pointerY - input.joyBaseY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const maxDist = input.joystickMaxDistance || 64;
+            const ratio = dist > maxDist && dist > 0 ? maxDist / dist : 1;
+            this.canvasJoystickKnob.setPosition(input.joyBaseX + dx * ratio, input.joyBaseY + dy * ratio);
+        }
+    }
+
     startCanvasDirectionalInput(pointer) {
         if (!this.canvasDirectionalInput) return;
+
+        const useJoystick = this.shouldUseCanvasJoystickMovement();
+
         this.canvasDirectionalInput.active = true;
         this.canvasDirectionalInput.pointerId = pointer.id;
-        this.updateCanvasDirectionalPointer(pointer);
+        this.canvasDirectionalInput.pointerX = pointer.x;
+        this.canvasDirectionalInput.pointerY = pointer.y;
+        this.canvasDirectionalInput.mode = useJoystick ? 'joystick' : 'touch';
+
+        if (useJoystick) {
+            this.canvasDirectionalInput.joyBaseX = pointer.x;
+            this.canvasDirectionalInput.joyBaseY = pointer.y;
+            this.setCanvasJoystickVisible(true);
+            this.updateCanvasJoystickVisual();
+        } else {
+            this.setCanvasJoystickVisible(false);
+        }
+
+        this.refreshCanvasDirectionalVector();
     }
 
     updateCanvasDirectionalPointer(pointer) {
@@ -23486,6 +23915,7 @@ if (activeBubbleMsg) {
         this.canvasDirectionalInput.pointerX = pointer.x;
         this.canvasDirectionalInput.pointerY = pointer.y;
         this.refreshCanvasDirectionalVector();
+        this.updateCanvasJoystickVisual();
     }
 
     clearCanvasDirectionalInput() {
@@ -23494,8 +23924,12 @@ if (activeBubbleMsg) {
         this.canvasDirectionalInput.pointerId = null;
         this.canvasDirectionalInput.pointerX = 0;
         this.canvasDirectionalInput.pointerY = 0;
+        this.canvasDirectionalInput.joyBaseX = 0;
+        this.canvasDirectionalInput.joyBaseY = 0;
+        this.canvasDirectionalInput.mode = 'touch';
         this.canvasDirectionalInput.vx = 0;
         this.canvasDirectionalInput.vy = 0;
+        this.setCanvasJoystickVisible(false);
     }
 
     getCanvasDirectionalAnchorSprite() {
@@ -23518,13 +23952,31 @@ if (activeBubbleMsg) {
 
     refreshCanvasDirectionalVector() {
         const input = this.canvasDirectionalInput;
-        const anchorSprite = this.getCanvasDirectionalAnchorSprite();
-        if (!input || !input.active || !anchorSprite) return;
+        if (!input || !input.active) return;
 
         if (this.isDomUiBlockingCanvasInput()) {
             this.clearCanvasDirectionalInput();
             return;
         }
+
+        if (input.mode === 'joystick') {
+            const dx = input.pointerX - input.joyBaseX;
+            const dy = input.pointerY - input.joyBaseY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < (input.joystickDeadZone || 10)) {
+                input.vx = 0;
+                input.vy = 0;
+                return;
+            }
+
+            input.vx = dx / dist;
+            input.vy = dy / dist;
+            return;
+        }
+
+        const anchorSprite = this.getCanvasDirectionalAnchorSprite();
+        if (!anchorSprite) return;
 
         const cam = this.cameras.main;
         const anchorScreenX = (anchorSprite.x - cam.scrollX) * cam.zoom + cam.x;
@@ -24328,6 +24780,39 @@ if (dist < 30) {
 
 function initPhaser() { const config = { type: Phaser.AUTO, parent: 'phaser-app', width: '100%', height: '100%', backgroundColor: '#1a1008', scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH }, input: { activePointers: 3 }, physics: { default: 'arcade', arcade: { debug: false } }, scene: [ BootScene, MainScene, UIScene ] }; window.GameLogic.phaserGame = new Phaser.Game(config); }
 
+window.getDoghouseFurnitureBaseKey = function(instanceKey, data = {}) {
+    if (data && data.furnitureKey) return data.furnitureKey;
+
+    if (window.getFurnitureDefinition && window.getFurnitureDefinition(instanceKey)) {
+        return instanceKey;
+    }
+
+    const rawKey = String(instanceKey || '');
+    const splitAt = rawKey.indexOf('__');
+    return splitAt > 0 ? rawKey.slice(0, splitAt) : rawKey;
+};
+
+window.getDoghouseFurnitureEntriesByBaseKey = function(baseKey) {
+    const source = (window.GameLogic && window.GameLogic.doghouseFurniture) ? window.GameLogic.doghouseFurniture : {};
+    return Object.keys(source)
+        .filter(instanceKey => {
+            const data = source[instanceKey] || {};
+            return window.getDoghouseFurnitureBaseKey(instanceKey, data) === baseKey;
+        })
+        .map(instanceKey => ({ instanceKey, data: source[instanceKey] || {} }));
+};
+
+window.getDoghouseFurniturePlacedCount = function(baseKey) {
+    return window.getDoghouseFurnitureEntriesByBaseKey(baseKey)
+        .filter(entry => entry.data && (entry.data.locked === true || entry.data.locked === false))
+        .length;
+};
+
+window.createDoghouseFurnitureInstanceId = function(baseKey) {
+    const safeBaseKey = String(baseKey || 'furniture').replace(/[^a-zA-Z0-9_-]/g, '_');
+    return `${safeBaseKey}__${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+};
+
 function openFurnitureCatalog() {
     const modal = document.getElementById('furniture-catalog-modal');
     const list = document.getElementById('catalog-list');
@@ -24370,9 +24855,11 @@ function openFurnitureCatalog() {
         const furnitureInventory = (window.GameLogic.myProfile && window.GameLogic.myProfile.furnitureInventory) ? window.GameLogic.myProfile.furnitureInventory : {};
         const placedDoghouseFurniture = window.GameLogic.doghouseFurniture || {};
         const allDefs = Object.values(window.FURNITURE_DEFS || {}).filter(def => def.scene === 'doghouse');
+
         items = allDefs.filter(def => {
             const boughtQty = Number(furnitureInventory[def.key] || 0);
-            const alreadyPlaced = !!placedDoghouseFurniture[def.key];
+            const entries = window.getDoghouseFurnitureEntriesByBaseKey ? window.getDoghouseFurnitureEntriesByBaseKey(def.key) : [];
+            const alreadyPlaced = entries.length > 0 || !!placedDoghouseFurniture[def.key];
             return def.defaultOwned || boughtQty > 0 || alreadyPlaced;
         });
 
@@ -24383,47 +24870,62 @@ function openFurnitureCatalog() {
                 const def = window.getFurnitureDefinition ? window.getFurnitureDefinition(item.key) : item;
                 const boughtQty = Number(furnitureInventory[def.key] || 0);
                 const displayQty = def.defaultOwned ? Math.max(1, boughtQty) : boughtQty;
-                const placedData = placedDoghouseFurniture[def.key] || {};
-                const isRotatable = !!(def.rotatable || placedData.rotatable);
+                const entries = window.getDoghouseFurnitureEntriesByBaseKey ? window.getDoghouseFurnitureEntriesByBaseKey(def.key) : [];
+                const placedEntries = entries.filter(entry => entry.data && (entry.data.locked === true || entry.data.locked === false));
+                const placedCount = placedEntries.length;
+                const availableCount = Math.max(0, displayQty - placedCount);
+                const firstPlacedData = placedEntries[0] ? placedEntries[0].data : {};
+                const isRotatable = !!(def.rotatable || firstPlacedData.rotatable);
 
                 const tags = [];
                 if (isRotatable) tags.push(`<span class="doghouse-furniture-tag rotatable">可轉向</span>`);
                 (def.tags || []).forEach(tag => tags.push(`<span class="doghouse-furniture-tag">${tag}</span>`));
 
-                const statusText = placedData.locked ? '已擺設' : (placedData.locked === false ? '擺放中' : '未擺設');
-                const placeLabel = placedData.locked ? '重新擺設' : (placedData.locked === false ? '繼續擺設' : '擺設家俱');
-                const canStow = placedData.locked === true || placedData.locked === false;
-                const buttonGrid = canStow ? '1fr 1fr' : '1fr';
-                const stowButton = canStow
-                    ? `<button class="doghouse-place-btn" type="button" style="background:linear-gradient(180deg, #f3b0a2, #8f2f24); color:#fff8f0;" onclick="window.stowDoghouseFurniture && window.stowDoghouseFurniture('${def.key}')">收起家俱</button>`
-                    : '';
+                const statusText = `持有：${displayQty}　已擺：${placedCount}　可再擺：${availableCount}`;
+                const actionButtons = [];
+
+                if (placedCount <= 0) {
+                    actionButtons.push(`<button class="doghouse-place-btn" type="button" style="margin-top:0;" onclick="window.startDoghouseFurniturePlacement && window.startDoghouseFurniturePlacement('${def.key}', { createNew:true })">擺設</button>`);
+                } else {
+                    if (availableCount > 0) {
+                        actionButtons.push(`<button class="doghouse-place-btn" type="button" style="margin-top:0;" onclick="window.startDoghouseFurniturePlacement && window.startDoghouseFurniturePlacement('${def.key}', { createNew:true })">再擺一個</button>`);
+                    }
+                    actionButtons.push(`<button class="doghouse-place-btn" type="button" style="margin-top:0;" onclick="window.startDoghouseFurnitureReposition && window.startDoghouseFurnitureReposition('${def.key}')">重新擺設</button>`);
+                    actionButtons.push(`<button class="doghouse-place-btn" type="button" style="margin-top:0; background:linear-gradient(180deg, #f3b0a2, #8f2f24); color:#fff8f0;" onclick="window.stowDoghouseFurniture && window.stowDoghouseFurniture('${def.key}')">收起一件</button>`);
+                }
 
                 detail.innerHTML = `
                     <div class="doghouse-furniture-detail-head">
                         <img src="${def.img || 'memory.png'}" alt="${def.name || '家具'}">
                         <div>
                             <div class="doghouse-furniture-detail-title">${def.name || '未命名家具'}</div>
-                            <div style="font-size:12px; color:#6d3b22; margin-top:3px;">持有：${displayQty}　狀態：${statusText}</div>
+                            <div style="font-size:12px; color:#6d3b22; margin-top:3px;">${statusText}</div>
                         </div>
                     </div>
                     <div style="font-size:13px; line-height:1.55; white-space:pre-wrap;">${def.desc || '尚未設定描述。'}</div>
                     <div class="doghouse-furniture-tags">${tags.join('') || '<span class="doghouse-furniture-tag">一般家具</span>'}</div>
-                    <div style="display:grid; grid-template-columns:${buttonGrid}; gap:8px; margin-top:10px;">
-                        <button class="doghouse-place-btn" type="button" style="margin-top:0;" onclick="window.startDoghouseFurniturePlacement && window.startDoghouseFurniturePlacement('${def.key}')">${placeLabel}</button>
-                        ${stowButton}
+                    <div style="display:grid; grid-template-columns:repeat(${Math.min(2, Math.max(1, actionButtons.length))}, minmax(0, 1fr)); gap:8px; margin-top:10px;">
+                        ${actionButtons.join('')}
                     </div>
                 `;
                 detail.classList.add('show');
             };
 
             items.forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.className = 'catalog-item';
                 const def = window.getFurnitureDefinition ? window.getFurnitureDefinition(item.key) : item;
                 const boughtQty = Number(furnitureInventory[def.key] || 0);
                 const displayQty = def.defaultOwned ? Math.max(1, boughtQty) : boughtQty;
+                const placedCount = window.getDoghouseFurniturePlacedCount ? window.getDoghouseFurniturePlacedCount(def.key) : 0;
+                const availableCount = Math.max(0, displayQty - placedCount);
 
-                let div = document.createElement('div');
-                div.className = 'catalog-item';
-                div.innerHTML = `<img src="${def.img || 'memory.png'}"><span>${def.name || '未命名家具'}</span><span style="font-size:11px; margin-top:3px;">持有 ${displayQty}</span>${def.rotatable ? '<span style="font-size:11px; color:#8dff8a; font-weight:bold; margin-top:2px;">可轉向</span>' : ''}`;
+                div.innerHTML = `
+                    <img src="${def.img || 'memory.png'}">
+                    <span style="margin-top:4px;">${def.name || def.key}</span>
+                    <span style="font-size:11px; opacity:0.86; margin-top:3px;">持有 ${displayQty}｜已擺 ${placedCount}</span>
+                    <span style="font-size:11px; color:${availableCount > 0 ? '#d8ff65' : '#ffe0b2'}; margin-top:2px;">可再擺 ${availableCount}</span>
+                `;
                 div.onclick = () => renderDoghouseDetail(def);
                 list.appendChild(div);
 
@@ -24515,12 +25017,16 @@ function openFurnitureCatalog() {
     else modal.style.display = 'block';
 }
 
-window.startDoghouseFurniturePlacement = function(furnitureKey) {
+window.startDoghouseFurniturePlacement = function(furnitureKey, options = {}) {
     if (!window.GameLogic || window.GameLogic.currentScene !== 'doghouse' || !window.GameLogic.currentUser) return;
 
     const def = window.getFurnitureDefinition ? window.getFurnitureDefinition(furnitureKey) : { key: furnitureKey, rotatable: false, defaultDirection: 'front' };
-    const path = `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${def.key}`;
-    const currentData = (window.GameLogic.doghouseFurniture || {})[def.key] || {};
+    const baseKey = def.key || furnitureKey;
+    const existingData = window.GameLogic.doghouseFurniture || {};
+    const requestedInstanceKey = options && options.instanceKey && existingData[options.instanceKey] ? options.instanceKey : null;
+    const instanceKey = requestedInstanceKey || (window.createDoghouseFurnitureInstanceId ? window.createDoghouseFurnitureInstanceId(baseKey) : `${baseKey}__${Date.now()}`);
+    const path = `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${instanceKey}`;
+    const currentData = existingData[instanceKey] || {};
 
     let pX = Number(currentData.x);
     let pY = Number(currentData.y);
@@ -24544,13 +25050,21 @@ window.startDoghouseFurniturePlacement = function(furnitureKey) {
         locked: false,
         ownerUid: window.GameLogic.currentUser.uid,
         category: 'furniture',
-        furnitureKey: def.key,
+        instanceId: instanceKey,
+        furnitureKey: baseKey,
         direction: currentData.direction || def.defaultDirection || 'front',
         rotatable: !!def.rotatable
     };
 
     window.GameLogic.doghouseFurniture = window.GameLogic.doghouseFurniture || {};
-    window.GameLogic.doghouseFurniture[def.key] = nextData;
+    window.GameLogic.doghouseFurniture[instanceKey] = nextData;
+
+    if (window.GameLogic.phaserGame) {
+        const scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
+        if (scene && scene.clearDoghouseFurnitureRepositionSelection) {
+            scene.clearDoghouseFurnitureRepositionSelection();
+        }
+    }
 
     if (window.closeFurnitureCatalogModal) window.closeFurnitureCatalogModal();
     else {
@@ -24561,17 +25075,63 @@ window.startDoghouseFurniturePlacement = function(furnitureKey) {
     update(ref(window.GameLogic.db, path), nextData)
         .then(() => {
             if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput();
-            window.GameLogic.placingFurnitureKey = def.key;
+            window.GameLogic.placingFurnitureKey = instanceKey;
             sendBubble(def.rotatable ? "移動家具中，點家具可轉向，按 A 放下。" : "移動家具中，按 A 放下。");
         })
         .catch(err => console.warn('Firebase 狗窩家具擺設啟動失敗:', err));
 };
 
-window.stowDoghouseFurniture = function(furnitureKey) {
+window.startDoghouseFurnitureReposition = function(furnitureKey) {
     if (!window.GameLogic || window.GameLogic.currentScene !== 'doghouse' || !window.GameLogic.currentUser) return;
 
     const def = window.getFurnitureDefinition ? window.getFurnitureDefinition(furnitureKey) : { key: furnitureKey };
-    const key = def.key || furnitureKey;
+    const baseKey = def.key || furnitureKey;
+    const entries = window.getDoghouseFurnitureEntriesByBaseKey ? window.getDoghouseFurnitureEntriesByBaseKey(baseKey) : [];
+    const placedEntries = entries.filter(entry => entry.data && (entry.data.locked === true || entry.data.locked === false));
+
+    if (placedEntries.length <= 0) {
+        window.startDoghouseFurniturePlacement(baseKey, { createNew:true });
+        return;
+    }
+
+    if (placedEntries.length === 1) {
+        window.startDoghouseFurniturePlacement(baseKey, { instanceKey: placedEntries[0].instanceKey, reposition:true });
+        return;
+    }
+
+    window.GameLogic.repositionDoghouseFurnitureBaseKey = baseKey;
+
+    if (window.closeFurnitureCatalogModal) window.closeFurnitureCatalogModal();
+    else {
+        const modal = document.getElementById('furniture-catalog-modal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    if (window.GameLogic.phaserGame) {
+        const scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
+        if (scene && scene.prepareDoghouseFurnitureRepositionSelection) {
+            scene.prepareDoghouseFurnitureRepositionSelection(baseKey);
+        }
+    }
+
+    sendBubble(`請點選要重新擺設的${def.name || '家具'}。`);
+};
+
+window.stowDoghouseFurniture = function(furnitureKey) {
+    if (!window.GameLogic || window.GameLogic.currentScene !== 'doghouse' || !window.GameLogic.currentUser) return;
+
+    const source = window.GameLogic.doghouseFurniture || {};
+    const exactData = source[furnitureKey] || null;
+    const baseKey = exactData
+        ? (window.getDoghouseFurnitureBaseKey ? window.getDoghouseFurnitureBaseKey(furnitureKey, exactData) : (exactData.furnitureKey || furnitureKey))
+        : ((window.getFurnitureDefinition && window.getFurnitureDefinition(furnitureKey)) ? furnitureKey : (window.getDoghouseFurnitureBaseKey ? window.getDoghouseFurnitureBaseKey(furnitureKey, {}) : furnitureKey));
+
+    const entries = window.getDoghouseFurnitureEntriesByBaseKey ? window.getDoghouseFurnitureEntriesByBaseKey(baseKey) : [];
+    const targetEntry = exactData ? { instanceKey: furnitureKey, data: exactData } : entries.find(entry => entry.data && (entry.data.locked === true || entry.data.locked === false));
+    if (!targetEntry || !targetEntry.instanceKey) return;
+
+    const key = targetEntry.instanceKey;
+    const def = window.getFurnitureDefinition ? window.getFurnitureDefinition(baseKey) : { key: baseKey, name: baseKey };
     const path = `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}`;
 
     if (window.GameLogic.placingFurnitureKey === key) {
@@ -24585,6 +25145,9 @@ window.stowDoghouseFurniture = function(furnitureKey) {
 
     if (window.GameLogic.phaserGame) {
         const scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
+        if (scene && scene.clearDoghouseFurnitureRepositionSelection) {
+            scene.clearDoghouseFurnitureRepositionSelection();
+        }
         if (scene && scene.localPlayer && scene.localPlayer.seatedFurnitureKey === key && scene.stopDoghouseCushionSitting) {
             scene.stopDoghouseCushionSitting();
         }
