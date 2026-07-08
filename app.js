@@ -556,8 +556,7 @@ window.prepareMeowlimeCheckinModal = function() {
 
 window.getMeowlimeCheckinDisplayDay = function() {
     const total = Number((window.GameLogic && window.GameLogic.dailyMeowlime && window.GameLogic.dailyMeowlime.totalCheckins) || 0);
-    const canCheckin = !!(window.GameLogic && window.GameLogic.meowlimeDailyLoaded && window.GameLogic.meowlimeCanCheckinToday);
-    return canCheckin ? total + 1 : total;
+    return total;
 };
 
 window.getMeowlimeSignatureState = function() {
@@ -1108,6 +1107,13 @@ function createSystemUI() {
             .meowlime-action-btn,
             .meowlime-close-btn {
                 min-height: 42px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                line-height: 1.15;
+                padding: 0 12px;
+                box-sizing: border-box;
                 border-radius: 999px !important;
                 border: 1px solid rgba(255,255,255,0.82) !important;
                 font-weight: 900 !important;
