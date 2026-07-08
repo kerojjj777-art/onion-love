@@ -25257,7 +25257,6 @@ function openFurnitureCatalog() {
         modal.classList.add('furniture-wood-ui');
         title.innerText = "📦 大廳家俱目錄";
         items = [
-        items = [
             { key: 'giftbox', name: '🎁 領獎大粉蔥', img: 'gift-box-stay.png' },
             { key: 'scoreboard', name: '🏆 戰況看板', img: 'hall-screen-in-list.png' },
             { key: 'solochicken', name: '獨樂雞', img: 'me_play_cock.png' },
