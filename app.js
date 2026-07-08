@@ -299,6 +299,63 @@ window.playSFX = function(scene, key) {
     scene.sound.play(key, { volume: vol });
 };
 
+// 喵萊姆專用音效橋接：沿用既有 Phaser 音效池與 muteSFX / sfxVolume，不另開 Audio 系統。
+window.getMeowlimeAudioScene = function() {
+    const game = window.GameLogic && window.GameLogic.phaserGame ? window.GameLogic.phaserGame : null;
+    if (!game || !game.scene) return null;
+
+    const preferredSceneKeys = ['MainScene', 'UIScene', 'BootScene'];
+
+    for (let i = 0; i < preferredSceneKeys.length; i++) {
+        const scene = game.scene.getScene(preferredSceneKeys[i]);
+        if (scene && scene.sound) return scene;
+    }
+
+    if (game.scene.getScenes) {
+        const activeScenes = game.scene.getScenes(true) || [];
+        for (let i = 0; i < activeScenes.length; i++) {
+            if (activeScenes[i] && activeScenes[i].sound) return activeScenes[i];
+        }
+    }
+
+    return null;
+};
+
+window.playMeowlimeSFX = function(key, options = {}) {
+    if (!key || !window.GameLogic || window.GameLogic.muteSFX) return;
+
+    const cooldownKey = options.cooldownKey || '';
+    const cooldownMs = Math.max(0, Number(options.cooldownMs || 0));
+    const now = (window.performance && performance.now) ? performance.now() : Date.now();
+
+    if (cooldownKey && cooldownMs > 0) {
+        if (!window.__meowlimeSfxCooldowns) window.__meowlimeSfxCooldowns = {};
+        const lastAt = Number(window.__meowlimeSfxCooldowns[cooldownKey] || 0);
+        if (now - lastAt < cooldownMs) return;
+        window.__meowlimeSfxCooldowns[cooldownKey] = now;
+    }
+
+    const scene = window.getMeowlimeAudioScene ? window.getMeowlimeAudioScene() : null;
+    if (!scene || !scene.sound) return;
+
+    try {
+        if (scene.cache && scene.cache.audio && scene.cache.audio.exists && !scene.cache.audio.exists(key)) {
+            console.warn(`[喵萊姆] 找不到音效素材：${key}`);
+            return;
+        }
+
+        if (window.playSFX) {
+            window.playSFX(scene, key);
+            return;
+        }
+
+        const vol = (window.GameLogic.sfxVolume !== undefined ? window.GameLogic.sfxVolume : 50) / 100;
+        if (vol > 0) scene.sound.play(key, { volume: vol });
+    } catch (err) {
+        console.warn(`[喵萊姆] 播放音效失敗：${key}`, err);
+    }
+};
+
 window.changeTrack = function(dir) {
     let playlist = [{ key: 'bgm', title: 'Sweet-Onion', cover: 'Sweet-Onion.png' }, { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' }, { key: 'bgm-inside', title: 'Inside-of-Onion', cover: 'Inside-of-Onion.png' }, { key: 'bgm-kyo', title: '귀엽다!귀엽다!Onion!', cover: 'kyo-kyo-onion.png' }, { key: 'bgm-world', title: '世界他會自己轉動', cover: "OMusic-World'll-roll.png" }, { key: 'bgm-lazy', title: 'Onion Lazy Cat', cover: 'OMusic-Onion-Lazy-Cat.png' }, { key: 'bgm-way', title: '洋蔥滾動自己路', cover: 'OMusic-Onion-go-my-way.png' }, { key: 'bgm-corazon', title: 'Onion acre Corazón', cover: 'OMusic-Onion-acre-Corazon.png' }, { key: 'bgm-fire', title: '烈艷洋蔥', cover: 'OMusic-Onion-Got-Fire.png' }];
     window.GameLogic.currentTrackIdx = ((window.GameLogic.currentTrackIdx || 0) + dir + playlist.length) % playlist.length;
@@ -395,12 +452,34 @@ window.getMeowlimeGrowthState = function() {
             lastTs: 0,
             x: 0,
             y: 0,
-            dir: 1,
+            targetX: 0,
+            targetY: 0,
+            nextTargetAt: 0,
+            floatSeed: Math.random() * 1000,
             expression: '^⦁⩊⦁^',
             jiggleUntil: 0,
+            touchPulseUntil: 0,
+            touchPulseStart: 0,
+            touchHueShift: 0,
+            stretchPower: 0,
+            stretchAngle: 0,
+            dragDX: 0,
+            dragDY: 0,
+            pointerId: null,
+            pointerDownAt: 0,
+            pointerStartX: 0,
+            pointerStartY: 0,
+            isPointerDown: false,
+            isHolding: false,
+            dragging: false,
+            holdTimer: null,
+            releaseBounceUntil: 0,
             boundCanvas: null,
             boundModal: null,
             pointerHandler: null,
+            pointerMoveHandler: null,
+            pointerUpHandler: null,
+            pointerCancelHandler: null,
             modalStopHandler: null,
             resizeHandler: null
         };
@@ -419,8 +498,25 @@ window.stopMeowlimeGrowthCanvas = function() {
         state.rafId = null;
     }
 
+    if (state.holdTimer) {
+        clearTimeout(state.holdTimer);
+        state.holdTimer = null;
+    }
+
     if (state.boundCanvas && state.pointerHandler) {
         state.boundCanvas.removeEventListener('pointerdown', state.pointerHandler);
+    }
+
+    if (state.pointerMoveHandler) {
+        window.removeEventListener('pointermove', state.pointerMoveHandler);
+    }
+
+    if (state.pointerUpHandler) {
+        window.removeEventListener('pointerup', state.pointerUpHandler);
+    }
+
+    if (state.pointerCancelHandler) {
+        window.removeEventListener('pointercancel', state.pointerCancelHandler);
     }
 
     if (state.boundModal && state.modalStopHandler) {
@@ -435,9 +531,20 @@ window.stopMeowlimeGrowthCanvas = function() {
     state.boundCanvas = null;
     state.boundModal = null;
     state.pointerHandler = null;
+    state.pointerMoveHandler = null;
+    state.pointerUpHandler = null;
+    state.pointerCancelHandler = null;
     state.modalStopHandler = null;
     state.resizeHandler = null;
     state.lastTs = 0;
+    state.pointerId = null;
+    state.isPointerDown = false;
+    state.isHolding = false;
+    state.dragging = false;
+    state.dragDX = 0;
+    state.dragDY = 0;
+    state.stretchPower = 0;
+    state.releaseBounceUntil = 0;
 };
 
 window.resizeMeowlimeGrowthCanvas = function(canvas) {
@@ -525,31 +632,50 @@ window.drawMeowlimeGrowthBackground = function(ctx, w, h, t) {
     ctx.restore();
 };
 
-window.drawMeowlimeGrowthBlob = function(ctx, x, y, size, expression, t, jigglePower) {
+window.drawMeowlimeGrowthBlob = function(ctx, x, y, size, expression, t, jigglePower, options = {}) {
     const radius = size / 2;
+    const touchGlow = Math.max(0, Math.min(1, Number(options.touchGlow || 0)));
+    const stretchPower = Math.max(0, Math.min(0.72, Number(options.stretchPower || 0)));
+    const stretchAngle = Number.isFinite(options.stretchAngle) ? options.stretchAngle : 0;
+
     const wobbleA = Math.sin(t * 3.4) * 0.05 + jigglePower * Math.sin(t * 38) * 0.12;
     const wobbleB = Math.cos(t * 2.7) * 0.045 + jigglePower * Math.cos(t * 31) * 0.1;
+    const hueShift = Number(options.hueShift || 0);
+    const baseHue = (t * 24 + hueShift + touchGlow * 75) % 360;
 
     ctx.save();
     ctx.translate(x, y);
-    ctx.scale(1 + wobbleA, 1 + wobbleB);
+    ctx.rotate(stretchAngle);
+    ctx.scale(
+        1 + wobbleA + stretchPower * 0.88,
+        Math.max(0.66, 1 + wobbleB - stretchPower * 0.24)
+    );
 
-    ctx.shadowColor = 'rgba(160, 245, 255, 0.72)';
-    ctx.shadowBlur = Math.max(8, radius * 0.28);
+    ctx.shadowColor = touchGlow > 0
+        ? 'rgba(255, 245, 180, 0.92)'
+        : 'rgba(160, 245, 255, 0.72)';
+    ctx.shadowBlur = Math.max(8, radius * (0.28 + touchGlow * 0.38));
 
-    const grad = ctx.createRadialGradient(-radius * 0.28, -radius * 0.35, radius * 0.1, 0, 0, radius);
-    grad.addColorStop(0, 'rgba(255,255,255,0.88)');
-    grad.addColorStop(0.28, `hsla(${(t * 24) % 360}, 100%, 88%, 0.94)`);
-    grad.addColorStop(0.58, `hsla(${(t * 24 + 92) % 360}, 100%, 82%, 0.92)`);
-    grad.addColorStop(1, `hsla(${(t * 24 + 174) % 360}, 94%, 74%, 0.92)`);
+    const grad = ctx.createRadialGradient(-radius * 0.28, -radius * 0.35, radius * 0.1, 0, 0, radius * (1 + stretchPower * 0.22));
+    grad.addColorStop(0, `rgba(255,255,255,${0.88 + touchGlow * 0.08})`);
+    grad.addColorStop(0.24, `hsla(${baseHue}, 100%, ${88 - touchGlow * 8}%, ${0.94 + touchGlow * 0.04})`);
+    grad.addColorStop(0.56, `hsla(${(baseHue + 92) % 360}, 100%, ${82 - touchGlow * 7}%, ${0.92 + touchGlow * 0.05})`);
+    grad.addColorStop(1, `hsla(${(baseHue + 174) % 360}, ${94 + touchGlow * 6}%, ${74 - touchGlow * 5}%, ${0.92 + touchGlow * 0.05})`);
 
     ctx.beginPath();
-    const steps = 44;
+    const steps = 52;
     for (let i = 0; i <= steps; i++) {
         const a = Math.PI * 2 * i / steps;
-        const n = 1 + Math.sin(a * 3 + t * 2.2) * 0.055 + Math.cos(a * 5 - t * 1.8) * 0.04 + jigglePower * Math.sin(a * 8 + t * 42) * 0.055;
-        const px = Math.cos(a) * radius * n;
-        const py = Math.sin(a) * radius * (0.92 + Math.cos(a * 2 - t) * 0.035) * n;
+        const frontPull = Math.max(0, Math.cos(a)) * radius * stretchPower * 0.42;
+        const sideSqueeze = 1 - stretchPower * 0.08 * Math.abs(Math.sin(a));
+        const n = 1
+            + Math.sin(a * 3 + t * 2.2) * 0.055
+            + Math.cos(a * 5 - t * 1.8) * 0.04
+            + jigglePower * Math.sin(a * 8 + t * 42) * 0.055;
+
+        const px = Math.cos(a) * radius * n * sideSqueeze + frontPull;
+        const py = Math.sin(a) * radius * (0.92 + Math.cos(a * 2 - t) * 0.035) * n * (1 - stretchPower * 0.1);
+
         if (i === 0) ctx.moveTo(px, py);
         else ctx.lineTo(px, py);
     }
@@ -558,21 +684,47 @@ window.drawMeowlimeGrowthBlob = function(ctx, x, y, size, expression, t, jiggleP
     ctx.fill();
 
     ctx.shadowBlur = 0;
-    ctx.globalAlpha = 0.72;
-    ctx.strokeStyle = 'rgba(255,255,255,0.72)';
-    ctx.lineWidth = Math.max(1.2, radius * 0.045);
+    ctx.globalAlpha = 0.72 + touchGlow * 0.22;
+    ctx.strokeStyle = touchGlow > 0 ? 'rgba(255,255,210,0.92)' : 'rgba(255,255,255,0.72)';
+    ctx.lineWidth = Math.max(1.2, radius * (0.045 + touchGlow * 0.018));
     ctx.stroke();
 
     ctx.globalAlpha = 1;
-    ctx.fillStyle = 'rgba(38, 70, 78, 0.92)';
+    ctx.rotate(-stretchAngle);
+    ctx.fillStyle = touchGlow > 0 ? 'rgba(20, 58, 70, 0.96)' : 'rgba(38, 70, 78, 0.92)';
     ctx.font = `900 ${Math.max(8, size * 0.17)}px "Microsoft JhengHei", "PingFang TC", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = 'rgba(255,255,255,0.82)';
-    ctx.shadowBlur = Math.max(2, size * 0.04);
+    ctx.shadowBlur = Math.max(2, size * (0.04 + touchGlow * 0.035));
     ctx.fillText(expression || '^⦁⩊⦁^', 0, size * 0.015);
 
     ctx.restore();
+};
+
+
+window.getMeowlimeGrowthPointerPoint = function(canvas, e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / Math.max(1, rect.width);
+    const scaleY = canvas.height / Math.max(1, rect.height);
+
+    return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+    };
+};
+
+window.pickMeowlimeGrowthTarget = function(state, w, h, size, dpr) {
+    const marginX = size / 2 + 18 * dpr;
+    const marginY = size / 2 + 18 * dpr;
+    const minX = Math.min(w / 2, marginX);
+    const maxX = Math.max(minX, w - marginX);
+    const minY = Math.min(h / 2, marginY);
+    const maxY = Math.max(minY, h - marginY);
+
+    state.targetX = minX + Math.random() * Math.max(1, maxX - minX);
+    state.targetY = minY + Math.random() * Math.max(1, maxY - minY);
+    state.nextTargetAt = ((window.performance && performance.now) ? performance.now() : Date.now()) + 1800 + Math.random() * 2600;
 };
 
 window.renderMeowlimeGrowthFrame = function(ts) {
@@ -593,38 +745,83 @@ window.renderMeowlimeGrowthFrame = function(ts) {
     state.lastTs = ts;
 
     const growthSize = window.getMeowlimeGrowthSize ? window.getMeowlimeGrowthSize() : 20;
-    const edgeSafeSize = Math.max(12, Math.min(growthSize * dpr, Math.min(w, h) - 36 * dpr));
+    const maxDrawableSize = Math.max(12, Math.min(w, h) - 36 * dpr);
+    const edgeSafeSize = Math.max(12, Math.min(growthSize * dpr, maxDrawableSize));
     const minX = edgeSafeSize / 2 + 16 * dpr;
-    const maxX = w - edgeSafeSize / 2 - 16 * dpr;
+    const maxX = Math.max(minX, w - edgeSafeSize / 2 - 16 * dpr);
+    const minY = edgeSafeSize / 2 + 16 * dpr;
+    const maxY = Math.max(minY, h - edgeSafeSize / 2 - 16 * dpr);
+    const now = (window.performance && performance.now) ? performance.now() : Date.now();
 
-    if (!state.x || state.x < minX || state.x > maxX) {
-        state.x = w / 2;
-        state.y = h * 0.58;
-        state.dir = 1;
+    if (!state.x || !state.y || state.x < minX || state.x > maxX || state.y < minY || state.y > maxY) {
+        state.x = Math.min(maxX, Math.max(minX, w / 2));
+        state.y = Math.min(maxY, Math.max(minY, h * 0.55));
+        if (window.pickMeowlimeGrowthTarget) window.pickMeowlimeGrowthTarget(state, w, h, edgeSafeSize, dpr);
     }
 
-    if (maxX > minX) {
-        state.x += state.dir * 18 * dpr * dt;
-        if (state.x >= maxX) {
-            state.x = maxX;
-            state.dir = -1;
-        } else if (state.x <= minX) {
-            state.x = minX;
-            state.dir = 1;
+    if (!state.targetX || !state.targetY) {
+        if (window.pickMeowlimeGrowthTarget) window.pickMeowlimeGrowthTarget(state, w, h, edgeSafeSize, dpr);
+    }
+
+    const blockedByTouch = !!state.isPointerDown || !!state.isHolding || !!state.dragging || (state.releaseBounceUntil && now < state.releaseBounceUntil);
+
+    if (!blockedByTouch) {
+        const tx = Math.min(maxX, Math.max(minX, state.targetX || state.x));
+        const ty = Math.min(maxY, Math.max(minY, state.targetY || state.y));
+        const dx = tx - state.x;
+        const dy = ty - state.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < Math.max(8 * dpr, edgeSafeSize * 0.14) || now > Number(state.nextTargetAt || 0)) {
+            if (window.pickMeowlimeGrowthTarget) window.pickMeowlimeGrowthTarget(state, w, h, edgeSafeSize, dpr);
+        } else {
+            const glide = Math.min(1, dt * (0.58 + Math.min(0.5, dist / Math.max(1, Math.max(w, h)))));
+            state.x += dx * glide;
+            state.y += dy * glide;
         }
-    } else {
-        state.x = w / 2;
     }
 
-    state.y = Math.min(h - edgeSafeSize * 0.58 - 20 * dpr, Math.max(edgeSafeSize * 0.58 + 20 * dpr, h * 0.58));
+    state.x = Math.min(maxX, Math.max(minX, state.x));
+    state.y = Math.min(maxY, Math.max(minY, state.y));
 
-    const now = performance.now();
-    const jigglePower = state.jiggleUntil && now < state.jiggleUntil
+    const dragLen = Math.sqrt((state.dragDX || 0) * (state.dragDX || 0) + (state.dragDY || 0) * (state.dragDY || 0));
+    const maxStretch = Math.max(24 * dpr, edgeSafeSize * 0.92);
+    const targetStretch = state.isHolding && state.dragging
+        ? Math.min(0.72, dragLen / Math.max(1, maxStretch) * 0.72)
+        : 0;
+
+    if (state.isHolding && state.dragging && dragLen > 0.5) {
+        state.stretchAngle = Math.atan2(state.dragDY, state.dragDX);
+    }
+
+    state.stretchPower += (targetStretch - (state.stretchPower || 0)) * Math.min(1, dt * 14);
+    if (!state.isHolding && Math.abs(state.stretchPower) < 0.002) state.stretchPower = 0;
+
+    let jigglePower = state.jiggleUntil && now < state.jiggleUntil
         ? Math.max(0, (state.jiggleUntil - now) / 620)
         : 0;
 
+    if (state.releaseBounceUntil && now < state.releaseBounceUntil) {
+        jigglePower = Math.max(jigglePower, Math.max(0, (state.releaseBounceUntil - now) / 760));
+    }
+
+    let touchGlow = 0;
+    if (state.touchPulseUntil && now < state.touchPulseUntil) {
+        const full = Math.max(1, state.touchPulseUntil - Number(state.touchPulseStart || now));
+        touchGlow = Math.max(0, Math.min(1, (state.touchPulseUntil - now) / full));
+    }
+
+    const floatPower = blockedByTouch ? 0.18 : 1;
+    const drawX = state.x + Math.sin(ts / 1000 * 1.8 + state.floatSeed) * 4 * dpr * floatPower;
+    const drawY = state.y + Math.cos(ts / 1000 * 2.15 + state.floatSeed * 0.7) * 7 * dpr * floatPower;
+
     window.drawMeowlimeGrowthBackground(ctx, w, h, ts / 1000);
-    window.drawMeowlimeGrowthBlob(ctx, state.x, state.y, edgeSafeSize, state.expression, ts / 1000, jigglePower);
+    window.drawMeowlimeGrowthBlob(ctx, drawX, drawY, edgeSafeSize, state.expression, ts / 1000, jigglePower, {
+        stretchPower: state.stretchPower || 0,
+        stretchAngle: state.stretchAngle || 0,
+        touchGlow: touchGlow,
+        hueShift: state.touchHueShift || 0
+    });
 
     state.rafId = requestAnimationFrame(window.renderMeowlimeGrowthFrame);
 };
@@ -647,9 +844,29 @@ window.startMeowlimeGrowthCanvas = function() {
     state.lastTs = 0;
     state.x = 0;
     state.y = 0;
-    state.dir = 1;
+    state.targetX = 0;
+    state.targetY = 0;
+    state.nextTargetAt = 0;
+    state.floatSeed = Math.random() * 1000;
     state.expression = '^⦁⩊⦁^';
     state.jiggleUntil = 0;
+    state.touchPulseUntil = 0;
+    state.touchPulseStart = 0;
+    state.touchHueShift = 0;
+    state.stretchPower = 0;
+    state.stretchAngle = 0;
+    state.dragDX = 0;
+    state.dragDY = 0;
+    state.pointerId = null;
+    state.isPointerDown = false;
+    state.isHolding = false;
+    state.dragging = false;
+    state.releaseBounceUntil = 0;
+
+    if (state.holdTimer) {
+        clearTimeout(state.holdTimer);
+        state.holdTimer = null;
+    }
 
     if (totalEl) totalEl.innerText = String(Number.isFinite(total) ? Math.max(0, total) : 0);
     if (sizeEl) sizeEl.innerText = `${growthSize.toFixed(1)}px`;
@@ -658,39 +875,142 @@ window.startMeowlimeGrowthCanvas = function() {
         if (e && e.stopPropagation) e.stopPropagation();
     };
 
+    const beginTouchReaction = () => {
+        const pool = window.getMeowlimeGrowthExpressions ? window.getMeowlimeGrowthExpressions() : ['^⦁⩊⦁^'];
+        state.expression = pool[Math.floor(Math.random() * pool.length)] || '^⦁⩊⦁^';
+        state.jiggleUntil = performance.now() + 620;
+        state.touchPulseStart = performance.now();
+        state.touchPulseUntil = state.touchPulseStart + 520;
+        state.touchHueShift = Math.random() * 360;
+
+        if (window.playMeowlimeSFX) {
+            window.playMeowlimeSFX('catslime-sign-touch', {
+                cooldownKey: 'catslime-sign-touch',
+                cooldownMs: 280
+            });
+        }
+    };
+
     const pointerHandler = (e) => {
         if (!e) return;
         if (e.preventDefault) e.preventDefault();
         if (e.stopPropagation) e.stopPropagation();
 
-        const rect = canvas.getBoundingClientRect();
+        if (state.isPointerDown) return;
+
+        window.resizeMeowlimeGrowthCanvas(canvas);
+
+        const point = window.getMeowlimeGrowthPointerPoint
+            ? window.getMeowlimeGrowthPointerPoint(canvas, e)
+            : { x: 0, y: 0 };
         const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-        const px = (e.clientX - rect.left) * dpr;
-        const py = (e.clientY - rect.top) * dpr;
-        const size = Math.max(12, Math.min((window.getMeowlimeGrowthSize ? window.getMeowlimeGrowthSize() : 20) * dpr, Math.min(canvas.width, canvas.height) - 36 * dpr));
-        const dx = px - state.x;
-        const dy = py - state.y;
+        const size = Math.max(12, Math.min((window.getMeowlimeGrowthSize ? window.getMeowlimeGrowthSize() : 20) * dpr, Math.max(12, Math.min(canvas.width, canvas.height) - 36 * dpr)));
+        const dx = point.x - state.x;
+        const dy = point.y - state.y;
 
-        if (Math.sqrt(dx * dx + dy * dy) > size * 0.68) return;
+        if (Math.sqrt(dx * dx + dy * dy) > size * 0.72) return;
 
-        const pool = window.getMeowlimeGrowthExpressions ? window.getMeowlimeGrowthExpressions() : ['^⦁⩊⦁^'];
-        state.expression = pool[Math.floor(Math.random() * pool.length)] || '^⦁⩊⦁^';
-        state.jiggleUntil = performance.now() + 620;
+        if (canvas.setPointerCapture && e.pointerId !== undefined) {
+            try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+        }
+
+        state.pointerId = e.pointerId;
+        state.pointerDownAt = performance.now();
+        state.pointerStartX = point.x;
+        state.pointerStartY = point.y;
+        state.isPointerDown = true;
+        state.isHolding = false;
+        state.dragging = false;
+        state.dragDX = 0;
+        state.dragDY = 0;
+        state.releaseBounceUntil = 0;
+
+        beginTouchReaction();
+
+        if (state.holdTimer) clearTimeout(state.holdTimer);
+        state.holdTimer = setTimeout(() => {
+            if (!state.running || !state.isPointerDown) return;
+            state.isHolding = true;
+            state.jiggleUntil = performance.now() + 360;
+        }, 260);
+    };
+
+    const pointerMoveHandler = (e) => {
+        if (!e || !state.isPointerDown) return;
+        if (state.pointerId !== null && e.pointerId !== undefined && e.pointerId !== state.pointerId) return;
+
+        if (e.preventDefault) e.preventDefault();
+        if (e.stopPropagation) e.stopPropagation();
+
+        const point = window.getMeowlimeGrowthPointerPoint
+            ? window.getMeowlimeGrowthPointerPoint(canvas, e)
+            : { x: state.pointerStartX, y: state.pointerStartY };
+        const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        const size = Math.max(12, Math.min((window.getMeowlimeGrowthSize ? window.getMeowlimeGrowthSize() : 20) * dpr, Math.max(12, Math.min(canvas.width, canvas.height) - 36 * dpr)));
+        const rawDX = point.x - state.pointerStartX;
+        const rawDY = point.y - state.pointerStartY;
+        const rawDist = Math.sqrt(rawDX * rawDX + rawDY * rawDY);
+        const maxStretch = Math.max(24 * dpr, size * 0.92);
+        const limitRate = rawDist > maxStretch ? maxStretch / rawDist : 1;
+
+        if (state.isHolding || (performance.now() - state.pointerDownAt > 180 && rawDist > 8 * dpr)) {
+            state.isHolding = true;
+            state.dragging = true;
+            state.dragDX = rawDX * limitRate;
+            state.dragDY = rawDY * limitRate;
+        }
+    };
+
+    const endTouch = (e) => {
+        if (!state.isPointerDown) return;
+        if (e && state.pointerId !== null && e.pointerId !== undefined && e.pointerId !== state.pointerId) return;
+
+        if (e && e.preventDefault) e.preventDefault();
+        if (e && e.stopPropagation) e.stopPropagation();
+
+        if (state.holdTimer) {
+            clearTimeout(state.holdTimer);
+            state.holdTimer = null;
+        }
+
+        if (canvas.releasePointerCapture && e && e.pointerId !== undefined) {
+            try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+        }
+
+        if (state.isHolding || state.dragging) {
+            state.releaseBounceUntil = performance.now() + 760;
+            state.jiggleUntil = performance.now() + 760;
+        }
+
+        state.pointerId = null;
+        state.isPointerDown = false;
+        state.isHolding = false;
+        state.dragging = false;
+        state.dragDX = 0;
+        state.dragDY = 0;
     };
 
     const resizeHandler = () => {
         state.x = 0;
+        state.targetX = 0;
+        state.targetY = 0;
         if (window.resizeMeowlimeGrowthCanvas) window.resizeMeowlimeGrowthCanvas(canvas);
     };
 
     modal.addEventListener('pointerdown', stopModalEvent);
     modal.addEventListener('click', stopModalEvent);
     canvas.addEventListener('pointerdown', pointerHandler, { passive: false });
+    window.addEventListener('pointermove', pointerMoveHandler, { passive: false });
+    window.addEventListener('pointerup', endTouch, { passive: false });
+    window.addEventListener('pointercancel', endTouch, { passive: false });
     window.addEventListener('resize', resizeHandler);
 
     state.boundCanvas = canvas;
     state.boundModal = modal;
     state.pointerHandler = pointerHandler;
+    state.pointerMoveHandler = pointerMoveHandler;
+    state.pointerUpHandler = endTouch;
+    state.pointerCancelHandler = endTouch;
     state.modalStopHandler = stopModalEvent;
     state.resizeHandler = resizeHandler;
 
@@ -698,6 +1018,7 @@ window.startMeowlimeGrowthCanvas = function() {
     window.resizeMeowlimeGrowthCanvas(canvas);
     state.rafId = requestAnimationFrame(window.renderMeowlimeGrowthFrame);
 };
+
 
 window.openMeowlimeGrowthModal = async function() {
     if (window.refreshDailyMeowlimeStatus) {
@@ -855,7 +1176,8 @@ window.recordDailyMeowlimeCheckin = async function() {
     const historyItem = {
         date: today,
         createdAt: Date.now(),
-        serverRoom: window.getCurrentServerRoomId ? window.getCurrentServerRoomId() : (window.GameLogic.currentServerRoom || '')
+        serverRoom: window.getCurrentServerRoomId ? window.getCurrentServerRoomId() : (window.GameLogic.currentServerRoom || ''),
+        hasSignature: false
     };
 
     const updates = {
@@ -1176,6 +1498,7 @@ window.submitMeowlimeCheckin = async function() {
 
         state.pending = false;
         if (window.renderMeowlimeCheckinModal) window.renderMeowlimeCheckinModal();
+        if (!result.alreadyChecked && window.playMeowlimeSFX) window.playMeowlimeSFX('catslime-sign-done');
         if (window.playMeowlimeStampAnimation) window.playMeowlimeStampAnimation();
         if (window.refreshMeowlimeVisualsInScene) window.refreshMeowlimeVisualsInScene();
     } catch (err) {
@@ -10078,6 +10401,8 @@ class BootScene extends Phaser.Scene {
         
         this.load.audio('bgm', 'Sweet-Onion.mp3'); this.load.audio('bgm-heart', 'Onion-Heart.mp3'); this.load.audio('bgm-inside', 'Inside-of-Onion.mp3'); this.load.audio('bgm-kyo', 'kyo-kyo-onion.mp3'); this.load.audio('bgm-world', "OMusic-World'll-roll.mp3"); this.load.audio('bgm-lazy', 'OMusic-Onion-Lazy-Cat.mp3'); this.load.audio('bgm-way', 'OMusic-Onion-go-my-way.mp3'); this.load.audio('bgm-corazon', 'OMusic-Onion-acre-Corazon.mp3'); this.load.audio('bgm-fire', 'OMusic-Onion-Got-Fire.mp3');
         this.load.audio('jump04', 'jump04.mp3'); this.load.audio('launcher1', 'launcher1.mp3'); this.load.audio('bomb', 'bomb.mp3'); this.load.audio('fireworks-in-the-sky', 'fireworks-in-the-sky.mp3'); this.load.audio('shop-boss-thank-you', 'shop-boss-thank-you.mp3'); this.load.audio('shop-check-buying', 'shop-check-buying.mp3');
+        this.load.audio('catslime-sign-done', 'catslime-sign-done.mp3');
+        this.load.audio('catslime-sign-touch', 'catslime-sign-touch.mp3');
 
         // 載入米米專屬音效
         this.load.audio('mimi-laugh', 'mimi-laugh.mp3');
