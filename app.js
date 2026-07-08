@@ -22402,18 +22402,23 @@ if (activeBubbleMsg) {
     }
 
     clearDoghouseFurnitureRepositionSelection() {
-        if (window.GameLogic) window.GameLogic.repositionDoghouseFurnitureBaseKey = null;
+        if (window.GameLogic) {
+            window.GameLogic.repositionDoghouseFurnitureBaseKey = null;
+            window.GameLogic.stowDoghouseFurnitureBaseKey = null;
+        }
 
         Object.keys(this.furnitureSprites || {}).forEach(key => {
             const f = this.furnitureSprites[key];
             if (!f || !f.sprite) return;
 
-            if (f.sprite._onionRepositionHighlight && f.sprite.clearTint) {
+            if ((f.sprite._onionRepositionHighlight || f.sprite._onionStowHighlight) && f.sprite.clearTint) {
                 f.sprite.clearTint();
             }
 
             f.sprite._onionRepositionHighlight = false;
+            f.sprite._onionStowHighlight = false;
             f.sprite._onionDoghouseRepositionCandidate = false;
+            f.sprite._onionDoghouseStowCandidate = false;
 
             const data = window.GameLogic && window.GameLogic.doghouseFurniture
                 ? (window.GameLogic.doghouseFurniture[key] || {})
@@ -22429,7 +22434,9 @@ if (activeBubbleMsg) {
         if (this.sceneName !== 'doghouse') return false;
         if (!window.GameLogic) return false;
 
+        this.clearDoghouseFurnitureRepositionSelection();
         window.GameLogic.repositionDoghouseFurnitureBaseKey = baseKey;
+        window.GameLogic.stowDoghouseFurnitureBaseKey = null;
 
         Object.keys(this.furnitureSprites || {}).forEach(key => {
             const f = this.furnitureSprites[key];
@@ -22441,8 +22448,60 @@ if (activeBubbleMsg) {
 
             if (f.sprite.setTint) f.sprite.setTint(0x7cff7c);
             f.sprite._onionRepositionHighlight = true;
+            f.sprite._onionStowHighlight = false;
             this.syncDoghouseFurniturePointerBehavior(key, f, data);
         });
+
+        return true;
+    }
+
+    prepareDoghouseFurnitureStowSelection(baseKey) {
+        if (this.sceneName !== 'doghouse') return false;
+        if (!window.GameLogic) return false;
+
+        this.clearDoghouseFurnitureRepositionSelection();
+        window.GameLogic.repositionDoghouseFurnitureBaseKey = null;
+        window.GameLogic.stowDoghouseFurnitureBaseKey = baseKey;
+
+        Object.keys(this.furnitureSprites || {}).forEach(key => {
+            const f = this.furnitureSprites[key];
+            if (!f || !f.sprite || !f.sprite.active) return;
+
+            const data = window.GameLogic.doghouseFurniture ? (window.GameLogic.doghouseFurniture[key] || {}) : {};
+            const runtimeBaseKey = this.getDoghouseFurnitureBaseKeyForRuntime(key, data);
+            const isPlacedOnField = data && (data.locked === true || data.locked === false);
+            if (runtimeBaseKey !== baseKey || !isPlacedOnField) return;
+
+            if (f.sprite.setTint) f.sprite.setTint(0x7cff7c);
+            f.sprite._onionStowHighlight = true;
+            f.sprite._onionRepositionHighlight = false;
+            this.syncDoghouseFurniturePointerBehavior(key, f, data);
+        });
+
+        return true;
+    }
+
+    trySelectDoghouseFurnitureForStow(key, f) {
+        if (this.sceneName !== 'doghouse' || !window.GameLogic || !window.GameLogic.currentUser) return false;
+
+        const targetBaseKey = window.GameLogic.stowDoghouseFurnitureBaseKey;
+        if (!targetBaseKey || !key || !f || !f.sprite || !f.sprite.active) return false;
+
+        const furnData = window.GameLogic.doghouseFurniture || {};
+        const currentData = furnData[key] || {};
+        const runtimeBaseKey = this.getDoghouseFurnitureBaseKeyForRuntime(key, currentData);
+        const isPlacedOnField = currentData && (currentData.locked === true || currentData.locked === false);
+
+        if (runtimeBaseKey !== targetBaseKey || !isPlacedOnField) return false;
+
+        if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+        this.clearDoghouseFurnitureRepositionSelection();
+
+        if (window.stowDoghouseFurnitureInstance) {
+            window.stowDoghouseFurnitureInstance(key);
+        } else {
+            remove(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}`));
+        }
 
         return true;
     }
@@ -22494,6 +22553,7 @@ if (activeBubbleMsg) {
 
         return true;
     }
+
   
       syncDoghouseFurniturePointerBehavior(key, f, data = {}) {
         if (this.sceneName !== 'doghouse' || !f || !f.sprite || !f.sprite.active) return;
@@ -22501,24 +22561,30 @@ if (activeBubbleMsg) {
         const sprite = f.sprite;
         const isPlacingSelf = !!(window.GameLogic && window.GameLogic.placingFurnitureKey === key);
         const isLocked = data && Object.prototype.hasOwnProperty.call(data, 'locked') ? !!data.locked : !!sprite.isLocked;
+        const isPlacedOnField = data && (data.locked === true || data.locked === false);
         const isInteractiveFurniture = this.isDoghouseInteractiveFurniture(key, f);
         const baseKey = this.getDoghouseFurnitureBaseKeyForRuntime ? this.getDoghouseFurnitureBaseKeyForRuntime(key, data || {}) : ((data && data.furnitureKey) || key);
         const repositionBaseKey = window.GameLogic ? window.GameLogic.repositionDoghouseFurnitureBaseKey : null;
+        const stowBaseKey = window.GameLogic ? window.GameLogic.stowDoghouseFurnitureBaseKey : null;
         const isRepositionCandidate = !!(repositionBaseKey && isLocked && baseKey === repositionBaseKey);
-        const shouldReceiveFurnitureTap = isPlacingSelf || isRepositionCandidate || !isLocked || isInteractiveFurniture;
+        const isStowCandidate = !!(stowBaseKey && isPlacedOnField && baseKey === stowBaseKey);
+        const shouldReceiveFurnitureTap = isPlacingSelf || isRepositionCandidate || isStowCandidate || !isLocked || isInteractiveFurniture;
 
         sprite._onionFurnitureKey = key;
         sprite._onionDirectTapType = 'furniture';
         sprite._onionDoghouseDecorativeFurniture = !isInteractiveFurniture;
         sprite._onionDoghouseRepositionCandidate = isRepositionCandidate;
+        sprite._onionDoghouseStowCandidate = isStowCandidate;
         sprite._onionCanvasMovePassThrough = !shouldReceiveFurnitureTap;
 
-        if (isRepositionCandidate) {
+        if (isRepositionCandidate || isStowCandidate) {
             if (sprite.setTint) sprite.setTint(0x7cff7c);
-            sprite._onionRepositionHighlight = true;
-        } else if (sprite._onionRepositionHighlight && !isPlacingSelf) {
+            sprite._onionRepositionHighlight = isRepositionCandidate;
+            sprite._onionStowHighlight = isStowCandidate;
+        } else if ((sprite._onionRepositionHighlight || sprite._onionStowHighlight) && !isPlacingSelf) {
             if (sprite.clearTint) sprite.clearTint();
             sprite._onionRepositionHighlight = false;
+            sprite._onionStowHighlight = false;
         }
 
         if (shouldReceiveFurnitureTap) {
@@ -23643,6 +23709,7 @@ if (activeBubbleMsg) {
         if (type === 'furniture') {
             const key = payload.key;
             const f = payload.f || (key && this.furnitureSprites ? this.furnitureSprites[key] : null);
+            if (this.trySelectDoghouseFurnitureForStow && this.trySelectDoghouseFurnitureForStow(key, f)) return true;
             if (this.trySelectDoghouseFurnitureForReposition && this.trySelectDoghouseFurnitureForReposition(key, f)) return true;
             return this.handleFurnitureDirectInteraction(key, f);
         }
@@ -25117,30 +25184,26 @@ window.startDoghouseFurnitureReposition = function(furnitureKey) {
     sendBubble(`請點選要重新擺設的${def.name || '家具'}。`);
 };
 
-window.stowDoghouseFurniture = function(furnitureKey) {
+window.stowDoghouseFurnitureInstance = function(instanceKey) {
     if (!window.GameLogic || window.GameLogic.currentScene !== 'doghouse' || !window.GameLogic.currentUser) return;
 
     const source = window.GameLogic.doghouseFurniture || {};
-    const exactData = source[furnitureKey] || null;
-    const baseKey = exactData
-        ? (window.getDoghouseFurnitureBaseKey ? window.getDoghouseFurnitureBaseKey(furnitureKey, exactData) : (exactData.furnitureKey || furnitureKey))
-        : ((window.getFurnitureDefinition && window.getFurnitureDefinition(furnitureKey)) ? furnitureKey : (window.getDoghouseFurnitureBaseKey ? window.getDoghouseFurnitureBaseKey(furnitureKey, {}) : furnitureKey));
+    const targetData = source[instanceKey] || null;
+    if (!targetData) return;
 
-    const entries = window.getDoghouseFurnitureEntriesByBaseKey ? window.getDoghouseFurnitureEntriesByBaseKey(baseKey) : [];
-    const targetEntry = exactData ? { instanceKey: furnitureKey, data: exactData } : entries.find(entry => entry.data && (entry.data.locked === true || entry.data.locked === false));
-    if (!targetEntry || !targetEntry.instanceKey) return;
-
-    const key = targetEntry.instanceKey;
+    const baseKey = window.getDoghouseFurnitureBaseKey
+        ? window.getDoghouseFurnitureBaseKey(instanceKey, targetData)
+        : (targetData.furnitureKey || instanceKey);
     const def = window.getFurnitureDefinition ? window.getFurnitureDefinition(baseKey) : { key: baseKey, name: baseKey };
-    const path = `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}`;
+    const path = `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${instanceKey}`;
 
-    if (window.GameLogic.placingFurnitureKey === key) {
+    if (window.GameLogic.placingFurnitureKey === instanceKey) {
         if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput();
         window.GameLogic.placingFurnitureKey = null;
     }
 
-    if (window.GameLogic.doghouseFurniture && window.GameLogic.doghouseFurniture[key]) {
-        delete window.GameLogic.doghouseFurniture[key];
+    if (window.GameLogic.doghouseFurniture && window.GameLogic.doghouseFurniture[instanceKey]) {
+        delete window.GameLogic.doghouseFurniture[instanceKey];
     }
 
     if (window.GameLogic.phaserGame) {
@@ -25148,7 +25211,7 @@ window.stowDoghouseFurniture = function(furnitureKey) {
         if (scene && scene.clearDoghouseFurnitureRepositionSelection) {
             scene.clearDoghouseFurnitureRepositionSelection();
         }
-        if (scene && scene.localPlayer && scene.localPlayer.seatedFurnitureKey === key && scene.stopDoghouseCushionSitting) {
+        if (scene && scene.localPlayer && scene.localPlayer.seatedFurnitureKey === instanceKey && scene.stopDoghouseCushionSitting) {
             scene.stopDoghouseCushionSitting();
         }
     }
@@ -25170,6 +25233,40 @@ window.stowDoghouseFurniture = function(furnitureKey) {
             }
         })
         .catch(err => console.warn('Firebase 狗窩家具收起失敗:', err));
+};
+
+window.stowDoghouseFurniture = function(furnitureKey) {
+    if (!window.GameLogic || window.GameLogic.currentScene !== 'doghouse' || !window.GameLogic.currentUser) return;
+
+    const source = window.GameLogic.doghouseFurniture || {};
+    const exactData = source[furnitureKey] || null;
+    const def = window.getFurnitureDefinition ? window.getFurnitureDefinition(furnitureKey) : null;
+    const baseKey = exactData
+        ? (window.getDoghouseFurnitureBaseKey ? window.getDoghouseFurnitureBaseKey(furnitureKey, exactData) : (exactData.furnitureKey || furnitureKey))
+        : ((def && def.key) || (window.getDoghouseFurnitureBaseKey ? window.getDoghouseFurnitureBaseKey(furnitureKey, {}) : furnitureKey));
+
+    const entries = window.getDoghouseFurnitureEntriesByBaseKey ? window.getDoghouseFurnitureEntriesByBaseKey(baseKey) : [];
+    const placedEntries = entries.filter(entry => entry.data && (entry.data.locked === true || entry.data.locked === false));
+    if (placedEntries.length <= 0) return;
+
+    window.GameLogic.repositionDoghouseFurnitureBaseKey = null;
+    window.GameLogic.stowDoghouseFurnitureBaseKey = baseKey;
+
+    if (window.closeFurnitureCatalogModal) window.closeFurnitureCatalogModal();
+    else {
+        const modal = document.getElementById('furniture-catalog-modal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    if (window.GameLogic.phaserGame) {
+        const scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
+        if (scene && scene.prepareDoghouseFurnitureStowSelection) {
+            scene.prepareDoghouseFurnitureStowSelection(baseKey);
+        }
+    }
+
+    const showDef = window.getFurnitureDefinition ? window.getFurnitureDefinition(baseKey) : { key: baseKey, name: baseKey };
+    sendBubble(`請點選要收起的${showDef.name || '家具'}。`);
 };
 
 window.showFurnitureCatalogModal = function() {
