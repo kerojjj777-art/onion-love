@@ -88,7 +88,10 @@ window.GameLogic = {
     cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, placingFurnitureKey: null, 
     phaserGame: null, phaserLoaded: false, pendingScene: null, db: db,
     armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false, rpsModalActive: false, moonBunBuffUntil: 0, moonBunSweepPressCount: 0, moonBunBuffEndNotified: false, moonBunBuffRemainingMs: 0, moonBunBuffLastSaveAt: 0,
-    selectedServerRoom: initialServerRoom, currentServerRoom: initialServerRoom, serverRooms: SERVER_ROOMS, authGuardSigningOut: false
+    selectedServerRoom: initialServerRoom, currentServerRoom: initialServerRoom, serverRooms: SERVER_ROOMS,
+    dailyMeowlime: { lastCheckinDate: "", totalCheckins: 0, checkinHistory: {} },
+    meowlimeDailyLoaded: false, meowlimeDailyRefreshing: false, meowlimeDailyDate: "", meowlimeCanCheckinToday: false,
+    authGuardSigningOut: false
 };
 
 let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, pmUnreadUnsubscribe = null, profileViewingUid = null;
@@ -342,7 +345,9 @@ window.openPortalModal = function() { document.getElementById('inventory-modal')
 
 window.openMeowlimeModal = function() {
     const modal = document.getElementById('meowlime-modal');
+    if (window.updateMeowlimeModalStatusText) window.updateMeowlimeModalStatusText();
     if (modal) modal.style.display = 'block';
+    if (window.refreshDailyMeowlimeStatus) window.refreshDailyMeowlimeStatus({ reason: 'openModal' });
 };
 
 window.closeMeowlimeModal = function() {
@@ -364,6 +369,171 @@ window.getMeowlimeCatalogIconHtml = function() {
     }
 
     return `<div class="meowlime-catalog-icon"><span>^⦁⩊⦁^</span></div>`;
+};
+
+window.getMeowlimeTodayDateString = function(date = new Date()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
+window.applyMeowlimeDailyState = function(data = {}) {
+    if (!window.GameLogic) return;
+
+    const today = window.getMeowlimeTodayDateString ? window.getMeowlimeTodayDateString() : '';
+    const dailyData = data || {};
+    const lastCheckinDate = dailyData.lastCheckinDate ? String(dailyData.lastCheckinDate) : '';
+
+    window.GameLogic.dailyMeowlime = {
+        lastCheckinDate: lastCheckinDate,
+        totalCheckins: Number(dailyData.totalCheckins || 0),
+        checkinHistory: dailyData.checkinHistory || {}
+    };
+    window.GameLogic.meowlimeDailyDate = today;
+    window.GameLogic.meowlimeDailyLoaded = true;
+    window.GameLogic.meowlimeCanCheckinToday = lastCheckinDate !== today;
+
+    if (window.updateMeowlimeModalStatusText) window.updateMeowlimeModalStatusText();
+    if (window.refreshMeowlimeVisualsInScene) window.refreshMeowlimeVisualsInScene();
+};
+
+window.updateMeowlimeModalStatusText = function() {
+    const textEl = document.querySelector('#meowlime-modal .meowlime-modal-text');
+    if (!textEl || !window.GameLogic) return;
+
+    if (!window.GameLogic.meowlimeDailyLoaded) {
+        textEl.innerText = '喵萊姆正在確認今日簽到狀態……';
+        return;
+    }
+
+    textEl.innerText = window.GameLogic.meowlimeCanCheckinToday
+        ? '喵萊姆：今天還沒簽到喵。'
+        : '喵萊姆：今天已經簽到過囉，明天再來喵。';
+};
+
+window.refreshMeowlimeVisualsInScene = function() {
+    try {
+        const scene = window.GameLogic && window.GameLogic.phaserGame
+            ? window.GameLogic.phaserGame.scene.getScene('MainScene')
+            : null;
+        if (scene && scene.refreshMeowlimeDailyHintVisuals) {
+            scene.refreshMeowlimeDailyHintVisuals();
+        }
+    } catch (err) {
+        console.warn('[喵萊姆] 刷新大廳提示失敗：', err);
+    }
+};
+
+window.refreshDailyMeowlimeStatus = async function(options = {}) {
+    if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return null;
+
+    const today = window.getMeowlimeTodayDateString ? window.getMeowlimeTodayDateString() : '';
+    const now = Date.now();
+
+    if (
+        options.skipIfFresh &&
+        window.GameLogic.meowlimeDailyLoaded &&
+        window.GameLogic.meowlimeDailyDate === today &&
+        window.__meowlimeDailyLastFetchedAt &&
+        now - window.__meowlimeDailyLastFetchedAt < 180000
+    ) {
+        return window.GameLogic.dailyMeowlime || null;
+    }
+
+    if (window.GameLogic.meowlimeDailyRefreshing) return window.GameLogic.dailyMeowlime || null;
+
+    window.GameLogic.meowlimeDailyRefreshing = true;
+
+    try {
+        const uid = window.GameLogic.currentUser.uid;
+        const snap = await get(ref(window.GameLogic.db, `users/${uid}/dailyMeowlime`));
+        const data = snap.exists() ? (snap.val() || {}) : {};
+        window.__meowlimeDailyLastFetchedAt = Date.now();
+        window.applyMeowlimeDailyState(data);
+        return data;
+    } catch (err) {
+        console.warn('[喵萊姆] 讀取每日簽到狀態失敗：', err);
+        return null;
+    } finally {
+        window.GameLogic.meowlimeDailyRefreshing = false;
+    }
+};
+
+window.recordDailyMeowlimeCheckin = async function() {
+    if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return { ok: false, reason: 'no-user' };
+
+    const uid = window.GameLogic.currentUser.uid;
+    const today = window.getMeowlimeTodayDateString ? window.getMeowlimeTodayDateString() : '';
+    const snap = await get(ref(window.GameLogic.db, `users/${uid}/dailyMeowlime`));
+    const data = snap.exists() ? (snap.val() || {}) : {};
+
+    if (data.lastCheckinDate === today) {
+        window.applyMeowlimeDailyState(data);
+        return { ok: true, alreadyChecked: true, date: today };
+    }
+
+    const totalCheckins = Number(data.totalCheckins || 0) + 1;
+    const historyItem = {
+        date: today,
+        createdAt: Date.now(),
+        serverRoom: window.getCurrentServerRoomId ? window.getCurrentServerRoomId() : (window.GameLogic.currentServerRoom || '')
+    };
+
+    const updates = {
+        lastCheckinDate: today,
+        totalCheckins: totalCheckins
+    };
+    updates[`checkinHistory/${today}`] = historyItem;
+
+    await update(ref(window.GameLogic.db, `users/${uid}/dailyMeowlime`), updates);
+
+    const nextData = {
+        ...data,
+        lastCheckinDate: today,
+        totalCheckins: totalCheckins,
+        checkinHistory: {
+            ...(data.checkinHistory || {}),
+            [today]: historyItem
+        }
+    };
+
+    window.__meowlimeDailyLastFetchedAt = Date.now();
+    window.applyMeowlimeDailyState(nextData);
+
+    return { ok: true, alreadyChecked: false, date: today, totalCheckins: totalCheckins };
+};
+
+window.startMeowlimeDailyWatcher = function() {
+    if (window.__meowlimeDailyTimer) return;
+
+    window.__meowlimeLastLocalDate = window.getMeowlimeTodayDateString ? window.getMeowlimeTodayDateString() : '';
+
+    window.__meowlimeDailyTimer = setInterval(() => {
+        const today = window.getMeowlimeTodayDateString ? window.getMeowlimeTodayDateString() : '';
+        if (!today || today === window.__meowlimeLastLocalDate) return;
+
+        window.__meowlimeLastLocalDate = today;
+
+        if (window.GameLogic) {
+            window.GameLogic.meowlimeDailyLoaded = false;
+            window.GameLogic.meowlimeDailyDate = today;
+            window.GameLogic.meowlimeCanCheckinToday = true;
+        }
+
+        if (window.updateMeowlimeModalStatusText) window.updateMeowlimeModalStatusText();
+        if (window.refreshMeowlimeVisualsInScene) window.refreshMeowlimeVisualsInScene();
+        if (window.refreshDailyMeowlimeStatus) window.refreshDailyMeowlimeStatus({ reason: 'dateChanged' });
+    }, 60000);
+};
+
+window.stopMeowlimeDailyWatcher = function() {
+    if (window.__meowlimeDailyTimer) {
+        clearInterval(window.__meowlimeDailyTimer);
+        window.__meowlimeDailyTimer = null;
+    }
+    window.__meowlimeLastLocalDate = null;
+    window.__meowlimeDailyLastFetchedAt = 0;
 };
 
 // 新增：空間傳送門點擊時的粒子噴發效果
@@ -8339,6 +8509,9 @@ onAuthStateChanged(auth, async (user) => {
         if (window.checkPendingWeeklyRewardNotice) window.checkPendingWeeklyRewardNotice();
         }, 0);
 
+        if (window.startMeowlimeDailyWatcher) window.startMeowlimeDailyWatcher();
+        if (window.refreshDailyMeowlimeStatus) window.refreshDailyMeowlimeStatus({ reason: 'login' });
+
         if (connectedUnsubscribe) { connectedUnsubscribe(); connectedUnsubscribe = null; }
         connectedUnsubscribe = onValue(ref(db, '.info/connected'), (snap) => {
             if (snap.val() === true && window.GameLogic.currentUser) {
@@ -8372,6 +8545,7 @@ onAuthStateChanged(auth, async (user) => {
         if (cafeFurnitureUnsubscribe) { cafeFurnitureUnsubscribe(); cafeFurnitureUnsubscribe = null; }
         cafeFurnitureUnsubscribe = onValue(ref(db, window.getServerRoomPath('cafeFurniture')), snap => {
             window.GameLogic.cafeFurniture = snap.val() || {};
+            if (window.refreshDailyMeowlimeStatus) window.refreshDailyMeowlimeStatus({ reason: 'cafeFurniture', skipIfFresh: true });
         });
 
         // 房間內神龕強制召喚監聽與 60 秒倒數
@@ -8442,6 +8616,13 @@ onAuthStateChanged(auth, async (user) => {
         if (shrineUnsubscribe) { shrineUnsubscribe(); shrineUnsubscribe = null; }
         if (shrineEventUnsubscribe) { shrineEventUnsubscribe(); shrineEventUnsubscribe = null; }
         if (partyInvitesUnsubscribe) { partyInvitesUnsubscribe(); partyInvitesUnsubscribe = null; }
+        if (window.stopMeowlimeDailyWatcher) window.stopMeowlimeDailyWatcher();
+
+        window.GameLogic.dailyMeowlime = { lastCheckinDate: "", totalCheckins: 0, checkinHistory: {} };
+        window.GameLogic.meowlimeDailyLoaded = false;
+        window.GameLogic.meowlimeDailyRefreshing = false;
+        window.GameLogic.meowlimeDailyDate = "";
+        window.GameLogic.meowlimeCanCheckinToday = false;
 
         window.GameLogic.partyInvitesData = {};
         if (window.PartyLogic) {
@@ -10122,6 +10303,8 @@ class MainScene extends Phaser.Scene {
         }
 
         this.otherPlayers = {}; this.furnitureSprites = {}; this.dummySprites = {}; this.coinSprites = {};
+        if (this.isCafe && window.refreshDailyMeowlimeStatus) window.refreshDailyMeowlimeStatus({ reason: 'cafeSceneCreate', skipIfFresh: true });
+        
         
                 if (this.isCafe || this.sceneName === "shrine") { 
             this.coinsListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('droppedCoins')), (snap) => { 
@@ -22916,6 +23099,7 @@ if (activeBubbleMsg) {
         f.sprite.setDepth(5);
         if (f.sprite.body && f.sprite.body.setSize) f.sprite.body.setSize(120, 120, true);
 
+        const hintGlow = this.add.graphics();
         const blob = this.add.graphics();
         const face = this.add.text(0, 1, '^⦁⩊⦁^', {
             fontSize: '21px',
@@ -22926,11 +23110,13 @@ if (activeBubbleMsg) {
             strokeThickness: 4
         }).setOrigin(0.5);
 
-        f.meowlimeContainer = this.add.container(f.sprite.x, f.sprite.y, [blob, face]).setDepth(5.2);
+        f.meowlimeContainer = this.add.container(f.sprite.x, f.sprite.y, [hintGlow, blob, face]).setDepth(5.2);
+        f.meowlimeDailyGlow = hintGlow;
         f.meowlimeGraphics = blob;
         f.meowlimeFace = face;
+        f.meowlimeDailyHintActive = null;
 
-        if (this.minimap && this.minimap.ignore) this.minimap.ignore([f.meowlimeContainer, blob, face]);
+        if (this.minimap && this.minimap.ignore) this.minimap.ignore([f.meowlimeContainer, hintGlow, blob, face]);
 
         f.meowlimeTween = this.tweens.add({
             targets: f.meowlimeContainer,
@@ -22942,7 +23128,65 @@ if (activeBubbleMsg) {
             ease: 'Sine.easeInOut'
         });
 
+        this.updateMeowlimeFurnitureDailyHint(f, !!(window.GameLogic && window.GameLogic.meowlimeCanCheckinToday));
         this.syncMeowlimeFurnitureVisual(f, this.time ? this.time.now : 0, !!data.locked);
+    }
+
+    updateMeowlimeFurnitureDailyHint(f, canCheckin) {
+        if (!f || !f.isMeowlime || !f.meowlimeContainer) return;
+
+        const active = !!canCheckin;
+
+        if (f.meowlimeDailyHintActive === active) {
+            if (f.meowlimeFace) {
+                f.meowlimeFace.setText(active ? '^ Φ⩊Φ ^' : '^⦁⩊⦁^');
+            }
+            return;
+        }
+
+        f.meowlimeDailyHintActive = active;
+
+        if (f.meowlimeFace) {
+            f.meowlimeFace.setText(active ? '^ Φ⩊Φ ^' : '^⦁⩊⦁^');
+        }
+
+        if (active) {
+            if (!f.meowlimeDailyGlow) {
+                f.meowlimeDailyGlow = this.add.graphics();
+                f.meowlimeContainer.addAt(f.meowlimeDailyGlow, 0);
+            }
+
+            if (!f.meowlimeDailyDot) {
+                f.meowlimeDailyDot = this.add.circle(40, -42, 7, 0xff2b4f, 1)
+                    .setStrokeStyle(3, 0xffffff, 0.82);
+                f.meowlimeDailyDot.setBlendMode(Phaser.BlendModes.ADD);
+                f.meowlimeContainer.add(f.meowlimeDailyDot);
+            }
+
+            if (!f.meowlimeDailyDotTween && f.meowlimeDailyDot) {
+                f.meowlimeDailyDotTween = this.tweens.add({
+                    targets: f.meowlimeDailyDot,
+                    scale: 1.28,
+                    alpha: 0.55,
+                    yoyo: true,
+                    repeat: -1,
+                    duration: 520,
+                    ease: 'Sine.easeInOut'
+                });
+            }
+        } else {
+            if (f.meowlimeDailyDotTween) {
+                f.meowlimeDailyDotTween.stop();
+                f.meowlimeDailyDotTween = null;
+            }
+            if (f.meowlimeDailyDot && f.meowlimeDailyDot.destroy) {
+                f.meowlimeDailyDot.destroy();
+                f.meowlimeDailyDot = null;
+            }
+            if (f.meowlimeDailyGlow) {
+                f.meowlimeDailyGlow.clear();
+            }
+        }
     }
 
     syncMeowlimeFurnitureVisual(f, time = 0, locked = true) {
@@ -22954,11 +23198,40 @@ if (activeBubbleMsg) {
 
         f.meowlimeContainer.setPosition(f.sprite.x + wobbleX, f.sprite.y + wobbleY);
         f.meowlimeContainer.setAlpha(locked ? 1 : 0.6);
+
+        const canCheckin = !!(window.GameLogic && window.GameLogic.meowlimeCanCheckinToday);
+        this.updateMeowlimeFurnitureDailyHint(f, canCheckin);
+
+        if (f.meowlimeDailyGlow) {
+            f.meowlimeDailyGlow.clear();
+            if (canCheckin) {
+                const glowPulse = 0.62 + Math.sin(t * 3.2) * 0.16;
+                f.meowlimeDailyGlow.lineStyle(9, this.getMeowlimeMixedColor(t, 0.4), glowPulse * 0.36);
+                f.meowlimeDailyGlow.strokeCircle(0, 0, 61 + Math.sin(t * 2.1) * 3);
+                f.meowlimeDailyGlow.lineStyle(5, this.getMeowlimeMixedColor(t, 2.1), glowPulse * 0.5);
+                f.meowlimeDailyGlow.strokeCircle(0, 0, 54 + Math.cos(t * 2.5) * 2);
+            }
+        }
+
         f.meowlimeGraphics.clear();
         this.drawMeowlimeBlob(f.meowlimeGraphics, 0, 0, 120, t);
 
+        if (f.meowlimeDailyDot) {
+            f.meowlimeDailyDot.setPosition(40 + Math.sin(t * 4.2) * 1.3, -42 + Math.cos(t * 3.8) * 1.2);
+        }
+
         if (f.meowlimeFace) {
             f.meowlimeFace.setY(1 + Math.sin(t * 3.4) * 1.2);
+        }
+    }
+
+    refreshMeowlimeDailyHintVisuals() {
+        if (!this.furnitureSprites) return;
+
+        const canCheckin = !!(window.GameLogic && window.GameLogic.meowlimeCanCheckinToday);
+        for (const key in this.furnitureSprites) {
+            const f = this.furnitureSprites[key];
+            if (f && f.isMeowlime) this.updateMeowlimeFurnitureDailyHint(f, canCheckin);
         }
     }
 
@@ -22968,12 +23241,25 @@ if (activeBubbleMsg) {
             f.meowlimeTween.stop();
             f.meowlimeTween = null;
         }
+        if (f.meowlimeDailyDotTween) {
+            f.meowlimeDailyDotTween.stop();
+            f.meowlimeDailyDotTween = null;
+        }
+        if (f.meowlimeDailyDot && f.meowlimeDailyDot.destroy) {
+            f.meowlimeDailyDot.destroy();
+        }
+        if (f.meowlimeDailyGlow && f.meowlimeDailyGlow.destroy) {
+            f.meowlimeDailyGlow.destroy();
+        }
         if (f.meowlimeContainer && f.meowlimeContainer.destroy) {
             f.meowlimeContainer.destroy();
         }
         f.meowlimeContainer = null;
+        f.meowlimeDailyGlow = null;
+        f.meowlimeDailyDot = null;
         f.meowlimeGraphics = null;
         f.meowlimeFace = null;
+        f.meowlimeDailyHintActive = null;
     }
   
     createFurniture(key, data) { 
