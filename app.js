@@ -1970,6 +1970,27 @@ function createSystemUI() {
             .friend-request-actions button { min-height:36px; border-radius:10px; font-weight:900; touch-action:manipulation; }
             #friend-request-modal { z-index:430 !important; }
             #friend-request-modal .friend-request-name { color:#ad1457; font-weight:900; text-shadow:0 0 8px rgba(255,128,171,0.45); }
+            .phone-header-row { position:relative; display:flex; align-items:center; justify-content:center; gap:8px; min-height:42px; padding:0 96px 0 8px; box-sizing:border-box; }
+            .phone-header-row h3 { margin:0; }
+            .phone-friends-top-btn { position:absolute; right:0; top:50%; transform:translateY(-50%); min-height:34px; padding:6px 10px !important; font-size:12px !important; white-space:nowrap; }
+            .phone-section-title { color:#ffcc00; font-weight:bold; text-align:left; margin:10px 0 4px 0; border-bottom:1px solid rgba(255,255,255,0.25); padding-bottom:3px; text-shadow:1px 1px 2px #000; }
+            .phone-friend-card { background:rgba(255,255,255,0.9) !important; color:#4a1230 !important; border:2px solid rgba(255,255,255,0.95) !important; border-radius:14px; box-shadow:0 4px 10px rgba(184,39,116,0.25), 0 0 12px rgba(255,64,160,0.18) !important; padding:10px; width:100%; box-sizing:border-box; text-align:left; }
+            .phone-friend-title { display:flex; align-items:center; justify-content:space-between; gap:8px; font-weight:900; min-width:0; }
+            .phone-friend-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+            .phone-friend-status { flex-shrink:0; font-size:11px; padding:3px 7px; border-radius:999px; border:1px solid rgba(255,255,255,0.85); background:rgba(0,0,0,0.12); }
+            .phone-friend-status.online { color:#0b7f28; background:rgba(186,255,196,0.72); }
+            .phone-friend-status.offline { color:#777; background:rgba(238,238,238,0.85); }
+            .phone-friend-meta { margin-top:5px; font-size:12px; color:#7d3657; line-height:1.45; word-break:break-all; }
+            .phone-friend-actions { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:6px; margin-top:9px; }
+            .phone-friend-actions button { min-height:34px; border-radius:10px; padding:6px 5px !important; font-size:12px !important; font-weight:900; touch-action:manipulation; }
+            .phone-friend-actions .phone-visit-ready { background:linear-gradient(180deg,#fff1a8,#ffb700) !important; color:#3b2200 !important; box-shadow:0 0 12px rgba(255,210,80,0.65), inset 0 1px 0 rgba(255,255,255,0.62) !important; }
+            .phone-friend-actions .phone-visit-disabled { background:linear-gradient(180deg,#eeeeee,#aaaaaa) !important; color:#555 !important; box-shadow:none !important; }
+            @media (max-width: 768px), (orientation: portrait) {
+                .phone-header-row { padding-right:92px; }
+                .phone-friends-top-btn { min-height:32px; padding:5px 8px !important; font-size:11px !important; }
+                .phone-friend-actions { grid-template-columns:1fr 1fr; gap:8px; }
+                .phone-friend-actions button { min-height:38px; font-size:13px !important; }
+            }
             .profile-line { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; border-bottom: 1px dashed #ccc; padding-bottom: 5px;}
             .prince-bond-card { margin: 12px 0; padding: 10px; border-radius: 12px; background: rgba(255, 182, 193, 0.35); border: 2px solid rgba(255, 128, 171, 0.85); box-shadow: 0 0 10px rgba(255, 128, 171, 0.45); display: flex; align-items: center; gap: 10px; text-align: left; }
             .prince-heart-icon { position: relative; font-size: 24px; filter: drop-shadow(0 0 6px rgba(255, 105, 180, 0.9)); }
@@ -6046,8 +6067,11 @@ function createSystemUI() {
                 <span style="--emoji-left:48%; --emoji-dx:-88px; --emoji-size:24px; --emoji-speed:6.6s; --emoji-delay:4.9s;">💋</span>
                 <span style="--emoji-left:78%; --emoji-dx:74px; --emoji-size:25px; --emoji-speed:7.4s; --emoji-delay:5.5s;">🤡</span>
             </div>
-            <h3 style="color: var(--mucha-green);">📱 洋蔥手機</h3>
-            <p style="font-size: 12px; color: #fff; text-shadow:1px 1px 2px #000; margin-top: 0;">點擊聯絡人發送私訊</p>
+            <div class="phone-header-row">
+                <h3 style="color: var(--mucha-green);">📱 洋蔥手機</h3>
+                <button id="phone-friends-btn" class="phone-pink-btn phone-friends-top-btn" type="button" onclick="window.openMyFriendsPhonePanel && window.openMyFriendsPhonePanel()">我的好友</button>
+            </div>
+            <p id="phone-subtitle" style="font-size: 12px; color: #fff; text-shadow:1px 1px 2px #000; margin-top: 0;">點擊聯絡人發送私訊</p>
             <div id="phone-contacts"></div>
             <button class="close-modal-btn btn-secondary phone-pink-btn" style="margin-top: 15px; width:100%; min-height:40px;" onclick="window.closePhoneModal()">收起手機</button>
         </div>
@@ -9275,6 +9299,174 @@ window.makePhoneFriendRequestCard = function(fromUid, requestData = {}) {
         </div>
     </div>`;
 };
+
+window.getShortFriendUid = function(uid) {
+    const raw = String(uid || '');
+    if (raw.length <= 10) return raw || '未知ID';
+    return `${raw.slice(0, 6)}…${raw.slice(-4)}`;
+};
+
+window.getFriendOnlineInfo = function(uid, onlinePlayers = null) {
+    const players = onlinePlayers || (window.GameLogic && window.GameLogic.onlinePlayers) || {};
+    const p = players && players[uid] ? players[uid] : null;
+    const fresh = p && window.isFreshPhoneOnlinePlayer ? window.isFreshPhoneOnlinePlayer(p) : false;
+
+    return {
+        online: !!fresh,
+        name: p && p.name ? p.name : '',
+        color: p && p.color ? p.color : '',
+        level: p && p.level !== undefined ? p.level : null
+    };
+};
+
+window.makePhoneFriendCard = function(uid, friendData = {}, options = {}) {
+    const onlinePlayers = options.onlinePlayers || {};
+    const pairData = options.pairData || {};
+    const onlineInfo = window.getFriendOnlineInfo ? window.getFriendOnlineInfo(uid, onlinePlayers) : { online: false };
+    const name = onlineInfo.name || friendData.name || '匿名好友';
+    const color = window.safePhoneColor ? window.safePhoneColor(onlineInfo.color || friendData.color || '#fff') : '#fff';
+    const pairId = friendData.pairId || (window.getFriendPairId && window.GameLogic && window.GameLogic.currentUser ? window.getFriendPairId(window.GameLogic.currentUser.uid, uid) : '');
+    const lovePercent = Number(pairData.lovePercent || friendData.lovePercent || 0);
+    const loveText = Number.isFinite(lovePercent) ? lovePercent.toFixed(1) : '0.0';
+    const statusClass = onlineInfo.online ? 'online' : 'offline';
+    const statusText = onlineInfo.online ? '在線' : '離線';
+    const visitClass = onlineInfo.online ? 'phone-visit-ready' : 'phone-visit-disabled';
+    const shortUid = window.getShortFriendUid ? window.getShortFriendUid(uid) : uid;
+
+    return `<div class="phone-friend-card" data-friend-uid="${window.phoneEscapeHtml(uid)}">
+        <div class="phone-friend-title">
+            <div class="phone-friend-name" style="color:${color};">🌱 ${window.phoneEscapeHtml(name)}</div>
+            <div class="phone-friend-status ${statusClass}">${statusText}</div>
+        </div>
+        <div class="phone-friend-meta">ID：${window.phoneEscapeHtml(shortUid)}｜❤️ ${window.phoneEscapeHtml(loveText)}%</div>
+        <div class="phone-friend-actions">
+            <button class="btn-secondary" style="color:#333;" data-phone-action="profile" data-uid="${window.phoneEscapeHtml(uid)}">查看</button>
+            <button class="btn-primary" data-phone-action="pm" data-uid="${window.phoneEscapeHtml(uid)}">私訊</button>
+            <button class="btn-primary" data-phone-action="love-entry" data-uid="${window.phoneEscapeHtml(uid)}" data-pair-id="${window.phoneEscapeHtml(pairId)}">我們的愛</button>
+            <button class="${visitClass}" data-phone-action="visit-entry" data-uid="${window.phoneEscapeHtml(uid)}" data-online="${onlineInfo.online ? '1' : '0'}">去你家</button>
+        </div>
+    </div>`;
+};
+
+window.openMyFriendsPhonePanel = async function() {
+    if (window.__phoneFriendsRendering) return;
+    window.__phoneFriendsRendering = true;
+
+    const inventoryModal = document.getElementById('inventory-modal');
+    const phoneModal = document.getElementById('phone-modal');
+    const contactsEl = document.getElementById('phone-contacts');
+    const subtitleEl = document.getElementById('phone-subtitle');
+    const friendsBtn = document.getElementById('phone-friends-btn');
+
+    try {
+        window.clearUiBlockersAfterModal({ blur: false });
+
+        if (inventoryModal) inventoryModal.style.display = 'none';
+        if (phoneModal) phoneModal.style.display = 'block';
+        if (subtitleEl) subtitleEl.innerText = '好蔥友名單｜查看、私訊、我們的愛、去你家';
+        if (friendsBtn) friendsBtn.innerText = '聯絡人';
+        if (friendsBtn) friendsBtn.onclick = () => window.openPhoneModal && window.openPhoneModal();
+        if (!contactsEl) return;
+
+        contactsEl.innerHTML = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">讀取我的好友中...</div>';
+
+        if (!window.GameLogic.currentUser) {
+            contactsEl.innerHTML = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">請先登入後再使用我的好友</div>';
+            return;
+        }
+
+        const myUid = window.GameLogic.currentUser.uid;
+        const roomName = window.getCurrentServerRoomName ? window.getCurrentServerRoomName() : '目前房間';
+        const [friendsSnap, onlineSnap] = await Promise.all([
+            get(ref(window.GameLogic.db, `users/${myUid}/friends`)),
+            get(ref(window.GameLogic.db, window.getServerRoomPath('onlinePlayers')))
+        ]);
+
+        const friends = friendsSnap.val() || {};
+        const onlinePlayers = Object.assign({}, window.GameLogic.onlinePlayers || {}, onlineSnap.val() || {});
+        window.GameLogic.friends = friends;
+        window.GameLogic.onlinePlayers = onlinePlayers;
+
+        const friendUids = Object.keys(friends)
+            .filter(uid => uid && uid !== myUid)
+            .sort((a, b) => {
+                const aOnline = window.getFriendOnlineInfo ? window.getFriendOnlineInfo(a, onlinePlayers).online : false;
+                const bOnline = window.getFriendOnlineInfo ? window.getFriendOnlineInfo(b, onlinePlayers).online : false;
+                if (aOnline !== bOnline) return aOnline ? -1 : 1;
+                const nameA = (friends[a] && friends[a].name) || '匿名好友';
+                const nameB = (friends[b] && friends[b].name) || '匿名好友';
+                return nameA.localeCompare(nameB, 'zh-Hant');
+            });
+
+        const pairSnaps = await Promise.all(friendUids.map(uid => {
+            const pairId = friends[uid] && friends[uid].pairId
+                ? friends[uid].pairId
+                : (window.getFriendPairId ? window.getFriendPairId(myUid, uid) : '');
+            return pairId
+                ? get(ref(window.GameLogic.db, `friendPairs/${pairId}`)).then(snap => [uid, snap.val() || {}]).catch(() => [uid, {}])
+                : Promise.resolve([uid, {}]);
+        }));
+        const pairMap = {};
+        pairSnaps.forEach(([uid, pairData]) => { pairMap[uid] = pairData || {}; });
+
+        const phoneContactMeta = {};
+        let html = `
+            <div style="font-size:11px; color:#fff; text-shadow:1px 1px 2px #000; margin-bottom:8px;">
+                目前房間：${window.phoneEscapeHtml(roomName)}
+            </div>
+            <div class="phone-section-title">💖 我的好友</div>
+        `;
+
+        if (friendUids.length === 0) {
+            html += '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000; font-size:13px; margin:12px 0;">目前還沒有好蔥友。可以從其他玩家的洋蔥身分證送出邀請。</div>';
+        } else {
+            friendUids.forEach(uid => {
+                const onlineInfo = window.getFriendOnlineInfo ? window.getFriendOnlineInfo(uid, onlinePlayers) : { online: false };
+                const friendData = friends[uid] || {};
+                const meta = {
+                    uid: uid,
+                    name: onlineInfo.name || friendData.name || '匿名好友',
+                    color: onlineInfo.color || friendData.color || '#fff',
+                    pairId: friendData.pairId || (window.getFriendPairId ? window.getFriendPairId(myUid, uid) : ''),
+                    lovePercent: Number((pairMap[uid] && pairMap[uid].lovePercent) || friendData.lovePercent || 0),
+                    online: !!onlineInfo.online
+                };
+                phoneContactMeta[uid] = meta;
+                html += window.makePhoneFriendCard(uid, friendData, { onlinePlayers, pairData: pairMap[uid] });
+            });
+        }
+
+        contactsEl.innerHTML = html;
+        window.GameLogic.phoneContactMeta = Object.assign({}, window.GameLogic.phoneContactMeta || {}, phoneContactMeta);
+        window.bindPhoneContactButtons(contactsEl);
+    } catch (err) {
+        console.warn('[我的好友] 讀取好友列表失敗：', err);
+        if (contactsEl) {
+            contactsEl.innerHTML = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">我的好友讀取失敗，請稍後再試</div>';
+        }
+    } finally {
+        window.__phoneFriendsRendering = false;
+        if (window.scheduleMobileViewportRefresh) window.scheduleMobileViewportRefresh();
+    }
+};
+
+window.openFriendLoveEntry = function(uid) {
+    const meta = (window.GameLogic.phoneContactMeta && window.GameLogic.phoneContactMeta[uid]) || {};
+    const name = meta.name || '這位好友';
+    window.showFriendSystemNotice(`「我們的愛」介面會在下一包開啟：${name}`);
+};
+
+window.openFriendVisitEntry = function(uid, isOnline = false) {
+    const meta = (window.GameLogic.phoneContactMeta && window.GameLogic.phoneContactMeta[uid]) || {};
+    const name = meta.name || '對方';
+
+    if (!isOnline) {
+        window.showFriendSystemNotice('對方不在家……');
+        return;
+    }
+
+    window.showFriendSystemNotice(`「去 ${name} 家」拜訪功能會在下一包開啟`);
+};
 // ====== 好蔥友基礎系統結束 ======
 // ====== 洋蔥手機：目前在線＋最近私訊（房間隔離版） ======
 window.getPMChatId = function(uidA, uidB) {
@@ -9535,6 +9727,20 @@ window.bindPhoneContactButtons = function(contactsEl) {
             window.rejectFriendRequest(btn.dataset.uid);
         });
     });
+
+    contactsEl.querySelectorAll('[data-phone-action="love-entry"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            window.openFriendLoveEntry(btn.dataset.uid);
+        });
+    });
+
+    contactsEl.querySelectorAll('[data-phone-action="visit-entry"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            window.openFriendVisitEntry(btn.dataset.uid, btn.dataset.online === '1');
+        });
+    });
 };
 
 window.openPhoneModal = async function() {
@@ -9562,6 +9768,13 @@ window.openPhoneModal = async function() {
         const myUid = window.GameLogic.currentUser.uid;
         const roomName = window.getCurrentServerRoomName();
         const phoneContactMeta = {};
+        const subtitleEl = document.getElementById('phone-subtitle');
+        const friendsBtn = document.getElementById('phone-friends-btn');
+        if (subtitleEl) subtitleEl.innerText = '點擊聯絡人發送私訊';
+        if (friendsBtn) {
+            friendsBtn.innerText = '我的好友';
+            friendsBtn.onclick = () => window.openMyFriendsPhonePanel && window.openMyFriendsPhonePanel();
+        }
 
         const [onlineSnap, recentSnap, friendRequestsSnap] = await Promise.all([
             get(ref(window.GameLogic.db, window.getServerRoomPath('onlinePlayers'))),
