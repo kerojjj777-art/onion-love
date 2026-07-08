@@ -87,7 +87,7 @@ const initialServerRoom = window.getRememberedServerRoom();
 window.GameLogic = {
     currentUser: null, currentScene: "doghouse",
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0, inventoryOrder: [], princeBond: 0, princePetCountToday: 0, princeLastPetDate: "", princeRewardsClaimed: {}, princeFeedCountToday: 0, princeLastFeedDate: "" },
-    cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, friendRequests: {}, friends: {}, placingFurnitureKey: null, 
+    cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, friendRequests: {}, friends: {}, friendPairs: {}, activeFriendLoveBonus: null, placingFurnitureKey: null, 
     phaserGame: null, phaserLoaded: false, pendingScene: null, db: db, storage: storage,
     armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false, rpsModalActive: false, moonBunBuffUntil: 0, moonBunSweepPressCount: 0, moonBunBuffEndNotified: false, moonBunBuffRemainingMs: 0, moonBunBuffLastSaveAt: 0,
     selectedServerRoom: initialServerRoom, currentServerRoom: initialServerRoom, serverRooms: SERVER_ROOMS,
@@ -1970,6 +1970,241 @@ function createSystemUI() {
             .friend-request-actions button { min-height:36px; border-radius:10px; font-weight:900; touch-action:manipulation; }
             #friend-request-modal { z-index:430 !important; }
             #friend-request-modal .friend-request-name { color:#ad1457; font-weight:900; text-shadow:0 0 8px rgba(255,128,171,0.45); }
+            #friend-love-modal.friend-love-modal {
+                width:min(92vw, 430px) !important;
+                height:min(92vw, calc(var(--onion-vh, 1vh) * 84), 430px) !important;
+                max-width:430px !important;
+                max-height:min(84vh, calc(var(--onion-vh, 1vh) * 84)) !important;
+                padding:18px !important;
+                border-radius:50% !important;
+                border:3px solid rgba(255,255,255,0.94) !important;
+                background:
+                    radial-gradient(circle at 50% 42%, rgba(255,255,255,0.24), transparent 24%),
+                    radial-gradient(circle at 26% 18%, rgba(255,139,206,0.36), transparent 27%),
+                    radial-gradient(circle at 76% 78%, rgba(126,255,238,0.28), transparent 28%),
+                    linear-gradient(145deg, rgba(28,5,42,0.98), rgba(83,12,68,0.98) 46%, rgba(6,18,38,0.98)) !important;
+                color:#fff7ff !important;
+                overflow:hidden !important;
+                box-shadow:0 0 26px rgba(255,99,190,0.52), 0 0 34px rgba(126,255,238,0.32), 0 16px 36px rgba(0,0,0,0.66), inset 0 0 28px rgba(255,255,255,0.16) !important;
+                z-index:440 !important;
+            }
+            #friend-love-modal.friend-love-modal::before {
+                content:"";
+                position:absolute;
+                inset:-18%;
+                border-radius:50%;
+                background:
+                    radial-gradient(circle, rgba(255,255,255,0.95) 0 1px, transparent 3px),
+                    radial-gradient(circle, rgba(255,120,210,0.55) 0 2px, transparent 6px),
+                    radial-gradient(circle, rgba(126,255,238,0.42) 0 2px, transparent 5px);
+                background-size:34px 34px, 56px 56px, 82px 82px;
+                opacity:0.42;
+                animation:friend-love-star-drift 6s linear infinite;
+                pointer-events:none;
+                z-index:0;
+            }
+            #friend-love-modal.friend-love-modal::after {
+                content:"";
+                position:absolute;
+                inset:8%;
+                border-radius:50%;
+                border:1px dashed rgba(255,255,255,0.34);
+                box-shadow:0 0 22px rgba(255,105,190,0.26), inset 0 0 24px rgba(126,255,238,0.12);
+                pointer-events:none;
+                animation:friend-love-ring-spin 12s linear infinite;
+                z-index:0;
+            }
+            #friend-love-modal.friend-love-modal > * { position:relative; z-index:1; }
+            .friend-love-layout {
+                height:100%;
+                display:flex;
+                flex-direction:column;
+                align-items:center;
+                justify-content:center;
+                gap:8px;
+                box-sizing:border-box;
+                text-align:center;
+            }
+            .friend-love-title {
+                margin:0;
+                color:#fff7ff !important;
+                font-size:20px;
+                border-bottom:none !important;
+                text-shadow:0 0 10px rgba(255,128,210,0.95), 0 0 18px rgba(126,255,238,0.5) !important;
+            }
+            .friend-love-people-row {
+                width:100%;
+                display:grid;
+                grid-template-columns:1fr 96px 1fr;
+                align-items:center;
+                gap:5px;
+            }
+            .friend-love-person {
+                min-width:0;
+                display:flex;
+                flex-direction:column;
+                align-items:center;
+                gap:5px;
+                color:#fff7ff;
+            }
+            .friend-love-avatar {
+                width:54px;
+                height:54px;
+                border-radius:50%;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                font-size:30px;
+                border:2px solid rgba(255,255,255,0.88);
+                background:radial-gradient(circle at 35% 28%, rgba(255,255,255,0.88), var(--friend-love-color, #ff8bd4) 48%, rgba(67,15,78,0.98));
+                box-shadow:0 0 14px var(--friend-love-color, rgba(255,139,212,0.82)), inset 0 0 12px rgba(255,255,255,0.26);
+            }
+            .friend-love-name {
+                max-width:100%;
+                font-size:12px;
+                font-weight:900;
+                overflow:hidden;
+                text-overflow:ellipsis;
+                white-space:nowrap;
+                text-shadow:0 1px 2px rgba(0,0,0,0.66);
+            }
+            .friend-love-id {
+                max-width:100%;
+                font-size:10px;
+                opacity:0.82;
+                overflow:hidden;
+                text-overflow:ellipsis;
+                white-space:nowrap;
+            }
+            .friend-love-heart-wrap {
+                position:relative;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                width:96px;
+                height:96px;
+                margin:0 auto;
+                isolation:isolate;
+            }
+            .friend-love-heart {
+                position:relative;
+                z-index:2;
+                font-size:58px;
+                line-height:1;
+                filter:drop-shadow(0 0 10px rgba(255,255,255,0.92)) drop-shadow(0 0 20px rgba(255,79,184,0.86));
+                animation:friend-love-heartbeat 1.05s ease-in-out infinite;
+            }
+            .friend-love-heart-wrap::before,
+            .friend-love-heart-wrap::after {
+                content:"❤️";
+                position:absolute;
+                inset:0;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                font-size:58px;
+                opacity:0.34;
+                filter:blur(0.2px) drop-shadow(0 0 18px rgba(255,79,184,0.72));
+                animation:friend-love-heart-echo 1.7s ease-out infinite;
+                z-index:1;
+            }
+            .friend-love-heart-wrap::after {
+                animation-delay:0.58s;
+                opacity:0.24;
+            }
+            .friend-love-percent {
+                min-width:136px;
+                padding:7px 12px;
+                border-radius:999px;
+                background:rgba(0,0,0,0.42);
+                border:1px solid rgba(255,255,255,0.55);
+                font-size:18px;
+                font-weight:900;
+                color:#fff0fa;
+                text-shadow:0 0 10px rgba(255,79,184,0.9), 0 0 14px rgba(126,255,238,0.42);
+                box-shadow:0 0 12px rgba(255,79,184,0.28), inset 0 0 12px rgba(255,255,255,0.1);
+            }
+            .friend-love-bonus {
+                width:86%;
+                padding:8px 10px;
+                border-radius:16px;
+                background:rgba(0,0,0,0.38);
+                border:1px solid rgba(126,255,238,0.38);
+                color:#eafffb;
+                font-size:12px;
+                line-height:1.45;
+                font-weight:900;
+                box-shadow:inset 0 0 12px rgba(126,255,238,0.08), 0 0 12px rgba(255,79,184,0.16);
+            }
+            .friend-love-actions {
+                display:grid;
+                grid-template-columns:1fr 1fr;
+                gap:8px;
+                width:76%;
+                margin-top:2px;
+            }
+            .friend-love-actions button {
+                min-height:34px;
+                border-radius:999px !important;
+                font-weight:900 !important;
+                font-size:12px !important;
+            }
+            .friend-love-toast {
+                position:fixed;
+                left:50%;
+                top:32%;
+                transform:translate(-50%, -50%);
+                z-index:9999;
+                pointer-events:none;
+                padding:10px 16px;
+                border-radius:999px;
+                background:rgba(255,240,250,0.92);
+                border:2px solid rgba(255,128,210,0.92);
+                color:#d81b72;
+                font-size:20px;
+                font-weight:900;
+                text-align:center;
+                text-shadow:0 0 8px rgba(255,255,255,0.96), 0 0 12px rgba(255,79,184,0.82);
+                box-shadow:0 0 18px rgba(255,79,184,0.62), 0 0 24px rgba(126,255,238,0.26);
+                animation:friend-love-toast-float 1.55s ease-out forwards;
+            }
+            @keyframes friend-love-star-drift { 0% { transform:translate(0,0) rotate(0deg); } 100% { transform:translate(34px,34px) rotate(18deg); } }
+            @keyframes friend-love-ring-spin { 100% { transform:rotate(360deg); } }
+            @keyframes friend-love-heartbeat {
+                0%, 100% { transform:scale(1); }
+                15% { transform:scale(1.22); }
+                28% { transform:scale(0.96); }
+                42% { transform:scale(1.14); }
+                58% { transform:scale(1); }
+            }
+            @keyframes friend-love-heart-echo {
+                0% { transform:scale(0.92); opacity:0.36; }
+                100% { transform:scale(2.35); opacity:0; }
+            }
+            @keyframes friend-love-toast-float {
+                0% { opacity:0; transform:translate(-50%, -44%) scale(0.82); }
+                14% { opacity:1; transform:translate(-50%, -50%) scale(1.08); }
+                72% { opacity:1; transform:translate(-50%, -70%) scale(1); }
+                100% { opacity:0; transform:translate(-50%, -92%) scale(0.92); }
+            }
+            @media (max-width: 768px), (orientation: portrait) {
+                #friend-love-modal.friend-love-modal {
+                    width:min(94vw, 390px) !important;
+                    height:min(94vw, calc(var(--onion-vh, 1vh) * 78), 390px) !important;
+                    padding:14px !important;
+                }
+                .friend-love-title { font-size:17px; }
+                .friend-love-people-row { grid-template-columns:1fr 78px 1fr; }
+                .friend-love-avatar { width:46px; height:46px; font-size:25px; }
+                .friend-love-heart-wrap { width:78px; height:78px; }
+                .friend-love-heart,
+                .friend-love-heart-wrap::before,
+                .friend-love-heart-wrap::after { font-size:48px; }
+                .friend-love-percent { font-size:16px; min-width:118px; }
+                .friend-love-bonus { width:92%; font-size:11px; padding:7px 9px; }
+                .friend-love-actions { width:84%; }
+                .friend-love-toast { width:82vw; font-size:17px; }
+            }
             .phone-header-row { position:relative; display:flex; align-items:center; justify-content:center; gap:8px; min-height:42px; padding:0 96px 0 8px; box-sizing:border-box; }
             .phone-header-row h3 { margin:0; }
             .phone-friends-top-btn { position:absolute; right:0; top:50%; transform:translateY(-50%); min-height:34px; padding:6px 10px !important; font-size:12px !important; white-space:nowrap; }
@@ -5738,6 +5973,12 @@ function createSystemUI() {
             </div>
             <button class="close-modal-btn btn-secondary" style="margin-top:10px; width:100%;" onclick="window.closeFriendRequestModal && window.closeFriendRequestModal()">晚點再看</button>
         </div>
+        <div id="friend-love-modal" class="modal friend-love-modal">
+            <div id="friend-love-content" class="friend-love-layout">
+                <h3 class="friend-love-title">💖 我們的愛</h3>
+                <div style="font-size:13px; color:#fff7ff; text-shadow:0 1px 2px rgba(0,0,0,0.65);">讀取好蔥友情中……</div>
+            </div>
+        </div>
 
         <div id="furniture-catalog-modal" class="modal">
             <div class="furniture-wood-fairy-field" aria-hidden="true">
@@ -9050,6 +9291,11 @@ window.refreshMyFriendsCache = async function() {
         const snap = await get(ref(window.GameLogic.db, `users/${myUid}/friends`));
         const friends = snap.val() || {};
         window.GameLogic.friends = friends;
+
+        if (window.refreshFriendPairsCache) {
+            window.refreshFriendPairsCache(friends).catch(err => console.warn('[好蔥友] 讀取共同友好度快取失敗：', err));
+        }
+
         return friends;
     } catch (err) {
         console.warn('[好蔥友] 讀取好友列表失敗：', err);
@@ -9409,6 +9655,14 @@ window.openMyFriendsPhonePanel = async function() {
         const pairMap = {};
         pairSnaps.forEach(([uid, pairData]) => { pairMap[uid] = pairData || {}; });
 
+        if (!window.GameLogic.friendPairs) window.GameLogic.friendPairs = {};
+        friendUids.forEach(uid => {
+            const pairId = friends[uid] && friends[uid].pairId
+                ? friends[uid].pairId
+                : (window.getFriendPairId ? window.getFriendPairId(myUid, uid) : '');
+            if (pairId) window.GameLogic.friendPairs[pairId] = pairMap[uid] || {};
+        });
+
         const phoneContactMeta = {};
         let html = `
             <div style="font-size:11px; color:#fff; text-shadow:1px 1px 2px #000; margin-bottom:8px;">
@@ -9450,10 +9704,288 @@ window.openMyFriendsPhonePanel = async function() {
     }
 };
 
-window.openFriendLoveEntry = function(uid) {
-    const meta = (window.GameLogic.phoneContactMeta && window.GameLogic.phoneContactMeta[uid]) || {};
-    const name = meta.name || '這位好友';
-    window.showFriendSystemNotice(`「我們的愛」介面會在下一包開啟：${name}`);
+window.getFriendLoveSweepBonusPercent = function(lovePercent) {
+    const val = Number(lovePercent || 0);
+    if (val >= 100) return 10;
+    if (val >= 81) return 9;
+    if (val >= 71) return 8;
+    if (val >= 61) return 7;
+    if (val >= 51) return 6;
+    if (val >= 41) return 5;
+    if (val >= 31) return 4;
+    if (val >= 21) return 3;
+    if (val >= 11) return 2;
+    if (val >= 5) return 1;
+    return 0;
+};
+
+window.getFriendLoveBonusText = function(lovePercent) {
+    const bonus = window.getFriendLoveSweepBonusPercent ? window.getFriendLoveSweepBonusPercent(lovePercent) : 0;
+    return bonus > 0 ? `目前效果：雙方同場時，掃地的錢多 ${bonus}%` : '目前效果：無。友好度達 5% 後，雙方同場掃地會開始增加馬德幣。';
+};
+
+window.refreshFriendPairsCache = async function(friends = null) {
+    if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return {};
+
+    const myUid = window.GameLogic.currentUser.uid;
+    const friendMap = friends || window.GameLogic.friends || {};
+    const pairCache = {};
+
+    const jobs = Object.keys(friendMap).map(uid => {
+        const pairId = friendMap[uid] && friendMap[uid].pairId
+            ? friendMap[uid].pairId
+            : (window.getFriendPairId ? window.getFriendPairId(myUid, uid) : '');
+
+        if (!pairId) return Promise.resolve();
+
+        return get(ref(window.GameLogic.db, `friendPairs/${pairId}`))
+            .then(snap => {
+                pairCache[pairId] = snap.val() || {};
+            })
+            .catch(err => {
+                console.warn(`[我們的愛] 讀取 ${pairId} 失敗：`, err);
+            });
+    });
+
+    await Promise.all(jobs);
+    window.GameLogic.friendPairs = Object.assign({}, window.GameLogic.friendPairs || {}, pairCache);
+    return window.GameLogic.friendPairs;
+};
+
+window.getFriendLovePairData = async function(friendUid) {
+    if (!friendUid || !window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return null;
+
+    const myUid = window.GameLogic.currentUser.uid;
+    const friendData = (window.GameLogic.friends && window.GameLogic.friends[friendUid]) || {};
+    const pairId = friendData.pairId || (window.getFriendPairId ? window.getFriendPairId(myUid, friendUid) : '');
+
+    if (!pairId) return null;
+
+    try {
+        const snap = await get(ref(window.GameLogic.db, `friendPairs/${pairId}`));
+        const pairData = snap.val() || {};
+        if (!window.GameLogic.friendPairs) window.GameLogic.friendPairs = {};
+        window.GameLogic.friendPairs[pairId] = pairData;
+        return { pairId, pairData };
+    } catch (err) {
+        console.warn('[我們的愛] 讀取共同友好度失敗：', err);
+        return { pairId, pairData: (window.GameLogic.friendPairs && window.GameLogic.friendPairs[pairId]) || {} };
+    }
+};
+
+window.closeFriendLoveModal = function() {
+    const modal = document.getElementById('friend-love-modal');
+    if (modal) modal.style.display = 'none';
+};
+
+window.renderFriendLoveModal = function(friendUid, data = {}) {
+    const modal = document.getElementById('friend-love-modal');
+    const content = document.getElementById('friend-love-content');
+    if (!modal || !content || !window.GameLogic || !window.GameLogic.currentUser) return;
+
+    const myUid = window.GameLogic.currentUser.uid;
+    const myProfile = window.GameLogic.myProfile || {};
+    const meta = (window.GameLogic.phoneContactMeta && window.GameLogic.phoneContactMeta[friendUid]) || {};
+    const friendData = (window.GameLogic.friends && window.GameLogic.friends[friendUid]) || {};
+    const friendProfile = data.friendProfile || {};
+    const pairData = data.pairData || {};
+    const lovePercent = Number(pairData.lovePercent || meta.lovePercent || friendData.lovePercent || 0);
+    const loveText = Number.isFinite(lovePercent) ? lovePercent.toFixed(1) : '0.0';
+    const myName = myProfile.name || '我';
+    const friendName = friendProfile.name || meta.name || friendData.name || '好友';
+    const myColor = window.safePhoneColor ? window.safePhoneColor(myProfile.color || '#ff8bd4') : '#ff8bd4';
+    const friendColor = window.safePhoneColor ? window.safePhoneColor(friendProfile.color || meta.color || friendData.color || '#7fffea') : '#7fffea';
+    const bonusText = window.getFriendLoveBonusText ? window.getFriendLoveBonusText(lovePercent) : '目前效果：無';
+    const myShortId = window.getShortFriendUid ? window.getShortFriendUid(myUid) : myUid;
+    const friendShortId = window.getShortFriendUid ? window.getShortFriendUid(friendUid) : friendUid;
+
+    content.innerHTML = `
+        <h3 class="friend-love-title">💖 我們的愛</h3>
+        <div class="friend-love-people-row">
+            <div class="friend-love-person">
+                <div class="friend-love-avatar" style="--friend-love-color:${myColor};">🧅</div>
+                <div class="friend-love-name">${window.phoneEscapeHtml(myName)}</div>
+                <div class="friend-love-id">ID：${window.phoneEscapeHtml(myShortId)}</div>
+            </div>
+            <div class="friend-love-heart-wrap" aria-hidden="true">
+                <div class="friend-love-heart">❤️</div>
+            </div>
+            <div class="friend-love-person">
+                <div class="friend-love-avatar" style="--friend-love-color:${friendColor};">🧅</div>
+                <div class="friend-love-name">${window.phoneEscapeHtml(friendName)}</div>
+                <div class="friend-love-id">ID：${window.phoneEscapeHtml(friendShortId)}</div>
+            </div>
+        </div>
+        <div class="friend-love-percent">❤️=${window.phoneEscapeHtml(loveText)}%</div>
+        <div class="friend-love-bonus">${window.phoneEscapeHtml(bonusText)}</div>
+        <div class="friend-love-actions">
+            <button class="btn-primary phone-pink-btn" type="button" onclick="window.openMyFriendsPhonePanel && window.openMyFriendsPhonePanel()">回好友</button>
+            <button class="btn-secondary" type="button" onclick="window.closeFriendLoveModal && window.closeFriendLoveModal()">關閉</button>
+        </div>
+    `;
+
+    modal.style.display = 'block';
+};
+
+window.openFriendLoveEntry = async function(uid) {
+    if (!uid || !window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return;
+
+    const modal = document.getElementById('friend-love-modal');
+    const content = document.getElementById('friend-love-content');
+    if (modal && content) {
+        content.innerHTML = `
+            <h3 class="friend-love-title">💖 我們的愛</h3>
+            <div style="font-size:13px; color:#fff7ff; text-shadow:0 1px 2px rgba(0,0,0,0.65);">讀取好蔥友情中……</div>
+        `;
+        modal.style.display = 'block';
+    }
+
+    try {
+        const [pairResult, friendProfileSnap] = await Promise.all([
+            window.getFriendLovePairData ? window.getFriendLovePairData(uid) : Promise.resolve(null),
+            get(ref(window.GameLogic.db, `users/${uid}`)).catch(() => null)
+        ]);
+
+        const friendProfile = friendProfileSnap && friendProfileSnap.exists ? (friendProfileSnap.val() || {}) : {};
+        const pairData = pairResult && pairResult.pairData ? pairResult.pairData : {};
+        window.renderFriendLoveModal(uid, { friendProfile, pairData });
+    } catch (err) {
+        console.warn('[我們的愛] 開啟介面失敗：', err);
+        window.showFriendSystemNotice('我們的愛讀取失敗，請稍後再試');
+        if (modal) modal.style.display = 'none';
+    }
+};
+
+window.isFriendActiveInSameScene = function(friendUid) {
+    if (!friendUid || !window.GameLogic || !window.GameLogic.currentUser) return false;
+    if (!window.GameLogic.friends || !window.GameLogic.friends[friendUid]) return false;
+
+    const onlinePlayers = window.GameLogic.onlinePlayers || {};
+    const player = onlinePlayers[friendUid];
+    if (!player) return false;
+
+    const fresh = window.isFreshPhoneOnlinePlayer ? window.isFreshPhoneOnlinePlayer(player) : true;
+    if (!fresh) return false;
+
+    const currentScene = window.GameLogic.currentScene || 'cafe';
+    const playerScene = player.scene || '';
+
+    if (playerScene) return playerScene === currentScene;
+
+    if (currentScene === 'cafe') return !!(window.GameLogic.cafePlayers && window.GameLogic.cafePlayers[friendUid]);
+    if (currentScene === 'shrine') return !!(window.GameLogic.shrinePlayers && window.GameLogic.shrinePlayers[friendUid]);
+    if (currentScene === 'playroom') return !!(window.GameLogic.playroomPlayers && window.GameLogic.playroomPlayers[friendUid]);
+    if (currentScene === 'partyroom' && window.PartyLogic && window.PartyLogic.players) return !!window.PartyLogic.players[friendUid];
+
+    return false;
+};
+
+window.getActiveFriendLoveSweepBonus = function() {
+    if (!window.GameLogic || !window.GameLogic.currentUser) return null;
+
+    const friends = window.GameLogic.friends || {};
+    const pairCache = window.GameLogic.friendPairs || {};
+    const myUid = window.GameLogic.currentUser.uid;
+    let best = null;
+
+    Object.keys(friends).forEach(friendUid => {
+        if (!window.isFriendActiveInSameScene || !window.isFriendActiveInSameScene(friendUid)) return;
+
+        const friendData = friends[friendUid] || {};
+        const pairId = friendData.pairId || (window.getFriendPairId ? window.getFriendPairId(myUid, friendUid) : '');
+        const pairData = pairCache[pairId] || {};
+        const lovePercent = Number(pairData.lovePercent || friendData.lovePercent || 0);
+        const bonusPercent = window.getFriendLoveSweepBonusPercent ? window.getFriendLoveSweepBonusPercent(lovePercent) : 0;
+        if (bonusPercent <= 0) return;
+
+        const meta = (window.GameLogic.phoneContactMeta && window.GameLogic.phoneContactMeta[friendUid]) || {};
+        const onlineInfo = window.getFriendOnlineInfo ? window.getFriendOnlineInfo(friendUid) : {};
+        const name = onlineInfo.name || meta.name || friendData.name || '好友';
+
+        if (!best || bonusPercent > best.bonusPercent || lovePercent > best.lovePercent) {
+            best = {
+                friendUid,
+                pairId,
+                name,
+                lovePercent,
+                bonusPercent,
+                bonusRate: bonusPercent / 100
+            };
+        }
+    });
+
+    window.GameLogic.activeFriendLoveBonus = best;
+    return best;
+};
+
+window.showFriendLoveToast = function(message) {
+    const safeMessage = message || '❤️ 好蔥友情升溫 +0.1%';
+    const scene = window.GameLogic && window.GameLogic.phaserGame
+        ? window.GameLogic.phaserGame.scene.getScene('MainScene')
+        : null;
+
+    if (scene && scene.showPrinceCatFriendshipHint) {
+        scene.showPrinceCatFriendshipHint(null, safeMessage);
+        return;
+    }
+
+    const oldToast = document.querySelector('.friend-love-toast');
+    if (oldToast) oldToast.remove();
+
+    const toast = document.createElement('div');
+    toast.className = 'friend-love-toast';
+    toast.innerText = safeMessage;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        if (toast && toast.remove) toast.remove();
+    }, 1700);
+};
+
+window.addFriendLovePercent = async function(friendUid, amount = 0.1, options = {}) {
+    if (!friendUid || !window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return null;
+
+    const myUid = window.GameLogic.currentUser.uid;
+    const friendData = (window.GameLogic.friends && window.GameLogic.friends[friendUid]) || {};
+    const pairId = friendData.pairId || (window.getFriendPairId ? window.getFriendPairId(myUid, friendUid) : '');
+    if (!pairId) return null;
+
+    try {
+        const pairSnap = await get(ref(window.GameLogic.db, `friendPairs/${pairId}`));
+        const pairData = pairSnap.val() || {};
+        const oldLove = Number(pairData.lovePercent || 0);
+        const addVal = Number(amount || 0);
+        const nextLove = Math.max(0, oldLove + addVal);
+        const uidList = [myUid, friendUid].sort();
+
+        const updates = {};
+        updates[`friendPairs/${pairId}/uidA`] = pairData.uidA || uidList[0];
+        updates[`friendPairs/${pairId}/uidB`] = pairData.uidB || uidList[1];
+        updates[`friendPairs/${pairId}/createdAt`] = pairData.createdAt || Date.now();
+        updates[`friendPairs/${pairId}/lovePercent`] = Number(nextLove.toFixed(1));
+        updates[`friendPairs/${pairId}/updatedAt`] = Date.now();
+
+        await update(ref(window.GameLogic.db), updates);
+
+        if (!window.GameLogic.friendPairs) window.GameLogic.friendPairs = {};
+        window.GameLogic.friendPairs[pairId] = Object.assign({}, pairData, {
+            uidA: updates[`friendPairs/${pairId}/uidA`],
+            uidB: updates[`friendPairs/${pairId}/uidB`],
+            lovePercent: updates[`friendPairs/${pairId}/lovePercent`],
+            updatedAt: updates[`friendPairs/${pairId}/updatedAt`]
+        });
+
+        const meta = (window.GameLogic.phoneContactMeta && window.GameLogic.phoneContactMeta[friendUid]) || {};
+        const friendName = options.friendName || meta.name || friendData.name || '好友';
+        if (options.silent !== true && window.showFriendLoveToast) {
+            window.showFriendLoveToast(`和 ${friendName} 的友好度 +${addVal.toFixed(1)}%`);
+        }
+
+        return window.GameLogic.friendPairs[pairId];
+    } catch (err) {
+        console.warn('[我們的愛] 增加友好度失敗：', err);
+        return null;
+    }
 };
 
 window.openFriendVisitEntry = function(uid, isOnline = false) {
@@ -11207,6 +11739,7 @@ onAuthStateChanged(auth, async (user) => {
                 set(globalPlayerRef, {
                      name: window.GameLogic.myProfile.name || '匿名',
                      color: window.GameLogic.myProfile.color || '#fff',
+                     scene: window.GameLogic.currentScene || 'doghouse',
                      lastActive: Date.now()
                  });
                 onDisconnect(globalPlayerRef).remove();
@@ -11535,6 +12068,14 @@ function switchScene(sceneName, extraData = null) {
     const doSwitch = () => {
         window.GameLogic.currentScene = sceneName;
         window.GameLogic.placingFurnitureKey = null;
+        if (window.GameLogic.currentUser && window.GameLogic.db) {
+            update(ref(window.GameLogic.db, window.getServerRoomPath(`onlinePlayers/${window.GameLogic.currentUser.uid}`)), {
+                scene: sceneName,
+                lastActive: Date.now(),
+                name: window.GameLogic.myProfile.name || '匿名',
+                color: window.GameLogic.myProfile.color || '#fff'
+            }).catch(err => console.warn('[我們的愛] 更新在線場景失敗：', err));
+        }
         if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput(); 
         
         // 離開原本的房間
@@ -26107,6 +26648,15 @@ if (activeBubbleMsg) {
             totalCoins *= 3;
          }
           
+            const friendLoveBonus = window.getActiveFriendLoveSweepBonus ? window.getActiveFriendLoveSweepBonus() : null;
+            if (friendLoveBonus && friendLoveBonus.bonusRate > 0) {
+                const bonusCoins = Math.max(1, Math.round(totalCoins * friendLoveBonus.bonusRate));
+                totalCoins += bonusCoins;
+                if (window.showFriendLoveToast) {
+                    window.showFriendLoveToast(`和 ${friendLoveBonus.name} 的好友加成 +${bonusCoins} 馬德幣`);
+                }
+            }
+
             this.tryPrinceCatSweepBonus(px, py);
 
             remove(ref(window.GameLogic.db, window.getServerRoomPath('cafeTrashes/' + trashKey))); 
@@ -27612,7 +28162,8 @@ if (activeBubbleMsg) {
             update(ref(window.GameLogic.db, window.getServerRoomPath(`onlinePlayers/${window.GameLogic.currentUser.uid}`)), {
                 lastActive: Date.now(),
                 name: window.GameLogic.myProfile.name || '匿名',
-                color: window.GameLogic.myProfile.color || '#fff'
+                color: window.GameLogic.myProfile.color || '#fff',
+                scene: window.GameLogic.currentScene || 'doghouse'
             });
         }
 
