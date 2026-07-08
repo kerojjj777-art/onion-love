@@ -340,6 +340,32 @@ window.closeProfileModal = function() {
 };
 window.openPortalModal = function() { document.getElementById('inventory-modal').style.display = 'none'; document.getElementById('portal-modal').style.display = 'block'; };
 
+window.openMeowlimeModal = function() {
+    const modal = document.getElementById('meowlime-modal');
+    if (modal) modal.style.display = 'block';
+};
+
+window.closeMeowlimeModal = function() {
+    const modal = document.getElementById('meowlime-modal');
+    if (modal) modal.style.display = 'none';
+};
+
+window.getMeowlimeCatalogIconHtml = function() {
+    try {
+        const scene = window.GameLogic && window.GameLogic.phaserGame
+            ? window.GameLogic.phaserGame.scene.getScene('MainScene')
+            : null;
+        const src = scene && scene.getMeowlimeCatalogIconDataUrl ? scene.getMeowlimeCatalogIconDataUrl() : '';
+        if (src) {
+            return `<img class="meowlime-catalog-phaser-img" src="${src}" alt="喵萊姆">`;
+        }
+    } catch (err) {
+        console.warn('[喵萊姆] 目錄縮圖產生失敗，改用 DOM 備援：', err);
+    }
+
+    return `<div class="meowlime-catalog-icon"><span>^⦁⩊⦁^</span></div>`;
+};
+
 // 新增：空間傳送門點擊時的粒子噴發效果
 window.popPortalParticles = function(e) {
     let x = e.clientX; let y = e.clientY;
@@ -397,6 +423,91 @@ function createSystemUI() {
             .catalog-item { padding: 8px 5px; border: 1px solid var(--mucha-gold); border-radius: 8px; background: #fff; cursor: pointer; font-weight: bold; display: flex; flex-direction: column; align-items: center; transition: all 0.3s; font-size: 13px; }
             .catalog-item:hover { background: rgba(197, 160, 89, 0.2); }
             .catalog-item img { width: 50px; height: 50px; margin-bottom: 5px; object-fit: contain;}
+            .meowlime-catalog-icon,
+            .meowlime-catalog-phaser-img {
+                width: 50px;
+                height: 50px;
+                margin-bottom: 5px;
+                border-radius: 50%;
+                object-fit: contain;
+                filter: drop-shadow(0 0 8px rgba(255, 190, 220, 0.7)) drop-shadow(0 0 10px rgba(170, 230, 255, 0.45));
+            }
+            .meowlime-catalog-icon {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background:
+                    radial-gradient(circle at 32% 28%, rgba(255,255,255,0.82), transparent 22%),
+                    radial-gradient(circle at 64% 35%, rgba(190, 230, 255, 0.78), transparent 35%),
+                    radial-gradient(circle at 36% 68%, rgba(255, 198, 220, 0.78), transparent 40%),
+                    linear-gradient(135deg, #ffd1e7, #c6f4ff, #d7ffc8, #fff1a8);
+                color: #34535e;
+                font-size: 9px;
+                font-weight: 900;
+                line-height: 1;
+                text-shadow: 0 1px 0 rgba(255,255,255,0.85), 0 0 4px rgba(255,255,255,0.75);
+                animation: meowlime-catalog-wobble 1.35s ease-in-out infinite alternate;
+            }
+            @keyframes meowlime-catalog-wobble {
+                0% { border-radius: 55% 45% 58% 42% / 48% 57% 43% 52%; transform: scale(0.98) rotate(-1deg); filter: hue-rotate(0deg) drop-shadow(0 0 8px rgba(255,190,220,0.7)); }
+                100% { border-radius: 43% 57% 45% 55% / 58% 43% 57% 42%; transform: scale(1.03) rotate(1deg); filter: hue-rotate(34deg) drop-shadow(0 0 10px rgba(170,230,255,0.72)); }
+            }
+
+            .meowlime-modal {
+                width: min(88vw, 360px) !important;
+                background:
+                    radial-gradient(circle at 50% 16%, rgba(255,255,255,0.72), transparent 26%),
+                    linear-gradient(135deg, rgba(255, 206, 230, 0.96), rgba(197, 241, 255, 0.94), rgba(218, 255, 203, 0.94), rgba(255, 242, 172, 0.94)) !important;
+                border: 3px solid rgba(255,255,255,0.95) !important;
+                box-shadow: 0 0 22px rgba(255, 180, 220, 0.58), 0 0 30px rgba(160, 230, 255, 0.38), 0 12px 26px rgba(0,0,0,0.38) !important;
+                color: #34535e !important;
+                overflow: hidden !important;
+            }
+            .meowlime-modal::before {
+                content: "";
+                position: absolute;
+                inset: -30%;
+                background:
+                    radial-gradient(circle, rgba(255,255,255,0.8) 0 2px, transparent 5px),
+                    radial-gradient(circle, rgba(255,190,220,0.65) 0 3px, transparent 7px),
+                    radial-gradient(circle, rgba(170,230,255,0.58) 0 2px, transparent 6px);
+                background-size: 34px 34px, 52px 52px, 76px 76px;
+                animation: meowlime-modal-bubbles 4.8s linear infinite;
+                opacity: 0.52;
+                pointer-events: none;
+                z-index: 0;
+            }
+            .meowlime-modal > * {
+                position: relative;
+                z-index: 1;
+            }
+            .meowlime-modal h3 {
+                color: #34535e !important;
+                border-bottom: 1px solid rgba(255,255,255,0.78) !important;
+                text-shadow: 0 1px 0 rgba(255,255,255,0.9), 0 0 9px rgba(255,255,255,0.7);
+            }
+            .meowlime-modal-text {
+                padding: 14px 12px;
+                border-radius: 16px;
+                background: rgba(255,255,255,0.56);
+                border: 1px solid rgba(255,255,255,0.72);
+                line-height: 1.6;
+                font-weight: bold;
+                box-shadow: inset 0 0 12px rgba(255,255,255,0.45);
+            }
+            .meowlime-close-btn {
+                background: linear-gradient(180deg, #ffffff, #bdefff) !important;
+                color: #34535e !important;
+                border: 2px solid rgba(255,255,255,0.96) !important;
+                border-radius: 999px !important;
+                font-weight: 900 !important;
+                box-shadow: 0 0 12px rgba(255,255,255,0.72), 0 4px 10px rgba(80,140,160,0.25) !important;
+            }
+            @keyframes meowlime-modal-bubbles {
+                0% { transform: translateY(34px) scale(0.92); opacity: 0; }
+                20% { opacity: 0.58; }
+                100% { transform: translateY(-80px) scale(1.08); opacity: 0; }
+            }
 
             /* 7-EONION 黑綠深紫黑洞商店＋購買拉條＋給西主題美化＋大廳家具木紋 */
             #store-modal.store-blackhole-ui,
@@ -3412,6 +3523,11 @@ function createSystemUI() {
             <h3 id="catalog-title">📦 家俱目錄</h3>
             <div id="catalog-list" class="catalog-grid"></div>
             <button class="close-modal-btn btn-secondary" style="margin-top: 15px;" onclick="window.closeFurnitureCatalogModal ? window.closeFurnitureCatalogModal() : document.getElementById('furniture-catalog-modal').style.display='none'">關閉</button>
+        </div>
+                <div id="meowlime-modal" class="modal meowlime-modal" style="z-index: 265;">
+            <h3>每日簽到喵萊姆</h3>
+            <div class="meowlime-modal-text">喵萊姆正在啟動每日簽到系統……</div>
+            <button class="close-modal-btn meowlime-close-btn" style="margin-top: 16px; width: 100%;" onclick="window.closeMeowlimeModal ? window.closeMeowlimeModal() : document.getElementById('meowlime-modal').style.display='none'">關閉</button>
         </div>
         <div id="fridge-modal" class="modal"><h3>❄️ 公用大冰箱</h3><p style="color:#888; font-size: 14px;">冰箱目前空空如也... 等待下次採買中</p><button class="close-modal-btn btn-primary" onclick="document.getElementById('fridge-modal').style.display='none'">關上冰箱</button></div>
         <div id="memory-modal" class="modal">
@@ -10768,6 +10884,12 @@ if (itemName === '月光饅頭') {
                 if (dist < 120) {
                     if (key.includes('solochicken')) {
                         this.openSoloChickenMenu();
+                        interacted = true;
+                        break;
+                    }
+
+                    if (this.isMeowlimeFurnitureKey && this.isMeowlimeFurnitureKey(key)) {
+                        if (window.openMeowlimeModal) window.openMeowlimeModal();
                         interacted = true;
                         break;
                     }
@@ -22678,6 +22800,181 @@ if (activeBubbleMsg) {
         });
     }
   
+    isMeowlimeFurnitureKey(key) {
+        return key === 'meowlime' || String(key || '').startsWith('meowlime_');
+    }
+
+    ensureMeowlimeProxyTexture() {
+        const textureKey = 'meowlime-proxy-texture';
+        if (this.textures && this.textures.exists(textureKey)) return textureKey;
+
+        const g = this.make.graphics({ x: 0, y: 0, add: false });
+        g.clear();
+        g.fillStyle(0xffffff, 0.01);
+        g.fillCircle(60, 60, 58);
+        g.generateTexture(textureKey, 120, 120);
+        g.destroy();
+
+        return textureKey;
+    }
+
+    getMeowlimeMixedColor(t, offset = 0) {
+        const palette = [
+            [255, 191, 222],
+            [190, 232, 255],
+            [211, 255, 196],
+            [255, 241, 168],
+            [220, 200, 255]
+        ];
+        const raw = (t * 0.55 + offset) % palette.length;
+        const idx = Math.floor(raw);
+        const nextIdx = (idx + 1) % palette.length;
+        const mix = raw - idx;
+        const a = palette[idx];
+        const b = palette[nextIdx];
+        return Phaser.Display.Color.GetColor(
+            Math.round(a[0] + (b[0] - a[0]) * mix),
+            Math.round(a[1] + (b[1] - a[1]) * mix),
+            Math.round(a[2] + (b[2] - a[2]) * mix)
+        );
+    }
+
+    drawMeowlimeBlob(graphics, cx, cy, size, t) {
+        if (!graphics) return;
+
+        const baseR = size * 0.42;
+        const points = [];
+        const count = 24;
+
+        for (let i = 0; i < count; i++) {
+            const a = (Math.PI * 2 * i) / count;
+            const wobble =
+                Math.sin(a * 3 + t * 1.7) * size * 0.035 +
+                Math.cos(a * 5 - t * 2.1) * size * 0.025 +
+                Math.sin(i * 1.23 + t * 3.1) * size * 0.018;
+            const r = baseR + wobble;
+            points.push(new Phaser.Geom.Point(
+                cx + Math.cos(a) * r,
+                cy + Math.sin(a) * r * 0.94
+            ));
+        }
+
+        graphics.fillStyle(this.getMeowlimeMixedColor(t, 0), 0.78);
+        graphics.fillPoints(points, true, true);
+        graphics.lineStyle(Math.max(2, size * 0.025), 0xffffff, 0.52);
+        graphics.strokePoints(points, true, true);
+
+        graphics.fillStyle(this.getMeowlimeMixedColor(t, 1.2), 0.34);
+        graphics.fillEllipse(cx + size * 0.1, cy - size * 0.04, size * 0.68, size * 0.56);
+        graphics.fillStyle(this.getMeowlimeMixedColor(t, 2.4), 0.28);
+        graphics.fillEllipse(cx - size * 0.12, cy + size * 0.12, size * 0.62, size * 0.48);
+        graphics.fillStyle(0xffffff, 0.28);
+        graphics.fillEllipse(cx - size * 0.16, cy - size * 0.18, size * 0.25, size * 0.12);
+    }
+
+    getMeowlimeCatalogIconDataUrl() {
+        const textureKey = 'meowlime-catalog-icon-texture';
+        try {
+            if (!this.textures.exists(textureKey)) {
+                const rt = this.make.renderTexture({ x: 0, y: 0, width: 120, height: 120, add: false });
+                const g = this.add.graphics();
+                const face = this.add.text(60, 61, '^⦁⩊⦁^', {
+                    fontSize: '19px',
+                    fontFamily: 'Arial, sans-serif',
+                    fontStyle: 'bold',
+                    color: '#34535e',
+                    stroke: '#ffffff',
+                    strokeThickness: 4
+                }).setOrigin(0.5);
+
+                g.clear();
+                this.drawMeowlimeBlob(g, 60, 60, 108, 1.7);
+                rt.draw(g, 0, 0);
+                rt.draw(face, 0, 0);
+                rt.saveTexture(textureKey);
+                g.destroy();
+                face.destroy();
+                rt.destroy();
+            }
+
+            return this.textures.getBase64 ? this.textures.getBase64(textureKey) : '';
+        } catch (err) {
+            console.warn('[喵萊姆] Phaser 目錄縮圖建立失敗：', err);
+            return '';
+        }
+    }
+
+    createMeowlimeFurnitureVisual(f, data = {}) {
+        if (!f || !f.sprite || !f.sprite.active) return;
+        if (f.meowlimeContainer && f.meowlimeContainer.active) return;
+
+        f.isMeowlime = true;
+        f.meowlimeSeed = Phaser.Math.FloatBetween(0, 1000);
+        f.meowlimeSize = 120;
+
+        f.sprite.setDisplaySize(120, 120);
+        f.sprite.setDepth(5);
+        if (f.sprite.body && f.sprite.body.setSize) f.sprite.body.setSize(120, 120, true);
+
+        const blob = this.add.graphics();
+        const face = this.add.text(0, 1, '^⦁⩊⦁^', {
+            fontSize: '21px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#34535e',
+            stroke: '#ffffff',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+
+        f.meowlimeContainer = this.add.container(f.sprite.x, f.sprite.y, [blob, face]).setDepth(5.2);
+        f.meowlimeGraphics = blob;
+        f.meowlimeFace = face;
+
+        if (this.minimap && this.minimap.ignore) this.minimap.ignore([f.meowlimeContainer, blob, face]);
+
+        f.meowlimeTween = this.tweens.add({
+            targets: f.meowlimeContainer,
+            scaleX: 1.035,
+            scaleY: 0.965,
+            yoyo: true,
+            repeat: -1,
+            duration: 720,
+            ease: 'Sine.easeInOut'
+        });
+
+        this.syncMeowlimeFurnitureVisual(f, this.time ? this.time.now : 0, !!data.locked);
+    }
+
+    syncMeowlimeFurnitureVisual(f, time = 0, locked = true) {
+        if (!f || !f.isMeowlime || !f.sprite || !f.sprite.active || !f.meowlimeContainer || !f.meowlimeGraphics) return;
+
+        const t = ((Number(time) || 0) * 0.001) + (f.meowlimeSeed || 0);
+        const wobbleX = Math.sin(t * 2.3) * 1.8;
+        const wobbleY = Math.cos(t * 2.7) * 1.5;
+
+        f.meowlimeContainer.setPosition(f.sprite.x + wobbleX, f.sprite.y + wobbleY);
+        f.meowlimeContainer.setAlpha(locked ? 1 : 0.6);
+        f.meowlimeGraphics.clear();
+        this.drawMeowlimeBlob(f.meowlimeGraphics, 0, 0, 120, t);
+
+        if (f.meowlimeFace) {
+            f.meowlimeFace.setY(1 + Math.sin(t * 3.4) * 1.2);
+        }
+    }
+
+    destroyMeowlimeFurnitureVisual(f) {
+        if (!f) return;
+        if (f.meowlimeTween) {
+            f.meowlimeTween.stop();
+            f.meowlimeTween = null;
+        }
+        if (f.meowlimeContainer && f.meowlimeContainer.destroy) {
+            f.meowlimeContainer.destroy();
+        }
+        f.meowlimeContainer = null;
+        f.meowlimeGraphics = null;
+        f.meowlimeFace = null;
+    }
   
     createFurniture(key, data) { 
     data = data || {};
@@ -22696,6 +22993,7 @@ if (activeBubbleMsg) {
 
     let imgKey = 'memory';
     if (isGiftBox) imgKey = 'gift-box-stay';
+    else if (this.isMeowlimeFurnitureKey && this.isMeowlimeFurnitureKey(key)) imgKey = this.ensureMeowlimeProxyTexture();
     else if (hasDoghouseFurnitureTexture) imgKey = furnitureTextureKey;
     else if (key.includes('scoreboard')) imgKey = 'hall-screen';
     else if (key.includes('solochicken')) imgKey = 'solochicken';
@@ -22710,6 +23008,10 @@ if (activeBubbleMsg) {
     let f = { sprite: this.physics.add.sprite(data.x, data.y, imgKey).setDepth(5).setCollideWorldBounds(true) }; 
     f.isGiftBox = isGiftBox;
     f.furnitureDef = fDef;
+
+    if (this.isMeowlimeFurnitureKey && this.isMeowlimeFurnitureKey(key)) {
+        this.createMeowlimeFurnitureVisual(f, data);
+    }
 
     if (isGiftBox) {
         f.sprite.setDisplaySize(120, 120);
@@ -23651,6 +23953,11 @@ if (activeBubbleMsg) {
             return true;
         }
 
+        if (this.isMeowlimeFurnitureKey && this.isMeowlimeFurnitureKey(key)) {
+            if (window.openMeowlimeModal) window.openMeowlimeModal();
+            return true;
+        }
+
         if (key.includes('giftbox')) return this.openGiftBoxByInteraction(f);
 
         if (key === 'fridge' || key.includes('fridge')) {
@@ -24571,6 +24878,7 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
                             let nextPromptMsg = null;
 
                             if (key.includes('giftbox')) nextPromptMsg = "按A領取週結算獎勵";
+                            else if (this.isMeowlimeFurnitureKey && this.isMeowlimeFurnitureKey(key)) nextPromptMsg = "按A啟動喵萊姆";
                             else if (key.includes('fridge')) nextPromptMsg = "按A打開冰箱";
                             else if (key.includes('shrine')) nextPromptMsg = "按A參拜神龕";
                             else if (key.includes('dummy')) nextPromptMsg = "假人洋蔥 (裝飾中)";
@@ -24753,6 +25061,7 @@ if (dist < 30) {
             }
             if (f.textContainer) f.textContainer.setPosition(f.sprite.x, f.sprite.y);
             if (f.particleEmitter) f.particleEmitter.setPosition(f.sprite.x, f.sprite.y); // [新增] 粒子跟隨實體
+            if (f.isMeowlime && this.syncMeowlimeFurnitureVisual) this.syncMeowlimeFurnitureVisual(f, time, !!fd.locked);
             f.sprite.setAlpha(!fd.locked ? 0.6 : 1);
         }
         for (let key in this.furnitureSprites) {
@@ -24763,6 +25072,7 @@ if (dist < 30) {
                     this.cameras.main.startFollow(this.localPlayer.sprite, true, 0.08, 0.08);
                 }
                 if (this.furnitureSprites[key].particleEmitter) this.furnitureSprites[key].particleEmitter.destroy(); // [新增] 銷毀粒子
+                if (this.destroyMeowlimeFurnitureVisual) this.destroyMeowlimeFurnitureVisual(this.furnitureSprites[key]);
                 if (this.furnitureSprites[key].textContainer) this.furnitureSprites[key].textContainer.destroy();
                 if (this.furnitureSprites[key].rewardNoticeTween) this.furnitureSprites[key].rewardNoticeTween.stop();
                 if (this.furnitureSprites[key].rewardNoticeText) this.furnitureSprites[key].rewardNoticeText.destroy();
@@ -24947,9 +25257,11 @@ function openFurnitureCatalog() {
         modal.classList.add('furniture-wood-ui');
         title.innerText = "📦 大廳家俱目錄";
         items = [
+        items = [
             { key: 'giftbox', name: '🎁 領獎大粉蔥', img: 'gift-box-stay.png' },
             { key: 'scoreboard', name: '🏆 戰況看板', img: 'hall-screen-in-list.png' },
             { key: 'solochicken', name: '獨樂雞', img: 'me_play_cock.png' },
+            { key: 'meowlime', name: '喵萊姆', iconHtml: window.getMeowlimeCatalogIconHtml ? window.getMeowlimeCatalogIconHtml() : '<div class="meowlime-catalog-icon"><span>^⦁⩊⦁^</span></div>' },
             { key: 'fridge', name: '🧊 公用大冰箱', img: 'fridge.png' },
             { key: 'memory', name: '📖 洋蔥回憶錄', img: 'memory.png' },
             { key: 'shrine', name: '⛩️ 洋蔥神龕', img: 'shrine.png' },
@@ -25059,7 +25371,8 @@ function openFurnitureCatalog() {
     items.forEach(item => {
         let div = document.createElement('div');
         div.className = 'catalog-item';
-        div.innerHTML = item.isAction ? `<span style="font-size:24px; margin-bottom:5px;">${item.name.split(' ')[0]}</span><span>${item.name.split(' ')[1]}</span>` : `<img src="${item.img}"><span>${item.name}</span>`;
+        const itemIconHtml = item.iconHtml || `<img src="${item.img}">`;
+        div.innerHTML = item.isAction ? `<span style="font-size:24px; margin-bottom:5px;">${item.name.split(' ')[0]}</span><span>${item.name.split(' ')[1]}</span>` : `${itemIconHtml}<span>${item.name}</span>`;
         div.onclick = () => {
             if (item.isAction) {
                 if (item.key === 'clear_seats') {
