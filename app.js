@@ -22078,8 +22078,49 @@ if (activeBubbleMsg) {
         return true;
     }
 
-    getDoghouseBedInteractionAnchor(f) {
-        const direction = (f && f.direction) || (f && f.sprite && f.sprite._onionFurnitureDirection) || 'front';
+    getDoghouseFurnitureInstanceData(key, f = null) {
+        if (this.sceneName !== 'doghouse') return {};
+
+        const furnData = window.GameLogic && window.GameLogic.doghouseFurniture
+            ? window.GameLogic.doghouseFurniture
+            : {};
+
+        if (key && furnData && furnData[key]) return furnData[key];
+
+        const spriteKey = f && f.sprite ? f.sprite._onionFurnitureKey : null;
+        if (spriteKey && furnData && furnData[spriteKey]) return furnData[spriteKey];
+
+        return {};
+    }
+
+    getDoghouseFurnitureInteractionDirection(key, f = null, fallbackData = {}) {
+        const instanceData = this.getDoghouseFurnitureInstanceData(key, f);
+        const mergedData = {
+            ...(fallbackData || {}),
+            ...(instanceData || {})
+        };
+
+        if (!mergedData.direction) {
+            mergedData.direction = (f && f.direction) || (f && f.sprite && f.sprite._onionFurnitureDirection) || 'front';
+        }
+
+        const direction = this.getFurnitureDirection(key, mergedData);
+
+        if (f) {
+            f.direction = direction;
+            if (f.sprite) f.sprite._onionFurnitureDirection = direction;
+        }
+
+        return direction;
+    }
+
+    getDoghouseBedInteractionAnchor(key, f) {
+        if (!f && key && key.sprite) {
+            f = key;
+            key = f.sprite ? f.sprite._onionFurnitureKey : null;
+        }
+
+        const direction = this.getDoghouseFurnitureInteractionDirection(key, f, f && f.furnitureDef ? f.furnitureDef : {});
 
         // 目前床鋪只有單張圖，互動點先固定於家具中心。
         // sleepAngle 會讓洋蔥睡覺精靈圖跟著床鋪方向同步旋轉，未來補四方向睡覺圖時可在此改成 setTexture。
@@ -22228,9 +22269,10 @@ if (activeBubbleMsg) {
         if (!this.localPlayer || !this.localPlayer.sprite) return false;
         if (this.localPlayer.isSleeping || this.localPlayer.isSweeping) return false;
 
-        const direction = this.getFurnitureDirection(key, {
+        const currentData = this.getDoghouseFurnitureInstanceData(key, f);
+        const direction = this.getDoghouseFurnitureInteractionDirection(key, f, {
             ...(f.furnitureDef || {}),
-            direction: f.direction || (f.sprite && f.sprite._onionFurnitureDirection) || 'front'
+            ...(currentData || {})
         });
 
         this.localPlayer.isSeated = true;
@@ -22284,7 +22326,7 @@ if (activeBubbleMsg) {
         if (!this.localPlayer || !this.localPlayer.sprite) return false;
         if (this.localPlayer.isSeated || this.localPlayer.isSweeping) return false;
 
-        const sleepAnchor = this.getDoghouseBedInteractionAnchor(f);
+        const sleepAnchor = this.getDoghouseBedInteractionAnchor(key, f);
         this.localPlayer.isSleeping = true;
         this.localPlayer.sprite.setVelocity(0, 0);
         this.localPlayer.sprite.setPosition(sleepAnchor.x, sleepAnchor.y);
@@ -24262,7 +24304,7 @@ if (activeBubbleMsg) {
                 const f = this.furnitureSprites[key];
                 if (this.isDoghouseBedFurniture(key, f) && f.sprite && f.sprite.isLocked) {
                     this.sleepInitDone = true;
-                    const sleepAnchor = this.getDoghouseBedInteractionAnchor(f);
+                    const sleepAnchor = this.getDoghouseBedInteractionAnchor(key, f);
                     this.localPlayer.isSleeping = true;
                     this.localPlayer.sprite.setPosition(sleepAnchor.x, sleepAnchor.y);
                     this.localPlayer.sprite.setAngle(sleepAnchor.sleepAngle || 0).setFlipX(false).play('sleep', true);
