@@ -2926,76 +2926,72 @@ function createSystemUI() {
                 }
             }
 
-            /* 手機版說明書位置微調：標題圖片下移、頁碼標籤說明鍵下移、說明氣泡貼近標籤下方 */
+            /* 手機版說明書微調：縮短高度、收回下推距離、📖 內文氣泡改向上浮現 */
             @media (max-width: 768px), (orientation: portrait) {
+                #manual-modal.manual-crayon-ui {
+                    height:76vh !important;
+                    max-height:calc(var(--onion-vh, 1vh) * 76) !important;
+                    padding:8px 10px 8px 10px !important;
+                }
+
                 #manual-modal.manual-crayon-ui #manual-page-title {
-                    transform:translateY(60px) !important;
-                    margin-bottom:3px !important;
+                    transform:translateY(18px) !important;
+                    margin-bottom:2px !important;
                 }
 
                 #manual-modal.manual-crayon-ui #manual-content {
-                    transform:translateY(60px) !important;
-                    margin-bottom:26px !important;
+                    height:32vh !important;
+                    max-height:calc(var(--onion-vh, 1vh) * 32) !important;
+                    transform:translateY(18px) !important;
+                    margin-bottom:14px !important;
                 }
 
                 #manual-modal.manual-crayon-ui #manual-page-indicator {
-                    bottom:-82px !important;
+                    bottom:-40px !important;
                 }
 
                 #manual-modal.manual-crayon-ui .manual-page-info-row {
-                    transform:translateY(120px) !important;
+                    transform:translateY(42px) !important;
                     margin:0 auto 0 auto !important;
                 }
 
                 #manual-modal.manual-crayon-ui #manual-page-desc.manual-desc-popover {
-                    top:calc(36vh + 184px) !important;
-                    bottom:auto !important;
+                    top:auto !important;
+                    bottom:46px !important;
                     transform:translateX(-50%) !important;
                     width:min(78%, 520px) !important;
                     max-height:min(23vh, 180px) !important;
                 }
 
                 #manual-modal.manual-crayon-ui #manual-page-desc.manual-desc-popover::after {
-                    top:-9px !important;
-                    bottom:auto !important;
-                    border-right:0 !important;
-                    border-bottom:0 !important;
-                    border-left:2px solid rgba(255,255,255,0.86) !important;
-                    border-top:2px solid rgba(255,255,255,0.86) !important;
-                    box-shadow:-4px -4px 8px rgba(0,0,0,0.04) !important;
+                    top:auto !important;
+                    bottom:-9px !important;
+                    border-left:0 !important;
+                    border-top:0 !important;
+                    border-right:2px solid rgba(255,255,255,0.86) !important;
+                    border-bottom:2px solid rgba(255,255,255,0.86) !important;
+                    box-shadow:4px 4px 8px rgba(0,0,0,0.06) !important;
                 }
 
                 #manual-modal.manual-crayon-ui #manual-page-desc.manual-desc-popover.show {
                     display:block !important;
-                    animation:manual-desc-bubble-drop-mobile 0.2s cubic-bezier(0.18, 0.9, 0.28, 1) forwards !important;
+                    animation:manual-desc-bubble-rise-mobile 0.2s cubic-bezier(0.18, 0.9, 0.28, 1) forwards !important;
                 }
 
                 #manual-modal.manual-crayon-ui #manual-page-desc.manual-desc-popover.hiding {
                     display:block !important;
-                    animation:manual-desc-bubble-drop-fade-mobile 0.16s ease-in forwards !important;
+                    animation:manual-desc-bubble-rise-fade-mobile 0.16s ease-in forwards !important;
                 }
             }
 
-            @keyframes manual-desc-bubble-drop-mobile {
-                0% {
-                    opacity:0;
-                    transform:translate(-50%, -10px) scale(0.94);
-                }
-                100% {
-                    opacity:1;
-                    transform:translate(-50%, 0px) scale(1);
-                }
+            @keyframes manual-desc-bubble-rise-mobile {
+                0% { opacity:0; transform:translate(-50%, 18px) scale(0.94); }
+                100% { opacity:1; transform:translate(-50%, -4px) scale(1); }
             }
 
-            @keyframes manual-desc-bubble-drop-fade-mobile {
-                0% {
-                    opacity:1;
-                    transform:translate(-50%, 0px) scale(1);
-                }
-                100% {
-                    opacity:0;
-                    transform:translate(-50%, 12px) scale(0.94);
-                }
+            @keyframes manual-desc-bubble-rise-fade-mobile {
+                0% { opacity:1; transform:translate(-50%, -4px) scale(1); }
+                100% { opacity:0; transform:translate(-50%, 14px) scale(0.94); }
             }
 
 
@@ -10508,6 +10504,11 @@ if (itemName === '月光饅頭') {
                 } 
             }
             if (this.isCafe && this.princeCatSprite) {
+                if (this.isPrinceCatMenuOpen && this.isPrinceCatMenuOpen() && !this.princeCatPetGameActive) {
+                    this.closePrinceCatMenu(true);
+                    return;
+                }
+
                 let catDist = Phaser.Math.Distance.Between(this.localPlayer.sprite.x, this.localPlayer.sprite.y, this.princeCatSprite.x, this.princeCatSprite.y);
                 if (catDist < 170) {
                     this.openPrinceCatMenu();
@@ -20439,31 +20440,25 @@ showPrinceCatLoveEffect() {
         }, 60000);
     }
 
-    async closePrinceCatMenu(restoreCat = true) {
+    isPrinceCatMenuOpen() {
         const menu = document.getElementById('prince-cat-menu');
-        if (menu) menu.style.display = 'none';
+        return !!(menu && menu.style.display !== 'none');
+    }
 
-        if (window.GameLogic.princeCatMenuTimeout) {
-            clearTimeout(window.GameLogic.princeCatMenuTimeout);
-            window.GameLogic.princeCatMenuTimeout = null;
-        }
+    updatePrinceCatMenuDistanceAutoClose() {
+        if (!this.isCafe || !this.princeCatSprite || !this.localPlayer || !this.localPlayer.sprite) return;
+        if (!this.isPrinceCatMenuOpen || !this.isPrinceCatMenuOpen()) return;
+        if (this.princeCatPetGameActive) return;
 
-        if (!restoreCat || !window.GameLogic.currentUser) return;
+        const dist = Phaser.Math.Distance.Between(
+            this.localPlayer.sprite.x,
+            this.localPlayer.sprite.y,
+            this.princeCatSprite.x,
+            this.princeCatSprite.y
+        );
 
-        const uid = window.GameLogic.currentUser.uid;
-        const catRef = ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat'));
-        const snap = await get(catRef);
-        const data = snap.val() || {};
-
-        if (data.interactingUid === uid && data.state !== 'petting') {
-            const closeNow = Date.now();
-            update(catRef, {
-                interactingUid: null,
-                lockedUntil: 0,
-                state: 'idle',
-                stateStartTime: closeNow,
-                stateUntil: closeNow + 1000
-            }).catch(err => console.warn('Firebase 關閉王子麵選單失敗:', err));
+        if (dist > 200) {
+            this.closePrinceCatMenu(true);
         }
     }
 
@@ -21959,7 +21954,8 @@ if (activeBubbleMsg) {
         }
 
         if (this.localPlayer.seatedCushionX !== undefined && this.localPlayer.seatedCushionY !== undefined) {
-            this.localPlayer.sprite.setPosition(this.localPlayer.seatedCushionX, this.localPlayer.seatedCushionY);
+            const seatedOffsetY = this.localPlayer.seatedCushionVisualOffsetY || 12;
+            this.localPlayer.sprite.setPosition(this.localPlayer.seatedCushionX, this.localPlayer.seatedCushionY - seatedOffsetY);
         }
 
         return true;
@@ -21982,7 +21978,8 @@ if (activeBubbleMsg) {
         this.localPlayer.seatedCushionDirection = direction;
         this.localPlayer.seatedCushionX = f.sprite.x;
         this.localPlayer.seatedCushionY = f.sprite.y;
-        this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y);
+        this.localPlayer.seatedCushionVisualOffsetY = 12;
+        this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y - this.localPlayer.seatedCushionVisualOffsetY);
 
         this.applyDoghouseCushionSittingVisual();
         sendBubble("坐下來休息一下。");
@@ -23975,24 +23972,33 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
                 
                 this._cachedMinDist = 90; this._cachedPromptTarget = null; this._cachedPromptMsg = ""; this.closestTrash = null;
                 for (let key in this.furnitureSprites) {
-                    let f = this.furnitureSprites[key]; if (!f.sprite.isLocked) continue; let d = Phaser.Math.Distance.Between(px, py, f.sprite.x, f.sprite.y);
+                    let f = this.furnitureSprites[key];
+                    if (!f || !f.sprite || !f.sprite.isLocked) continue;
+
+                    let d = Phaser.Math.Distance.Between(px, py, f.sprite.x, f.sprite.y);
+
                     if (this.sceneName === 'shrine') {
                         if (key === 'altar' && d < 150) { this._cachedMinDist = d; this._cachedPromptTarget = f.sprite; this._cachedPromptMsg = "按A召喚教友"; }
                         if (key.startsWith('seat_') && d < 150) { this._cachedMinDist = d; this._cachedPromptTarget = f.sprite; this._cachedPromptMsg = "按B入席"; }
                     } else {
-                        if (d < this._cachedMinDist) { 
-                            this._cachedMinDist = d; 
-                            this._cachedPromptTarget = f.sprite; 
+                        if (d < this._cachedMinDist) {
+                            let nextPromptMsg = null;
 
-                            if (key.includes('giftbox')) this._cachedPromptMsg = "按A領取週結算獎勵"; 
-                            else if (key.includes('fridge')) this._cachedPromptMsg = "按A打開冰箱"; 
-                            else if (key.includes('shrine')) this._cachedPromptMsg = "按A參拜神龕"; 
-                            else if (key.includes('dummy')) this._cachedPromptMsg = "假人洋蔥 (裝飾中)"; 
-                            else if (this.isDoghouseBedFurniture(key, f)) this._cachedPromptMsg = "按A歐歐睏"; 
-                            else if (this.isDoghouseCushionFurniture(key, f)) this._cachedPromptMsg = "按A坐下休息"; 
-                            else if (key.includes('scoreboard')) this._cachedPromptMsg = "按A查看洋蔥王排行榜"; 
-                            else if (key.includes('solochicken')) this._cachedPromptMsg = "按A打開獨樂雞";
-                            else this._cachedPromptMsg = "按A打開回憶錄"; 
+                            if (key.includes('giftbox')) nextPromptMsg = "按A領取週結算獎勵";
+                            else if (key.includes('fridge')) nextPromptMsg = "按A打開冰箱";
+                            else if (key.includes('shrine')) nextPromptMsg = "按A參拜神龕";
+                            else if (key.includes('dummy')) nextPromptMsg = "假人洋蔥 (裝飾中)";
+                            else if (this.isDoghouseBedFurniture(key, f)) nextPromptMsg = "按A歐歐睏";
+                            else if (this.isDoghouseCushionFurniture(key, f)) nextPromptMsg = "按A坐下休息";
+                            else if (key.includes('scoreboard')) nextPromptMsg = "按A查看洋蔥王排行榜";
+                            else if (key.includes('solochicken')) nextPromptMsg = "按A打開獨樂雞";
+                            else if (this.isCafe) nextPromptMsg = "按A打開回憶錄";
+
+                            if (!nextPromptMsg) continue;
+
+                            this._cachedMinDist = d;
+                            this._cachedPromptTarget = f.sprite;
+                            this._cachedPromptMsg = nextPromptMsg;
                         }
                     }
                 }
@@ -24068,6 +24074,7 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
         if (this.isCafe && this.princeCatSprite) {
             this.updatePrinceCatAutonomy(time, delta);
             this.updatePrinceCatVisual();
+            this.updatePrinceCatMenuDistanceAutoClose();
         }
 
         if (this.princeCatPetGameActive) {
