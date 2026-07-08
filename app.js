@@ -20440,26 +20440,51 @@ showPrinceCatLoveEffect() {
         }, 60000);
     }
 
+    async closePrinceCatMenu(restoreCat = true) {
+        const menu = document.getElementById('prince-cat-menu');
+        if (menu) menu.style.display = 'none';
+
+        if (window.GameLogic.princeCatMenuTimeout) {
+            clearTimeout(window.GameLogic.princeCatMenuTimeout);
+            window.GameLogic.princeCatMenuTimeout = null;
+        }
+
+        if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+
+        if (!restoreCat || !window.GameLogic.currentUser) return;
+
+        const uid = window.GameLogic.currentUser.uid;
+        const catRef = ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat'));
+
+        try {
+            const snap = await get(catRef);
+            const data = snap.val() || {};
+
+            if (data.interactingUid === uid && data.state !== 'petting') {
+                const closeNow = Date.now();
+                await update(catRef, {
+                    interactingUid: null,
+                    lockedUntil: 0,
+                    state: 'idle',
+                    targetX: data.x || this.princeCatSprite.x,
+                    targetY: data.y || this.princeCatSprite.y,
+                    stateStartTime: closeNow,
+                    stateUntil: closeNow + Phaser.Math.Between(2000, 5000)
+                });
+            }
+        } catch (err) {
+            console.warn('Firebase 關閉王子麵互動選單失敗:', err);
+        }
+    }
+
     isPrinceCatMenuOpen() {
         const menu = document.getElementById('prince-cat-menu');
         return !!(menu && menu.style.display !== 'none');
     }
 
     updatePrinceCatMenuDistanceAutoClose() {
-        if (!this.isCafe || !this.princeCatSprite || !this.localPlayer || !this.localPlayer.sprite) return;
-        if (!this.isPrinceCatMenuOpen || !this.isPrinceCatMenuOpen()) return;
-        if (this.princeCatPetGameActive) return;
-
-        const dist = Phaser.Math.Distance.Between(
-            this.localPlayer.sprite.x,
-            this.localPlayer.sprite.y,
-            this.princeCatSprite.x,
-            this.princeCatSprite.y
-        );
-
-        if (dist > 200) {
-            this.closePrinceCatMenu(true);
-        }
+        // 保留空方法避免舊補丁呼叫報錯；目前不再用距離自動關閉王子麵選單。
+        return;
     }
 
   playPrinceCatFeedingSFXOnce(feedingEffectKey) {
@@ -24074,7 +24099,6 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
         if (this.isCafe && this.princeCatSprite) {
             this.updatePrinceCatAutonomy(time, delta);
             this.updatePrinceCatVisual();
-            this.updatePrinceCatMenuDistanceAutoClose();
         }
 
         if (this.princeCatPetGameActive) {
