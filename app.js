@@ -343,11 +343,19 @@ window.closeProfileModal = function() {
 };
 window.openPortalModal = function() { document.getElementById('inventory-modal').style.display = 'none'; document.getElementById('portal-modal').style.display = 'block'; };
 
-window.openMeowlimeModal = function() {
+window.openMeowlimeModal = async function() {
     const modal = document.getElementById('meowlime-modal');
-    if (window.updateMeowlimeModalStatusText) window.updateMeowlimeModalStatusText();
     if (modal) modal.style.display = 'block';
-    if (window.refreshDailyMeowlimeStatus) window.refreshDailyMeowlimeStatus({ reason: 'openModal' });
+
+    if (window.prepareMeowlimeCheckinModal) window.prepareMeowlimeCheckinModal();
+    if (window.updateMeowlimeModalStatusText) window.updateMeowlimeModalStatusText();
+
+    if (window.refreshDailyMeowlimeStatus) {
+        await window.refreshDailyMeowlimeStatus({ reason: 'openModal' });
+    }
+
+    if (window.prepareMeowlimeCheckinModal) window.prepareMeowlimeCheckinModal();
+    if (window.updateMeowlimeModalStatusText) window.updateMeowlimeModalStatusText();
 };
 
 window.closeMeowlimeModal = function() {
@@ -399,6 +407,11 @@ window.applyMeowlimeDailyState = function(data = {}) {
 };
 
 window.updateMeowlimeModalStatusText = function() {
+    if (window.renderMeowlimeCheckinModal) {
+        window.renderMeowlimeCheckinModal();
+        return;
+    }
+
     const textEl = document.querySelector('#meowlime-modal .meowlime-modal-text');
     if (!textEl || !window.GameLogic) return;
 
@@ -534,6 +547,279 @@ window.stopMeowlimeDailyWatcher = function() {
     }
     window.__meowlimeLastLocalDate = null;
     window.__meowlimeDailyLastFetchedAt = 0;
+};
+
+window.prepareMeowlimeCheckinModal = function() {
+    if (window.initMeowlimeSignatureCanvas) window.initMeowlimeSignatureCanvas();
+    if (window.renderMeowlimeCheckinModal) window.renderMeowlimeCheckinModal();
+};
+
+window.getMeowlimeCheckinDisplayDay = function() {
+    const total = Number((window.GameLogic && window.GameLogic.dailyMeowlime && window.GameLogic.dailyMeowlime.totalCheckins) || 0);
+    const canCheckin = !!(window.GameLogic && window.GameLogic.meowlimeDailyLoaded && window.GameLogic.meowlimeCanCheckinToday);
+    return canCheckin ? total + 1 : total;
+};
+
+window.getMeowlimeSignatureState = function() {
+    if (!window.__meowlimeSignatureState) {
+        window.__meowlimeSignatureState = {
+            drawing: false,
+            hasInk: false,
+            pending: false,
+            lastX: 0,
+            lastY: 0
+        };
+    }
+    return window.__meowlimeSignatureState;
+};
+
+window.getMeowlimeCanvasPoint = function(canvas, e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / Math.max(1, rect.width);
+    const scaleY = canvas.height / Math.max(1, rect.height);
+    return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+    };
+};
+
+window.clearMeowlimeSignature = function() {
+    const canvas = document.getElementById('meowlime-signature-canvas');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const state = window.getMeowlimeSignatureState ? window.getMeowlimeSignatureState() : null;
+    if (state) state.hasInk = false;
+
+    const errorEl = document.getElementById('meowlime-error-text');
+    if (errorEl) errorEl.innerText = '';
+
+    if (window.renderMeowlimeCheckinModal) window.renderMeowlimeCheckinModal();
+};
+
+window.initMeowlimeSignatureCanvas = function() {
+    const canvas = document.getElementById('meowlime-signature-canvas');
+    if (!canvas || canvas.dataset.meowlimeBound === '1') return;
+
+    canvas.dataset.meowlimeBound = '1';
+    canvas.style.touchAction = 'none';
+
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#dffcff';
+        ctx.shadowColor = 'rgba(122, 255, 238, 0.82)';
+        ctx.shadowBlur = 8;
+    }
+
+    const stopCanvasEvent = (e) => {
+        if (!e) return;
+        if (e.preventDefault) e.preventDefault();
+        if (e.stopPropagation) e.stopPropagation();
+    };
+
+    canvas.addEventListener('pointerdown', (e) => {
+        stopCanvasEvent(e);
+
+        if (!window.GameLogic || !window.GameLogic.meowlimeDailyLoaded || !window.GameLogic.meowlimeCanCheckinToday) return;
+
+        const state = window.getMeowlimeSignatureState();
+        if (state.pending) return;
+
+        const point = window.getMeowlimeCanvasPoint(canvas, e);
+        state.drawing = true;
+        state.lastX = point.x;
+        state.lastY = point.y;
+
+        if (canvas.setPointerCapture && e.pointerId !== undefined) {
+            try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+        }
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.beginPath();
+            ctx.moveTo(point.x, point.y);
+        }
+    }, { passive: false });
+
+    canvas.addEventListener('pointermove', (e) => {
+        stopCanvasEvent(e);
+
+        const state = window.getMeowlimeSignatureState();
+        if (!state.drawing || state.pending) return;
+
+        const point = window.getMeowlimeCanvasPoint(canvas, e);
+        const ctx = canvas.getContext('2d');
+
+        if (ctx) {
+            ctx.lineTo(point.x, point.y);
+            ctx.stroke();
+        }
+
+        state.lastX = point.x;
+        state.lastY = point.y;
+        state.hasInk = true;
+
+        const errorEl = document.getElementById('meowlime-error-text');
+        if (errorEl) errorEl.innerText = '';
+    }, { passive: false });
+
+    const endDraw = (e) => {
+        stopCanvasEvent(e);
+        const state = window.getMeowlimeSignatureState();
+        state.drawing = false;
+    };
+
+    canvas.addEventListener('pointerup', endDraw, { passive: false });
+    canvas.addEventListener('pointercancel', endDraw, { passive: false });
+    canvas.addEventListener('pointerleave', endDraw, { passive: false });
+};
+
+window.renderMeowlimeCheckinModal = function() {
+    const modal = document.getElementById('meowlime-modal');
+    if (!modal || !window.GameLogic) return;
+
+    const loaded = !!window.GameLogic.meowlimeDailyLoaded;
+    const canCheckin = !!(loaded && window.GameLogic.meowlimeCanCheckinToday);
+    const state = window.getMeowlimeSignatureState ? window.getMeowlimeSignatureState() : { hasInk: false, pending: false };
+    const signed = loaded && !canCheckin;
+    const displayDay = window.getMeowlimeCheckinDisplayDay ? window.getMeowlimeCheckinDisplayDay() : 0;
+
+    const dayEl = document.getElementById('meowlime-day-count');
+    const statusEl = document.getElementById('meowlime-status-text');
+    const hintEl = document.getElementById('meowlime-signature-hint');
+    const wrap = document.getElementById('meowlime-signature-wrap');
+    const stamp = document.getElementById('meowlime-stamp');
+    const submitBtn = document.getElementById('meowlime-submit-btn');
+    const clearBtn = document.getElementById('meowlime-clear-btn');
+
+    if (dayEl) dayEl.innerText = loaded ? String(displayDay) : '確認中';
+
+    if (statusEl) {
+        if (!loaded) {
+            statusEl.innerText = '喵萊姆正在確認今日簽到狀態……';
+        } else if (canCheckin) {
+            statusEl.innerText = '喵萊姆：今天還沒簽到喵。';
+        } else {
+            statusEl.innerText = '今天已經簽到過囉，明天再來喵。';
+        }
+    }
+
+    if (hintEl) {
+        hintEl.innerText = signed ? '今日已簽到完成' : '請在下方簽名欄位留下今天的筆跡';
+    }
+
+    if (wrap) {
+        wrap.classList.toggle('meowlime-signed', signed);
+        wrap.classList.toggle('meowlime-pending', !!state.pending);
+    }
+
+    if (stamp) stamp.innerText = '簽到了喵！';
+
+    if (submitBtn) {
+        submitBtn.disabled = !loaded || signed || !!state.pending;
+        submitBtn.innerText = state.pending ? '簽到中……' : (signed ? '今日已簽到' : '簽到');
+        submitBtn.style.display = signed ? 'none' : 'inline-flex';
+    }
+
+    if (clearBtn) {
+        clearBtn.disabled = !loaded || signed || !!state.pending;
+    }
+};
+
+window.spawnMeowlimeStampStars = function() {
+    const field = document.getElementById('meowlime-star-field');
+    if (!field) return;
+
+    field.innerHTML = '';
+
+    for (let i = 0; i < 18; i++) {
+        const star = document.createElement('span');
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 56 + Math.random() * 92;
+        star.innerText = '✦';
+        star.style.setProperty('--meowlime-star-x', `${Math.cos(angle) * dist}px`);
+        star.style.setProperty('--meowlime-star-y', `${Math.sin(angle) * dist}px`);
+        star.style.setProperty('--meowlime-star-delay', `${Math.random() * 0.12}s`);
+        star.style.setProperty('--meowlime-star-size', `${13 + Math.random() * 12}px`);
+        field.appendChild(star);
+    }
+
+    setTimeout(() => {
+        if (field) field.innerHTML = '';
+    }, 900);
+};
+
+window.playMeowlimeStampAnimation = function() {
+    const wrap = document.getElementById('meowlime-signature-wrap');
+    if (!wrap) return;
+
+    wrap.classList.remove('meowlime-stamped');
+    void wrap.offsetWidth;
+    wrap.classList.add('meowlime-stamped');
+
+    if (window.spawnMeowlimeStampStars) window.spawnMeowlimeStampStars();
+
+    setTimeout(() => {
+        if (wrap) wrap.classList.remove('meowlime-stamped');
+    }, 980);
+};
+
+window.submitMeowlimeCheckin = async function() {
+    const state = window.getMeowlimeSignatureState ? window.getMeowlimeSignatureState() : null;
+    const errorEl = document.getElementById('meowlime-error-text');
+
+    if (!state) return;
+    if (state.pending) return;
+
+    if (errorEl) errorEl.innerText = '';
+
+    try {
+        if (window.refreshDailyMeowlimeStatus) {
+            await window.refreshDailyMeowlimeStatus({ reason: 'submitMeowlimeCheckin' });
+        }
+
+        if (!window.GameLogic || !window.GameLogic.meowlimeDailyLoaded) {
+            if (errorEl) errorEl.innerText = '喵萊姆還在確認資料，請再試一次。';
+            return;
+        }
+
+        if (!window.GameLogic.meowlimeCanCheckinToday) {
+            if (window.renderMeowlimeCheckinModal) window.renderMeowlimeCheckinModal();
+            if (window.playMeowlimeStampAnimation) window.playMeowlimeStampAnimation();
+            return;
+        }
+
+        if (!state.hasInk) {
+            if (errorEl) errorEl.innerText = '請先在簽名欄位留下筆跡喵。';
+            return;
+        }
+
+        state.pending = true;
+        if (window.renderMeowlimeCheckinModal) window.renderMeowlimeCheckinModal();
+
+        const result = window.recordDailyMeowlimeCheckin
+            ? await window.recordDailyMeowlimeCheckin()
+            : { ok: false, reason: 'missing-helper' };
+
+        if (!result || !result.ok) {
+            throw new Error(result && result.reason ? result.reason : 'checkin-failed');
+        }
+
+        state.pending = false;
+        if (window.renderMeowlimeCheckinModal) window.renderMeowlimeCheckinModal();
+        if (window.playMeowlimeStampAnimation) window.playMeowlimeStampAnimation();
+        if (window.refreshMeowlimeVisualsInScene) window.refreshMeowlimeVisualsInScene();
+    } catch (err) {
+        console.warn('[喵萊姆] 簽到失敗：', err);
+        state.pending = false;
+        if (window.renderMeowlimeCheckinModal) window.renderMeowlimeCheckinModal();
+        if (errorEl) errorEl.innerText = '簽到暫時失敗，請稍後再試喵。';
+    }
 };
 
 // 新增：空間傳送門點擊時的粒子噴發效果
@@ -677,6 +963,195 @@ function createSystemUI() {
                 0% { transform: translateY(34px) scale(0.92); opacity: 0; }
                 20% { opacity: 0.58; }
                 100% { transform: translateY(-80px) scale(1.08); opacity: 0; }
+            }
+
+                        .meowlime-modal {
+                width: min(92vw, 430px) !important;
+                max-width: 430px !important;
+                background:
+                    radial-gradient(circle at 22% 12%, rgba(255,255,255,0.14), transparent 22%),
+                    radial-gradient(circle at 78% 18%, rgba(132,255,236,0.13), transparent 26%),
+                    linear-gradient(145deg, rgba(2, 7, 19, 0.98), rgba(6, 18, 34, 0.98) 45%, rgba(3, 9, 20, 0.98)) !important;
+                border: 2px solid rgba(126, 255, 238, 0.82) !important;
+                box-shadow: 0 0 22px rgba(126,255,238,0.38), 0 0 28px rgba(255,160,226,0.24), 0 14px 30px rgba(0,0,0,0.62), inset 0 0 24px rgba(126,255,238,0.12) !important;
+                color: #e9fffb !important;
+                overflow: hidden !important;
+                touch-action: none;
+            }
+            .meowlime-modal::after {
+                content: "";
+                position: absolute;
+                inset: 0;
+                background:
+                    linear-gradient(90deg, transparent 0 48%, rgba(126,255,238,0.16) 49%, transparent 50%),
+                    linear-gradient(0deg, transparent 0 48%, rgba(255,190,232,0.13) 49%, transparent 50%);
+                background-size: 34px 34px;
+                opacity: 0.35;
+                pointer-events: none;
+                z-index: 0;
+                animation: meowlime-tech-grid-drift 5.4s linear infinite;
+            }
+            .meowlime-modal h3 {
+                color: #eafffb !important;
+                border-bottom: 1px solid rgba(126,255,238,0.45) !important;
+                text-shadow: 0 0 8px rgba(126,255,238,0.95), 0 0 14px rgba(255,190,232,0.52) !important;
+                letter-spacing: 1px;
+            }
+            .meowlime-day-card {
+                margin: 6px auto 10px auto;
+                padding: 10px 12px;
+                border-radius: 16px;
+                background: rgba(0,0,0,0.48);
+                border: 1px solid rgba(126,255,238,0.5);
+                color: #eafffb;
+                font-weight: 900;
+                box-shadow: inset 0 0 16px rgba(126,255,238,0.08), 0 0 12px rgba(126,255,238,0.18);
+            }
+            #meowlime-day-count {
+                color: #a7ffbd;
+                font-size: 24px;
+                text-shadow: 0 0 8px rgba(126,255,132,0.95), 0 0 14px rgba(126,255,238,0.65);
+                padding: 0 4px;
+            }
+            .meowlime-modal-text {
+                background: rgba(0, 0, 0, 0.44) !important;
+                color: #dffcff !important;
+                border: 1px solid rgba(255, 190, 232, 0.46) !important;
+                box-shadow: inset 0 0 14px rgba(255,255,255,0.05), 0 0 12px rgba(255,190,232,0.14) !important;
+            }
+            .meowlime-signature-hint {
+                margin: 10px 0 6px 0;
+                color: rgba(233,255,251,0.82);
+                font-size: 12px;
+                font-weight: bold;
+                text-shadow: 0 0 6px rgba(126,255,238,0.45);
+            }
+            .meowlime-signature-wrap {
+                position: relative;
+                height: 128px;
+                border-radius: 16px;
+                overflow: hidden;
+                background:
+                    radial-gradient(circle at 18% 22%, rgba(255,255,255,0.12), transparent 18%),
+                    linear-gradient(135deg, rgba(255,208,232,0.22), rgba(186,240,255,0.17), rgba(208,255,198,0.16)),
+                    rgba(0,0,0,0.72);
+                border: 2px solid rgba(126,255,238,0.64);
+                box-shadow: 0 0 14px rgba(126,255,238,0.28), inset 0 0 18px rgba(0,0,0,0.72);
+                touch-action: none;
+            }
+            #meowlime-signature-canvas {
+                width: 100%;
+                height: 100%;
+                display: block;
+                cursor: crosshair;
+                touch-action: none;
+                user-select: none;
+                -webkit-user-select: none;
+                -webkit-touch-callout: none;
+            }
+            .meowlime-signature-overlay {
+                display: none;
+                position: absolute;
+                inset: 0;
+                align-items: center;
+                justify-content: center;
+                background: rgba(0,0,0,0.58);
+                z-index: 3;
+                pointer-events: auto;
+            }
+            .meowlime-signature-wrap.meowlime-signed .meowlime-signature-overlay {
+                display: flex;
+            }
+            .meowlime-stamp {
+                width: 118px;
+                height: 118px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: radial-gradient(circle at 35% 28%, rgba(255,255,255,0.88), #7cff89 30%, #0bbf4f 62%, #02782c 100%);
+                color: #003314;
+                border: 5px solid rgba(218,255,218,0.92);
+                font-size: 19px;
+                font-weight: 900;
+                text-align: center;
+                text-shadow: 0 1px 0 rgba(255,255,255,0.72);
+                box-shadow: 0 0 16px rgba(80,255,110,0.9), 0 0 30px rgba(80,255,110,0.42), inset 0 0 12px rgba(255,255,255,0.45);
+                transform: rotate(-8deg);
+                z-index: 4;
+            }
+            .meowlime-signature-wrap.meowlime-stamped .meowlime-stamp {
+                animation: meowlime-stamp-press 0.62s cubic-bezier(0.12, 0.86, 0.2, 1.15) forwards;
+            }
+            .meowlime-star-field {
+                position: absolute;
+                inset: 0;
+                pointer-events: none;
+                z-index: 5;
+            }
+            .meowlime-star-field span {
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                color: #eafffb;
+                font-size: var(--meowlime-star-size, 18px);
+                text-shadow: 0 0 8px #ffffff, 0 0 16px #7cff89, 0 0 24px #ffbfe8;
+                animation: meowlime-star-pop 0.78s ease-out forwards;
+                animation-delay: var(--meowlime-star-delay, 0s);
+            }
+            .meowlime-button-row {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+                margin-top: 12px;
+            }
+            .meowlime-action-btn,
+            .meowlime-close-btn {
+                min-height: 42px;
+                border-radius: 999px !important;
+                border: 1px solid rgba(255,255,255,0.82) !important;
+                font-weight: 900 !important;
+                cursor: pointer;
+                touch-action: manipulation;
+            }
+            .meowlime-action-btn {
+                background: linear-gradient(180deg, #a9fff0, #1fb9ff 52%, #1450a8) !important;
+                color: #001b2d !important;
+                box-shadow: 0 0 12px rgba(126,255,238,0.62), inset 0 1px 0 rgba(255,255,255,0.62) !important;
+            }
+            .meowlime-submit-btn {
+                background: linear-gradient(180deg, #baffc4, #20d767 48%, #087f34) !important;
+                color: #05240c !important;
+                box-shadow: 0 0 13px rgba(90,255,120,0.72), inset 0 1px 0 rgba(255,255,255,0.7) !important;
+            }
+            .meowlime-action-btn:disabled,
+            .meowlime-submit-btn:disabled {
+                opacity: 0.48;
+                filter: grayscale(0.55);
+                cursor: not-allowed;
+            }
+            .meowlime-error-text {
+                min-height: 18px;
+                margin-top: 8px;
+                color: #ffadc8;
+                font-size: 12px;
+                font-weight: 900;
+                text-shadow: 0 0 8px rgba(255,80,132,0.8);
+            }
+            @keyframes meowlime-tech-grid-drift {
+                0% { transform: translate(0, 0); }
+                100% { transform: translate(34px, 34px); }
+            }
+            @keyframes meowlime-stamp-press {
+                0% { transform: translateY(-88px) scale(1.85) rotate(-8deg); opacity: 0; filter: brightness(1.45); }
+                48% { transform: translateY(8px) scale(0.86) rotate(-8deg); opacity: 1; filter: brightness(1.25); }
+                72% { transform: translateY(-4px) scale(1.05) rotate(-8deg); }
+                100% { transform: translateY(0) scale(1) rotate(-8deg); opacity: 1; filter: brightness(1); }
+            }
+            @keyframes meowlime-star-pop {
+                0% { transform: translate(-50%, -50%) scale(0.2) rotate(0deg); opacity: 0; }
+                18% { opacity: 1; }
+                100% { transform: translate(calc(-50% + var(--meowlime-star-x, 0px)), calc(-50% + var(--meowlime-star-y, 0px))) scale(0.1) rotate(120deg); opacity: 0; }
             }
 
             /* 7-EONION 黑綠深紫黑洞商店＋購買拉條＋給西主題美化＋大廳家具木紋 */
@@ -3696,8 +4171,22 @@ function createSystemUI() {
         </div>
                 <div id="meowlime-modal" class="modal meowlime-modal" style="z-index: 265;">
             <h3>每日簽到喵萊姆</h3>
-            <div class="meowlime-modal-text">喵萊姆正在啟動每日簽到系統……</div>
-            <button class="close-modal-btn meowlime-close-btn" style="margin-top: 16px; width: 100%;" onclick="window.closeMeowlimeModal ? window.closeMeowlimeModal() : document.getElementById('meowlime-modal').style.display='none'">關閉</button>
+            <div class="meowlime-day-card">這是你簽到的第 <span id="meowlime-day-count">確認中</span> 天</div>
+            <div id="meowlime-status-text" class="meowlime-modal-text">喵萊姆正在啟動每日簽到系統……</div>
+            <div id="meowlime-signature-hint" class="meowlime-signature-hint">請在下方簽名欄位留下今天的筆跡</div>
+            <div id="meowlime-signature-wrap" class="meowlime-signature-wrap">
+                <canvas id="meowlime-signature-canvas" width="640" height="180"></canvas>
+                <div id="meowlime-signature-overlay" class="meowlime-signature-overlay">
+                    <div id="meowlime-stamp" class="meowlime-stamp">簽到了喵！</div>
+                    <div id="meowlime-star-field" class="meowlime-star-field"></div>
+                </div>
+            </div>
+            <div id="meowlime-error-text" class="meowlime-error-text"></div>
+            <div class="meowlime-button-row">
+                <button id="meowlime-clear-btn" class="meowlime-action-btn" type="button" onclick="window.clearMeowlimeSignature && window.clearMeowlimeSignature()">清除重簽</button>
+                <button id="meowlime-submit-btn" class="meowlime-action-btn meowlime-submit-btn" type="button" onclick="window.submitMeowlimeCheckin && window.submitMeowlimeCheckin()">簽到</button>
+            </div>
+            <button class="close-modal-btn meowlime-close-btn" style="margin-top: 12px; width: 100%;" onclick="window.closeMeowlimeModal ? window.closeMeowlimeModal() : document.getElementById('meowlime-modal').style.display='none'">關閉</button>
         </div>
         <div id="fridge-modal" class="modal"><h3>❄️ 公用大冰箱</h3><p style="color:#888; font-size: 14px;">冰箱目前空空如也... 等待下次採買中</p><button class="close-modal-btn btn-primary" onclick="document.getElementById('fridge-modal').style.display='none'">關上冰箱</button></div>
         <div id="memory-modal" class="modal">
