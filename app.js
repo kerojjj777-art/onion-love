@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getDatabase, ref, set, onValue, push, remove, onDisconnect, update, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC266DIMj81hWMk83GEmqSbBl85VY3tTcE", authDomain: "onion-love.firebaseapp.com",
@@ -11,7 +12,8 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getDatabase(app);         
+const db = getDatabase(app);
+const storage = getStorage(app);              
 
 // ====== 入口房間設定：良之友天地公開，洋蔥五告派團體白名單 ======
 const DEFAULT_SERVER_ROOM = "ryoFriends";
@@ -86,7 +88,7 @@ window.GameLogic = {
     currentUser: null, currentScene: "doghouse",
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0, inventoryOrder: [], princeBond: 0, princePetCountToday: 0, princeLastPetDate: "", princeRewardsClaimed: {}, princeFeedCountToday: 0, princeLastFeedDate: "" },
     cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, placingFurnitureKey: null, 
-    phaserGame: null, phaserLoaded: false, pendingScene: null, db: db,
+    phaserGame: null, phaserLoaded: false, pendingScene: null, db: db, storage: storage,
     armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false, rpsModalActive: false, moonBunBuffUntil: 0, moonBunSweepPressCount: 0, moonBunBuffEndNotified: false, moonBunBuffRemainingMs: 0, moonBunBuffLastSaveAt: 0,
     selectedServerRoom: initialServerRoom, currentServerRoom: initialServerRoom, serverRooms: SERVER_ROOMS,
     dailyMeowlime: { lastCheckinDate: "", totalCheckins: 0, checkinHistory: {} },
@@ -1067,11 +1069,16 @@ window.getMeowlimeCheckinHistoryList = function() {
     return Object.keys(history)
         .map((dateKey) => {
             const item = history[dateKey] || {};
+            const signatureUrl = item.signatureUrl ? String(item.signatureUrl) : '';
+            const signaturePath = item.signaturePath ? String(item.signaturePath) : '';
+
             return {
                 date: String(item.date || dateKey || ''),
                 createdAt: Number(item.createdAt || 0),
                 serverRoom: String(item.serverRoom || ''),
-                hasSignature: !!item.hasSignature
+                hasSignature: !!item.hasSignature,
+                signatureUrl: signatureUrl,
+                signaturePath: signaturePath
             };
         })
         .filter(item => !!item.date)
@@ -1086,6 +1093,84 @@ window.getMeowlimeStarRoomName = function(roomId) {
     const rooms = (window.GameLogic && window.GameLogic.serverRooms) || {};
     if (safeRoomId && rooms[safeRoomId] && rooms[safeRoomId].name) return rooms[safeRoomId].name;
     return safeRoomId || '未知房間';
+};
+
+window.showMeowlimeStarMapMessage = function(message) {
+    const panel = document.getElementById('meowlime-star-map-panel');
+    const summary = panel ? panel.querySelector('.meowlime-star-map-summary') : null;
+    const safeMessage = message || '這顆星星沒有保存簽名圖喵。';
+
+    if (summary) {
+        summary.textContent = safeMessage;
+        summary.classList.add('meowlime-star-map-summary-flash');
+
+        clearTimeout(window.__meowlimeStarMapMessageTimer);
+        window.__meowlimeStarMapMessageTimer = setTimeout(() => {
+            if (summary) summary.classList.remove('meowlime-star-map-summary-flash');
+            if (window.renderMeowlimeStarMap) window.renderMeowlimeStarMap();
+        }, 1600);
+        return;
+    }
+
+    const errorEl = document.getElementById('meowlime-error-text');
+    if (errorEl) errorEl.innerText = safeMessage;
+};
+
+window.openMeowlimeSignatureViewer = function(item) {
+    const data = item || {};
+    const url = data.signatureUrl ? String(data.signatureUrl) : '';
+
+    if (!url) {
+        if (window.showMeowlimeStarMapMessage) window.showMeowlimeStarMapMessage('這顆星星沒有保存簽名圖喵。');
+        return;
+    }
+
+    const modal = document.getElementById('meowlime-signature-viewer-modal');
+    const dateEl = document.getElementById('meowlime-signature-viewer-date');
+    const roomEl = document.getElementById('meowlime-signature-viewer-room');
+    const img = document.getElementById('meowlime-signature-viewer-img');
+    const statusEl = document.getElementById('meowlime-signature-viewer-status');
+
+    if (!modal || !img) {
+        console.warn('[喵萊姆] 找不到簽名回放視窗 DOM。');
+        return;
+    }
+
+    const roomName = window.getMeowlimeStarRoomName
+        ? window.getMeowlimeStarRoomName(data.serverRoom)
+        : (data.serverRoom || '未知房間');
+
+    if (dateEl) dateEl.innerText = data.date ? `日期：${data.date}` : '日期：未知';
+    if (roomEl) roomEl.innerText = `房間：${roomName}`;
+    if (statusEl) statusEl.innerText = '簽名圖讀取中……';
+
+    img.onload = () => {
+        if (statusEl) statusEl.innerText = '';
+    };
+    img.onerror = () => {
+        console.warn('[喵萊姆] 簽名圖讀取失敗：', url);
+        if (statusEl) statusEl.innerText = '簽名圖讀取失敗喵。';
+        img.removeAttribute('src');
+    };
+
+    img.alt = `${data.date || '某一天'} 的喵萊姆簽名`;
+    img.src = url;
+    modal.style.display = 'block';
+};
+
+window.closeMeowlimeSignatureViewer = function() {
+    const modal = document.getElementById('meowlime-signature-viewer-modal');
+    const img = document.getElementById('meowlime-signature-viewer-img');
+    const statusEl = document.getElementById('meowlime-signature-viewer-status');
+
+    if (modal) modal.style.display = 'none';
+    if (img) {
+        img.onload = null;
+        img.onerror = null;
+        img.removeAttribute('src');
+        img.alt = '';
+    }
+    if (statusEl) statusEl.innerText = '';
 };
 
 window.renderMeowlimeStarMap = function() {
@@ -1127,6 +1212,7 @@ window.renderMeowlimeStarMap = function() {
     list.forEach((item, idx) => {
         const dayNo = idx + 1;
         const isToday = item.date === today;
+        const canViewSignature = !!(item.hasSignature && item.signatureUrl);
         const angle = (idx * 137.5) * Math.PI / 180;
         const ring = 18 + (idx % 5) * 8 + Math.floor(idx / 5) * 2;
         const left = Math.max(10, Math.min(90, 50 + Math.cos(angle) * ring));
@@ -1135,16 +1221,65 @@ window.renderMeowlimeStarMap = function() {
         const roomName = window.getMeowlimeStarRoomName ? window.getMeowlimeStarRoomName(item.serverRoom) : (item.serverRoom || '未知房間');
 
         const star = document.createElement('div');
-        star.className = `meowlime-star-node${isToday ? ' today' : ''}`;
+        star.className = `meowlime-star-node${isToday ? ' today' : ''}${canViewSignature ? ' has-signature' : ''}`;
         star.style.setProperty('--star-left', `${left}%`);
         star.style.setProperty('--star-top', `${top}%`);
         star.style.setProperty('--star-hue', String(hue));
-        star.title = `${item.date}｜第 ${dayNo} 天｜${roomName}`;
+        star.title = `${item.date}｜第 ${dayNo} 天｜${roomName}${canViewSignature ? '｜點擊查看簽名' : '｜沒有保存簽名圖'}`;
         star.textContent = '✦';
+        star.setAttribute('role', 'button');
+        star.setAttribute('tabindex', '0');
+        star.setAttribute('aria-label', canViewSignature
+            ? `${item.date} 第 ${dayNo} 天，點擊查看簽名`
+            : `${item.date} 第 ${dayNo} 天，沒有保存簽名圖`);
+
+        let pointerStart = null;
+
+        const handleStarActivate = (e) => {
+            if (e && e.stopPropagation) e.stopPropagation();
+
+            if (canViewSignature) {
+                if (window.openMeowlimeSignatureViewer) window.openMeowlimeSignatureViewer(item);
+            } else if (window.showMeowlimeStarMapMessage) {
+                window.showMeowlimeStarMapMessage('這顆星星沒有保存簽名圖喵。');
+            }
+        };
+
+        star.addEventListener('pointerdown', (e) => {
+            if (e && e.stopPropagation) e.stopPropagation();
+            pointerStart = e ? { x: e.clientX, y: e.clientY, t: Date.now() } : null;
+        }, { passive: true });
+
+        star.addEventListener('pointerup', (e) => {
+            if (e && e.stopPropagation) e.stopPropagation();
+
+            if (pointerStart && e) {
+                const dx = Math.abs(e.clientX - pointerStart.x);
+                const dy = Math.abs(e.clientY - pointerStart.y);
+                if (dx > 8 || dy > 8) {
+                    pointerStart = null;
+                    return;
+                }
+            }
+
+            pointerStart = null;
+            handleStarActivate(e);
+        }, { passive: true });
+
+        star.addEventListener('click', (e) => {
+            if (e && e.stopPropagation) e.stopPropagation();
+        });
+
+        star.addEventListener('keydown', (e) => {
+            if (!e || (e.key !== 'Enter' && e.key !== ' ')) return;
+            e.preventDefault();
+            handleStarActivate(e);
+        });
+
         sky.appendChild(star);
 
         const card = document.createElement('div');
-        card.className = `meowlime-star-map-card${isToday ? ' today' : ''}`;
+        card.className = `meowlime-star-map-card${isToday ? ' today' : ''}${canViewSignature ? ' has-signature' : ''}`;
 
         const title = document.createElement('div');
         title.className = 'meowlime-star-map-card-title';
@@ -1152,7 +1287,7 @@ window.renderMeowlimeStarMap = function() {
 
         const meta = document.createElement('div');
         meta.className = 'meowlime-star-map-card-meta';
-        meta.textContent = `${item.date}｜${roomName}`;
+        meta.textContent = `${item.date}｜${roomName}${canViewSignature ? '｜已保存簽名圖' : '｜無簽名圖'}`;
 
         card.appendChild(title);
         card.appendChild(meta);
@@ -1327,7 +1462,95 @@ window.refreshDailyMeowlimeStatus = async function(options = {}) {
     }
 };
 
-window.recordDailyMeowlimeCheckin = async function() {
+window.getMeowlimeSignatureBlob = function() {
+    return new Promise((resolve) => {
+        try {
+            const canvas = document.getElementById('meowlime-signature-canvas');
+            const state = window.getMeowlimeSignatureState ? window.getMeowlimeSignatureState() : null;
+
+            if (!canvas) {
+                resolve({ ok: false, reason: 'missing-canvas' });
+                return;
+            }
+
+            if (!state || !state.hasInk) {
+                resolve({ ok: false, reason: 'no-ink' });
+                return;
+            }
+
+            if (typeof canvas.toBlob !== 'function') {
+                resolve({ ok: false, reason: 'toBlob-unavailable' });
+                return;
+            }
+
+            canvas.toBlob((blob) => {
+                if (!blob || blob.size <= 0) {
+                    resolve({ ok: false, reason: 'empty-blob' });
+                    return;
+                }
+
+                resolve({ ok: true, blob: blob });
+            }, 'image/png');
+        } catch (err) {
+            console.warn('[喵萊姆] 簽名圖轉 Blob 失敗：', err);
+            resolve({ ok: false, reason: 'blob-error' });
+        }
+    });
+};
+
+window.uploadMeowlimeSignatureImage = async function(dateKey) {
+    try {
+        if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.currentUser.uid) {
+            return { ok: false, reason: 'no-user' };
+        }
+
+        const activeStorage = (window.GameLogic && window.GameLogic.storage) || (typeof storage !== 'undefined' ? storage : null);
+        if (!activeStorage) {
+            return { ok: false, reason: 'missing-storage' };
+        }
+
+        if (typeof storageRef !== 'function' || typeof uploadBytes !== 'function' || typeof getDownloadURL !== 'function') {
+            return { ok: false, reason: 'storage-sdk-unavailable' };
+        }
+
+        if (!window.getMeowlimeSignatureBlob) {
+            return { ok: false, reason: 'missing-blob-helper' };
+        }
+
+        const blobResult = await window.getMeowlimeSignatureBlob();
+        if (!blobResult || !blobResult.ok || !blobResult.blob) {
+            return { ok: false, reason: blobResult && blobResult.reason ? blobResult.reason : 'blob-failed' };
+        }
+
+        const uid = window.GameLogic.currentUser.uid;
+        const safeDateKey = String(dateKey || (window.getMeowlimeTodayDateString ? window.getMeowlimeTodayDateString() : ''))
+            .replace(/[^\d-]/g, '');
+
+        if (!safeDateKey) {
+            return { ok: false, reason: 'missing-date' };
+        }
+
+        const storagePath = `users/${uid}/dailyMeowlimeSignatures/${safeDateKey}.png`;
+        const imageRef = storageRef(activeStorage, storagePath);
+
+        await uploadBytes(imageRef, blobResult.blob, { contentType: 'image/png' });
+        const downloadUrl = await getDownloadURL(imageRef);
+
+        return {
+            ok: true,
+            signatureUrl: downloadUrl,
+            signaturePath: storagePath
+        };
+    } catch (err) {
+        console.warn('[喵萊姆] 簽名圖上傳失敗：', err);
+        return {
+            ok: false,
+            reason: err && err.code ? err.code : 'upload-error'
+        };
+    }
+};
+
+window.recordDailyMeowlimeCheckin = async function(signatureInfo = {}) {
     if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return { ok: false, reason: 'no-user' };
 
     const uid = window.GameLogic.currentUser.uid;
@@ -1340,13 +1563,21 @@ window.recordDailyMeowlimeCheckin = async function() {
         return { ok: true, alreadyChecked: true, date: today };
     }
 
+    const signatureUrl = signatureInfo && signatureInfo.signatureUrl ? String(signatureInfo.signatureUrl) : '';
+    const signaturePath = signatureInfo && signatureInfo.signaturePath ? String(signatureInfo.signaturePath) : '';
+
     const totalCheckins = Number(data.totalCheckins || 0) + 1;
     const historyItem = {
         date: today,
         createdAt: Date.now(),
         serverRoom: window.getCurrentServerRoomId ? window.getCurrentServerRoomId() : (window.GameLogic.currentServerRoom || ''),
-        hasSignature: false
+        hasSignature: !!signatureUrl
     };
+
+    if (signatureUrl) {
+        historyItem.signatureUrl = signatureUrl;
+        historyItem.signaturePath = signaturePath;
+    }
 
     const updates = {
         lastCheckinDate: today,
@@ -1656,8 +1887,21 @@ window.submitMeowlimeCheckin = async function() {
         state.pending = true;
         if (window.renderMeowlimeCheckinModal) window.renderMeowlimeCheckinModal();
 
+        const today = window.getMeowlimeTodayDateString ? window.getMeowlimeTodayDateString() : '';
+        const signatureInfo = window.uploadMeowlimeSignatureImage
+            ? await window.uploadMeowlimeSignatureImage(today)
+            : { ok: false, reason: 'missing-upload-helper' };
+
+        if (!signatureInfo || !signatureInfo.ok || !signatureInfo.signatureUrl) {
+            console.warn('[喵萊姆] 簽名圖上傳未完成，取消本次簽到：', signatureInfo);
+            state.pending = false;
+            if (window.renderMeowlimeCheckinModal) window.renderMeowlimeCheckinModal();
+            if (errorEl) errorEl.innerText = '簽名圖上傳失敗，請稍後再試喵。';
+            return;
+        }
+
         const result = window.recordDailyMeowlimeCheckin
-            ? await window.recordDailyMeowlimeCheckin()
+            ? await window.recordDailyMeowlimeCheckin(signatureInfo)
             : { ok: false, reason: 'missing-helper' };
 
         if (!result || !result.ok) {
@@ -2256,6 +2500,102 @@ function createSystemUI() {
                 font-size: 30px;
                 text-shadow: 0 0 10px #fff, 0 0 22px #fff7a8, 0 0 34px #ff87df, 0 0 44px #7fffea;
                 animation: meowlime-star-today-pulse 0.95s ease-in-out infinite alternate;
+            }
+            .meowlime-star-node.has-signature {
+                cursor: pointer;
+                color: hsl(var(--star-hue, 185), 100%, 84%);
+                text-shadow: 0 0 10px currentColor, 0 0 22px currentColor, 0 0 34px rgba(255,190,232,0.76), 0 0 42px rgba(126,255,238,0.52);
+                filter: drop-shadow(0 0 10px currentColor) brightness(1.15);
+                touch-action: pan-y;
+            }
+            .meowlime-star-node.has-signature::after {
+                content: "";
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                width: 26px;
+                height: 26px;
+                transform: translate(-50%, -50%);
+                border-radius: 50%;
+                border: 1px solid rgba(255,255,255,0.32);
+                box-shadow: 0 0 10px rgba(126,255,238,0.48), 0 0 14px rgba(255,130,228,0.28);
+                pointer-events: none;
+            }
+            @media (hover: hover) {
+                .meowlime-star-node.has-signature:hover {
+                    transform: translate(-50%, -50%) scale(1.28) rotate(8deg);
+                    text-shadow: 0 0 12px #fff, 0 0 26px currentColor, 0 0 42px rgba(255,130,228,0.92), 0 0 54px rgba(126,255,238,0.72);
+                }
+            }
+            .meowlime-star-map-summary.meowlime-star-map-summary-flash {
+                border-color: rgba(255,247,168,0.88);
+                color: #fff7a8;
+                box-shadow: 0 0 14px rgba(255,247,168,0.38), 0 0 16px rgba(255,130,228,0.18), inset 0 0 12px rgba(255,247,168,0.1);
+            }
+            .meowlime-star-map-card.has-signature {
+                border-color: rgba(255,190,232,0.58);
+                box-shadow: inset 0 0 12px rgba(255,190,232,0.08), 0 0 12px rgba(126,255,238,0.14);
+            }
+            #meowlime-signature-viewer-modal {
+                width: min(92vw, 430px) !important;
+                max-width: 430px !important;
+                z-index: 267 !important;
+                background:
+                    radial-gradient(circle at 25% 12%, rgba(255,190,232,0.16), transparent 28%),
+                    radial-gradient(circle at 76% 20%, rgba(126,255,238,0.16), transparent 30%),
+                    linear-gradient(145deg, rgba(1, 4, 14, 0.98), rgba(7, 18, 36, 0.98) 54%, rgba(2, 3, 10, 0.99)) !important;
+                border: 2px solid rgba(126,255,238,0.82) !important;
+                color: #eafffb !important;
+                box-shadow: 0 0 24px rgba(126,255,238,0.36), 0 0 28px rgba(255,130,228,0.24), 0 16px 34px rgba(0,0,0,0.72), inset 0 0 20px rgba(126,255,238,0.1) !important;
+                overflow: hidden !important;
+            }
+            #meowlime-signature-viewer-modal h3 {
+                color: #eafffb !important;
+                border-bottom: 1px solid rgba(126,255,238,0.44) !important;
+                text-shadow: 0 0 9px rgba(126,255,238,0.92), 0 0 16px rgba(255,130,228,0.48) !important;
+            }
+            .meowlime-signature-viewer-meta {
+                margin: 6px 0 10px 0;
+                padding: 8px 10px;
+                border-radius: 14px;
+                background: rgba(0,0,0,0.44);
+                border: 1px solid rgba(255,190,232,0.42);
+                color: rgba(233,255,251,0.86);
+                font-size: 12px;
+                font-weight: 900;
+                line-height: 1.55;
+                text-align: left;
+                box-shadow: inset 0 0 12px rgba(126,255,238,0.06), 0 0 10px rgba(255,130,228,0.12);
+            }
+            .meowlime-signature-viewer-frame {
+                width: 100%;
+                min-height: 150px;
+                border-radius: 16px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background:
+                    radial-gradient(circle at 50% 45%, rgba(126,255,238,0.16), transparent 34%),
+                    rgba(0,0,0,0.68);
+                border: 2px solid rgba(126,255,238,0.52);
+                box-shadow: inset 0 0 18px rgba(0,0,0,0.72), 0 0 16px rgba(126,255,238,0.22), 0 0 18px rgba(255,130,228,0.14);
+                overflow: hidden;
+            }
+            #meowlime-signature-viewer-img {
+                display: block;
+                width: 100%;
+                max-height: min(48vh, 310px);
+                object-fit: contain;
+                image-rendering: auto;
+                filter: drop-shadow(0 0 10px rgba(126,255,238,0.38));
+            }
+            #meowlime-signature-viewer-status {
+                min-height: 18px;
+                margin-top: 8px;
+                color: #ffbfe8;
+                font-size: 12px;
+                font-weight: 900;
+                text-shadow: 0 0 8px rgba(255,130,228,0.62);
             }
             .meowlime-star-map-empty {
                 position: absolute;
@@ -5392,6 +5732,19 @@ function createSystemUI() {
                 <div class="meowlime-star-map-summary">星圖資料載入中……</div>
             </div>
             <button class="close-modal-btn meowlime-close-btn" style="margin-top: 12px; width: 100%;" onclick="window.closeMeowlimeGrowthModal ? window.closeMeowlimeGrowthModal({ returnToCheckin: true }) : document.getElementById('meowlime-growth-modal').style.display='none'">返回每日簽到</button>
+        </div>
+
+        <div id="meowlime-signature-viewer-modal" class="modal meowlime-signature-viewer-modal" style="z-index: 267;">
+            <h3>✦ 簽名星光回放</h3>
+            <div class="meowlime-signature-viewer-meta">
+                <div id="meowlime-signature-viewer-date">日期：未知</div>
+                <div id="meowlime-signature-viewer-room">房間：未知房間</div>
+            </div>
+            <div class="meowlime-signature-viewer-frame">
+                <img id="meowlime-signature-viewer-img" alt="">
+            </div>
+            <div id="meowlime-signature-viewer-status"></div>
+            <button class="close-modal-btn meowlime-close-btn" style="margin-top: 12px; width: 100%;" onclick="window.closeMeowlimeSignatureViewer && window.closeMeowlimeSignatureViewer()">關閉回放</button>
         </div>
 
         <div id="fridge-modal" class="modal"><h3>❄️ 公用大冰箱</h3><p style="color:#888; font-size: 14px;">冰箱目前空空如也... 等待下次採買中</p><button class="close-modal-btn btn-primary" onclick="document.getElementById('fridge-modal').style.display='none'">關上冰箱</button></div>
