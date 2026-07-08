@@ -87,7 +87,7 @@ const initialServerRoom = window.getRememberedServerRoom();
 window.GameLogic = {
     currentUser: null, currentScene: "doghouse",
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0, inventoryOrder: [], princeBond: 0, princePetCountToday: 0, princeLastPetDate: "", princeRewardsClaimed: {}, princeFeedCountToday: 0, princeLastFeedDate: "" },
-    cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, friendRequests: {}, friends: {}, friendPairs: {}, activeFriendLoveBonus: null, placingFurnitureKey: null, 
+    cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, friendRequests: {}, friendVisitRequests: {}, friends: {}, friendPairs: {}, activeFriendLoveBonus: null, placingFurnitureKey: null, 
     phaserGame: null, phaserLoaded: false, pendingScene: null, db: db, storage: storage,
     armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false, rpsModalActive: false, moonBunBuffUntil: 0, moonBunSweepPressCount: 0, moonBunBuffEndNotified: false, moonBunBuffRemainingMs: 0, moonBunBuffLastSaveAt: 0,
     selectedServerRoom: initialServerRoom, currentServerRoom: initialServerRoom, serverRooms: SERVER_ROOMS,
@@ -96,7 +96,7 @@ window.GameLogic = {
     authGuardSigningOut: false
 };
 
-let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, pmUnreadUnsubscribe = null, friendRequestsUnsubscribe = null, profileViewingUid = null;
+let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, pmUnreadUnsubscribe = null, friendRequestsUnsubscribe = null, friendVisitRequestsUnsubscribe = null, friendVisitRepliesUnsubscribe = null, profileViewingUid = null;
 window.switchScene = switchScene; window.showProfileModal = showProfileModal; window.leaveCafe = leaveCafe; window.signOut = signOut; window.auth = auth;
 
 // ====== 入口房間共用工具 ======
@@ -1970,6 +1970,11 @@ function createSystemUI() {
             .friend-request-actions button { min-height:36px; border-radius:10px; font-weight:900; touch-action:manipulation; }
             #friend-request-modal { z-index:430 !important; }
             #friend-request-modal .friend-request-name { color:#ad1457; font-weight:900; text-shadow:0 0 8px rgba(255,128,171,0.45); }
+            #friend-visit-request-modal { z-index:435 !important; }
+            #friend-visit-request-modal .friend-visit-request-name { color:#ad1457; font-weight:900; text-shadow:0 0 8px rgba(255,128,171,0.45); }
+            #friend-visit-request-modal .friend-visit-request-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+            #friend-visit-request-modal .friend-visit-request-actions button { min-height:38px; border-radius:12px; font-weight:900; touch-action:manipulation; }
+            .phone-friend-actions .phone-visit-waiting { background:linear-gradient(180deg,#eeeeee,#aaaaaa) !important; color:#555 !important; box-shadow:none !important; }
             #friend-love-modal.friend-love-modal {
                 width:min(92vw, 430px) !important;
                 height:min(92vw, calc(var(--onion-vh, 1vh) * 84), 430px) !important;
@@ -5978,6 +5983,15 @@ function createSystemUI() {
                 <h3 class="friend-love-title">💖 我們的愛</h3>
                 <div style="font-size:13px; color:#fff7ff; text-shadow:0 1px 2px rgba(0,0,0,0.65);">讀取好蔥友情中……</div>
             </div>
+        </div>
+        <div id="friend-visit-request-modal" class="modal phone-pink-chat-ui">
+            <h3>🏠 好友拜訪邀請</h3>
+            <p style="font-weight:bold; color:#4a1230; line-height:1.55;"><span id="friend-visit-request-name" class="friend-visit-request-name">某顆蔥</span>想去你家，可以嗎？</p>
+            <div class="friend-visit-request-actions">
+                <button class="btn-primary phone-pink-btn" type="button" onclick="window.acceptCurrentFriendVisitRequest && window.acceptCurrentFriendVisitRequest()">答應</button>
+                <button class="btn-secondary" type="button" onclick="window.rejectCurrentFriendVisitRequest && window.rejectCurrentFriendVisitRequest()">下次再來</button>
+            </div>
+            <button class="close-modal-btn btn-secondary" style="margin-top:10px; width:100%;" onclick="window.closeFriendVisitRequestModal && window.closeFriendVisitRequestModal()">晚點再看</button>
         </div>
 
         <div id="furniture-catalog-modal" class="modal">
@@ -9988,16 +10002,216 @@ window.addFriendLovePercent = async function(friendUid, amount = 0.1, options = 
     }
 };
 
-window.openFriendVisitEntry = function(uid, isOnline = false) {
-    const meta = (window.GameLogic.phoneContactMeta && window.GameLogic.phoneContactMeta[uid]) || {};
-    const name = meta.name || '對方';
+window.normalizeFriendVisitRequests = function(rawRequests = {}) {
+    const result = {};
+    const myUid = window.GameLogic && window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : '';
 
+    if (!rawRequests || typeof rawRequests !== 'object') return result;
+
+    Object.keys(rawRequests).forEach(fromUid => {
+        const item = rawRequests[fromUid] || {};
+        if (!fromUid || fromUid === myUid) return;
+        if (item.status && item.status !== 'pending') return;
+
+        result[fromUid] = {
+            fromUid: item.fromUid || fromUid,
+            fromName: item.fromName || '匿名洋蔥',
+            fromColor: item.fromColor || '#fff',
+            hostUid: item.hostUid || myUid,
+            createdAt: Number(item.createdAt || 0),
+            requestId: item.requestId || `${fromUid}_${item.createdAt || Date.now()}`
+        };
+    });
+
+    return result;
+};
+
+window.closeFriendVisitRequestModal = function() {
+    const modal = document.getElementById('friend-visit-request-modal');
+    if (modal) modal.style.display = 'none';
+};
+
+window.showIncomingFriendVisitRequest = function(fromUid, requestData = {}) {
+    const modal = document.getElementById('friend-visit-request-modal');
+    const nameEl = document.getElementById('friend-visit-request-name');
+    if (!modal) return;
+
+    window.__activeFriendVisitRequestUid = fromUid;
+    if (nameEl) nameEl.innerText = requestData.fromName || '某顆蔥';
+    modal.style.display = 'block';
+};
+
+window.startFriendVisitRequestsListener = function() {
+    if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return;
+
+    const myUid = window.GameLogic.currentUser.uid;
+
+    if (friendVisitRequestsUnsubscribe) {
+        friendVisitRequestsUnsubscribe();
+        friendVisitRequestsUnsubscribe = null;
+    }
+
+    friendVisitRequestsUnsubscribe = onValue(ref(window.GameLogic.db, `users/${myUid}/friendVisitRequests`), snap => {
+        const requests = window.normalizeFriendVisitRequests ? window.normalizeFriendVisitRequests(snap.val() || {}) : {};
+        window.GameLogic.friendVisitRequests = requests;
+
+        const requestUids = Object.keys(requests).sort((a, b) => Number(requests[b].createdAt || 0) - Number(requests[a].createdAt || 0));
+        if (requestUids.length > 0) window.showFriendSystemNotice('有蔥想來你家拜訪');
+
+        if (!window.__shownFriendVisitRequestKeys) window.__shownFriendVisitRequestKeys = {};
+        const freshUid = requestUids.find(uid => !window.__shownFriendVisitRequestKeys[uid]);
+        if (freshUid) {
+            window.__shownFriendVisitRequestKeys[freshUid] = true;
+            window.showIncomingFriendVisitRequest(freshUid, requests[freshUid]);
+        }
+    });
+};
+
+window.startFriendVisitRepliesListener = function() {
+    if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return;
+
+    const myUid = window.GameLogic.currentUser.uid;
+
+    if (friendVisitRepliesUnsubscribe) {
+        friendVisitRepliesUnsubscribe();
+        friendVisitRepliesUnsubscribe = null;
+    }
+
+    friendVisitRepliesUnsubscribe = onValue(ref(window.GameLogic.db, `users/${myUid}/friendVisitReplies`), snap => {
+        const replies = snap.val() || {};
+        Object.keys(replies).forEach(hostUid => {
+            const item = replies[hostUid] || {};
+            if (!item || !item.status || !item.createdAt) return;
+            if (Date.now() - Number(item.createdAt || 0) > 60000) {
+                remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitReplies/${hostUid}`));
+                return;
+            }
+
+            const hostName = item.hostName || '對方';
+            if (item.status === 'accepted') {
+                window.showFriendSystemNotice(`${hostName}答應你去他家囉，下一包會接上轉跳。`);
+            } else if (item.status === 'rejected') {
+                window.showFriendSystemNotice(`${hostName}說下次再來。`);
+            }
+
+            remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitReplies/${hostUid}`));
+        });
+    });
+};
+
+window.sendFriendVisitRequest = async function(targetUid) {
+    if (!targetUid || !window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return;
+
+    const myUid = window.GameLogic.currentUser.uid;
+    if (targetUid === myUid) return;
+
+    const meta = (window.GameLogic.phoneContactMeta && window.GameLogic.phoneContactMeta[targetUid]) || {};
+    const onlineInfo = window.getFriendOnlineInfo ? window.getFriendOnlineInfo(targetUid) : { online: false };
+    const targetName = onlineInfo.name || meta.name || '對方';
+
+    if (!onlineInfo.online) {
+        window.showFriendSystemNotice('對方不在家……');
+        return;
+    }
+
+    try {
+        const friendSnap = await get(ref(window.GameLogic.db, `users/${myUid}/friends/${targetUid}`));
+        if (!friendSnap.exists()) {
+            window.showFriendSystemNotice('要先成為好蔥友才能拜訪喔');
+            return;
+        }
+
+        const now = Date.now();
+        const requestData = {
+            fromUid: myUid,
+            fromName: window.GameLogic.myProfile.name || '匿名',
+            fromColor: window.GameLogic.myProfile.color || '#fff',
+            hostUid: targetUid,
+            createdAt: now,
+            status: 'pending',
+            requestId: `${myUid}_${now}`,
+            roomId: window.getCurrentServerRoomId ? window.getCurrentServerRoomId() : (window.GameLogic.currentServerRoom || '')
+        };
+
+        await set(ref(window.GameLogic.db, `users/${targetUid}/friendVisitRequests/${myUid}`), requestData);
+        window.showFriendSystemNotice(`已送出去 ${targetName} 家的拜訪邀請`);
+    } catch (err) {
+        console.warn('[好友拜訪] 送出拜訪邀請失敗：', err);
+        window.showFriendSystemNotice('拜訪邀請送出失敗，請稍後再試');
+    }
+};
+
+window.openFriendVisitEntry = function(uid, isOnline = false) {
     if (!isOnline) {
         window.showFriendSystemNotice('對方不在家……');
         return;
     }
 
-    window.showFriendSystemNotice(`「去 ${name} 家」拜訪功能會在下一包開啟`);
+    window.sendFriendVisitRequest(uid);
+};
+
+window.acceptCurrentFriendVisitRequest = function() {
+    if (!window.__activeFriendVisitRequestUid) return;
+    window.acceptFriendVisitRequest(window.__activeFriendVisitRequestUid);
+};
+
+window.rejectCurrentFriendVisitRequest = function() {
+    if (!window.__activeFriendVisitRequestUid) return;
+    window.rejectFriendVisitRequest(window.__activeFriendVisitRequestUid);
+};
+
+window.acceptFriendVisitRequest = async function(fromUid) {
+    if (!fromUid || !window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return;
+
+    const myUid = window.GameLogic.currentUser.uid;
+    const myName = window.GameLogic.myProfile.name || '匿名';
+
+    try {
+        const updates = {};
+        updates[`users/${myUid}/friendVisitRequests/${fromUid}`] = null;
+        updates[`users/${fromUid}/friendVisitReplies/${myUid}`] = {
+            status: 'accepted',
+            hostUid: myUid,
+            hostName: myName,
+            createdAt: Date.now()
+        };
+
+        await update(ref(window.GameLogic.db), updates);
+
+        if (window.GameLogic.friendVisitRequests) delete window.GameLogic.friendVisitRequests[fromUid];
+        window.closeFriendVisitRequestModal();
+        window.showFriendSystemNotice('已答應拜訪邀請，下一包會接上共同轉跳。');
+    } catch (err) {
+        console.warn('[好友拜訪] 接受拜訪邀請失敗：', err);
+        window.showFriendSystemNotice('接受拜訪邀請失敗，請稍後再試');
+    }
+};
+
+window.rejectFriendVisitRequest = async function(fromUid) {
+    if (!fromUid || !window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return;
+
+    const myUid = window.GameLogic.currentUser.uid;
+    const myName = window.GameLogic.myProfile.name || '匿名';
+
+    try {
+        const updates = {};
+        updates[`users/${myUid}/friendVisitRequests/${fromUid}`] = null;
+        updates[`users/${fromUid}/friendVisitReplies/${myUid}`] = {
+            status: 'rejected',
+            hostUid: myUid,
+            hostName: myName,
+            createdAt: Date.now()
+        };
+
+        await update(ref(window.GameLogic.db), updates);
+
+        if (window.GameLogic.friendVisitRequests) delete window.GameLogic.friendVisitRequests[fromUid];
+        window.closeFriendVisitRequestModal();
+        window.showFriendSystemNotice('已回覆：下次再來');
+    } catch (err) {
+        console.warn('[好友拜訪] 拒絕拜訪邀請失敗：', err);
+        window.showFriendSystemNotice('拒絕拜訪邀請失敗，請稍後再試');
+    }
 };
 // ====== 好蔥友基礎系統結束 ======
 // ====== 洋蔥手機：目前在線＋最近私訊（房間隔離版） ======
@@ -11762,6 +11976,8 @@ onAuthStateChanged(auth, async (user) => {
         window.normalizeUnreadPMs(snap.val() || {});
         });
         if (window.startFriendRequestsListener) window.startFriendRequestsListener();
+        if (window.startFriendVisitRequestsListener) window.startFriendVisitRequestsListener();
+        if (window.startFriendVisitRepliesListener) window.startFriendVisitRepliesListener();
         if (window.refreshMyFriendsCache) window.refreshMyFriendsCache();
         onValue(ref(db, 'manuals'), snap => { const data = snap.val(); window.manualPages = []; if (data) { Object.keys(data).forEach(key => { const item = data[key] || {}; if (!item.imgBase64) return; window.manualPages.push({ key: key, imgBase64: item.imgBase64, timestamp: item.timestamp || 0, title: item.title || '', description: item.description || '', categoryId: item.categoryId || 'uncategorized' }); }); window.manualPages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); } window.renderManualPage(); });
         onValue(ref(db, 'manualCategories'), snap => { window.manualCategories = snap.val() || {}; window.renderManualPage(); });
@@ -11832,6 +12048,8 @@ onAuthStateChanged(auth, async (user) => {
         if (onlinePlayersUnsubscribe) { onlinePlayersUnsubscribe(); onlinePlayersUnsubscribe = null; }
         if (pmUnreadUnsubscribe) { pmUnreadUnsubscribe(); pmUnreadUnsubscribe = null; }
         if (friendRequestsUnsubscribe) { friendRequestsUnsubscribe(); friendRequestsUnsubscribe = null; }
+        if (friendVisitRequestsUnsubscribe) { friendVisitRequestsUnsubscribe(); friendVisitRequestsUnsubscribe = null; }
+        if (friendVisitRepliesUnsubscribe) { friendVisitRepliesUnsubscribe(); friendVisitRepliesUnsubscribe = null; }
         if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
         if (memoryUnsubscribe) { memoryUnsubscribe(); memoryUnsubscribe = null; }
         if (cafeFurnitureUnsubscribe) { cafeFurnitureUnsubscribe(); cafeFurnitureUnsubscribe = null; }
