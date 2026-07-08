@@ -87,7 +87,7 @@ const initialServerRoom = window.getRememberedServerRoom();
 window.GameLogic = {
     currentUser: null, currentScene: "doghouse",
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0, inventoryOrder: [], princeBond: 0, princePetCountToday: 0, princeLastPetDate: "", princeRewardsClaimed: {}, princeFeedCountToday: 0, princeLastFeedDate: "" },
-    cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, placingFurnitureKey: null, 
+    cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, friendRequests: {}, friends: {}, placingFurnitureKey: null, 
     phaserGame: null, phaserLoaded: false, pendingScene: null, db: db, storage: storage,
     armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false, rpsModalActive: false, moonBunBuffUntil: 0, moonBunSweepPressCount: 0, moonBunBuffEndNotified: false, moonBunBuffRemainingMs: 0, moonBunBuffLastSaveAt: 0,
     selectedServerRoom: initialServerRoom, currentServerRoom: initialServerRoom, serverRooms: SERVER_ROOMS,
@@ -96,7 +96,7 @@ window.GameLogic = {
     authGuardSigningOut: false
 };
 
-let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, pmUnreadUnsubscribe = null, profileViewingUid = null;
+let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, pmUnreadUnsubscribe = null, friendRequestsUnsubscribe = null, profileViewingUid = null;
 window.switchScene = switchScene; window.showProfileModal = showProfileModal; window.leaveCafe = leaveCafe; window.signOut = signOut; window.auth = auth;
 
 // ====== 入口房間共用工具 ======
@@ -1959,6 +1959,17 @@ function createSystemUI() {
             .modal-btns { display: flex; justify-content: space-around; margin-top: 15px; }
             .modal-btns button, .close-modal-btn { padding: 10px 15px; border-radius: 4px; border: none; cursor: pointer; font-family: inherit; font-size: 15px; margin: 5px;}
             .btn-primary { background: var(--mucha-gold); color: white; } .btn-secondary { background: #ccc; color: #333; } .btn-edit { background: var(--mucha-green); color: white; } .btn-danger { background: #d9534f; color: white; }
+            .friend-profile-action-wrap { display:none; margin:12px 0 4px 0; text-align:center; }
+            .friend-profile-btn { min-height:40px; padding:9px 14px; border-radius:999px; border:2px solid rgba(255,255,255,0.88); font-family:inherit; font-weight:900; cursor:pointer; color:#ffffff; background:linear-gradient(180deg,#7dff9b,#13ad43); box-shadow:0 0 12px rgba(71,255,122,0.55), inset 0 1px 0 rgba(255,255,255,0.5); touch-action:manipulation; }
+            .friend-profile-btn.pending, .friend-profile-btn.friend { background:linear-gradient(180deg,#eeeeee,#999999); color:#333; box-shadow:inset 0 1px 0 rgba(255,255,255,0.7); cursor:default; }
+            .friend-profile-btn.incoming { background:linear-gradient(180deg,#fff1a8,#ffb700); color:#3b2200; box-shadow:0 0 12px rgba(255,210,80,0.62), inset 0 1px 0 rgba(255,255,255,0.66); }
+            .friend-request-card { margin:10px 0; padding:12px; border-radius:14px; background:rgba(255,255,255,0.9); border:2px solid rgba(255,128,171,0.86); color:#4a1230; box-shadow:0 0 12px rgba(255,64,160,0.28); text-align:left; }
+            .friend-request-card-title { font-weight:900; color:#ad1457; margin-bottom:4px; }
+            .friend-request-card-sub { font-size:12px; color:#7d3657; line-height:1.4; }
+            .friend-request-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; }
+            .friend-request-actions button { min-height:36px; border-radius:10px; font-weight:900; touch-action:manipulation; }
+            #friend-request-modal { z-index:430 !important; }
+            #friend-request-modal .friend-request-name { color:#ad1457; font-weight:900; text-shadow:0 0 8px rgba(255,128,171,0.45); }
             .profile-line { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; border-bottom: 1px dashed #ccc; padding-bottom: 5px;}
             .prince-bond-card { margin: 12px 0; padding: 10px; border-radius: 12px; background: rgba(255, 182, 193, 0.35); border: 2px solid rgba(255, 128, 171, 0.85); box-shadow: 0 0 10px rgba(255, 128, 171, 0.45); display: flex; align-items: center; gap: 10px; text-align: left; }
             .prince-heart-icon { position: relative; font-size: 24px; filter: drop-shadow(0 0 6px rgba(255, 105, 180, 0.9)); }
@@ -5691,7 +5702,20 @@ function createSystemUI() {
                     <div id="vp-prince-bond-effect" style="font-size:11px; color:#ad1457; margin-top:4px; line-height:1.35;">效果：無</div>
                 </div>
             </div>
+            <div id="friend-profile-action-wrap" class="friend-profile-action-wrap">
+                <button id="profile-friend-btn" class="friend-profile-btn" type="button" onclick="window.handleProfileFriendButton && window.handleProfileFriendButton()">新增好蔥友</button>
+            </div>
             <div class="modal-btns"><button id="start-edit-btn" class="btn-edit" style="display:none;">編輯</button><button id="save-edit-btn" class="btn-primary" style="display:none;">儲存</button><button class="close-modal-btn btn-secondary" onclick="window.closeProfileModal()">收起證件</button></div>
+        </div>
+        <div id="friend-request-modal" class="modal phone-pink-chat-ui">
+            <h3>🌱 好蔥友邀請</h3>
+            <p style="font-weight:bold; color:#4a1230; line-height:1.55;">有蔥想加你好友！</p>
+            <div style="font-size:18px; margin:10px 0;"><span id="friend-request-name" class="friend-request-name">某顆蔥</span></div>
+            <div class="friend-request-actions">
+                <button class="btn-primary phone-pink-btn" type="button" onclick="window.acceptCurrentFriendRequest && window.acceptCurrentFriendRequest()">好啊</button>
+                <button class="btn-secondary" type="button" onclick="window.rejectCurrentFriendRequest && window.rejectCurrentFriendRequest()">先不要</button>
+            </div>
+            <button class="close-modal-btn btn-secondary" style="margin-top:10px; width:100%;" onclick="window.closeFriendRequestModal && window.closeFriendRequestModal()">晚點再看</button>
         </div>
 
         <div id="furniture-catalog-modal" class="modal">
@@ -8901,6 +8925,357 @@ window.openInventoryModal = function(options = {}) {
 };
 
 window.viewOtherProfile = function(uid) { get(ref(window.GameLogic.db, `users/${uid}`)).then(snap => { if (snap.exists()) { document.getElementById('phone-modal').style.display = 'none'; showProfileModal(snap.val(), uid); } }); };
+
+// ====== 好蔥友基礎系統：邀請、接受、拒絕、手機通知 ======
+window.getFriendPairId = function(uidA, uidB) {
+    return [String(uidA || ''), String(uidB || '')].sort().join('_');
+};
+
+window.normalizeFriendRequests = function(rawRequests = {}) {
+    const result = {};
+    const myUid = window.GameLogic && window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : '';
+
+    if (!rawRequests || typeof rawRequests !== 'object') return result;
+
+    Object.keys(rawRequests).forEach(fromUid => {
+        const item = rawRequests[fromUid] || {};
+        if (!fromUid || fromUid === myUid) return;
+        if (item.status && item.status !== 'pending') return;
+
+        result[fromUid] = {
+            fromUid: item.fromUid || fromUid,
+            fromName: item.fromName || '匿名洋蔥',
+            fromColor: item.fromColor || '#fff',
+            createdAt: Number(item.createdAt || 0),
+            pairId: item.pairId || (window.getFriendPairId ? window.getFriendPairId(myUid, fromUid) : '')
+        };
+    });
+
+    return result;
+};
+
+window.showFriendSystemNotice = function(message) {
+    const topBar = document.getElementById('top-notification-bar');
+    if (!topBar || !message) return;
+
+    topBar.innerText = `系統通知：${message}`;
+
+    clearTimeout(window.__friendNoticeTimer);
+    window.__friendNoticeTimer = setTimeout(() => {
+        if (window.updateCurrentRoomLabel) window.updateCurrentRoomLabel();
+    }, 2600);
+};
+
+window.closeFriendRequestModal = function() {
+    const modal = document.getElementById('friend-request-modal');
+    if (modal) modal.style.display = 'none';
+};
+
+window.showIncomingFriendRequest = function(fromUid, requestData = {}) {
+    const modal = document.getElementById('friend-request-modal');
+    const nameEl = document.getElementById('friend-request-name');
+    if (!modal) return;
+
+    window.__activeFriendRequestUid = fromUid;
+    if (nameEl) nameEl.innerText = requestData.fromName || '某顆蔥';
+    modal.style.display = 'block';
+};
+
+window.startFriendRequestsListener = function() {
+    if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return;
+
+    const myUid = window.GameLogic.currentUser.uid;
+
+    if (friendRequestsUnsubscribe) {
+        friendRequestsUnsubscribe();
+        friendRequestsUnsubscribe = null;
+    }
+
+    friendRequestsUnsubscribe = onValue(ref(window.GameLogic.db, `users/${myUid}/friendRequests`), snap => {
+        const requests = window.normalizeFriendRequests ? window.normalizeFriendRequests(snap.val() || {}) : {};
+        window.GameLogic.friendRequests = requests;
+
+        const requestUids = Object.keys(requests).sort((a, b) => Number(requests[b].createdAt || 0) - Number(requests[a].createdAt || 0));
+        if (requestUids.length > 0) {
+            window.showFriendSystemNotice('有蔥想加你好友');
+        }
+
+        if (!window.__shownFriendRequestKeys) window.__shownFriendRequestKeys = {};
+        const freshUid = requestUids.find(uid => !window.__shownFriendRequestKeys[uid]);
+        if (freshUid) {
+            window.__shownFriendRequestKeys[freshUid] = true;
+            window.showIncomingFriendRequest(freshUid, requests[freshUid]);
+        }
+
+        const phoneModal = document.getElementById('phone-modal');
+        if (phoneModal && phoneModal.style.display === 'block' && !window.__phoneRendering && window.openPhoneModal) {
+            window.openPhoneModal();
+        }
+
+        if (profileViewingUid && window.renderProfileFriendButton) {
+            window.renderProfileFriendButton(null, profileViewingUid, profileViewingUid === myUid);
+        }
+    });
+};
+
+window.refreshMyFriendsCache = async function() {
+    if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return {};
+
+    try {
+        const myUid = window.GameLogic.currentUser.uid;
+        const snap = await get(ref(window.GameLogic.db, `users/${myUid}/friends`));
+        const friends = snap.val() || {};
+        window.GameLogic.friends = friends;
+        return friends;
+    } catch (err) {
+        console.warn('[好蔥友] 讀取好友列表失敗：', err);
+        return window.GameLogic.friends || {};
+    }
+};
+
+window.renderProfileFriendButton = async function(profile = null, uid = profileViewingUid, isMe = false) {
+    const wrap = document.getElementById('friend-profile-action-wrap');
+    const btn = document.getElementById('profile-friend-btn');
+    if (!wrap || !btn || !window.GameLogic || !window.GameLogic.currentUser || !uid) return;
+
+    const myUid = window.GameLogic.currentUser.uid;
+    isMe = isMe || uid === myUid;
+
+    if (isMe) {
+        wrap.style.display = 'none';
+        return;
+    }
+
+    wrap.style.display = 'block';
+    btn.disabled = true;
+    btn.className = 'friend-profile-btn pending';
+    btn.innerText = '確認關係中……';
+    btn.dataset.friendTargetUid = uid;
+
+    try {
+        const [friendSnap, outgoingSnap, incomingSnap] = await Promise.all([
+            get(ref(window.GameLogic.db, `users/${myUid}/friends/${uid}`)),
+            get(ref(window.GameLogic.db, `users/${uid}/friendRequests/${myUid}`)),
+            get(ref(window.GameLogic.db, `users/${myUid}/friendRequests/${uid}`))
+        ]);
+
+        if (profileViewingUid !== uid) return;
+
+        if (friendSnap.exists()) {
+            btn.disabled = true;
+            btn.className = 'friend-profile-btn friend';
+            btn.innerText = '此蔥已是友';
+            return;
+        }
+
+        if (incomingSnap.exists()) {
+            btn.disabled = false;
+            btn.className = 'friend-profile-btn incoming';
+            btn.innerText = '對方邀你，按我答應';
+            btn.dataset.friendMode = 'accept';
+            return;
+        }
+
+        if (outgoingSnap.exists()) {
+            btn.disabled = true;
+            btn.className = 'friend-profile-btn pending';
+            btn.innerText = '邀請已送出';
+            return;
+        }
+
+        btn.disabled = false;
+        btn.className = 'friend-profile-btn';
+        btn.innerText = '新增好蔥友';
+        btn.dataset.friendMode = 'send';
+    } catch (err) {
+        console.warn('[好蔥友] 更新身分證好友按鈕失敗：', err);
+        btn.disabled = false;
+        btn.className = 'friend-profile-btn';
+        btn.innerText = '新增好蔥友';
+        btn.dataset.friendMode = 'send';
+    }
+};
+
+window.handleProfileFriendButton = async function() {
+    const btn = document.getElementById('profile-friend-btn');
+    const targetUid = btn && btn.dataset.friendTargetUid ? btn.dataset.friendTargetUid : profileViewingUid;
+    if (!targetUid || !window.GameLogic || !window.GameLogic.currentUser) return;
+
+    if (btn && btn.dataset.friendMode === 'accept') {
+        await window.acceptFriendRequest(targetUid);
+        return;
+    }
+
+    await window.sendFriendRequest(targetUid);
+};
+
+window.sendFriendRequest = async function(targetUid) {
+    if (!targetUid || !window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return;
+
+    const myUid = window.GameLogic.currentUser.uid;
+    if (targetUid === myUid) return;
+
+    const btn = document.getElementById('profile-friend-btn');
+    if (btn) {
+        btn.disabled = true;
+        btn.className = 'friend-profile-btn pending';
+        btn.innerText = '送出中……';
+    }
+
+    try {
+        const [friendSnap, outgoingSnap, incomingSnap] = await Promise.all([
+            get(ref(window.GameLogic.db, `users/${myUid}/friends/${targetUid}`)),
+            get(ref(window.GameLogic.db, `users/${targetUid}/friendRequests/${myUid}`)),
+            get(ref(window.GameLogic.db, `users/${myUid}/friendRequests/${targetUid}`))
+        ]);
+
+        if (friendSnap.exists()) {
+            if (window.renderProfileFriendButton) window.renderProfileFriendButton(null, targetUid, false);
+            return;
+        }
+
+        if (incomingSnap.exists()) {
+            await window.acceptFriendRequest(targetUid);
+            return;
+        }
+
+        if (outgoingSnap.exists()) {
+            if (window.renderProfileFriendButton) window.renderProfileFriendButton(null, targetUid, false);
+            window.showFriendSystemNotice('好友邀請已經送出囉');
+            return;
+        }
+
+        const pairId = window.getFriendPairId(myUid, targetUid);
+        const requestData = {
+            fromUid: myUid,
+            fromName: window.GameLogic.myProfile.name || '匿名',
+            fromColor: window.GameLogic.myProfile.color || '#fff',
+            createdAt: Date.now(),
+            status: 'pending',
+            pairId: pairId,
+            roomId: window.getCurrentServerRoomId ? window.getCurrentServerRoomId() : (window.GameLogic.currentServerRoom || '')
+        };
+
+        await set(ref(window.GameLogic.db, `users/${targetUid}/friendRequests/${myUid}`), requestData);
+
+        window.showFriendSystemNotice('已送出好蔥友邀請');
+        if (window.renderProfileFriendButton) window.renderProfileFriendButton(null, targetUid, false);
+    } catch (err) {
+        console.warn('[好蔥友] 送出好友邀請失敗：', err);
+        window.showFriendSystemNotice('好友邀請送出失敗，請稍後再試');
+        if (window.renderProfileFriendButton) window.renderProfileFriendButton(null, targetUid, false);
+    }
+};
+
+window.acceptCurrentFriendRequest = function() {
+    if (!window.__activeFriendRequestUid) return;
+    window.acceptFriendRequest(window.__activeFriendRequestUid);
+};
+
+window.rejectCurrentFriendRequest = function() {
+    if (!window.__activeFriendRequestUid) return;
+    window.rejectFriendRequest(window.__activeFriendRequestUid);
+};
+
+window.acceptFriendRequest = async function(fromUid) {
+    if (!fromUid || !window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return;
+
+    const myUid = window.GameLogic.currentUser.uid;
+    const pairId = window.getFriendPairId(myUid, fromUid);
+    const uidList = [myUid, fromUid].sort();
+    const now = Date.now();
+
+    try {
+        const [requestSnap, fromProfileSnap, pairSnap] = await Promise.all([
+            get(ref(window.GameLogic.db, `users/${myUid}/friendRequests/${fromUid}`)),
+            get(ref(window.GameLogic.db, `users/${fromUid}`)),
+            get(ref(window.GameLogic.db, `friendPairs/${pairId}`))
+        ]);
+
+        const requestData = requestSnap.val() || {};
+        const fromProfile = fromProfileSnap.val() || {};
+        const pairData = pairSnap.val() || {};
+        const fromName = requestData.fromName || fromProfile.name || '匿名';
+        const fromColor = requestData.fromColor || fromProfile.color || '#fff';
+        const myName = window.GameLogic.myProfile.name || '匿名';
+        const myColor = window.GameLogic.myProfile.color || '#fff';
+
+        const updates = {};
+        updates[`users/${myUid}/friends/${fromUid}`] = {
+            uid: fromUid,
+            name: fromName,
+            color: fromColor,
+            addedAt: now,
+            pairId: pairId
+        };
+        updates[`users/${fromUid}/friends/${myUid}`] = {
+            uid: myUid,
+            name: myName,
+            color: myColor,
+            addedAt: now,
+            pairId: pairId
+        };
+        updates[`friendPairs/${pairId}/uidA`] = uidList[0];
+        updates[`friendPairs/${pairId}/uidB`] = uidList[1];
+        updates[`friendPairs/${pairId}/createdAt`] = pairData.createdAt || now;
+        updates[`friendPairs/${pairId}/lovePercent`] = Number(pairData.lovePercent || 0);
+        updates[`users/${myUid}/friendRequests/${fromUid}`] = null;
+        updates[`users/${fromUid}/friendRequests/${myUid}`] = null;
+
+        await update(ref(window.GameLogic.db), updates);
+
+        if (window.GameLogic.friendRequests) delete window.GameLogic.friendRequests[fromUid];
+        if (!window.GameLogic.friends) window.GameLogic.friends = {};
+        window.GameLogic.friends[fromUid] = updates[`users/${myUid}/friends/${fromUid}`];
+
+        window.closeFriendRequestModal();
+        window.showFriendSystemNotice(`你和 ${fromName} 已成為好蔥友！`);
+
+        if (profileViewingUid === fromUid && window.renderProfileFriendButton) {
+            window.renderProfileFriendButton(null, fromUid, false);
+        }
+
+        const phoneModal = document.getElementById('phone-modal');
+        if (phoneModal && phoneModal.style.display === 'block' && window.openPhoneModal) window.openPhoneModal();
+    } catch (err) {
+        console.warn('[好蔥友] 接受好友邀請失敗：', err);
+        window.showFriendSystemNotice('接受好友邀請失敗，請稍後再試');
+    }
+};
+
+window.rejectFriendRequest = async function(fromUid) {
+    if (!fromUid || !window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return;
+
+    const myUid = window.GameLogic.currentUser.uid;
+
+    try {
+        await remove(ref(window.GameLogic.db, `users/${myUid}/friendRequests/${fromUid}`));
+        if (window.GameLogic.friendRequests) delete window.GameLogic.friendRequests[fromUid];
+        window.closeFriendRequestModal();
+        window.showFriendSystemNotice('已婉拒這次好蔥友邀請');
+
+        const phoneModal = document.getElementById('phone-modal');
+        if (phoneModal && phoneModal.style.display === 'block' && window.openPhoneModal) window.openPhoneModal();
+    } catch (err) {
+        console.warn('[好蔥友] 拒絕好友邀請失敗：', err);
+        window.showFriendSystemNotice('拒絕好友邀請失敗，請稍後再試');
+    }
+};
+
+window.makePhoneFriendRequestCard = function(fromUid, requestData = {}) {
+    const name = requestData.fromName || '匿名洋蔥';
+    const color = window.safePhoneColor ? window.safePhoneColor(requestData.fromColor || '#fff') : '#fff';
+
+    return `<div class="friend-request-card" data-friend-request-uid="${window.phoneEscapeHtml(fromUid)}">
+        <div class="friend-request-card-title" style="color:${color};">🌱 ${window.phoneEscapeHtml(name)}</div>
+        <div class="friend-request-card-sub">有蔥想加你好友</div>
+        <div class="friend-request-actions">
+            <button class="btn-primary" data-phone-action="accept-friend" data-uid="${window.phoneEscapeHtml(fromUid)}">好啊</button>
+            <button class="btn-secondary" style="color:#333;" data-phone-action="reject-friend" data-uid="${window.phoneEscapeHtml(fromUid)}">先不要</button>
+        </div>
+    </div>`;
+};
+// ====== 好蔥友基礎系統結束 ======
 // ====== 洋蔥手機：目前在線＋最近私訊（房間隔離版） ======
 window.getPMChatId = function(uidA, uidB) {
     return [uidA, uidB].sort().join('_');
@@ -9146,6 +9521,20 @@ window.bindPhoneContactButtons = function(contactsEl) {
             window.openPM(uid, name, color);
         });
     });
+
+    contactsEl.querySelectorAll('[data-phone-action="accept-friend"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            window.acceptFriendRequest(btn.dataset.uid);
+        });
+    });
+
+    contactsEl.querySelectorAll('[data-phone-action="reject-friend"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            window.rejectFriendRequest(btn.dataset.uid);
+        });
+    });
 };
 
 window.openPhoneModal = async function() {
@@ -9174,9 +9563,10 @@ window.openPhoneModal = async function() {
         const roomName = window.getCurrentServerRoomName();
         const phoneContactMeta = {};
 
-        const [onlineSnap, recentSnap] = await Promise.all([
+        const [onlineSnap, recentSnap, friendRequestsSnap] = await Promise.all([
             get(ref(window.GameLogic.db, window.getServerRoomPath('onlinePlayers'))),
-            get(ref(window.GameLogic.db, window.getServerRoomPath(`pmContacts/${myUid}`)))
+            get(ref(window.GameLogic.db, window.getServerRoomPath(`pmContacts/${myUid}`))),
+            get(ref(window.GameLogic.db, `users/${myUid}/friendRequests`))
         ]);
 
         const onlinePlayers = Object.assign(
@@ -9188,7 +9578,9 @@ window.openPhoneModal = async function() {
         window.GameLogic.onlinePlayers = onlinePlayers;
 
         const recentContacts = recentSnap.val() || {};
+        const friendRequests = window.normalizeFriendRequests ? window.normalizeFriendRequests(friendRequestsSnap.val() || {}) : {};
         window.GameLogic.pmContacts = recentContacts;
+        window.GameLogic.friendRequests = friendRequests;
         window.applyValidUnreadPMs(window.GameLogic.unreadPMs || {}, recentContacts);
 
         const onlineUids = Object.keys(onlinePlayers)
@@ -9211,6 +9603,20 @@ window.openPhoneModal = async function() {
                 🟢 目前在線
             </div>
         `;
+
+        const friendRequestUids = Object.keys(friendRequests)
+            .sort((a, b) => Number(friendRequests[b].createdAt || 0) - Number(friendRequests[a].createdAt || 0));
+
+        if (friendRequestUids.length > 0) {
+            html += `
+                <div style="color:#ffcc00; font-weight:bold; text-align:left; margin:6px 0 4px 0; border-bottom:1px solid rgba(255,255,255,0.25); padding-bottom:3px;">
+                    🌱 好蔥友邀請
+                </div>
+            `;
+            friendRequestUids.forEach(fromUid => {
+                html += window.makePhoneFriendRequestCard(fromUid, friendRequests[fromUid]);
+            });
+        }
 
         if (onlineUids.length === 0) {
             html += '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000; font-size:13px; margin-bottom:8px;">目前房間沒有其他在線玩家</div>';
@@ -10609,6 +11015,8 @@ onAuthStateChanged(auth, async (user) => {
         pmUnreadUnsubscribe = onValue(ref(db, `users/${user.uid}/unreadPMs`), snap => {
         window.normalizeUnreadPMs(snap.val() || {});
         });
+        if (window.startFriendRequestsListener) window.startFriendRequestsListener();
+        if (window.refreshMyFriendsCache) window.refreshMyFriendsCache();
         onValue(ref(db, 'manuals'), snap => { const data = snap.val(); window.manualPages = []; if (data) { Object.keys(data).forEach(key => { const item = data[key] || {}; if (!item.imgBase64) return; window.manualPages.push({ key: key, imgBase64: item.imgBase64, timestamp: item.timestamp || 0, title: item.title || '', description: item.description || '', categoryId: item.categoryId || 'uncategorized' }); }); window.manualPages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); } window.renderManualPage(); });
         onValue(ref(db, 'manualCategories'), snap => { window.manualCategories = snap.val() || {}; window.renderManualPage(); });
         if (cafeFurnitureUnsubscribe) { cafeFurnitureUnsubscribe(); cafeFurnitureUnsubscribe = null; }
@@ -10677,6 +11085,7 @@ onAuthStateChanged(auth, async (user) => {
         if (connectedUnsubscribe) { connectedUnsubscribe(); connectedUnsubscribe = null; }
         if (onlinePlayersUnsubscribe) { onlinePlayersUnsubscribe(); onlinePlayersUnsubscribe = null; }
         if (pmUnreadUnsubscribe) { pmUnreadUnsubscribe(); pmUnreadUnsubscribe = null; }
+        if (friendRequestsUnsubscribe) { friendRequestsUnsubscribe(); friendRequestsUnsubscribe = null; }
         if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
         if (memoryUnsubscribe) { memoryUnsubscribe(); memoryUnsubscribe = null; }
         if (cafeFurnitureUnsubscribe) { cafeFurnitureUnsubscribe(); cafeFurnitureUnsubscribe = null; }
@@ -28043,6 +28452,7 @@ function showProfileModal(p, uid) {
     const isMe = uid === window.GameLogic.currentUser.uid; 
     document.getElementById("start-edit-btn").style.display = isMe ? "inline-block" : "none"; 
     document.getElementById("save-edit-btn").style.display = "none"; 
+    if (window.renderProfileFriendButton) window.renderProfileFriendButton(p, uid, isMe); 
 
     let viewMedalsBtn = document.getElementById("view-medals-btn"); 
     if(!viewMedalsBtn) { 
