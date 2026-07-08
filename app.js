@@ -363,6 +363,371 @@ window.closeMeowlimeModal = function() {
     if (modal) modal.style.display = 'none';
 };
 
+window.getMeowlimeGrowthSize = function() {
+    const rawTotal = Number((window.GameLogic && window.GameLogic.dailyMeowlime && window.GameLogic.dailyMeowlime.totalCheckins) || 0);
+    const total = Number.isFinite(rawTotal) ? rawTotal : 0;
+    return Math.min(500, 20 + Math.max(0, total - 1) * 0.1);
+};
+
+window.getMeowlimeGrowthExpressions = function() {
+    return [
+        '^⦁⩊⦁^',
+        '^-ᯅ-^',
+        '/ᐠ .⸝⸝⸝. ྀིﾏ',
+        '⌯^⦁𖥦⦁^⌯',
+        '₍^˶⦁༝⦁˶^₎◞ ̑̑',
+        'ฅ^•ﻌ•^ฅ',
+        '/ᐠ｡ꞈ｡ᐟ\\',
+        '^ ̳ᴗ ̫ ᴗ ̳^ྀི',
+        '≽^•⩊•^≼',
+        '^ↀᴥↀ^',
+        '(^˵◕ω◕˵^)',
+        '₍˄•༝•˄₎◞✩︎',
+        '^•𖥦•^.ᐟ'
+    ];
+};
+
+window.getMeowlimeGrowthState = function() {
+    if (!window.__meowlimeGrowthState) {
+        window.__meowlimeGrowthState = {
+            running: false,
+            rafId: null,
+            lastTs: 0,
+            x: 0,
+            y: 0,
+            dir: 1,
+            expression: '^⦁⩊⦁^',
+            jiggleUntil: 0,
+            boundCanvas: null,
+            boundModal: null,
+            pointerHandler: null,
+            modalStopHandler: null,
+            resizeHandler: null
+        };
+    }
+    return window.__meowlimeGrowthState;
+};
+
+window.stopMeowlimeGrowthCanvas = function() {
+    const state = window.getMeowlimeGrowthState ? window.getMeowlimeGrowthState() : null;
+    if (!state) return;
+
+    state.running = false;
+
+    if (state.rafId) {
+        cancelAnimationFrame(state.rafId);
+        state.rafId = null;
+    }
+
+    if (state.boundCanvas && state.pointerHandler) {
+        state.boundCanvas.removeEventListener('pointerdown', state.pointerHandler);
+    }
+
+    if (state.boundModal && state.modalStopHandler) {
+        state.boundModal.removeEventListener('pointerdown', state.modalStopHandler);
+        state.boundModal.removeEventListener('click', state.modalStopHandler);
+    }
+
+    if (state.resizeHandler) {
+        window.removeEventListener('resize', state.resizeHandler);
+    }
+
+    state.boundCanvas = null;
+    state.boundModal = null;
+    state.pointerHandler = null;
+    state.modalStopHandler = null;
+    state.resizeHandler = null;
+    state.lastTs = 0;
+};
+
+window.resizeMeowlimeGrowthCanvas = function(canvas) {
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const nextWidth = Math.max(1, Math.floor(rect.width * dpr));
+    const nextHeight = Math.max(1, Math.floor(rect.height * dpr));
+
+    if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+        canvas.width = nextWidth;
+        canvas.height = nextHeight;
+    }
+};
+
+window.drawMeowlimeGrowthBackground = function(ctx, w, h, t) {
+    const centerX = w / 2;
+    const centerY = h * 0.52;
+
+    ctx.fillStyle = '#02030a';
+    ctx.fillRect(0, 0, w, h);
+
+    const glow = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, Math.max(w, h) * 0.68);
+    glow.addColorStop(0, `hsla(${(t * 34) % 360}, 100%, 58%, 0.16)`);
+    glow.addColorStop(0.42, 'rgba(10, 18, 34, 0.86)');
+    glow.addColorStop(1, 'rgba(0, 0, 0, 0.98)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = Math.max(1, w * 0.002);
+
+    for (let i = 0; i < 22; i++) {
+        const angle = (Math.PI * 2 * i / 22) + t * 0.14;
+        const hue = (t * 45 + i * 37) % 360;
+        const outerX = centerX + Math.cos(angle) * Math.max(w, h) * 0.72;
+        const outerY = centerY + Math.sin(angle) * Math.max(w, h) * 0.72;
+        ctx.strokeStyle = `hsla(${hue}, 100%, 64%, 0.34)`;
+        ctx.beginPath();
+        ctx.moveTo(outerX, outerY);
+        ctx.lineTo(centerX, centerY);
+        ctx.stroke();
+    }
+
+    for (let r = 0; r < 9; r++) {
+        const pulse = ((t * 0.18 + r * 0.115) % 1);
+        const scale = 0.08 + pulse * 1.05;
+        const rw = w * scale;
+        const rh = h * scale * 0.62;
+        const hue = (t * 58 + r * 41) % 360;
+
+        ctx.strokeStyle = `hsla(${hue}, 100%, 62%, ${0.42 - pulse * 0.24})`;
+        ctx.lineWidth = Math.max(1, 2.2 - pulse);
+        ctx.strokeRect(centerX - rw / 2, centerY - rh / 2, rw, rh);
+
+        if (r % 2 === 0) {
+            ctx.fillStyle = `hsla(${(hue + 80) % 360}, 100%, 60%, ${0.12 - pulse * 0.06})`;
+            ctx.fillRect(centerX - rw / 2, centerY - rh / 2, Math.max(2, rw * 0.025), Math.max(2, rh * 0.12));
+            ctx.fillRect(centerX + rw / 2 - Math.max(2, rw * 0.025), centerY + rh / 2 - Math.max(2, rh * 0.12), Math.max(2, rw * 0.025), Math.max(2, rh * 0.12));
+        }
+    }
+
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.strokeStyle = '#8fffee';
+    ctx.lineWidth = 1;
+    const gap = Math.max(18, w / 24);
+    const offset = (t * 18) % gap;
+    for (let x = -gap; x < w + gap; x += gap) {
+        ctx.beginPath();
+        ctx.moveTo(x + offset, 0);
+        ctx.lineTo(centerX + (x - centerX) * 0.18, centerY);
+        ctx.stroke();
+    }
+    for (let y = -gap; y < h + gap; y += gap) {
+        ctx.beginPath();
+        ctx.moveTo(0, y + offset);
+        ctx.lineTo(centerX, centerY + (y - centerY) * 0.18);
+        ctx.stroke();
+    }
+    ctx.restore();
+};
+
+window.drawMeowlimeGrowthBlob = function(ctx, x, y, size, expression, t, jigglePower) {
+    const radius = size / 2;
+    const wobbleA = Math.sin(t * 3.4) * 0.05 + jigglePower * Math.sin(t * 38) * 0.12;
+    const wobbleB = Math.cos(t * 2.7) * 0.045 + jigglePower * Math.cos(t * 31) * 0.1;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(1 + wobbleA, 1 + wobbleB);
+
+    ctx.shadowColor = 'rgba(160, 245, 255, 0.72)';
+    ctx.shadowBlur = Math.max(8, radius * 0.28);
+
+    const grad = ctx.createRadialGradient(-radius * 0.28, -radius * 0.35, radius * 0.1, 0, 0, radius);
+    grad.addColorStop(0, 'rgba(255,255,255,0.88)');
+    grad.addColorStop(0.28, `hsla(${(t * 24) % 360}, 100%, 88%, 0.94)`);
+    grad.addColorStop(0.58, `hsla(${(t * 24 + 92) % 360}, 100%, 82%, 0.92)`);
+    grad.addColorStop(1, `hsla(${(t * 24 + 174) % 360}, 94%, 74%, 0.92)`);
+
+    ctx.beginPath();
+    const steps = 44;
+    for (let i = 0; i <= steps; i++) {
+        const a = Math.PI * 2 * i / steps;
+        const n = 1 + Math.sin(a * 3 + t * 2.2) * 0.055 + Math.cos(a * 5 - t * 1.8) * 0.04 + jigglePower * Math.sin(a * 8 + t * 42) * 0.055;
+        const px = Math.cos(a) * radius * n;
+        const py = Math.sin(a) * radius * (0.92 + Math.cos(a * 2 - t) * 0.035) * n;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 0.72;
+    ctx.strokeStyle = 'rgba(255,255,255,0.72)';
+    ctx.lineWidth = Math.max(1.2, radius * 0.045);
+    ctx.stroke();
+
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(38, 70, 78, 0.92)';
+    ctx.font = `900 ${Math.max(8, size * 0.17)}px "Microsoft JhengHei", "PingFang TC", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(255,255,255,0.82)';
+    ctx.shadowBlur = Math.max(2, size * 0.04);
+    ctx.fillText(expression || '^⦁⩊⦁^', 0, size * 0.015);
+
+    ctx.restore();
+};
+
+window.renderMeowlimeGrowthFrame = function(ts) {
+    const state = window.getMeowlimeGrowthState();
+    const canvas = document.getElementById('meowlime-growth-canvas');
+
+    if (!state.running || !canvas) return;
+
+    window.resizeMeowlimeGrowthCanvas(canvas);
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const w = canvas.width;
+    const h = canvas.height;
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const dt = state.lastTs ? Math.min(0.05, (ts - state.lastTs) / 1000) : 0.016;
+    state.lastTs = ts;
+
+    const growthSize = window.getMeowlimeGrowthSize ? window.getMeowlimeGrowthSize() : 20;
+    const edgeSafeSize = Math.max(12, Math.min(growthSize * dpr, Math.min(w, h) - 36 * dpr));
+    const minX = edgeSafeSize / 2 + 16 * dpr;
+    const maxX = w - edgeSafeSize / 2 - 16 * dpr;
+
+    if (!state.x || state.x < minX || state.x > maxX) {
+        state.x = w / 2;
+        state.y = h * 0.58;
+        state.dir = 1;
+    }
+
+    if (maxX > minX) {
+        state.x += state.dir * 18 * dpr * dt;
+        if (state.x >= maxX) {
+            state.x = maxX;
+            state.dir = -1;
+        } else if (state.x <= minX) {
+            state.x = minX;
+            state.dir = 1;
+        }
+    } else {
+        state.x = w / 2;
+    }
+
+    state.y = Math.min(h - edgeSafeSize * 0.58 - 20 * dpr, Math.max(edgeSafeSize * 0.58 + 20 * dpr, h * 0.58));
+
+    const now = performance.now();
+    const jigglePower = state.jiggleUntil && now < state.jiggleUntil
+        ? Math.max(0, (state.jiggleUntil - now) / 620)
+        : 0;
+
+    window.drawMeowlimeGrowthBackground(ctx, w, h, ts / 1000);
+    window.drawMeowlimeGrowthBlob(ctx, state.x, state.y, edgeSafeSize, state.expression, ts / 1000, jigglePower);
+
+    state.rafId = requestAnimationFrame(window.renderMeowlimeGrowthFrame);
+};
+
+window.startMeowlimeGrowthCanvas = function() {
+    const modal = document.getElementById('meowlime-growth-modal');
+    const canvas = document.getElementById('meowlime-growth-canvas');
+    const totalEl = document.getElementById('meowlime-growth-total-text');
+    const sizeEl = document.getElementById('meowlime-growth-size-text');
+
+    if (!modal || !canvas) return;
+
+    window.stopMeowlimeGrowthCanvas();
+
+    const state = window.getMeowlimeGrowthState();
+    const growthSize = window.getMeowlimeGrowthSize ? window.getMeowlimeGrowthSize() : 20;
+    const total = Number((window.GameLogic && window.GameLogic.dailyMeowlime && window.GameLogic.dailyMeowlime.totalCheckins) || 0);
+
+    state.running = true;
+    state.lastTs = 0;
+    state.x = 0;
+    state.y = 0;
+    state.dir = 1;
+    state.expression = '^⦁⩊⦁^';
+    state.jiggleUntil = 0;
+
+    if (totalEl) totalEl.innerText = String(Number.isFinite(total) ? Math.max(0, total) : 0);
+    if (sizeEl) sizeEl.innerText = `${growthSize.toFixed(1)}px`;
+
+    const stopModalEvent = (e) => {
+        if (e && e.stopPropagation) e.stopPropagation();
+    };
+
+    const pointerHandler = (e) => {
+        if (!e) return;
+        if (e.preventDefault) e.preventDefault();
+        if (e.stopPropagation) e.stopPropagation();
+
+        const rect = canvas.getBoundingClientRect();
+        const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        const px = (e.clientX - rect.left) * dpr;
+        const py = (e.clientY - rect.top) * dpr;
+        const size = Math.max(12, Math.min((window.getMeowlimeGrowthSize ? window.getMeowlimeGrowthSize() : 20) * dpr, Math.min(canvas.width, canvas.height) - 36 * dpr));
+        const dx = px - state.x;
+        const dy = py - state.y;
+
+        if (Math.sqrt(dx * dx + dy * dy) > size * 0.68) return;
+
+        const pool = window.getMeowlimeGrowthExpressions ? window.getMeowlimeGrowthExpressions() : ['^⦁⩊⦁^'];
+        state.expression = pool[Math.floor(Math.random() * pool.length)] || '^⦁⩊⦁^';
+        state.jiggleUntil = performance.now() + 620;
+    };
+
+    const resizeHandler = () => {
+        state.x = 0;
+        if (window.resizeMeowlimeGrowthCanvas) window.resizeMeowlimeGrowthCanvas(canvas);
+    };
+
+    modal.addEventListener('pointerdown', stopModalEvent);
+    modal.addEventListener('click', stopModalEvent);
+    canvas.addEventListener('pointerdown', pointerHandler, { passive: false });
+    window.addEventListener('resize', resizeHandler);
+
+    state.boundCanvas = canvas;
+    state.boundModal = modal;
+    state.pointerHandler = pointerHandler;
+    state.modalStopHandler = stopModalEvent;
+    state.resizeHandler = resizeHandler;
+
+    canvas.style.touchAction = 'none';
+    window.resizeMeowlimeGrowthCanvas(canvas);
+    state.rafId = requestAnimationFrame(window.renderMeowlimeGrowthFrame);
+};
+
+window.openMeowlimeGrowthModal = async function() {
+    if (window.refreshDailyMeowlimeStatus) {
+        await window.refreshDailyMeowlimeStatus({ reason: 'openMeowlimeGrowthModal', skipIfFresh: true });
+    }
+
+    const checkinModal = document.getElementById('meowlime-modal');
+    const growthModal = document.getElementById('meowlime-growth-modal');
+
+    if (checkinModal) checkinModal.style.display = 'none';
+    if (growthModal) growthModal.style.display = 'block';
+
+    if (window.startMeowlimeGrowthCanvas) window.startMeowlimeGrowthCanvas();
+};
+
+window.closeMeowlimeGrowthModal = function(options = {}) {
+    const shouldReturnToCheckin = options.returnToCheckin !== false;
+    const growthModal = document.getElementById('meowlime-growth-modal');
+    const checkinModal = document.getElementById('meowlime-modal');
+
+    if (window.stopMeowlimeGrowthCanvas) window.stopMeowlimeGrowthCanvas();
+    if (growthModal) growthModal.style.display = 'none';
+
+    if (shouldReturnToCheckin && checkinModal) {
+        checkinModal.style.display = 'block';
+        if (window.prepareMeowlimeCheckinModal) window.prepareMeowlimeCheckinModal();
+        if (window.updateMeowlimeModalStatusText) window.updateMeowlimeModalStatusText();
+    }
+};
+
 window.getMeowlimeCatalogIconHtml = function() {
     try {
         const scene = window.GameLogic && window.GameLogic.phaserGame
@@ -1158,6 +1523,131 @@ function createSystemUI() {
                 0% { transform: translate(-50%, -50%) scale(0.2) rotate(0deg); opacity: 0; }
                 18% { opacity: 1; }
                 100% { transform: translate(calc(-50% + var(--meowlime-star-x, 0px)), calc(-50% + var(--meowlime-star-y, 0px))) scale(0.1) rotate(120deg); opacity: 0; }
+            }
+
+                        .meowlime-view-growth-btn {
+                width: 100%;
+                margin-top: 10px;
+                background: linear-gradient(180deg, #ffe5ff, #ff87df 48%, #7a2de2) !important;
+                color: #210018 !important;
+                box-shadow: 0 0 13px rgba(255,160,226,0.68), 0 0 12px rgba(126,255,238,0.32), inset 0 1px 0 rgba(255,255,255,0.72) !important;
+            }
+            .meowlime-growth-modal {
+                width: min(94vw, 560px) !important;
+                max-width: 560px !important;
+                background: radial-gradient(circle at 50% 40%, rgba(20, 28, 55, 0.98), rgba(2, 3, 10, 0.99) 58%, #000 100%) !important;
+                border: 2px solid rgba(126,255,238,0.86) !important;
+                box-shadow: 0 0 24px rgba(126,255,238,0.36), 0 0 34px rgba(255,130,228,0.26), 0 16px 36px rgba(0,0,0,0.75), inset 0 0 24px rgba(126,255,238,0.12) !important;
+                color: #eafffb !important;
+                overflow: hidden !important;
+                touch-action: none;
+                pointer-events: auto;
+            }
+            .meowlime-growth-modal::before {
+                content: "";
+                position: absolute;
+                inset: -18%;
+                background:
+                    radial-gradient(circle, rgba(126,255,238,0.34) 0 1px, transparent 3px),
+                    radial-gradient(circle, rgba(255,130,228,0.25) 0 2px, transparent 5px),
+                    linear-gradient(90deg, transparent 0 47%, rgba(126,255,238,0.11) 48%, transparent 50%),
+                    linear-gradient(0deg, transparent 0 47%, rgba(255,130,228,0.1) 48%, transparent 50%);
+                background-size: 40px 40px, 68px 68px, 36px 36px, 36px 36px;
+                animation: meowlime-growth-grid-drift 7s linear infinite;
+                opacity: 0.62;
+                pointer-events: none;
+                z-index: 0;
+            }
+            .meowlime-growth-modal::after {
+                content: "";
+                position: absolute;
+                inset: -30%;
+                background: conic-gradient(from 0deg, rgba(126,255,238,0.08), rgba(0,0,0,0.9), rgba(255,130,228,0.12), rgba(0,0,0,0.95), rgba(126,255,238,0.1));
+                animation: meowlime-growth-hue-spin 12s linear infinite;
+                opacity: 0.72;
+                pointer-events: none;
+                z-index: 0;
+            }
+            .meowlime-growth-modal > * {
+                position: relative;
+                z-index: 1;
+            }
+            .meowlime-growth-modal h3 {
+                color: #eafffb !important;
+                border-bottom: 1px solid rgba(126,255,238,0.48) !important;
+                text-shadow: 0 0 9px rgba(126,255,238,0.95), 0 0 16px rgba(255,130,228,0.52) !important;
+                letter-spacing: 1px;
+            }
+            .meowlime-growth-stage {
+                position: relative;
+                width: 100%;
+                height: min(58vh, 520px);
+                min-height: 320px;
+                border-radius: 18px;
+                overflow: hidden;
+                border: 2px solid rgba(126,255,238,0.5);
+                background: #01020a;
+                box-shadow: inset 0 0 30px rgba(0,0,0,0.82), 0 0 18px rgba(126,255,238,0.24);
+                touch-action: none;
+            }
+            #meowlime-growth-canvas {
+                width: 100%;
+                height: 100%;
+                display: block;
+                touch-action: none;
+                user-select: none;
+                -webkit-user-select: none;
+                -webkit-touch-callout: none;
+                cursor: pointer;
+            }
+            .meowlime-growth-info {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+                margin-top: 10px;
+            }
+            .meowlime-growth-info-card {
+                padding: 8px 10px;
+                border-radius: 14px;
+                background: rgba(0,0,0,0.5);
+                border: 1px solid rgba(126,255,238,0.38);
+                color: #dffcff;
+                font-size: 12px;
+                font-weight: 900;
+                box-shadow: inset 0 0 12px rgba(126,255,238,0.08), 0 0 10px rgba(255,130,228,0.12);
+            }
+            .meowlime-growth-info-card span {
+                color: #a7ffbd;
+                font-size: 16px;
+                text-shadow: 0 0 8px rgba(126,255,132,0.8);
+            }
+            .meowlime-growth-hint {
+                margin-top: 8px;
+                color: rgba(233,255,251,0.72);
+                font-size: 12px;
+                font-weight: bold;
+                text-shadow: 0 0 7px rgba(126,255,238,0.35);
+            }
+            @keyframes meowlime-growth-grid-drift {
+                0% { transform: translate(0, 0) scale(1); filter: hue-rotate(0deg); }
+                100% { transform: translate(36px, 36px) scale(1.02); filter: hue-rotate(360deg); }
+            }
+            @keyframes meowlime-growth-hue-spin {
+                100% { transform: rotate(360deg); filter: hue-rotate(360deg); }
+            }
+            @media (max-width: 768px), (orientation: portrait) {
+                .meowlime-growth-modal {
+                    width: min(94vw, 430px) !important;
+                    padding: 14px !important;
+                }
+                .meowlime-growth-stage {
+                    height: min(52vh, 430px);
+                    min-height: 280px;
+                }
+                .meowlime-growth-info {
+                    grid-template-columns: 1fr;
+                    gap: 6px;
+                }
             }
 
             /* 7-EONION 黑綠深紫黑洞商店＋購買拉條＋給西主題美化＋大廳家具木紋 */
@@ -4192,8 +4682,22 @@ function createSystemUI() {
                 <button id="meowlime-clear-btn" class="meowlime-action-btn" type="button" onclick="window.clearMeowlimeSignature && window.clearMeowlimeSignature()">清除重簽</button>
                 <button id="meowlime-submit-btn" class="meowlime-action-btn meowlime-submit-btn" type="button" onclick="window.submitMeowlimeCheckin && window.submitMeowlimeCheckin()">簽到</button>
             </div>
+            <button id="meowlime-view-growth-btn" class="meowlime-action-btn meowlime-view-growth-btn" type="button" onclick="window.openMeowlimeGrowthModal && window.openMeowlimeGrowthModal()">看看喵萊姆</button>
             <button class="close-modal-btn meowlime-close-btn" style="margin-top: 12px; width: 100%;" onclick="window.closeMeowlimeModal ? window.closeMeowlimeModal() : document.getElementById('meowlime-modal').style.display='none'">關閉</button>
         </div>
+        <div id="meowlime-growth-modal" class="modal meowlime-growth-modal" style="z-index: 266;">
+            <h3>看看喵萊姆</h3>
+            <div class="meowlime-growth-stage">
+                <canvas id="meowlime-growth-canvas" width="900" height="620"></canvas>
+            </div>
+            <div class="meowlime-growth-info">
+                <div class="meowlime-growth-info-card">累積簽到：<span id="meowlime-growth-total-text">0</span> 天</div>
+                <div class="meowlime-growth-info-card">培育尺寸：<span id="meowlime-growth-size-text">20.0px</span></div>
+            </div>
+            <div class="meowlime-growth-hint">點點喵萊姆，他會果凍彈跳並換表情喵。</div>
+            <button class="close-modal-btn meowlime-close-btn" style="margin-top: 12px; width: 100%;" onclick="window.closeMeowlimeGrowthModal ? window.closeMeowlimeGrowthModal({ returnToCheckin: true }) : document.getElementById('meowlime-growth-modal').style.display='none'">返回每日簽到</button>
+        </div>
+
         <div id="fridge-modal" class="modal"><h3>❄️ 公用大冰箱</h3><p style="color:#888; font-size: 14px;">冰箱目前空空如也... 等待下次採買中</p><button class="close-modal-btn btn-primary" onclick="document.getElementById('fridge-modal').style.display='none'">關上冰箱</button></div>
         <div id="memory-modal" class="modal">
             <h3>📖 洋蔥回憶錄</h3>
