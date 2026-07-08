@@ -2065,8 +2065,9 @@ function createSystemUI() {
             }
 
                         .meowlime-modal {
-                width: min(92vw, 430px) !important;
-                max-width: 430px !important;
+                width: min(92vw, 500px) !important;
+                max-width: 500px !important;
+                max-height: min(90vh, calc(var(--onion-vh, 1vh) * 90)) !important;
                 background:
                     radial-gradient(circle at 22% 12%, rgba(255,255,255,0.14), transparent 22%),
                     radial-gradient(circle at 78% 18%, rgba(132,255,236,0.13), transparent 26%),
@@ -2074,8 +2075,11 @@ function createSystemUI() {
                 border: 2px solid rgba(126, 255, 238, 0.82) !important;
                 box-shadow: 0 0 22px rgba(126,255,238,0.38), 0 0 28px rgba(255,160,226,0.24), 0 14px 30px rgba(0,0,0,0.62), inset 0 0 24px rgba(126,255,238,0.12) !important;
                 color: #e9fffb !important;
-                overflow: hidden !important;
-                touch-action: none;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior: contain;
+                touch-action: pan-y;
             }
             .meowlime-modal::after {
                 content: "";
@@ -2227,7 +2231,7 @@ function createSystemUI() {
             }
             .meowlime-button-row {
                 display: grid;
-                grid-template-columns: 1fr 1fr;
+                grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
                 gap: 8px;
                 margin-top: 12px;
             }
@@ -2296,20 +2300,28 @@ function createSystemUI() {
 
                         .meowlime-view-growth-btn {
                 width: 100%;
-                margin-top: 10px;
+                margin-top: 0;
                 background: linear-gradient(180deg, #ffe5ff, #ff87df 48%, #7a2de2) !important;
                 color: #210018 !important;
                 box-shadow: 0 0 13px rgba(255,160,226,0.68), 0 0 12px rgba(126,255,238,0.32), inset 0 1px 0 rgba(255,255,255,0.72) !important;
             }
+            .meowlime-submit-wide-btn {
+                width: 100%;
+                margin-top: 8px;
+            }
             .meowlime-growth-modal {
-                width: min(94vw, 560px) !important;
-                max-width: 560px !important;
+                width: min(94vw, 640px) !important;
+                max-width: 640px !important;
+                max-height: min(92vh, calc(var(--onion-vh, 1vh) * 92)) !important;
                 background: radial-gradient(circle at 50% 40%, rgba(20, 28, 55, 0.98), rgba(2, 3, 10, 0.99) 58%, #000 100%) !important;
                 border: 2px solid rgba(126,255,238,0.86) !important;
                 box-shadow: 0 0 24px rgba(126,255,238,0.36), 0 0 34px rgba(255,130,228,0.26), 0 16px 36px rgba(0,0,0,0.75), inset 0 0 24px rgba(126,255,238,0.12) !important;
                 color: #eafffb !important;
-                overflow: hidden !important;
-                touch-action: none;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior: contain;
+                touch-action: pan-y;
                 pointer-events: auto;
             }
             .meowlime-growth-modal::before {
@@ -2350,8 +2362,8 @@ function createSystemUI() {
             .meowlime-growth-stage {
                 position: relative;
                 width: 100%;
-                height: min(58vh, 520px);
-                min-height: 320px;
+                height: min(50vh, 440px);
+                min-height: 300px;
                 border-radius: 18px;
                 overflow: hidden;
                 border: 2px solid rgba(126,255,238,0.5);
@@ -2424,7 +2436,7 @@ function createSystemUI() {
                 display: none !important;
             }
             .meowlime-star-map-panel {
-                max-height: min(58vh, 520px);
+                max-height: min(62vh, 560px);
                 overflow-y: auto;
                 overflow-x: hidden;
                 -webkit-overflow-scrolling: touch;
@@ -2663,13 +2675,22 @@ function createSystemUI() {
                 100% { transform: rotate(360deg); filter: hue-rotate(360deg); }
             }
             @media (max-width: 768px), (orientation: portrait) {
+                .meowlime-modal {
+                    width: min(94vw, 430px) !important;
+                    max-height: min(90vh, calc(var(--onion-vh, 1vh) * 90)) !important;
+                    padding: 14px !important;
+                }
                 .meowlime-growth-modal {
                     width: min(94vw, 430px) !important;
+                    max-height: min(90vh, calc(var(--onion-vh, 1vh) * 90)) !important;
                     padding: 14px !important;
                 }
                 .meowlime-growth-stage {
-                    height: min(52vh, 430px);
-                    min-height: 280px;
+                    height: min(46vh, 390px);
+                    min-height: 260px;
+                }
+                .meowlime-star-map-panel {
+                    max-height: min(56vh, 430px);
                 }
                 .meowlime-growth-info {
                     grid-template-columns: 1fr;
@@ -5707,9 +5728,9 @@ function createSystemUI() {
             <div id="meowlime-error-text" class="meowlime-error-text"></div>
             <div class="meowlime-button-row">
                 <button id="meowlime-clear-btn" class="meowlime-action-btn" type="button" onclick="window.clearMeowlimeSignature && window.clearMeowlimeSignature()">清除重簽</button>
-                <button id="meowlime-submit-btn" class="meowlime-action-btn meowlime-submit-btn" type="button" onclick="window.submitMeowlimeCheckin && window.submitMeowlimeCheckin()">簽到</button>
+                <button id="meowlime-view-growth-btn" class="meowlime-action-btn meowlime-view-growth-btn" type="button" onclick="window.openMeowlimeGrowthModal && window.openMeowlimeGrowthModal()">看看喵萊姆</button>
             </div>
-            <button id="meowlime-view-growth-btn" class="meowlime-action-btn meowlime-view-growth-btn" type="button" onclick="window.openMeowlimeGrowthModal && window.openMeowlimeGrowthModal()">看看喵萊姆</button>
+            <button id="meowlime-submit-btn" class="meowlime-action-btn meowlime-submit-btn meowlime-submit-wide-btn" type="button" onclick="window.submitMeowlimeCheckin && window.submitMeowlimeCheckin()">簽到</button>
             <button class="close-modal-btn meowlime-close-btn" style="margin-top: 12px; width: 100%;" onclick="window.closeMeowlimeModal ? window.closeMeowlimeModal() : document.getElementById('meowlime-modal').style.display='none'">關閉</button>
         </div>
         <div id="meowlime-growth-modal" class="modal meowlime-growth-modal" style="z-index: 266;">
