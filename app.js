@@ -687,9 +687,78 @@ window.closeProfileModal = function() {
 };
 window.openPortalModal = function() { document.getElementById('inventory-modal').style.display = 'none'; document.getElementById('portal-modal').style.display = 'block'; };
 
+window.playMeowlimeModalFadeIn = function(modal) {
+    if (!modal) return;
+
+    modal.dataset.meowlimeClosing = '0';
+    modal.classList.remove('meowlime-fade-out');
+    modal.classList.remove('meowlime-fade-in');
+    modal.style.display = 'block';
+
+    void modal.offsetWidth;
+    modal.classList.add('meowlime-fade-in');
+
+    clearTimeout(modal.__meowlimeFadeTimer);
+    modal.__meowlimeFadeTimer = setTimeout(() => {
+        if (modal) modal.classList.remove('meowlime-fade-in');
+    }, 280);
+};
+
+window.closeMeowlimeModalWithFade = function(modal, options = {}) {
+    const duration = Math.max(120, Math.min(520, Number(options.duration || 240)));
+    const afterClose = typeof options.afterClose === 'function' ? options.afterClose : null;
+
+    if (!modal) {
+        if (afterClose) afterClose();
+        return;
+    }
+
+    if (modal.dataset.meowlimeClosing === '1') return;
+
+    modal.dataset.meowlimeClosing = '1';
+    modal.classList.remove('meowlime-fade-in');
+    modal.classList.remove('meowlime-fade-out');
+    void modal.offsetWidth;
+    modal.classList.add('meowlime-fade-out');
+
+    clearTimeout(modal.__meowlimeFadeTimer);
+    modal.__meowlimeFadeTimer = setTimeout(() => {
+        modal.style.display = 'none';
+        modal.classList.remove('meowlime-fade-out');
+        modal.dataset.meowlimeClosing = '0';
+        if (afterClose) afterClose();
+    }, duration);
+};
+
+window.syncPlayerCoinsUi = function(coins) {
+    const safeCoins = Math.max(0, Math.floor(Number(coins || 0)));
+    if (window.GameLogic && window.GameLogic.myProfile) window.GameLogic.myProfile.coins = safeCoins;
+
+    const coinsEl = document.getElementById('vp-coins');
+    if (coinsEl) coinsEl.innerText = safeCoins;
+
+    const storeCoinsEl = document.getElementById('store-current-coins');
+    if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${safeCoins}`;
+};
+
+window.showMeowlimeRewardToast = function(message = '簽到獎勵888馬德幣，祝你發發發') {
+    const oldToast = document.querySelector('.meowlime-reward-toast');
+    if (oldToast && oldToast.parentNode) oldToast.parentNode.removeChild(oldToast);
+
+    const toast = document.createElement('div');
+    toast.className = 'meowlime-reward-toast';
+    toast.innerText = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 5200);
+};
+
 window.openMeowlimeModal = async function() {
     const modal = document.getElementById('meowlime-modal');
-    if (modal) modal.style.display = 'block';
+    if (window.playMeowlimeModalFadeIn) window.playMeowlimeModalFadeIn(modal);
+    else if (modal) modal.style.display = 'block';
 
     if (window.prepareMeowlimeCheckinModal) window.prepareMeowlimeCheckinModal();
     if (window.updateMeowlimeModalStatusText) window.updateMeowlimeModalStatusText();
@@ -704,7 +773,8 @@ window.openMeowlimeModal = async function() {
 
 window.closeMeowlimeModal = function() {
     const modal = document.getElementById('meowlime-modal');
-    if (modal) modal.style.display = 'none';
+    if (window.closeMeowlimeModalWithFade) window.closeMeowlimeModalWithFade(modal);
+    else if (modal) modal.style.display = 'none';
 };
 
 window.getMeowlimeGrowthSize = function() {
@@ -1440,7 +1510,9 @@ window.openMeowlimeSignatureViewer = function(item) {
 
     img.alt = `${data.date || '某一天'} 的喵萊姆簽名`;
     img.src = url;
-    modal.style.display = 'block';
+
+    if (window.playMeowlimeModalFadeIn) window.playMeowlimeModalFadeIn(modal);
+    else modal.style.display = 'block';
 };
 
 window.closeMeowlimeSignatureViewer = function() {
@@ -1448,14 +1520,21 @@ window.closeMeowlimeSignatureViewer = function() {
     const img = document.getElementById('meowlime-signature-viewer-img');
     const statusEl = document.getElementById('meowlime-signature-viewer-status');
 
-    if (modal) modal.style.display = 'none';
-    if (img) {
-        img.onload = null;
-        img.onerror = null;
-        img.removeAttribute('src');
-        img.alt = '';
+    const cleanup = () => {
+        if (img) {
+            img.onload = null;
+            img.onerror = null;
+            img.removeAttribute('src');
+            img.alt = '';
+        }
+        if (statusEl) statusEl.innerText = '';
+    };
+
+    if (window.closeMeowlimeModalWithFade) window.closeMeowlimeModalWithFade(modal, { afterClose: cleanup });
+    else {
+        if (modal) modal.style.display = 'none';
+        cleanup();
     }
-    if (statusEl) statusEl.innerText = '';
 };
 
 window.renderMeowlimeStarMap = function() {
@@ -1592,8 +1671,24 @@ window.setMeowlimeGrowthTab = function(tabName = 'growth') {
     if (growthBtn) growthBtn.classList.toggle('active', activeTab === 'growth');
     if (mapBtn) mapBtn.classList.toggle('active', activeTab === 'map');
 
-    if (growthPanel) growthPanel.hidden = activeTab !== 'growth';
-    if (mapPanel) mapPanel.hidden = activeTab !== 'map';
+    if (growthPanel) {
+        growthPanel.classList.remove('meowlime-panel-fade-in');
+        growthPanel.hidden = activeTab !== 'growth';
+    }
+    if (mapPanel) {
+        mapPanel.classList.remove('meowlime-panel-fade-in');
+        mapPanel.hidden = activeTab !== 'map';
+    }
+
+    const activePanel = activeTab === 'growth' ? growthPanel : mapPanel;
+    if (activePanel) {
+        void activePanel.offsetWidth;
+        activePanel.classList.add('meowlime-panel-fade-in');
+        clearTimeout(activePanel.__meowlimePanelFadeTimer);
+        activePanel.__meowlimePanelFadeTimer = setTimeout(() => {
+            if (activePanel) activePanel.classList.remove('meowlime-panel-fade-in');
+        }, 280);
+    }
 
     if (activeTab === 'growth') {
         if (window.startMeowlimeGrowthCanvas) window.startMeowlimeGrowthCanvas();
@@ -1612,13 +1707,26 @@ window.openMeowlimeGrowthModal = async function() {
     const checkinModal = document.getElementById('meowlime-modal');
     const growthModal = document.getElementById('meowlime-growth-modal');
 
-    if (checkinModal) checkinModal.style.display = 'none';
-    if (growthModal) growthModal.style.display = 'block';
+    const openGrowth = () => {
+        if (window.playMeowlimeModalFadeIn) window.playMeowlimeModalFadeIn(growthModal);
+        else if (growthModal) growthModal.style.display = 'block';
 
-    if (window.setMeowlimeGrowthTab) {
-        window.setMeowlimeGrowthTab('growth');
-    } else if (window.startMeowlimeGrowthCanvas) {
-        window.startMeowlimeGrowthCanvas();
+        if (window.setMeowlimeGrowthTab) {
+            window.setMeowlimeGrowthTab('growth');
+        } else if (window.startMeowlimeGrowthCanvas) {
+            window.startMeowlimeGrowthCanvas();
+        }
+    };
+
+    if (checkinModal && checkinModal.style.display !== 'none') {
+        if (window.closeMeowlimeModalWithFade) {
+            window.closeMeowlimeModalWithFade(checkinModal, { duration: 200, afterClose: openGrowth });
+        } else {
+            checkinModal.style.display = 'none';
+            openGrowth();
+        }
+    } else {
+        openGrowth();
     }
 };
 window.closeMeowlimeGrowthModal = function(options = {}) {
@@ -1627,12 +1735,20 @@ window.closeMeowlimeGrowthModal = function(options = {}) {
     const checkinModal = document.getElementById('meowlime-modal');
 
     if (window.stopMeowlimeGrowthCanvas) window.stopMeowlimeGrowthCanvas();
-    if (growthModal) growthModal.style.display = 'none';
 
-    if (shouldReturnToCheckin && checkinModal) {
-        checkinModal.style.display = 'block';
-        if (window.prepareMeowlimeCheckinModal) window.prepareMeowlimeCheckinModal();
-        if (window.updateMeowlimeModalStatusText) window.updateMeowlimeModalStatusText();
+    const afterClose = () => {
+        if (shouldReturnToCheckin && checkinModal) {
+            if (window.playMeowlimeModalFadeIn) window.playMeowlimeModalFadeIn(checkinModal);
+            else checkinModal.style.display = 'block';
+            if (window.prepareMeowlimeCheckinModal) window.prepareMeowlimeCheckinModal();
+            if (window.updateMeowlimeModalStatusText) window.updateMeowlimeModalStatusText();
+        }
+    };
+
+    if (window.closeMeowlimeModalWithFade) window.closeMeowlimeModalWithFade(growthModal, { afterClose });
+    else {
+        if (growthModal) growthModal.style.display = 'none';
+        afterClose();
     }
 };
 
@@ -1840,52 +1956,93 @@ window.recordDailyMeowlimeCheckin = async function(signatureInfo = {}) {
 
     const uid = window.GameLogic.currentUser.uid;
     const today = window.getMeowlimeTodayDateString ? window.getMeowlimeTodayDateString() : '';
-    const snap = await get(ref(window.GameLogic.db, `users/${uid}/dailyMeowlime`));
-    const data = snap.exists() ? (snap.val() || {}) : {};
-
-    if (data.lastCheckinDate === today) {
-        window.applyMeowlimeDailyState(data);
-        return { ok: true, alreadyChecked: true, date: today };
-    }
-
+    const rewardCoins = 888;
     const signatureUrl = signatureInfo && signatureInfo.signatureUrl ? String(signatureInfo.signatureUrl) : '';
     const signaturePath = signatureInfo && signatureInfo.signaturePath ? String(signatureInfo.signaturePath) : '';
+    const checkinRequestId = `${today}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const createdAt = window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now();
+    let txResult = null;
 
-    const totalCheckins = Number(data.totalCheckins || 0) + 1;
-    const historyItem = {
-        date: today,
-        createdAt: Date.now(),
-        serverRoom: window.getCurrentServerRoomId ? window.getCurrentServerRoomId() : (window.GameLogic.currentServerRoom || ''),
-        hasSignature: !!signatureUrl
-    };
+    try {
+        txResult = await runTransaction(ref(window.GameLogic.db, `users/${uid}`), (userData) => {
+            if (!userData || typeof userData !== 'object') userData = {};
 
-    if (signatureUrl) {
-        historyItem.signatureUrl = signatureUrl;
-        historyItem.signaturePath = signaturePath;
+            const dailyData = userData.dailyMeowlime && typeof userData.dailyMeowlime === 'object'
+                ? userData.dailyMeowlime
+                : {};
+            const history = dailyData.checkinHistory && typeof dailyData.checkinHistory === 'object'
+                ? dailyData.checkinHistory
+                : {};
+            const todayHistory = history[today] && typeof history[today] === 'object'
+                ? history[today]
+                : {};
+
+            if (dailyData.lastCheckinDate === today || todayHistory.rewardClaimed === true) {
+                return userData;
+            }
+
+            const totalCheckins = Number(dailyData.totalCheckins || 0) + 1;
+            const historyItem = {
+                date: today,
+                createdAt: createdAt,
+                serverRoom: window.getCurrentServerRoomId ? window.getCurrentServerRoomId() : (window.GameLogic.currentServerRoom || ''),
+                hasSignature: !!signatureUrl,
+                rewardCoins: rewardCoins,
+                rewardClaimed: true,
+                checkinRequestId: checkinRequestId
+            };
+
+            if (signatureUrl) {
+                historyItem.signatureUrl = signatureUrl;
+                historyItem.signaturePath = signaturePath;
+            }
+
+            userData.coins = Number(userData.coins || 0) + rewardCoins;
+            userData.dailyMeowlime = {
+                ...dailyData,
+                lastCheckinDate: today,
+                totalCheckins: totalCheckins,
+                checkinHistory: {
+                    ...history,
+                    [today]: historyItem
+                }
+            };
+
+            return userData;
+        });
+    } catch (err) {
+        console.warn('[喵萊姆] 每日簽到 transaction 失敗：', err);
+        return { ok: false, reason: err && err.code ? err.code : 'transaction-failed' };
     }
 
-    const updates = {
-        lastCheckinDate: today,
-        totalCheckins: totalCheckins
-    };
-    updates[`checkinHistory/${today}`] = historyItem;
+    if (!txResult || !txResult.committed) {
+        return { ok: false, reason: 'transaction-aborted' };
+    }
 
-    await update(ref(window.GameLogic.db, `users/${uid}/dailyMeowlime`), updates);
-
-    const nextData = {
-        ...data,
-        lastCheckinDate: today,
-        totalCheckins: totalCheckins,
-        checkinHistory: {
-            ...(data.checkinHistory || {}),
-            [today]: historyItem
-        }
-    };
+    const nextUserData = txResult.snapshot && txResult.snapshot.exists && txResult.snapshot.exists() ? (txResult.snapshot.val() || {}) : {};
+    const nextDailyData = nextUserData.dailyMeowlime || {};
+    const nextHistory = nextDailyData.checkinHistory || {};
+    const todayItem = nextHistory[today] || {};
+    const rewardClaimedNow = todayItem.checkinRequestId === checkinRequestId && todayItem.rewardClaimed === true;
+    const nextCoins = Number(nextUserData.coins || 0);
 
     window.__meowlimeDailyLastFetchedAt = Date.now();
-    window.applyMeowlimeDailyState(nextData);
+    window.applyMeowlimeDailyState(nextDailyData);
 
-    return { ok: true, alreadyChecked: false, date: today, totalCheckins: totalCheckins };
+    if (Number.isFinite(nextCoins)) {
+        if (window.syncPlayerCoinsUi) window.syncPlayerCoinsUi(nextCoins);
+        else if (window.GameLogic && window.GameLogic.myProfile) window.GameLogic.myProfile.coins = nextCoins;
+    }
+
+    return {
+        ok: true,
+        alreadyChecked: !rewardClaimedNow,
+        rewardClaimed: rewardClaimedNow,
+        rewardCoins: rewardClaimedNow ? rewardCoins : 0,
+        date: today,
+        totalCheckins: Number(nextDailyData.totalCheckins || 0),
+        coins: nextCoins
+    };
 };
 
 window.startMeowlimeDailyWatcher = function() {
@@ -2196,6 +2353,12 @@ window.submitMeowlimeCheckin = async function() {
         state.pending = false;
         if (window.renderMeowlimeCheckinModal) window.renderMeowlimeCheckinModal();
         if (!result.alreadyChecked && window.playMeowlimeSFX) window.playMeowlimeSFX('catslime-sign-done');
+        if (result.rewardClaimed && window.showMeowlimeRewardToast) {
+            window.showMeowlimeRewardToast('簽到獎勵888馬德幣，祝你發發發');
+        }
+        if (result.rewardClaimed && result.coins !== undefined && window.syncPlayerCoinsUi) {
+            window.syncPlayerCoinsUi(result.coins);
+        }
         if (window.playMeowlimeStampAnimation) window.playMeowlimeStampAnimation();
         if (window.refreshMeowlimeVisualsInScene) window.refreshMeowlimeVisualsInScene();
     } catch (err) {
@@ -2669,6 +2832,57 @@ function createSystemUI() {
                 0% { transform: translateY(34px) scale(0.92); opacity: 0; }
                 20% { opacity: 0.58; }
                 100% { transform: translateY(-80px) scale(1.08); opacity: 0; }
+            }
+            .meowlime-fade-in {
+                animation: meowlime-modal-fade-in 0.26s ease-out both !important;
+            }
+            .meowlime-fade-out {
+                animation: meowlime-modal-fade-out 0.22s ease-in both !important;
+                pointer-events: none !important;
+            }
+            .meowlime-growth-panel.meowlime-panel-fade-in {
+                animation: meowlime-panel-fade-in 0.24s ease-out both;
+            }
+            .meowlime-reward-toast {
+                position: fixed;
+                left: 50%;
+                top: 42%;
+                transform: translate(-50%, -50%);
+                z-index: 9999;
+                pointer-events: none;
+                width: min(92vw, 780px);
+                padding: 18px 22px;
+                border-radius: 999px;
+                color: #fff4a8;
+                font-size: clamp(26px, 6vw, 54px);
+                font-weight: 1000;
+                text-align: center;
+                letter-spacing: 1px;
+                line-height: 1.18;
+                background: radial-gradient(circle at 50% 50%, rgba(255, 150, 0, 0.32), rgba(255, 98, 0, 0.16) 44%, rgba(0,0,0,0.1) 72%, transparent 100%);
+                border: 2px solid rgba(255, 236, 138, 0.72);
+                text-shadow: 0 0 8px #fff, 0 0 16px #ffd24a, 0 0 28px #ff9100, 0 0 42px #ff5b00, 0 3px 4px rgba(0,0,0,0.72);
+                box-shadow: 0 0 24px rgba(255, 190, 40, 0.72), 0 0 46px rgba(255, 112, 0, 0.48), inset 0 0 22px rgba(255,255,255,0.16);
+                animation: meowlime-reward-toast-888 5s ease-in-out forwards;
+            }
+            @keyframes meowlime-modal-fade-in {
+                0% { opacity: 0; transform: translate(-50%, -47%) scale(0.96); filter: blur(5px) brightness(1.15); }
+                100% { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0) brightness(1); }
+            }
+            @keyframes meowlime-modal-fade-out {
+                0% { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0) brightness(1); }
+                100% { opacity: 0; transform: translate(-50%, -53%) scale(0.96); filter: blur(5px) brightness(0.85); }
+            }
+            @keyframes meowlime-panel-fade-in {
+                0% { opacity: 0; transform: translateY(8px) scale(0.985); filter: blur(3px); }
+                100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+            }
+            @keyframes meowlime-reward-toast-888 {
+                0% { opacity: 0; transform: translate(-50%, -42%) scale(0.72); filter: blur(7px) brightness(1.35); }
+                10% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); filter: blur(0) brightness(1.18); }
+                18% { transform: translate(-50%, -50%) scale(1); }
+                72% { opacity: 1; transform: translate(-50%, -58%) scale(1.02); }
+                100% { opacity: 0; transform: translate(-50%, -72%) scale(0.92); filter: blur(5px) brightness(0.92); }
             }
 
                         .meowlime-modal {
