@@ -12912,6 +12912,11 @@ onAuthStateChanged(auth, async (user) => {
             if (localSleep && parseInt(localSleep) > 0) {
                 window.GameLogic.myProfile.sleepStartTime = parseInt(localSleep);
                 window.GameLogic.myProfile.lastScene = 'doghouse';
+
+                const localSleepFurnitureId = localStorage.getItem('onion_sleepFurnitureId');
+                if (localSleepFurnitureId) {
+                    window.GameLogic.myProfile.sleepFurnitureId = localSleepFurnitureId;
+                }
             }
 
             window.GameLogic.currentTrackIdx = window.GameLogic.myProfile.currentTrackIdx || 0;
@@ -13271,9 +13276,18 @@ function switchScene(sceneName, extraData = null) {
 
     if (sceneName !== 'doghouse') {
     if (window.GameLogic.myProfile && window.GameLogic.myProfile.sleepStartTime > 0) {
-        window.GameLogic.myProfile.sleepStartTime = 0; 
+        window.GameLogic.myProfile.sleepStartTime = 0;
+        window.GameLogic.myProfile.sleepFurnitureId = '';
+        window.GameLogic.myProfile.sleepFurnitureKey = '';
+        window.GameLogic.myProfile.sleepFurnitureDirection = '';
         localStorage.removeItem('onion_sleepStartTime');
-        update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { sleepStartTime: 0 });
+        localStorage.removeItem('onion_sleepFurnitureId');
+        update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), {
+            sleepStartTime: 0,
+            sleepFurnitureId: '',
+            sleepFurnitureKey: '',
+            sleepFurnitureDirection: ''
+        });
     }
         if (window.GameLogic.phaserGame) { let ms = window.GameLogic.phaserGame.scene.getScene('MainScene'); if (ms && ms.sound && ms.sound.get('onion-sleep')) ms.sound.stopByKey('onion-sleep'); }
     }
@@ -15202,12 +15216,33 @@ this.events.on('action_A_short', () => {
                             uiScene.showSleepSummary(timeStr, addEnergy.toFixed(1), Math.floor(addMoney));
                         }
                         
-                        update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { energy: p.energy, energyBank: p.energyBank, sleepStartTime: 0 });
+                        update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), {
+                        energy: p.energy,
+                        energyBank: p.energyBank,
+                        sleepStartTime: 0,
+                        sleepFurnitureId: '',
+                        sleepFurnitureKey: '',
+                        sleepFurnitureDirection: ''
+                    });
                    } else {
-                        update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { sleepStartTime: 0 });
+                        update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), {
+                            sleepStartTime: 0,
+                            sleepFurnitureId: '',
+                            sleepFurnitureKey: '',
+                            sleepFurnitureDirection: ''
+                        });
                     }
                     p.sleepStartTime = 0;
+                    p.sleepFurnitureId = '';
+                    p.sleepFurnitureKey = '';
+                    p.sleepFurnitureDirection = '';
+                    if (this.localPlayer) {
+                        this.localPlayer.sleepingFurnitureId = null;
+                        this.localPlayer.sleepingFurnitureKey = null;
+                        this.localPlayer.sleepingFurnitureDirection = null;
+                    }
                     localStorage.removeItem('onion_sleepStartTime');
+                    localStorage.removeItem('onion_sleepFurnitureId');
                 }
                 return;
             }
@@ -27244,7 +27279,19 @@ if (activeBubbleMsg) {
         if (this.localPlayer.isSeated || this.localPlayer.isSweeping) return false;
 
         const sleepAnchor = this.getDoghouseBedInteractionAnchor(key, f);
+        const sleepFurnitureId = key || (f.sprite && f.sprite._onionFurnitureKey) || '';
+        const sleepFurnitureData = window.GameLogic && window.GameLogic.doghouseFurniture && sleepFurnitureId
+            ? (window.GameLogic.doghouseFurniture[sleepFurnitureId] || {})
+            : {};
+        const sleepFurnitureKey = this.getDoghouseFurnitureBaseKeyForRuntime
+            ? this.getDoghouseFurnitureBaseKeyForRuntime(sleepFurnitureId, sleepFurnitureData)
+            : (sleepFurnitureData.furnitureKey || sleepFurnitureId);
+
+        this.sleepInitDone = true;
         this.localPlayer.isSleeping = true;
+        this.localPlayer.sleepingFurnitureId = sleepFurnitureId;
+        this.localPlayer.sleepingFurnitureKey = sleepFurnitureKey;
+        this.localPlayer.sleepingFurnitureDirection = sleepAnchor.direction || sleepFurnitureData.direction || '';
         this.localPlayer.sprite.setVelocity(0, 0);
         this.localPlayer.sprite.setPosition(sleepAnchor.x, sleepAnchor.y);
         this.localPlayer.sprite.setAngle(sleepAnchor.sleepAngle || 0).setFlipX(false).play('sleep', true);
@@ -27267,7 +27314,12 @@ if (activeBubbleMsg) {
         }
 
         window.GameLogic.myProfile.sleepStartTime = Date.now();
+        window.GameLogic.myProfile.sleepFurnitureId = sleepFurnitureId;
+        window.GameLogic.myProfile.sleepFurnitureKey = sleepFurnitureKey;
+        window.GameLogic.myProfile.sleepFurnitureDirection = sleepAnchor.direction || '';
         localStorage.setItem('onion_sleepStartTime', window.GameLogic.myProfile.sleepStartTime);
+        if (sleepFurnitureId) localStorage.setItem('onion_sleepFurnitureId', sleepFurnitureId);
+        else localStorage.removeItem('onion_sleepFurnitureId');
 
         let cam = this.cameras.main;
         let guardContainer = this.add.container(cam.scrollX + cam.width / 2, cam.scrollY + cam.height / 2).setDepth(1000);
@@ -27284,6 +27336,9 @@ if (activeBubbleMsg) {
 
         update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), {
             sleepStartTime: window.GameLogic.myProfile.sleepStartTime,
+            sleepFurnitureId: sleepFurnitureId,
+            sleepFurnitureKey: sleepFurnitureKey,
+            sleepFurnitureDirection: sleepAnchor.direction || '',
             lastX: sleepAnchor.x,
             lastY: sleepAnchor.y
         }).then(() => {
@@ -29542,12 +29597,37 @@ if (activeBubbleMsg) {
 
         // 修正2：確保進入狗窩後，等到家具完全載入並產生實體後，再把睡覺的玩家放到床上
         if (this.sceneName === 'doghouse' && !(window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) && window.GameLogic.myProfile.sleepStartTime > 0 && !this.sleepInitDone && this.localPlayer) {
-            for (let key in this.furnitureSprites) {
+            const savedSleepFurnitureId = String(
+                window.GameLogic.myProfile.sleepFurnitureId ||
+                localStorage.getItem('onion_sleepFurnitureId') ||
+                ''
+            );
+            const furnitureKeys = Object.keys(this.furnitureSprites || {});
+            const orderedKeys = savedSleepFurnitureId
+                ? [savedSleepFurnitureId, ...furnitureKeys.filter(k => k !== savedSleepFurnitureId)]
+                : furnitureKeys;
+
+            for (let key of orderedKeys) {
                 const f = this.furnitureSprites[key];
-                if (this.isDoghouseBedFurniture(key, f) && f.sprite && f.sprite.isLocked) {
+                if (!f || !f.sprite) continue;
+
+                if (this.isDoghouseBedFurniture(key, f) && f.sprite.isLocked) {
                     this.sleepInitDone = true;
                     const sleepAnchor = this.getDoghouseBedInteractionAnchor(key, f);
+                    const sleepFurnitureData = window.GameLogic && window.GameLogic.doghouseFurniture
+                        ? (window.GameLogic.doghouseFurniture[key] || {})
+                        : {};
+                    const sleepFurnitureKey = this.getDoghouseFurnitureBaseKeyForRuntime
+                        ? this.getDoghouseFurnitureBaseKeyForRuntime(key, sleepFurnitureData)
+                        : (sleepFurnitureData.furnitureKey || key);
+
                     this.localPlayer.isSleeping = true;
+                    this.localPlayer.sleepingFurnitureId = key;
+                    this.localPlayer.sleepingFurnitureKey = sleepFurnitureKey;
+                    this.localPlayer.sleepingFurnitureDirection = sleepAnchor.direction || sleepFurnitureData.direction || '';
+                    window.GameLogic.myProfile.sleepFurnitureId = key;
+                    window.GameLogic.myProfile.sleepFurnitureKey = sleepFurnitureKey;
+                    window.GameLogic.myProfile.sleepFurnitureDirection = sleepAnchor.direction || '';
                     this.localPlayer.sprite.setPosition(sleepAnchor.x, sleepAnchor.y);
                     this.localPlayer.sprite.setAngle(sleepAnchor.sleepAngle || 0).setFlipX(false).play('sleep', true);
                     this.localPlayer.sprite.setAlpha(1);
