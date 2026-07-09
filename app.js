@@ -537,7 +537,7 @@ window.updateBGMVolume = function(val) {
     let volText = document.getElementById('bgm-vol-text');
     if(volText) volText.innerText = val + '%';
     if (window.GameLogic.phaserGame) {
-        let playlist = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire', 'shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success', 'solo-rocket-cruise-bgm', 'solo-rocket-rabbit-shop-bgm'];
+        let playlist = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire', 'shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success', 'solo-cleaning-room-bgm', 'solo-rocket-cruise-bgm', 'solo-rocket-rabbit-shop-bgm'];
         playlist.forEach(k => {
             let sndList = window.GameLogic.phaserGame.sound.getAll(k);
             sndList.forEach(snd => snd.setVolume(val / 100));
@@ -14696,12 +14696,29 @@ class MainScene extends Phaser.Scene {
         this.soloChickenMenuRippleCount = 0;
         this.soloChickenMenuBlocker = null;
 
-        // 第一包：獨樂雞大掃除入口狀態初始化。正式副本內容由後續包接上。
+        // 第二包：獨樂雞大掃除副本外殼狀態初始化。正式玩法內容由後續包接上。
         this.soloCleaningRoom = {
             active: false,
             paid: false,
             paymentPending: false,
+            inputLocked: true,
+            gameplayStarted: false,
+            startTime: 0,
+            durationMs: 150000,
+            remainingMs: 150000,
+            cleanliness: 100,
+            grimeCount: 0,
+            mouseCount: 0,
+            deodorizeCount: 0,
+            prevUiState: null,
+            playerUiState: null,
+            returnPosition: null,
+            layerContainer: null,
             uiContainer: null,
+            introContainer: null,
+            countdownTimer: null,
+            introTypingTimer: null,
+            bgm: null,
             messageText: null,
             timers: [],
             objects: []
@@ -17699,7 +17716,24 @@ if (!data.scoreHandled && data.attacker) {
                 active: false,
                 paid: false,
                 paymentPending: false,
+                inputLocked: true,
+                gameplayStarted: false,
+                startTime: 0,
+                durationMs: 150000,
+                remainingMs: 150000,
+                cleanliness: 100,
+                grimeCount: 0,
+                mouseCount: 0,
+                deodorizeCount: 0,
+                prevUiState: null,
+                playerUiState: null,
+                returnPosition: null,
+                layerContainer: null,
                 uiContainer: null,
+                introContainer: null,
+                countdownTimer: null,
+                introTypingTimer: null,
+                bgm: null,
                 messageText: null,
                 timers: [],
                 objects: []
@@ -17805,7 +17839,7 @@ if (!data.scoreHandled && data.attacker) {
 
             this.closeSoloCleaningRoomPaymentConfirm();
             this.closeSoloChickenMenu();
-            this.showSoloCleaningRoomPendingMessage();
+            this.startSoloCleaningRoom();
         } catch (err) {
             console.warn('[大掃除] 扣款失敗，已阻擋進入副本：', err);
             this.openSoloCleaningRoomPaymentConfirm(cost, {
@@ -18016,96 +18050,778 @@ if (!data.scoreHandled && data.attacker) {
         }
     }
 
-    showSoloCleaningRoomPendingMessage() {
+    getSoloCleaningRoomSafeRect() {
+        if (this.getSoloRocketSafeRect) return this.getSoloRocketSafeRect();
+
+        const cam = this.cameras.main;
+        const margin = cam.width <= 768 ? 12 : 24;
+        const safeW = Math.max(320, cam.width - margin * 2);
+        const safeH = Math.max(420, cam.height - margin * 2);
+        return {
+            x: margin,
+            y: margin,
+            w: safeW,
+            h: safeH,
+            centerX: margin + safeW / 2,
+            centerY: margin + safeH / 2
+        };
+    }
+
+    hideSoloCleaningRoomLobbyUi() {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.prevUiState) state.prevUiState = { dom: {}, phaser: {}, cameras: {} };
+
+        const domIds = this.soloRocketDomUiIds || ['chat-section', 'online-players-container', 'top-notification-bar', 'action-menu', 'quick-select-menu', 'prince-cat-menu', 'magic-menu-blocker', 'party-minimized-list'];
+
+        const rememberDomUiState = (id, el) => {
+            if (!el || (id in state.prevUiState.dom)) return;
+
+            state.prevUiState.dom[id] = {
+                display: el.style.getPropertyValue('display'),
+                displayPriority: el.style.getPropertyPriority('display'),
+                visibility: el.style.getPropertyValue('visibility'),
+                visibilityPriority: el.style.getPropertyPriority('visibility'),
+                pointerEvents: el.style.getPropertyValue('pointer-events'),
+                pointerEventsPriority: el.style.getPropertyPriority('pointer-events'),
+                opacity: el.style.getPropertyValue('opacity'),
+                opacityPriority: el.style.getPropertyPriority('opacity')
+            };
+        };
+
+        domIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+
+            rememberDomUiState(id, el);
+            el.style.setProperty('display', 'none', 'important');
+            el.style.setProperty('visibility', 'hidden', 'important');
+            el.style.setProperty('pointer-events', 'none', 'important');
+            el.style.setProperty('opacity', '0', 'important');
+        });
+
+        const uiScene = this.scene.manager.getScene('UIScene');
+        if (uiScene) {
+            const hideKeys = [
+                'statusContainer',
+                'btnA',
+                'txtA',
+                'btnB',
+                'txtB',
+                'furnBtn',
+                'furnText',
+                'itemBtn',
+                'itemText',
+                'sweepBtn',
+                'sweepText',
+                'sweepBtnGlow',
+                'partyDash'
+            ];
+
+            hideKeys.forEach(key => {
+                const obj = uiScene[key];
+                if (!obj || !obj.setVisible) return;
+                if (!(key in state.prevUiState.phaser)) state.prevUiState.phaser[key] = obj.visible;
+                obj.setVisible(false);
+            });
+
+            if (uiScene.joyStick && uiScene.disableLegacyVirtualJoystick) {
+                uiScene.disableLegacyVirtualJoystick();
+            }
+        }
+
+        if (this.minimap) {
+            if (!('minimap' in state.prevUiState.cameras)) {
+                state.prevUiState.cameras.minimap = this.minimap.visible;
+            }
+
+            if (this.minimap.setVisible) this.minimap.setVisible(false);
+            else this.minimap.visible = false;
+        }
+    }
+
+    restoreSoloCleaningRoomLobbyUi() {
+        const state = this.getSoloCleaningRoomState();
+        const prev = state.prevUiState || { dom: {}, phaser: {}, cameras: {} };
+
+        const restoreDomStyleProperty = (el, prop, value, priority) => {
+            if (!el) return;
+            if (value === undefined || value === null || value === '') {
+                el.style.removeProperty(prop);
+            } else {
+                el.style.setProperty(prop, value, priority || '');
+            }
+        };
+
+        Object.keys(prev.dom || {}).forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+
+            const item = prev.dom[id];
+            if (typeof item === 'string') {
+                restoreDomStyleProperty(el, 'display', item, '');
+                el.style.removeProperty('visibility');
+                el.style.removeProperty('pointer-events');
+                el.style.removeProperty('opacity');
+                return;
+            }
+
+            restoreDomStyleProperty(el, 'display', item.display, item.displayPriority);
+            restoreDomStyleProperty(el, 'visibility', item.visibility, item.visibilityPriority);
+            restoreDomStyleProperty(el, 'pointer-events', item.pointerEvents, item.pointerEventsPriority);
+            restoreDomStyleProperty(el, 'opacity', item.opacity, item.opacityPriority);
+        });
+
+        const uiScene = this.scene.manager.getScene('UIScene');
+        if (uiScene) {
+            Object.keys(prev.phaser || {}).forEach(key => {
+                const obj = uiScene[key];
+                if (obj && obj.setVisible) obj.setVisible(!!prev.phaser[key]);
+            });
+        }
+
+        if (this.minimap && prev.cameras && ('minimap' in prev.cameras)) {
+            if (this.minimap.setVisible) this.minimap.setVisible(!!prev.cameras.minimap);
+            else this.minimap.visible = !!prev.cameras.minimap;
+        }
+
+        state.prevUiState = null;
+    }
+
+    stopLobbyBgmForSoloCleaningRoom() {
+        if (this.stopLobbyBgmForSoloRocket) {
+            this.stopLobbyBgmForSoloRocket();
+            return;
+        }
+
+        const bgms = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire', 'bgm-party', 'shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'];
+        bgms.forEach(key => {
+            try { this.sound.getAll(key).forEach(snd => snd.stop()); } catch (_) {}
+        });
+    }
+
+    resumeLobbyBgmAfterSoloCleaningRoom() {
+        if (this.resumeLobbyBgmAfterSoloRocket) {
+            this.resumeLobbyBgmAfterSoloRocket();
+            return;
+        }
+
+        if (this.sceneName === 'shrine' || this.sceneName === 'partyroom') return;
+
+        const bgms = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire'];
+        const trackKey = bgms[window.GameLogic.currentTrackIdx || 0] || 'bgm';
+        const volControl = document.getElementById('bgm-volume');
+        const vol = volControl ? Number(volControl.value || 100) / 100 : 0.8;
+
+        try {
+            bgms.forEach(key => {
+                if (key !== trackKey) this.sound.getAll(key).forEach(snd => snd.stop());
+            });
+
+            if (!this.cache.audio.exists(trackKey)) return;
+
+            let current = this.sound.get(trackKey);
+            if (!current || !current.isPlaying) {
+                this.sound.removeByKey(trackKey);
+                this.sound.add(trackKey, { loop: true, volume: vol }).play();
+            } else {
+                current.setVolume(vol);
+            }
+        } catch (err) {
+            console.warn('[大掃除] 恢復大廳音樂失敗，已略過：', err);
+        }
+    }
+
+    playSoloCleaningRoomBgm() {
         const state = this.getSoloCleaningRoomState();
 
         try {
-            if (state.uiContainer && state.uiContainer.destroy) state.uiContainer.destroy(true);
+            this.sound.getAll('solo-cleaning-room-bgm').forEach(snd => {
+                snd.stop();
+                if (snd.destroy) snd.destroy();
+            });
+
+            if (!this.cache.audio.exists('solo-cleaning-room-bgm')) {
+                console.warn('[大掃除] 找不到 solo-cleaning-room-bgm.mp3，已略過音樂播放。');
+                return;
+            }
+
+            const volControl = document.getElementById('bgm-volume');
+            const vol = volControl ? Number(volControl.value || 100) / 100 : 0.8;
+            state.bgm = this.sound.add('solo-cleaning-room-bgm', { loop: false, volume: vol });
+            state.bgm.play();
         } catch (err) {
-            console.warn('[大掃除] 舊提示清理失敗，已略過：', err);
+            console.warn('[大掃除] BGM 播放失敗，倒數仍會繼續：', err);
+        }
+    }
+
+    stopSoloCleaningRoomBgm() {
+        const state = this.getSoloCleaningRoomState();
+
+        try {
+            if (state.bgm) {
+                state.bgm.stop();
+                if (state.bgm.destroy) state.bgm.destroy();
+            }
+
+            this.sound.getAll('solo-cleaning-room-bgm').forEach(snd => {
+                snd.stop();
+                if (snd.destroy) snd.destroy();
+            });
+        } catch (err) {
+            console.warn('[大掃除] 停止 BGM 失敗，已略過：', err);
         }
 
+        state.bgm = null;
+    }
+
+    playSoloCleaningRoomSfx(key) {
+        try {
+            if (!key || window.GameLogic.muteSFX) return;
+
+            if (!this.cache.audio.exists(key)) {
+                console.warn(`[大掃除] 找不到 ${key}，已略過音效。`);
+                return;
+            }
+
+            if (window.playSFX) {
+                window.playSFX(this, key);
+                return;
+            }
+
+            const sfxControl = document.getElementById('sfx-volume');
+            const vol = sfxControl
+                ? Number(sfxControl.value || 100) / 100
+                : (window.GameLogic.sfxVolume !== undefined ? Number(window.GameLogic.sfxVolume || 100) / 100 : 1);
+
+            if (Number.isFinite(vol) && vol > 0) this.sound.play(key, { volume: vol });
+        } catch (err) {
+            console.warn(`[大掃除] 播放音效失敗：${key}`, err);
+        }
+    }
+
+    startSoloCleaningRoom() {
+        if (!this.localPlayer || !this.localPlayer.sprite) return;
+
+        const state = this.getSoloCleaningRoomState();
+        if (state.active) return;
+
+        try {
+            state.active = true;
+            state.paid = true;
+            state.inputLocked = true;
+            state.gameplayStarted = false;
+            state.startTime = Date.now();
+            state.durationMs = 150000;
+            state.remainingMs = 150000;
+            state.cleanliness = 100;
+            state.grimeCount = 0;
+            state.mouseCount = 0;
+            state.deodorizeCount = 0;
+            state.timers = [];
+            state.objects = [];
+            window.GameLogic.soloCleaningRoomActive = true;
+
+            state.returnPosition = {
+                x: this.localPlayer.sprite.x,
+                y: this.localPlayer.sprite.y
+            };
+            state.playerUiState = {
+                nameVisible: !!(this.localPlayer.nameContainer && this.localPlayer.nameContainer.visible),
+                bubbleVisible: !!(this.localPlayer.bubbleContainer && this.localPlayer.bubbleContainer.visible),
+                partyScoreVisible: !!(this.localPlayer.partyScoreContainer && this.localPlayer.partyScoreContainer.visible),
+                localAuraVisible: !!(this.localPlayer.localAura && this.localPlayer.localAura.visible)
+            };
+
+            window.GameLogic.placingFurnitureKey = null;
+            if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput();
+            window.GameLogic.armedItemState = null;
+            window.GameLogic.armedItemName = null;
+
+            this.hideSoloCleaningRoomLobbyUi();
+            this.stopLobbyBgmForSoloCleaningRoom();
+
+            this.localPlayer.sprite.setVelocity(0, 0);
+            this.localPlayer.sprite.setVisible(false);
+            if (this.localPlayer.sprite.body) this.localPlayer.sprite.body.enable = false;
+            if (this.localPlayer.nameContainer) this.localPlayer.nameContainer.setVisible(false);
+            if (this.localPlayer.bubbleContainer) this.localPlayer.bubbleContainer.setVisible(false);
+            if (this.localPlayer.partyScoreContainer) this.localPlayer.partyScoreContainer.setVisible(false);
+            if (this.localPlayer.localAura) this.localPlayer.localAura.setVisible(false);
+
+            this.createSoloCleaningRoomLayer();
+            this.createSoloCleaningRoomUiLayer();
+            this.playSoloCleaningRoomBgm();
+            this.startSoloCleaningRoomCountdown();
+            this.playSoloCleaningRoomIntro();
+        } catch (err) {
+            console.warn('[大掃除] 啟動副本外殼失敗，已清理回大廳：', err);
+            alert('大掃除啟動失敗，已返回大廳。');
+            this.clearSoloCleaningRoom(false);
+        }
+    }
+
+    showSoloCleaningRoomPendingMessage() {
+        // 相容第一包暫時函式：第二包開始，扣款成功後直接進入副本外殼。
+        this.startSoloCleaningRoom();
+    }
+
+    createSoloCleaningRoomLayer() {
+        const state = this.getSoloCleaningRoomState();
         const cam = this.cameras.main;
-        const cx = cam.width / 2;
-        const cy = cam.height / 2;
-        const panelW = Math.min(430, Math.max(286, cam.width - 44));
-        const panelH = 150;
-        const px = cx - panelW / 2;
-        const py = cy - panelH / 2;
+        const rect = this.getSoloCleaningRoomSafeRect();
 
         const container = this.add.container(0, 0)
-            .setDepth(9900)
-            .setScrollFactor(0)
-            .setAlpha(0);
+            .setDepth(9580)
+            .setScrollFactor(0);
 
-        const panel = this.add.graphics();
-        panel.fillStyle(0x031017, 0.94);
-        panel.fillRoundedRect(px, py, panelW, panelH, 18);
-        panel.lineStyle(4, 0x16e0d6, 1);
-        panel.strokeRoundedRect(px, py, panelW, panelH, 18);
-        panel.lineStyle(2, 0xa7ffbd, 0.88);
-        panel.strokeRoundedRect(px + 8, py + 8, panelW - 16, panelH - 16, 14);
+        const blocker = this.add.zone(cam.width / 2, cam.height / 2, cam.width, cam.height)
+            .setInteractive();
+        blocker.__soloCleaningKind = 'screenBlocker';
 
-        const title = this.add.text(cx, py + 38, '大掃除入口已開啟', {
-            fontSize: '23px',
+        const dim = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x08100a, 0.14)
+            .setScrollFactor(0);
+
+        const frame = this.add.graphics();
+        frame.fillStyle(0x251206, 0.56);
+        frame.fillRoundedRect(rect.x - 8, rect.y - 8, rect.w + 16, rect.h + 16, 24);
+        frame.lineStyle(10, 0x7b4a21, 1);
+        frame.strokeRoundedRect(rect.x - 8, rect.y - 8, rect.w + 16, rect.h + 16, 24);
+        frame.lineStyle(4, 0xd7a35b, 0.95);
+        frame.strokeRoundedRect(rect.x + 4, rect.y + 4, rect.w - 8, rect.h - 8, 18);
+        frame.lineStyle(2, 0x3b1f0d, 0.9);
+        frame.strokeRoundedRect(rect.x + 16, rect.y + 16, rect.w - 32, rect.h - 32, 12);
+
+        const title = this.add.text(rect.centerX, rect.y + 24, '大掃除', {
+            fontSize: '24px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
-            color: '#ffffff',
-            stroke: '#006b66',
+            color: '#fff4cc',
+            stroke: '#3b1f0d',
             strokeThickness: 5
         }).setOrigin(0.5);
 
-        const message = this.add.text(cx, py + 84, '大掃除入口已開啟，副本內容將由下一包接上。', {
-            fontSize: '15px',
+        const hint = this.add.text(rect.centerX, rect.y + rect.h - 24, '開場演出中，正式操作由下一包接上', {
+            fontSize: '14px',
             fontFamily: 'Arial, sans-serif',
-            color: '#eafffb',
-            align: 'center',
-            wordWrap: { width: panelW - 48 }
+            color: '#fff4cc',
+            stroke: '#3b1f0d',
+            strokeThickness: 4
         }).setOrigin(0.5);
 
-        const okBg = this.add.rectangle(cx, py + 122, 132, 34, 0xffffff, 1)
-            .setStrokeStyle(2, 0xa7ffbd, 0.9)
-            .setInteractive({ useHandCursor: true });
-        const okText = this.add.text(cx, py + 122, '知道了', {
-            fontSize: '15px',
+        container.add([blocker, dim, frame, title, hint]);
+        state.layerContainer = container;
+        state.objects.push(container);
+        return container;
+    }
+
+    createSoloCleaningRoomUiLayer() {
+        const state = this.getSoloCleaningRoomState();
+        const cam = this.cameras.main;
+        const panelW = Math.min(310, Math.max(250, cam.width - 28));
+        const px = Math.max(14, cam.width - panelW - 16);
+        const py = 16;
+
+        const container = this.add.container(0, 0)
+            .setDepth(9720)
+            .setScrollFactor(0);
+
+        const panel = this.add.graphics();
+        panel.fillStyle(0x021a26, 0.86);
+        panel.fillRoundedRect(px, py, panelW, 126, 14);
+        panel.lineStyle(3, 0x30dfff, 0.98);
+        panel.strokeRoundedRect(px, py, panelW, 126, 14);
+        panel.lineStyle(1, 0xffffff, 0.42);
+        panel.strokeRoundedRect(px + 7, py + 7, panelW - 14, 112, 10);
+
+        const countdownText = this.add.text(px + panelW - 18, py + 20, '02:30', {
+            fontSize: '26px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
-            color: '#003333'
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+            color: '#ffffff',
+            stroke: '#00425c',
+            strokeThickness: 5
+        }).setOrigin(1, 0.5);
 
-        const closePending = (pointer, localX, localY, event) => {
-            if (event && event.stopPropagation) event.stopPropagation();
-            try {
-                if (state.uiContainer && state.uiContainer.destroy) state.uiContainer.destroy(true);
-            } catch (err) {
-                console.warn('[大掃除] 提示關閉失敗，已略過：', err);
+        const cleanText = this.add.text(px + 18, py + 48, '洋蔥潔淨度 100%', {
+            fontSize: '14px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#dffcff',
+            stroke: '#00151d',
+            strokeThickness: 3
+        }).setOrigin(0, 0.5);
+
+        const barX = px + 18;
+        const barY = py + 65;
+        const barW = panelW - 36;
+        const barBack = this.add.rectangle(barX, barY, barW, 12, 0x001c2a, 0.9)
+            .setOrigin(0, 0.5)
+            .setStrokeStyle(2, 0x8ffcff, 0.85);
+        const barFill = this.add.rectangle(barX + 2, barY, barW - 4, 8, 0x26dfff, 1)
+            .setOrigin(0, 0.5);
+        const barGlow = this.add.rectangle(barX + 2, barY, barW - 4, 16, 0x26dfff, 0.16)
+            .setOrigin(0, 0.5)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        const grimeText = this.add.text(px + 18, py + 92, '除垢數量：0', {
+            fontSize: '14px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#fff4cc',
+            stroke: '#00151d',
+            strokeThickness: 3
+        }).setOrigin(0, 0.5);
+
+        const mouseText = this.add.text(px + 18, py + 114, '驅鼠數量：0', {
+            fontSize: '14px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#fff4cc',
+            stroke: '#00151d',
+            strokeThickness: 3
+        }).setOrigin(0, 0.5);
+
+        container.add([panel, countdownText, cleanText, barBack, barGlow, barFill, grimeText, mouseText]);
+
+        state.uiContainer = container;
+        state.countdownText = countdownText;
+        state.cleanlinessText = cleanText;
+        state.cleanlinessBarFill = barFill;
+        state.cleanlinessBarGlow = barGlow;
+        state.cleanlinessBarMaxWidth = barW - 4;
+        state.grimeText = grimeText;
+        state.mouseText = mouseText;
+        state.objects.push(container);
+        this.updateSoloCleaningRoomUi();
+    }
+
+    updateSoloCleaningRoomUi() {
+        const state = this.getSoloCleaningRoomState();
+        const remaining = Math.max(0, Math.ceil((state.remainingMs || 0) / 1000));
+        const min = String(Math.floor(remaining / 60)).padStart(2, '0');
+        const sec = String(remaining % 60).padStart(2, '0');
+        const cleanliness = Math.max(0, Math.min(100, Math.round(Number(state.cleanliness || 0))));
+        const fillW = Math.max(0.01, (state.cleanlinessBarMaxWidth || 1) * cleanliness / 100);
+
+        if (state.countdownText && state.countdownText.setText) state.countdownText.setText(`${min}:${sec}`);
+        if (state.cleanlinessText && state.cleanlinessText.setText) state.cleanlinessText.setText(`洋蔥潔淨度 ${cleanliness}%`);
+        if (state.cleanlinessBarFill) state.cleanlinessBarFill.displayWidth = fillW;
+        if (state.cleanlinessBarGlow) state.cleanlinessBarGlow.displayWidth = fillW;
+        if (state.grimeText && state.grimeText.setText) state.grimeText.setText(`除垢數量：${Math.max(0, Math.floor(Number(state.grimeCount || 0)))}`);
+        if (state.mouseText && state.mouseText.setText) state.mouseText.setText(`驅鼠數量：${Math.max(0, Math.floor(Number(state.mouseCount || 0)))}`);
+    }
+
+    startSoloCleaningRoomCountdown() {
+        const state = this.getSoloCleaningRoomState();
+        if (state.countdownTimer && state.countdownTimer.remove) state.countdownTimer.remove(false);
+
+        const tick = () => {
+            if (!state.active) return;
+            const elapsed = Date.now() - Number(state.startTime || Date.now());
+            state.remainingMs = Math.max(0, Number(state.durationMs || 150000) - elapsed);
+            this.updateSoloCleaningRoomUi();
+
+            if (state.remainingMs <= 0) {
+                this.showSoloCleaningRoomShellEndAndReturn();
             }
-            state.uiContainer = null;
-            state.messageText = null;
         };
 
-        okBg.on('pointerdown', closePending);
-        okText.on('pointerdown', closePending);
+        tick();
+        state.countdownTimer = this.time.addEvent({ delay: 250, loop: true, callback: tick });
+        state.timers.push(state.countdownTimer);
+    }
 
-        container.add([panel, title, message, okBg, okText]);
-        state.uiContainer = container;
-        state.messageText = message;
-        state.objects = Array.isArray(state.objects) ? state.objects : [];
+    playSoloCleaningRoomIntro() {
+        const state = this.getSoloCleaningRoomState();
+        const cam = this.cameras.main;
+        const rect = this.getSoloCleaningRoomSafeRect();
+        const bubbleW = Math.min(560, Math.max(300, rect.w - 38));
+        const bubbleH = 150;
+        const bubbleX = rect.centerX;
+        const bubbleY = rect.y + Math.min(160, Math.max(118, rect.h * 0.2));
+
+        const container = this.add.container(0, 0)
+            .setDepth(9820)
+            .setScrollFactor(0)
+            .setAlpha(0);
+
+        const bg = this.add.graphics();
+        bg.fillStyle(0xdffcff, 0.86);
+        bg.fillRoundedRect(bubbleX - bubbleW / 2, bubbleY - bubbleH / 2, bubbleW, bubbleH, 28);
+        bg.lineStyle(4, 0xffffff, 0.96);
+        bg.strokeRoundedRect(bubbleX - bubbleW / 2, bubbleY - bubbleH / 2, bubbleW, bubbleH, 28);
+        bg.lineStyle(2, 0x68dfff, 0.72);
+        bg.strokeRoundedRect(bubbleX - bubbleW / 2 + 9, bubbleY - bubbleH / 2 + 9, bubbleW - 18, bubbleH - 18, 20);
+
+        const sodaBubbles = [];
+        for (let i = 0; i < 18; i++) {
+            const b = this.add.circle(
+                bubbleX - bubbleW / 2 + Phaser.Math.Between(16, bubbleW - 16),
+                bubbleY - bubbleH / 2 + Phaser.Math.Between(12, bubbleH - 12),
+                Phaser.Math.Between(2, 7),
+                0xffffff,
+                Phaser.Math.FloatBetween(0.22, 0.54)
+            ).setBlendMode(Phaser.BlendModes.ADD);
+            sodaBubbles.push(b);
+        }
+
+        const npcX = bubbleX - bubbleW / 2 + 72;
+        const npcY = bubbleY;
+        let npc = null;
+        if (this.textures.exists('solo-cleaning-room-npc-onion1')) {
+            npc = this.add.image(npcX, npcY, 'solo-cleaning-room-npc-onion1')
+                .setDisplaySize(92, 92);
+        } else {
+            npc = this.add.text(npcX, npcY, '🧅', {
+                fontSize: '58px',
+                fontFamily: 'Arial, sans-serif'
+            }).setOrigin(0.5);
+        }
+
+        const nameText = this.add.text(npcX, bubbleY + 58, '洋蔥精靈', {
+            fontSize: '13px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#005766',
+            stroke: '#ffffff',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+
+        const lineText = this.add.text(bubbleX - bubbleW / 2 + 132, bubbleY - 34, '', {
+            fontSize: '19px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#003b45',
+            lineSpacing: 7,
+            wordWrap: { width: bubbleW - 162 }
+        }).setOrigin(0, 0);
+
+        container.add([bg, ...sodaBubbles, npc, nameText, lineText]);
+        state.introContainer = container;
         state.objects.push(container);
 
-        const tw = this.tweens.add({
+        this.tweens.add({
             targets: container,
-            alpha: { from: 0, to: 1 },
+            alpha: 1,
             y: { from: 12, to: 0 },
-            duration: 160,
+            duration: 260,
             ease: 'Sine.easeOut'
         });
 
-        const timer = this.time.delayedCall(4200, () => {
-            if (state.uiContainer === container) closePending();
+        const stopTyping = () => {
+            try {
+                if (state.introTypingTimer && state.introTypingTimer.remove) state.introTypingTimer.remove(false);
+            } catch (_) {}
+            state.introTypingTimer = null;
+        };
+
+        const typeLine = (text) => {
+            stopTyping();
+            lineText.setText('');
+            let idx = 0;
+            state.introTypingTimer = this.time.addEvent({
+                delay: 38,
+                loop: true,
+                callback: () => {
+                    idx += 1;
+                    lineText.setText(text.slice(0, idx));
+                    if (idx >= text.length) stopTyping();
+                }
+            });
+            state.timers.push(state.introTypingTimer);
+        };
+
+        typeLine('鼠偷米米們造反啦，是時候用水球清理他們囉！');
+
+        const switchTimer = this.time.delayedCall(5000, () => {
+            if (!state.active || !state.introContainer || !state.introContainer.active) return;
+            stopTyping();
+            if (npc && npc.setTexture && this.textures.exists('solo-cleaning-room-npc-onion2')) {
+                npc.setTexture('solo-cleaning-room-npc-onion2');
+                npc.setDisplaySize(92, 92);
+            }
+
+            this.tweens.add({
+                targets: npc,
+                y: npcY - 10,
+                yoyo: true,
+                repeat: 8,
+                duration: 220,
+                ease: 'Sine.easeInOut'
+            });
+
+            typeLine('地上的污泥也清一清，小心他們的頭目！相信你沒問題的！👍🏻');
+        });
+        state.timers.push(switchTimer);
+
+        const glitchTimer = this.time.delayedCall(10000, () => {
+            if (!state.active || !state.introContainer || !state.introContainer.active) return;
+            stopTyping();
+
+            const flash1 = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x00ff66, 0.18)
+                .setDepth(9821)
+                .setScrollFactor(0)
+                .setBlendMode(Phaser.BlendModes.ADD);
+            const flash2 = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0xff8a00, 0.14)
+                .setDepth(9822)
+                .setScrollFactor(0)
+                .setBlendMode(Phaser.BlendModes.ADD);
+
+            state.objects.push(flash1, flash2);
+            container.add([flash1, flash2]);
+
+            this.tweens.add({
+                targets: container,
+                x: { from: -8, to: 10 },
+                alpha: 0,
+                duration: 720,
+                ease: 'Stepped',
+                onComplete: () => {
+                    try { if (container && container.destroy) container.destroy(true); } catch (_) {}
+                    state.introContainer = null;
+                }
+            });
+        });
+        state.timers.push(glitchTimer);
+
+        const unlockTimer = this.time.delayedCall(11000, () => {
+            if (!state.active) return;
+            state.inputLocked = false;
+            state.gameplayStarted = true;
+        });
+        state.timers.push(unlockTimer);
+
+        const whistleTimer = this.time.delayedCall(12000, () => {
+            if (!state.active) return;
+            this.playSoloCleaningRoomSfx('solo-cleaning-room-whistle');
+        });
+        state.timers.push(whistleTimer);
+    }
+
+    showSoloCleaningRoomShellEndAndReturn() {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active || state.shellEnding) return;
+        state.shellEnding = true;
+        state.inputLocked = true;
+        state.gameplayStarted = false;
+
+        try {
+            if (state.countdownTimer && state.countdownTimer.remove) state.countdownTimer.remove(false);
+        } catch (_) {}
+        state.countdownTimer = null;
+
+        this.playSoloCleaningRoomSfx('solo-cleaning-room-whistle');
+
+        const cam = this.cameras.main;
+        const text = this.add.text(cam.width / 2, cam.height / 2, '結束大掃除', {
+            fontSize: '42px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#005c6b',
+            strokeThickness: 7
+        }).setOrigin(0.5).setDepth(9905).setScrollFactor(0);
+
+        state.objects.push(text);
+
+        const timer = this.time.delayedCall(3000, () => {
+            this.clearSoloCleaningRoom(false);
         });
         state.timers.push(timer);
-        state.objects.push(tw);
+    }
+
+    clearSoloCleaningRoom(skipMusicResume = false) {
+        const state = this.getSoloCleaningRoomState();
+
+        try {
+            (state.timers || []).forEach(timer => {
+                try {
+                    if (timer && timer.remove) timer.remove(false);
+                } catch (_) {}
+            });
+        } catch (_) {}
+
+        try {
+            if (state.introTypingTimer && state.introTypingTimer.remove) state.introTypingTimer.remove(false);
+        } catch (_) {}
+
+        state.timers = [];
+        state.countdownTimer = null;
+        state.introTypingTimer = null;
+
+        this.stopSoloCleaningRoomBgm();
+
+        const safeDestroy = (obj, destroyChildren = false) => {
+            try {
+                if (!obj) return;
+                if (this.tweens) this.tweens.killTweensOf(obj);
+                if (obj.destroy) obj.destroy(destroyChildren);
+            } catch (err) {
+                console.warn('[大掃除] 單一物件清理失敗，已略過：', err);
+            }
+        };
+
+        try {
+            (state.objects || []).forEach(obj => safeDestroy(obj, true));
+        } catch (_) {}
+
+        safeDestroy(state.introContainer, true);
+        safeDestroy(state.uiContainer, true);
+        safeDestroy(state.layerContainer, true);
+
+        state.objects = [];
+        state.layerContainer = null;
+        state.uiContainer = null;
+        state.introContainer = null;
+        state.countdownText = null;
+        state.cleanlinessText = null;
+        state.cleanlinessBarFill = null;
+        state.cleanlinessBarGlow = null;
+        state.cleanlinessBarMaxWidth = 0;
+        state.grimeText = null;
+        state.mouseText = null;
+        state.messageText = null;
+
+        const sprite = this.localPlayer && this.localPlayer.sprite
+            ? this.localPlayer.sprite
+            : null;
+        if (sprite && sprite.active) {
+            if (sprite.body) sprite.body.enable = true;
+            sprite.setVisible(true);
+            sprite.setVelocity(0, 0);
+            if (state.returnPosition) {
+                sprite.setPosition(state.returnPosition.x, state.returnPosition.y);
+            }
+            if (this.anims && this.anims.exists('idle')) sprite.play('idle', true);
+            this.cameras.main.startFollow(sprite, true, 0.08, 0.08);
+        }
+
+        const playerUiState = state.playerUiState || {};
+        if (this.localPlayer && this.localPlayer.nameContainer) this.localPlayer.nameContainer.setVisible(playerUiState.nameVisible !== false);
+        if (this.localPlayer && this.localPlayer.bubbleContainer) this.localPlayer.bubbleContainer.setVisible(!!playerUiState.bubbleVisible);
+        if (this.localPlayer && this.localPlayer.partyScoreContainer) this.localPlayer.partyScoreContainer.setVisible(!!playerUiState.partyScoreVisible);
+        if (this.localPlayer && this.localPlayer.localAura) this.localPlayer.localAura.setVisible(!!playerUiState.localAuraVisible);
+
+        this.restoreSoloCleaningRoomLobbyUi();
+        if (!skipMusicResume) this.resumeLobbyBgmAfterSoloCleaningRoom();
+
+        state.active = false;
+        state.paid = false;
+        state.paymentPending = false;
+        state.inputLocked = true;
+        state.gameplayStarted = false;
+        state.shellEnding = false;
+        state.startTime = 0;
+        state.durationMs = 150000;
+        state.remainingMs = 150000;
+        state.cleanliness = 100;
+        state.grimeCount = 0;
+        state.mouseCount = 0;
+        state.deodorizeCount = 0;
+        state.returnPosition = null;
+        state.playerUiState = null;
+        state.bgm = null;
+        window.GameLogic.soloCleaningRoomActive = false;
     }
 
     confirmStartSoloRocketCruise() {
