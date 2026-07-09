@@ -14731,6 +14731,20 @@ class MainScene extends Phaser.Scene {
             soloJoystickInner: null,
             soloJoystickState: null,
             soloJoystickHandlers: null,
+            soloMimis: [],
+            soloGrimes: [],
+            soloDirtyProjectiles: [],
+            soloWashbasin: null,
+            soloWashbasinAura: null,
+            soloDirtyFx: null,
+            soloDirtyState: false,
+            soloDirtyDrainAccumulator: 0,
+            soloDeodorizePresses: 0,
+            soloNeedDeodorizePresses: 4,
+            soloMaxMimis: 10,
+            soloMaxGrimes: 15,
+            soloHazardsStarted: false,
+            soloNextDirtyThrowAt: 0,
             playerUiState: null,
             returnPosition: null,
             tutorialContainer: null,
@@ -17780,6 +17794,20 @@ if (!data.scoreHandled && data.attacker) {
                 soloJoystickInner: null,
                 soloJoystickState: null,
                 soloJoystickHandlers: null,
+                soloMimis: [],
+                soloGrimes: [],
+                soloDirtyProjectiles: [],
+                soloWashbasin: null,
+                soloWashbasinAura: null,
+                soloDirtyFx: null,
+                soloDirtyState: false,
+                soloDirtyDrainAccumulator: 0,
+                soloDeodorizePresses: 0,
+                soloNeedDeodorizePresses: 4,
+                soloMaxMimis: 10,
+                soloMaxGrimes: 15,
+                soloHazardsStarted: false,
+                soloNextDirtyThrowAt: 0,
                 playerUiState: null,
                 returnPosition: null,
                 tutorialContainer: null,
@@ -17800,9 +17828,15 @@ if (!data.scoreHandled && data.attacker) {
         if (!Array.isArray(this.soloCleaningRoom.objects)) this.soloCleaningRoom.objects = [];
         if (!Array.isArray(this.soloCleaningRoom.hiddenFurnitureObjects)) this.soloCleaningRoom.hiddenFurnitureObjects = [];
         if (!Array.isArray(this.soloCleaningRoom.soloWaterBalls)) this.soloCleaningRoom.soloWaterBalls = [];
+        if (!Array.isArray(this.soloCleaningRoom.soloMimis)) this.soloCleaningRoom.soloMimis = [];
+        if (!Array.isArray(this.soloCleaningRoom.soloGrimes)) this.soloCleaningRoom.soloGrimes = [];
+        if (!Array.isArray(this.soloCleaningRoom.soloDirtyProjectiles)) this.soloCleaningRoom.soloDirtyProjectiles = [];
         if (!this.soloCleaningRoom.soloPlayerFacing || typeof this.soloCleaningRoom.soloPlayerFacing !== 'object') this.soloCleaningRoom.soloPlayerFacing = { x: 0, y: 1 };
         if (!this.soloCleaningRoom.soloActionButtonMode) this.soloCleaningRoom.soloActionButtonMode = 'clean';
         if (!Number.isFinite(Number(this.soloCleaningRoom.soloPlayerSpeed))) this.soloCleaningRoom.soloPlayerSpeed = 324;
+        if (!Number.isFinite(Number(this.soloCleaningRoom.soloNeedDeodorizePresses))) this.soloCleaningRoom.soloNeedDeodorizePresses = 4;
+        if (!Number.isFinite(Number(this.soloCleaningRoom.soloMaxMimis))) this.soloCleaningRoom.soloMaxMimis = 10;
+        if (!Number.isFinite(Number(this.soloCleaningRoom.soloMaxGrimes))) this.soloCleaningRoom.soloMaxGrimes = 15;
         return this.soloCleaningRoom;
     }
 
@@ -18693,6 +18727,17 @@ if (!data.scoreHandled && data.attacker) {
             state.grimeCount = 0;
             state.mouseCount = 0;
             state.deodorizeCount = 0;
+            state.soloMimis = [];
+            state.soloGrimes = [];
+            state.soloDirtyProjectiles = [];
+            state.soloDirtyState = false;
+            state.soloDirtyDrainAccumulator = 0;
+            state.soloDeodorizePresses = 0;
+            state.soloNeedDeodorizePresses = 4;
+            state.soloMaxMimis = 10;
+            state.soloMaxGrimes = 15;
+            state.soloHazardsStarted = false;
+            state.soloNextDirtyThrowAt = 0;
             this.clearSoloCleaningRoomTutorial();
             state.timers = [];
             state.objects = [];
@@ -19164,6 +19209,7 @@ if (!data.scoreHandled && data.attacker) {
         this.cameras.main.startFollow(sprite, true, 0.12, 0.12);
         this.createSoloCleaningActionControls();
         this.setupSoloCleaningDynamicJoystick();
+        this.createSoloCleaningRoomWashbasin();
     }
 
     createSoloCleaningActionControls() {
@@ -19259,9 +19305,7 @@ if (!data.scoreHandled && data.attacker) {
         state.soloActionCooldownUntil = now + 260;
 
         if (state.soloActionButtonMode === 'deodorize') {
-            if (state.soloActionButtonBg) {
-                this.tweens.add({ targets: state.soloActionButtonBg, scaleX: 0.9, scaleY: 0.9, yoyo: true, duration: 80 });
-            }
+            this.handleSoloCleaningDeodorizePress();
             return;
         }
 
@@ -19498,6 +19542,548 @@ if (!data.scoreHandled && data.attacker) {
         };
     }
 
+    createSoloCleaningRoomWashbasin() {
+        const state = this.getSoloCleaningRoomState();
+        const bounds = this.physics && this.physics.world && this.physics.world.bounds
+            ? this.physics.world.bounds
+            : { x: 0, y: 0, width: 2048, height: 2048 };
+        const x = bounds.x + bounds.width / 2;
+        const y = bounds.y + bounds.height / 2;
+
+        try { if (state.soloWashbasin && state.soloWashbasin.destroy) state.soloWashbasin.destroy(); } catch (_) {}
+        try { if (state.soloWashbasinAura && state.soloWashbasinAura.destroy) state.soloWashbasinAura.destroy(); } catch (_) {}
+
+        const aura = this.add.circle(x, y, 72, 0x7fffea, 0.13)
+            .setDepth(9604)
+            .setBlendMode(Phaser.BlendModes.ADD);
+        const basin = this.textures.exists('solo-cleaning-room-washbasin')
+            ? this.add.image(x, y, 'solo-cleaning-room-washbasin').setDepth(9605).setDisplaySize(96, 96)
+            : this.add.text(x, y, '🪣', { fontSize: '64px' }).setOrigin(0.5).setDepth(9605);
+
+        state.soloWashbasin = basin;
+        state.soloWashbasinAura = aura;
+        state.objects.push(aura, basin);
+
+        this.tweens.add({
+            targets: aura,
+            scaleX: 1.12,
+            scaleY: 1.12,
+            alpha: 0.24,
+            yoyo: true,
+            repeat: -1,
+            duration: 980,
+            ease: 'Sine.easeInOut'
+        });
+    }
+
+    initializeSoloCleaningRoomHazards() {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active || state.soloHazardsStarted) return;
+
+        state.soloHazardsStarted = true;
+        state.soloMimis = state.soloMimis || [];
+        state.soloGrimes = state.soloGrimes || [];
+        state.soloDirtyProjectiles = state.soloDirtyProjectiles || [];
+        state.soloNextDirtyThrowAt = (this.time ? this.time.now : 0) + 5000;
+
+        const maxMimis = Math.max(1, Math.floor(Number(state.soloMaxMimis || 10)));
+        for (let i = state.soloMimis.length; i < maxMimis; i++) {
+            this.spawnSoloCleaningRoomMimi();
+        }
+    }
+
+    getSoloCleaningRoomWorldBounds() {
+        const bounds = this.physics && this.physics.world && this.physics.world.bounds
+            ? this.physics.world.bounds
+            : { x: 0, y: 0, width: 2048, height: 2048 };
+        return {
+            x: Number(bounds.x || 0),
+            y: Number(bounds.y || 0),
+            width: Number(bounds.width || 2048),
+            height: Number(bounds.height || 2048)
+        };
+    }
+
+    getSoloCleaningRoomRandomPoint(pad = 120) {
+        const bounds = this.getSoloCleaningRoomWorldBounds();
+        return {
+            x: Phaser.Math.Between(bounds.x + pad, bounds.x + bounds.width - pad),
+            y: Phaser.Math.Between(bounds.y + pad, bounds.y + bounds.height - pad)
+        };
+    }
+
+    spawnSoloCleaningRoomMimi(x = null, y = null) {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active) return null;
+        if ((state.soloMimis || []).length >= Math.max(1, Number(state.soloMaxMimis || 10))) return null;
+
+        const point = Number.isFinite(Number(x)) && Number.isFinite(Number(y))
+            ? { x: Number(x), y: Number(y) }
+            : this.getSoloCleaningRoomRandomPoint(130);
+        const speed = Phaser.Math.Between(72, 106);
+        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        const sprite = this.physics.add.sprite(point.x, point.y, 'mimi-thief-walk')
+            .setDepth(9610)
+            .setDisplaySize(56, 56)
+            .setCollideWorldBounds(false);
+
+        if (sprite.body) {
+            sprite.body.enable = false;
+            sprite.body.setAllowGravity(false);
+        }
+        if (this.anims && this.anims.exists('mimi-walk')) sprite.play('mimi-walk', true);
+
+        const mimi = {
+            sprite,
+            hp: 3,
+            maxHp: 3,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            speed,
+            state: 'move',
+            makingMudUntil: 0,
+            mudMade: false,
+            nextMudAt: (this.time ? this.time.now : 0) + Phaser.Math.Between(3200, 9000),
+            invulnUntil: 0
+        };
+
+        state.soloMimis.push(mimi);
+        state.objects.push(sprite);
+        return mimi;
+    }
+
+    updateSoloCleaningRoomHazards(time, delta) {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active || state.inputLocked || !state.gameplayStarted || state.shellEnding) return;
+
+        const dt = Math.min(delta || 16, 50) / 1000;
+        const bounds = this.getSoloCleaningRoomWorldBounds();
+        const pad = 42;
+        const mimis = state.soloMimis || [];
+
+        for (let i = mimis.length - 1; i >= 0; i--) {
+            const mimi = mimis[i];
+            const sprite = mimi && mimi.sprite ? mimi.sprite : null;
+            if (!sprite || !sprite.active) {
+                mimis.splice(i, 1);
+                continue;
+            }
+
+            if (mimi.state === 'mud') {
+                sprite.y += Math.sin(time / 62) * 0.65;
+                if (time >= mimi.makingMudUntil) {
+                    if (!mimi.mudMade) this.spawnSoloCleaningRoomGrimeNear(sprite.x, sprite.y);
+                    mimi.state = 'move';
+                    mimi.mudMade = false;
+                    mimi.nextMudAt = time + Phaser.Math.Between(4200, 10000);
+                    const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+                    const speed = Phaser.Math.Between(72, 106);
+                    mimi.vx = Math.cos(angle) * speed;
+                    mimi.vy = Math.sin(angle) * speed;
+                    if (this.anims && this.anims.exists('mimi-walk')) sprite.play('mimi-walk', true);
+                }
+                continue;
+            }
+
+            if (time >= Number(mimi.nextMudAt || 0) && (state.soloGrimes || []).length < Number(state.soloMaxGrimes || 15)) {
+                mimi.state = 'mud';
+                mimi.makingMudUntil = time + 2000;
+                mimi.mudMade = false;
+                sprite.setVelocity(0, 0);
+                if (this.tweens) {
+                    this.tweens.add({ targets: sprite, y: sprite.y - 10, yoyo: true, repeat: 5, duration: 160, ease: 'Sine.easeInOut' });
+                }
+                continue;
+            }
+
+            sprite.x += mimi.vx * dt;
+            sprite.y += mimi.vy * dt;
+
+            if (sprite.x <= bounds.x + pad || sprite.x >= bounds.x + bounds.width - pad) {
+                mimi.vx *= -1;
+                sprite.x = Phaser.Math.Clamp(sprite.x, bounds.x + pad, bounds.x + bounds.width - pad);
+            }
+            if (sprite.y <= bounds.y + pad || sprite.y >= bounds.y + bounds.height - pad) {
+                mimi.vy *= -1;
+                sprite.y = Phaser.Math.Clamp(sprite.y, bounds.y + pad, bounds.y + bounds.height - pad);
+            }
+
+            if (Math.abs(mimi.vx) > 1) sprite.setFlipX(mimi.vx < 0);
+        }
+
+        this.separateSoloCleaningMimis();
+        this.updateSoloCleaningDirtyProjectiles(delta);
+
+        if (time >= Number(state.soloNextDirtyThrowAt || 0)) {
+            state.soloNextDirtyThrowAt = time + 5000;
+            this.throwSoloCleaningDirtAtPlayer();
+        }
+    }
+
+    separateSoloCleaningMimis() {
+        const state = this.getSoloCleaningRoomState();
+        const mimis = state.soloMimis || [];
+        const minDist = 54;
+
+        for (let i = 0; i < mimis.length; i++) {
+            const a = mimis[i];
+            if (!a || !a.sprite || !a.sprite.active) continue;
+
+            for (let j = i + 1; j < mimis.length; j++) {
+                const b = mimis[j];
+                if (!b || !b.sprite || !b.sprite.active) continue;
+
+                const dx = b.sprite.x - a.sprite.x;
+                const dy = b.sprite.y - a.sprite.y;
+                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                if (dist >= minDist) continue;
+
+                const push = (minDist - dist) * 0.5;
+                const nx = dx / dist;
+                const ny = dy / dist;
+                a.sprite.x -= nx * push;
+                a.sprite.y -= ny * push;
+                b.sprite.x += nx * push;
+                b.sprite.y += ny * push;
+                a.vx -= nx * 8;
+                a.vy -= ny * 8;
+                b.vx += nx * 8;
+                b.vy += ny * 8;
+            }
+        }
+    }
+
+    spawnSoloCleaningRoomGrimeNear(sourceX, sourceY) {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active || (state.soloGrimes || []).length >= Number(state.soloMaxGrimes || 15)) return null;
+
+        for (let attempt = 0; attempt < 8; attempt++) {
+            const offsetAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+            const offsetDist = Phaser.Math.Between(20, 72);
+            const x = sourceX + Math.cos(offsetAngle) * offsetDist;
+            const y = sourceY + Math.sin(offsetAngle) * offsetDist;
+            const tooClose = (state.soloGrimes || []).some(grime => {
+                if (!grime) return false;
+                const dx = Number(grime.x || 0) - x;
+                const dy = Number(grime.y || 0) - y;
+                return Math.sqrt(dx * dx + dy * dy) < 150;
+            });
+            if (!tooClose) return this.createSoloCleaningRoomGrime(x, y);
+        }
+
+        return null;
+    }
+
+    createSoloCleaningRoomGrime(x, y) {
+        const state = this.getSoloCleaningRoomState();
+        const container = this.add.container(x, y).setDepth(9607);
+        const shadow = this.add.ellipse(0, 7, 86, 30, 0x000000, 0.34);
+        const mud = this.add.ellipse(0, 0, 78, 32, 0x111111, 0.9).setStrokeStyle(2, 0x3f3f3f, 0.78);
+        const shine = this.add.ellipse(-18, -6, 22, 7, 0x5a5a5a, 0.38);
+        const smokeA = this.add.circle(-22, -18, 7, 0x646464, 0.22).setBlendMode(Phaser.BlendModes.ADD);
+        const smokeB = this.add.circle(18, -15, 5, 0x7b7b7b, 0.18).setBlendMode(Phaser.BlendModes.ADD);
+
+        container.add([shadow, mud, shine, smokeA, smokeB]);
+        this.tweens.add({ targets: [smokeA, smokeB], y: '-=12', alpha: 0.04, yoyo: true, repeat: -1, duration: 1200, ease: 'Sine.easeInOut' });
+
+        const grime = { container, x, y, hp: 3, maxHp: 3 };
+        state.soloGrimes.push(grime);
+        state.objects.push(container);
+        return grime;
+    }
+
+    throwSoloCleaningDirtAtPlayer() {
+        const state = this.getSoloCleaningRoomState();
+        const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
+        const available = (state.soloMimis || []).filter(mimi => mimi && mimi.sprite && mimi.sprite.active);
+        if (!state.active || !player || !available.length) return;
+
+        const mimi = Phaser.Utils.Array.GetRandom(available);
+        const sprite = mimi.sprite;
+        const dx = player.x - sprite.x;
+        const dy = player.y - sprite.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const approachX = sprite.x + dx / dist * Math.min(96, dist * 0.35);
+        const approachY = sprite.y + dy / dist * Math.min(96, dist * 0.35);
+
+        this.tweens.add({ targets: sprite, x: approachX, y: approachY, duration: 280, ease: 'Sine.easeOut' });
+
+        const projectile = this.add.circle(sprite.x, sprite.y - 10, 10, 0xd8b56b, 0.95)
+            .setDepth(9626)
+            .setStrokeStyle(2, 0xfff1a8, 0.86)
+            .setBlendMode(Phaser.BlendModes.ADD);
+        projectile.__soloCleaningDirt = true;
+        projectile.__targetPlayer = player;
+
+        state.soloDirtyProjectiles.push(projectile);
+        state.objects.push(projectile);
+
+        this.tweens.add({
+            targets: projectile,
+            x: player.x,
+            y: player.y - 12,
+            scaleX: 1.35,
+            scaleY: 1.35,
+            duration: 720,
+            ease: 'Sine.easeIn',
+            onComplete: () => {
+                try { if (projectile && projectile.destroy) projectile.destroy(); } catch (_) {}
+                state.soloDirtyProjectiles = (state.soloDirtyProjectiles || []).filter(item => item !== projectile);
+            }
+        });
+    }
+
+    updateSoloCleaningDirtyProjectiles(delta) {
+        const state = this.getSoloCleaningRoomState();
+        const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
+        if (!player) return;
+
+        for (let i = (state.soloDirtyProjectiles || []).length - 1; i >= 0; i--) {
+            const projectile = state.soloDirtyProjectiles[i];
+            if (!projectile || !projectile.active) {
+                state.soloDirtyProjectiles.splice(i, 1);
+                continue;
+            }
+
+            const dx = projectile.x - player.x;
+            const dy = projectile.y - (player.y - 12);
+            if (Math.sqrt(dx * dx + dy * dy) <= 34) {
+                projectile.__hitPlayer = true;
+                this.applySoloCleaningDirtyState();
+                try { if (projectile.destroy) projectile.destroy(); } catch (_) {}
+                state.soloDirtyProjectiles.splice(i, 1);
+            }
+        }
+    }
+
+    applySoloCleaningDirtyState() {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active || state.soloDirtyState) return;
+
+        state.soloDirtyState = true;
+        state.soloDirtyDrainAccumulator = 0;
+        state.soloDeodorizePresses = 0;
+        this.createSoloCleaningDirtyFx();
+        this.updateSoloCleaningRoomWashbasinMode();
+    }
+
+    createSoloCleaningDirtyFx() {
+        const state = this.getSoloCleaningRoomState();
+        try { if (state.soloDirtyFx && state.soloDirtyFx.destroy) state.soloDirtyFx.destroy(true); } catch (_) {}
+
+        const container = this.add.container(0, 0).setDepth(9635);
+        const stinkA = this.add.text(-20, -42, '✦', { fontSize: '18px', color: '#5f4a1a' }).setOrigin(0.5);
+        const stinkB = this.add.text(18, -48, '☁', { fontSize: '20px', color: '#6b5a2c' }).setOrigin(0.5);
+        const speckA = this.add.circle(-14, -22, 5, 0x6f5526, 0.75);
+        const speckB = this.add.circle(16, -24, 4, 0x8b6a2d, 0.68);
+        container.add([stinkA, stinkB, speckA, speckB]);
+
+        this.tweens.add({ targets: [stinkA, stinkB], y: '-=12', alpha: 0.32, yoyo: true, repeat: -1, duration: 760, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: [speckA, speckB], scaleX: 1.35, scaleY: 1.35, alpha: 0.35, yoyo: true, repeat: -1, duration: 520, ease: 'Sine.easeInOut' });
+
+        state.soloDirtyFx = container;
+        state.objects.push(container);
+        this.updateSoloCleaningRoomDirtyFx();
+    }
+
+    updateSoloCleaningRoomDirtyFx() {
+        const state = this.getSoloCleaningRoomState();
+        const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
+        if (!state.soloDirtyFx || !player || !player.active) return;
+        state.soloDirtyFx.setPosition(player.x, player.y - 4).setVisible(!!state.soloDirtyState);
+    }
+
+    updateSoloCleaningRoomDirtyDrain(dt) {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active || !state.soloDirtyState || state.inputLocked || !state.gameplayStarted) return;
+
+        const next = Math.max(0, Math.min(100, Number(state.cleanliness || 0) - 2 * Math.max(0, Number(dt || 0))));
+        if (next !== state.cleanliness) {
+            state.cleanliness = next;
+            this.updateSoloCleaningRoomUi();
+        }
+    }
+
+    updateSoloCleaningRoomWashbasinMode() {
+        const state = this.getSoloCleaningRoomState();
+        const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
+        const basin = state.soloWashbasin;
+        if (!state.active || !player || !basin) return;
+
+        const dx = player.x - basin.x;
+        const dy = player.y - basin.y;
+        const near = Math.sqrt(dx * dx + dy * dy) <= 118;
+        state.soloNearWashbasin = near;
+
+        if (near) this.setSoloCleaningActionButtonMode('deodorize');
+        else this.setSoloCleaningActionButtonMode('clean');
+    }
+
+    handleSoloCleaningDeodorizePress() {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active || state.inputLocked || !state.gameplayStarted || !state.soloNearWashbasin) return;
+
+        if (state.soloActionButtonBg) {
+            this.tweens.add({ targets: state.soloActionButtonBg, scaleX: 0.9, scaleY: 0.9, yoyo: true, duration: 80 });
+        }
+        this.spawnSoloCleaningBubbleFx(state.soloWashbasin ? state.soloWashbasin.x : 0, state.soloWashbasin ? state.soloWashbasin.y : 0);
+
+        if (!state.soloDirtyState) return;
+
+        state.soloDeodorizePresses = Math.min(Number(state.soloNeedDeodorizePresses || 4), Number(state.soloDeodorizePresses || 0) + 1);
+        if (state.soloDeodorizePresses < Number(state.soloNeedDeodorizePresses || 4)) return;
+
+        state.soloDirtyState = false;
+        state.soloDirtyDrainAccumulator = 0;
+        state.soloDeodorizePresses = 0;
+        state.deodorizeCount = Math.max(0, Math.floor(Number(state.deodorizeCount || 0))) + 1;
+
+        if (state.soloDirtyFx && state.soloDirtyFx.destroy) {
+            try { state.soloDirtyFx.destroy(true); } catch (_) {}
+        }
+        state.soloDirtyFx = null;
+        this.spawnSoloCleaningPurifyFx(state.soloWashbasin ? state.soloWashbasin.x : 0, state.soloWashbasin ? state.soloWashbasin.y : 0);
+        this.updateSoloCleaningRoomUi();
+    }
+
+    spawnSoloCleaningBubbleFx(x, y) {
+        for (let i = 0; i < 8; i++) {
+            const b = this.add.circle(
+                x + Phaser.Math.Between(-28, 28),
+                y + Phaser.Math.Between(-18, 18),
+                Phaser.Math.Between(4, 8),
+                0xdffcff,
+                0.72
+            ).setDepth(9634).setBlendMode(Phaser.BlendModes.ADD);
+            this.getSoloCleaningRoomState().objects.push(b);
+            this.tweens.add({
+                targets: b,
+                y: b.y - Phaser.Math.Between(24, 52),
+                alpha: 0,
+                scaleX: 1.45,
+                scaleY: 1.45,
+                duration: Phaser.Math.Between(420, 720),
+                ease: 'Sine.easeOut',
+                onComplete: () => { try { if (b && b.destroy) b.destroy(); } catch (_) {} }
+            });
+        }
+    }
+
+    spawnSoloCleaningPurifyFx(x, y) {
+        for (let i = 0; i < 18; i++) {
+            const angle = Math.PI * 2 * i / 18;
+            const p = this.add.circle(x, y, Phaser.Math.Between(3, 7), 0xffffff, 0.86)
+                .setDepth(9637)
+                .setBlendMode(Phaser.BlendModes.ADD);
+            this.getSoloCleaningRoomState().objects.push(p);
+            this.tweens.add({
+                targets: p,
+                x: x + Math.cos(angle) * Phaser.Math.Between(34, 74),
+                y: y + Math.sin(angle) * Phaser.Math.Between(24, 58),
+                alpha: 0,
+                scaleX: 0.2,
+                scaleY: 0.2,
+                duration: 620,
+                ease: 'Sine.easeOut',
+                onComplete: () => { try { if (p && p.destroy) p.destroy(); } catch (_) {} }
+            });
+        }
+    }
+
+    updateSoloCleaningRoomWaterballHits() {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active) return;
+
+        const balls = state.soloWaterBalls || [];
+        for (let i = balls.length - 1; i >= 0; i--) {
+            const ball = balls[i];
+            if (!ball || !ball.active || ball.__soloCleaningHit) {
+                if (!ball || !ball.active) balls.splice(i, 1);
+                continue;
+            }
+
+            let didHit = false;
+            const mimis = state.soloMimis || [];
+            for (let m = mimis.length - 1; m >= 0 && !didHit; m--) {
+                const mimi = mimis[m];
+                const sprite = mimi && mimi.sprite ? mimi.sprite : null;
+                if (!sprite || !sprite.active) continue;
+
+                const dx = ball.x - sprite.x;
+                const dy = ball.y - sprite.y;
+                if (Math.sqrt(dx * dx + dy * dy) <= 38) {
+                    didHit = true;
+                    this.hitSoloCleaningRoomMimi(mimi);
+                }
+            }
+
+            const grimes = state.soloGrimes || [];
+            for (let g = grimes.length - 1; g >= 0 && !didHit; g--) {
+                const grime = grimes[g];
+                if (!grime || !grime.container || !grime.container.active) continue;
+
+                const dx = ball.x - grime.x;
+                const dy = ball.y - grime.y;
+                if (Math.sqrt(dx * dx + dy * dy) <= 48) {
+                    didHit = true;
+                    this.hitSoloCleaningRoomGrime(grime);
+                }
+            }
+
+            if (didHit) {
+                ball.__soloCleaningHit = true;
+                if (this.tweens) this.tweens.killTweensOf(ball);
+                try { if (ball.destroy) ball.destroy(); } catch (_) {}
+                balls.splice(i, 1);
+            }
+        }
+    }
+
+    hitSoloCleaningRoomMimi(mimi) {
+        const state = this.getSoloCleaningRoomState();
+        if (!mimi || !mimi.sprite || !mimi.sprite.active) return;
+
+        mimi.hp = Math.max(0, Number(mimi.hp || 0) - 1);
+        this.tweens.add({ targets: mimi.sprite, alpha: 0.36, yoyo: true, duration: 80, repeat: 2 });
+        this.tweens.add({ targets: mimi.sprite, scaleX: 1.16, scaleY: 1.16, yoyo: true, duration: 90 });
+
+        if (mimi.hp > 0) return;
+
+        const sprite = mimi.sprite;
+        const x = sprite.x;
+        const y = sprite.y;
+        state.soloMimis = (state.soloMimis || []).filter(item => item !== mimi);
+        state.mouseCount = Math.max(0, Math.floor(Number(state.mouseCount || 0))) + 1;
+        this.spawnSoloCleaningPurifyFx(x, y);
+        try { window.playSFX(this, 'mimi-thief-get-down'); } catch (_) {}
+        try { if (sprite.destroy) sprite.destroy(); } catch (_) {}
+        this.updateSoloCleaningRoomUi();
+
+        const timer = this.time.delayedCall(3000, () => {
+            const st = this.getSoloCleaningRoomState();
+            if (!st.active || st.shellEnding) return;
+            if ((st.soloMimis || []).length < Number(st.soloMaxMimis || 10)) this.spawnSoloCleaningRoomMimi();
+        });
+        state.timers.push(timer);
+    }
+
+    hitSoloCleaningRoomGrime(grime) {
+        const state = this.getSoloCleaningRoomState();
+        if (!grime || !grime.container || !grime.container.active) return;
+
+        grime.hp = Math.max(0, Number(grime.hp || 0) - 1);
+        this.tweens.add({ targets: grime.container, scaleX: 0.92, scaleY: 0.92, yoyo: true, duration: 90 });
+        this.spawnSoloCleaningBubbleFx(grime.x, grime.y);
+
+        if (grime.hp > 0) return;
+
+        state.soloGrimes = (state.soloGrimes || []).filter(item => item !== grime);
+        state.grimeCount = Math.max(0, Math.floor(Number(state.grimeCount || 0))) + 1;
+        this.spawnSoloCleaningPurifyFx(grime.x, grime.y);
+        try { if (grime.container.destroy) grime.container.destroy(true); } catch (_) {}
+        this.updateSoloCleaningRoomUi();
+    }
+
     clearSoloCleaningRoomGameplayObjects(destroyObjects = true) {
         const state = this.getSoloCleaningRoomState();
         this.destroySoloCleaningDynamicJoystick(destroyObjects);
@@ -19506,6 +20092,18 @@ if (!data.scoreHandled && data.attacker) {
             (state.soloWaterBalls || []).forEach(ball => {
                 try { if (ball && ball.destroy) ball.destroy(); } catch (_) {}
             });
+            (state.soloMimis || []).forEach(mimi => {
+                try { if (mimi && mimi.sprite && mimi.sprite.destroy) mimi.sprite.destroy(); } catch (_) {}
+            });
+            (state.soloGrimes || []).forEach(grime => {
+                try { if (grime && grime.container && grime.container.destroy) grime.container.destroy(true); } catch (_) {}
+            });
+            (state.soloDirtyProjectiles || []).forEach(projectile => {
+                try { if (projectile && projectile.destroy) projectile.destroy(); } catch (_) {}
+            });
+            try { if (state.soloWashbasin && state.soloWashbasin.destroy) state.soloWashbasin.destroy(); } catch (_) {}
+            try { if (state.soloWashbasinAura && state.soloWashbasinAura.destroy) state.soloWashbasinAura.destroy(); } catch (_) {}
+            try { if (state.soloDirtyFx && state.soloDirtyFx.destroy) state.soloDirtyFx.destroy(true); } catch (_) {}
         } catch (_) {}
 
         if (destroyObjects) {
@@ -19521,6 +20119,18 @@ if (!data.scoreHandled && data.attacker) {
         state.soloPlayerEntity = null;
         state.soloPlayerThrowing = false;
         state.soloWaterBalls = [];
+        state.soloMimis = [];
+        state.soloGrimes = [];
+        state.soloDirtyProjectiles = [];
+        state.soloWashbasin = null;
+        state.soloWashbasinAura = null;
+        state.soloDirtyFx = null;
+        state.soloDirtyState = false;
+        state.soloDirtyDrainAccumulator = 0;
+        state.soloDeodorizePresses = 0;
+        state.soloHazardsStarted = false;
+        state.soloNextDirtyThrowAt = 0;
+        state.soloNearWashbasin = false;
         state.soloActionUiContainer = null;
         state.soloActionButtonBg = null;
         state.soloActionButtonText = null;
@@ -19557,6 +20167,11 @@ if (!data.scoreHandled && data.attacker) {
         }
 
         const dt = Math.min(delta || 16, 50) / 1000;
+        if (!state.soloHazardsStarted) this.initializeSoloCleaningRoomHazards();
+        this.updateSoloCleaningRoomDirtyDrain(dt);
+        this.updateSoloCleaningRoomHazards(time, delta);
+        this.updateSoloCleaningRoomWaterballHits();
+
         const speed = Number(state.soloPlayerSpeed || 324);
         let ix = 0;
         let iy = 0;
@@ -19611,6 +20226,8 @@ if (!data.scoreHandled && data.attacker) {
             }
         }
 
+        this.updateSoloCleaningRoomWashbasinMode();
+        this.updateSoloCleaningRoomDirtyFx();
         this.cameras.main.startFollow(player, true, 0.12, 0.12);
     }
 
@@ -19749,6 +20366,21 @@ if (!data.scoreHandled && data.attacker) {
         state.soloPlayerFacing = { x: 0, y: 1 };
         state.soloPlayerThrowing = false;
         state.soloWaterBalls = [];
+        state.soloMimis = [];
+        state.soloGrimes = [];
+        state.soloDirtyProjectiles = [];
+        state.soloWashbasin = null;
+        state.soloWashbasinAura = null;
+        state.soloDirtyFx = null;
+        state.soloDirtyState = false;
+        state.soloDirtyDrainAccumulator = 0;
+        state.soloDeodorizePresses = 0;
+        state.soloNeedDeodorizePresses = 4;
+        state.soloMaxMimis = 10;
+        state.soloMaxGrimes = 15;
+        state.soloHazardsStarted = false;
+        state.soloNextDirtyThrowAt = 0;
+        state.soloNearWashbasin = false;
         state.soloActionButtonMode = 'clean';
         state.soloActionCooldownUntil = 0;
         state.soloActionUiContainer = null;
