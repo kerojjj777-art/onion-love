@@ -96,7 +96,7 @@ window.GameLogic = {
     authGuardSigningOut: false
 };
 
-let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, pmUnreadUnsubscribe = null, friendRequestsUnsubscribe = null, friendVisitRequestsUnsubscribe = null, friendVisitRepliesUnsubscribe = null, friendVisitLoveNoticesUnsubscribe = null, profileViewingUid = null;
+let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, pmUnreadUnsubscribe = null, friendRequestsUnsubscribe = null, friendVisitRequestsUnsubscribe = null, friendVisitRepliesUnsubscribe = null, friendVisitSessionsUnsubscribe = null, friendVisitLoveNoticesUnsubscribe = null, profileViewingUid = null;
 window.switchScene = switchScene; window.showProfileModal = showProfileModal; window.leaveCafe = leaveCafe; window.signOut = signOut; window.auth = auth;
 
 // ====== 入口房間共用工具 ======
@@ -223,8 +223,90 @@ window.scheduleDoghousePresenceRefresh = function(delayMs = 650) {
             await window.refreshMyOnlinePresenceNow({ force: true });
         }
 
+        if (window.writeMyDoghousePresenceNow) {
+            await window.writeMyDoghousePresenceNow(null, { reason: 'scheduledPresenceRefresh' });
+        }
+
         if (window.updateOnlinePlayersUI) window.updateOnlinePlayersUI();
     }, delay);
+};
+
+window.getMyDoghousePresencePayload = function(hostUid = null, options = {}) {
+    if (!window.GameLogic || !window.GameLogic.currentUser) return null;
+
+    const myUid = window.GameLogic.currentUser.uid;
+    const safeHostUid = hostUid || (window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : myUid);
+    const phaserScene = options.scene || (
+        window.GameLogic.phaserGame && window.GameLogic.phaserGame.scene
+            ? window.GameLogic.phaserGame.scene.getScene('MainScene')
+            : null
+    );
+    const sprite = phaserScene && phaserScene.localPlayer && phaserScene.localPlayer.sprite
+        ? phaserScene.localPlayer.sprite
+        : null;
+
+    return {
+        uid: myUid,
+        name: window.GameLogic.myProfile.name || '匿名',
+        color: window.GameLogic.myProfile.color || '#fff',
+        level: window.GameLogic.myProfile.level || 1,
+        x: sprite ? sprite.x : (window.GameLogic.myProfile.lastX || 640),
+        y: sprite ? sprite.y : (window.GameLogic.myProfile.lastY || 360),
+        scene: 'doghouse',
+        isHost: safeHostUid === myUid,
+        hostUid: safeHostUid,
+        lastActive: Date.now()
+    };
+};
+
+window.writeMyDoghousePresenceNow = async function(hostUid = null, options = {}) {
+    if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return false;
+
+    const myUid = window.GameLogic.currentUser.uid;
+    const safeHostUid = hostUid || (window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : myUid);
+    if (!safeHostUid) return false;
+
+    const playersPath = window.getDoghousePlayersPath ? window.getDoghousePlayersPath(safeHostUid) : `users/${safeHostUid}/doghousePlayers`;
+    const payload = window.getMyDoghousePresencePayload ? window.getMyDoghousePresencePayload(safeHostUid, options) : null;
+    if (!playersPath || !payload) return false;
+
+    try {
+        await set(ref(window.GameLogic.db, `${playersPath}/${myUid}`), payload);
+        window.GameLogic.doghousePlayers = window.GameLogic.doghousePlayers || {};
+        window.GameLogic.doghousePlayers[myUid] = Object.assign({}, window.GameLogic.doghousePlayers[myUid] || {}, payload);
+        if (window.updateOnlinePlayersUI) window.updateOnlinePlayersUI();
+        return true;
+    } catch (err) {
+        console.warn('[狗窩] 寫入目前狗窩玩家 presence 失敗：', err);
+        return false;
+    }
+};
+
+window.waitForDoghousePresenceAck = async function(hostUid, options = {}) {
+    if (!hostUid || !window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return false;
+
+    const myUid = window.GameLogic.currentUser.uid;
+    const attempts = Math.max(1, Math.min(8, Number(options.attempts || 5)));
+    const intervalMs = Math.max(180, Math.min(1200, Number(options.intervalMs || 420)));
+    const playersPath = window.getDoghousePlayersPath ? window.getDoghousePlayersPath(hostUid) : `users/${hostUid}/doghousePlayers`;
+
+    for (let i = 0; i < attempts; i++) {
+        if (options.ensureWrite !== false && window.writeMyDoghousePresenceNow) {
+            await window.writeMyDoghousePresenceNow(hostUid, { reason: options.reason || 'waitForDoghousePresenceAck' });
+        }
+
+        try {
+            const snap = await get(ref(window.GameLogic.db, `${playersPath}/${myUid}`));
+            const data = snap.exists() ? (snap.val() || {}) : null;
+            if (data && data.hostUid === hostUid) return true;
+        } catch (err) {
+            console.warn('[好友拜訪] 讀取狗窩進房 ack 失敗：', err);
+        }
+
+        if (i < attempts - 1) await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+
+    return false;
 };
 
 window.fetchFriendOnlineInfoNow = async function(uid) {
@@ -7879,13 +7961,26 @@ window.updateOnlinePlayersUI = function() {
             players[uid] = {
                 name: rp.name || '匿名',
                 color: rp.color || '#fff',
-                lastActive: now,
+                level: rp.level || 1,
+                lastActive: Number(rp.lastActive || now),
                 roomFallback: true
             };
         } else {
             players[uid].name = players[uid].name || rp.name || '匿名';
             players[uid].color = players[uid].color || rp.color || '#fff';
+            players[uid].level = players[uid].level || rp.level || 1;
+            players[uid].lastActive = Math.max(Number(players[uid].lastActive || 0), Number(rp.lastActive || 0));
         }
+    }
+
+    if (window.GameLogic.currentScene === 'doghouse') {
+        const friends = window.GameLogic.friends || {};
+        Object.keys(friends).forEach(uid => {
+            if (players[uid]) return;
+            const onlineInfo = window.GameLogic.onlinePlayers && window.GameLogic.onlinePlayers[uid] ? window.GameLogic.onlinePlayers[uid] : null;
+            if (!onlineInfo || !(window.isFreshOnlinePlayer && window.isFreshOnlinePlayer(onlineInfo, { mode: 'list' }))) return;
+            players[uid] = Object.assign({}, onlineInfo, { friendOnlineFallback: true });
+        });
     }
 
     for (let uid in players) {
@@ -10482,14 +10577,27 @@ window.enterFriendDoghouse = async function(hostUid, hostName = '', options = {}
         });
 
         if (window.scheduleDoghousePresenceRefresh) {
-            window.scheduleDoghousePresenceRefresh(320);
-            window.scheduleDoghousePresenceRefresh(950);
+            window.scheduleDoghousePresenceRefresh(280);
+            window.scheduleDoghousePresenceRefresh(900);
         }
 
-        await new Promise(resolve => setTimeout(resolve, 680));
+        await new Promise(resolve => setTimeout(resolve, 520));
 
-        const currentHostUid = window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : '';
-        return currentHostUid === hostUid;
+        const ackOk = window.waitForDoghousePresenceAck
+            ? await window.waitForDoghousePresenceAck(hostUid, {
+                attempts: options.ackAttempts || 5,
+                intervalMs: options.ackIntervalMs || 380,
+                ensureWrite: true,
+                reason: options.source || 'enterFriendDoghouse'
+            })
+            : false;
+
+        if (!ackOk) {
+            console.warn('[好友拜訪] 尚未確認進入目標狗窩：', hostUid);
+            return false;
+        }
+
+        return true;
     } catch (err) {
         console.warn('[好友拜訪] 進入好友狗窩失敗：', err);
         window.showFriendSystemNotice('前往好友家失敗，請稍後再試');
@@ -10661,6 +10769,119 @@ window.startFriendVisitRepliesListener = function() {
     });
 };
 
+window.startFriendVisitSessionsListener = function() {
+    if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return;
+
+    const myUid = window.GameLogic.currentUser.uid;
+
+    if (friendVisitSessionsUnsubscribe) {
+        friendVisitSessionsUnsubscribe();
+        friendVisitSessionsUnsubscribe = null;
+    }
+
+    window.__processingFriendVisitSessionKeys = {};
+
+    friendVisitSessionsUnsubscribe = onValue(ref(window.GameLogic.db, `users/${myUid}/friendVisitSessions`), snap => {
+        const sessions = snap.val() || {};
+
+        Object.keys(sessions).forEach(async hostUid => {
+            const item = sessions[hostUid] || {};
+            if (!item || item.status !== 'go' || !item.hostUid) return;
+
+            const createdAt = Number(item.createdAt || item.updatedAt || 0);
+            const retryCount = Number(item.retryCount || 0);
+            const sessionKey = item.sessionId || `${hostUid}_${createdAt || item.updatedAt || 'session'}`;
+            if (!sessionKey) return;
+
+            if (window.__processingFriendVisitSessionKeys && window.__processingFriendVisitSessionKeys[sessionKey]) return;
+
+            if (createdAt && Date.now() - createdAt > 120000) {
+                remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitSessions/${hostUid}`));
+                return;
+            }
+
+            if (retryCount >= 4) {
+                update(ref(window.GameLogic.db, `users/${myUid}/friendVisitSessions/${hostUid}`), {
+                    status: 'failed',
+                    updatedAt: Date.now(),
+                    lastError: 'retry-limit'
+                }).catch(err => console.warn('[好友拜訪] 標記 visitSession 失敗狀態失敗：', err));
+                return;
+            }
+
+            if (!window.__processingFriendVisitSessionKeys) window.__processingFriendVisitSessionKeys = {};
+            window.__processingFriendVisitSessionKeys[sessionKey] = true;
+
+            try {
+                const targetHostUid = item.hostUid || hostUid;
+                const targetHostName = item.hostName || '好友';
+                const alreadyAcked = window.waitForDoghousePresenceAck
+                    ? await window.waitForDoghousePresenceAck(targetHostUid, {
+                        attempts: 1,
+                        intervalMs: 200,
+                        ensureWrite: false,
+                        reason: 'visitSessionPrecheck'
+                    })
+                    : false;
+
+                let enterOk = alreadyAcked;
+                if (!enterOk && window.enterFriendDoghouse) {
+                    window.showFriendSystemNotice(`${targetHostName}答應你去他家囉！`);
+                    enterOk = await window.enterFriendDoghouse(targetHostUid, targetHostName, {
+                        source: 'visitSession',
+                        sessionId: sessionKey,
+                        ackAttempts: 6,
+                        ackIntervalMs: 360
+                    });
+                }
+
+                if (!enterOk && window.enterFriendDoghouse) {
+                    await new Promise(resolve => setTimeout(resolve, 900));
+                    enterOk = await window.enterFriendDoghouse(targetHostUid, targetHostName, {
+                        source: 'visitSessionRetry',
+                        sessionId: sessionKey,
+                        ackAttempts: 5,
+                        ackIntervalMs: 420
+                    });
+                }
+
+                const finalAck = enterOk && window.waitForDoghousePresenceAck
+                    ? await window.waitForDoghousePresenceAck(targetHostUid, {
+                        attempts: 2,
+                        intervalMs: 280,
+                        ensureWrite: true,
+                        reason: 'visitSessionFinalAck'
+                    })
+                    : enterOk;
+
+                if (finalAck) {
+                    await update(ref(window.GameLogic.db, `users/${myUid}/friendVisitSessions/${hostUid}`), {
+                        status: 'arrived',
+                        arrivedAt: Date.now(),
+                        updatedAt: Date.now()
+                    });
+                    await remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitSessions/${hostUid}`));
+                    await remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitReplies/${hostUid}`)).catch(() => {});
+                } else {
+                    await update(ref(window.GameLogic.db, `users/${myUid}/friendVisitSessions/${hostUid}`), {
+                        status: 'go',
+                        retryCount: retryCount + 1,
+                        updatedAt: Date.now(),
+                        lastError: 'ack-missing'
+                    });
+                    console.warn('[好友拜訪] visitSession 尚未取得 doghousePlayers ack：', sessionKey);
+                }
+            } catch (err) {
+                console.warn('[好友拜訪] 處理 visitSession 失敗：', err);
+            } finally {
+                setTimeout(() => {
+                    if (window.__processingFriendVisitSessionKeys) delete window.__processingFriendVisitSessionKeys[sessionKey];
+                }, 1000);
+            }
+        });
+    });
+};
+
 window.sendFriendVisitRequest = async function(targetUid) {
     if (!targetUid || !window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return;
 
@@ -10732,15 +10953,34 @@ window.acceptFriendVisitRequest = async function(fromUid) {
 
     try {
         const now = Date.now();
+        const sessionId = `${myUid}_${fromUid}_${now}`;
         const updates = {};
         updates[`users/${myUid}/friendVisitRequests/${fromUid}`] = null;
         updates[`users/${fromUid}/friendVisitReplies/${myUid}`] = {
             status: 'accepted',
+            command: 'enterDoghouse',
+            needAck: true,
             hostUid: myUid,
             hostName: myName,
+            guestUid: fromUid,
             createdAt: now,
             updatedAt: now,
-            replyId: `${myUid}_${fromUid}_${now}`
+            replyId: sessionId,
+            sessionId: sessionId,
+            ackPath: `users/${myUid}/doghousePlayers/${fromUid}`
+        };
+        updates[`users/${fromUid}/friendVisitSessions/${myUid}`] = {
+            sessionId: sessionId,
+            status: 'go',
+            hostUid: myUid,
+            hostName: myName,
+            guestUid: fromUid,
+            createdAt: now,
+            updatedAt: now,
+            retryCount: 0,
+            needAck: true,
+            ackPath: `users/${myUid}/doghousePlayers/${fromUid}`,
+            source: 'visitAccepted'
         };
 
         await update(ref(window.GameLogic.db), updates);
@@ -12545,6 +12785,7 @@ onAuthStateChanged(auth, async (user) => {
         if (window.startFriendRequestsListener) window.startFriendRequestsListener();
         if (window.startFriendVisitRequestsListener) window.startFriendVisitRequestsListener();
         if (window.startFriendVisitRepliesListener) window.startFriendVisitRepliesListener();
+        if (window.startFriendVisitSessionsListener) window.startFriendVisitSessionsListener();
         if (window.startFriendVisitLoveNoticesListener) window.startFriendVisitLoveNoticesListener();
         if (window.refreshMyFriendsCache) window.refreshMyFriendsCache();
         onValue(ref(db, 'manuals'), snap => { const data = snap.val(); window.manualPages = []; if (data) { Object.keys(data).forEach(key => { const item = data[key] || {}; if (!item.imgBase64) return; window.manualPages.push({ key: key, imgBase64: item.imgBase64, timestamp: item.timestamp || 0, title: item.title || '', description: item.description || '', categoryId: item.categoryId || 'uncategorized' }); }); window.manualPages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); } window.renderManualPage(); });
@@ -12618,6 +12859,7 @@ onAuthStateChanged(auth, async (user) => {
         if (friendRequestsUnsubscribe) { friendRequestsUnsubscribe(); friendRequestsUnsubscribe = null; }
         if (friendVisitRequestsUnsubscribe) { friendVisitRequestsUnsubscribe(); friendVisitRequestsUnsubscribe = null; }
         if (friendVisitRepliesUnsubscribe) { friendVisitRepliesUnsubscribe(); friendVisitRepliesUnsubscribe = null; }
+        if (friendVisitSessionsUnsubscribe) { friendVisitSessionsUnsubscribe(); friendVisitSessionsUnsubscribe = null; }
         if (friendVisitLoveNoticesUnsubscribe) { friendVisitLoveNoticesUnsubscribe(); friendVisitLoveNoticesUnsubscribe = null; }
         if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
         if (memoryUnsubscribe) { memoryUnsubscribe(); memoryUnsubscribe = null; }
@@ -14315,6 +14557,7 @@ class MainScene extends Phaser.Scene {
                 level: window.GameLogic.myProfile.level || 1,
                 x: window.GameLogic.myProfile.lastX || 640,
                 y: window.GameLogic.myProfile.lastY || 360,
+                scene: 'doghouse',
                 isHost: doghouseHostUid === window.GameLogic.currentUser.uid,
                 hostUid: doghouseHostUid,
                 lastActive: Date.now()
@@ -29028,12 +29271,26 @@ if (activeBubbleMsg) {
         // 修正4：心跳機制更新，每 5 秒上傳一次當前時間戳，用於徹底過濾斷線與幽靈人口
         if (!this.lastHeartbeatSync || time - this.lastHeartbeatSync > 5000) {
             this.lastHeartbeatSync = time;
+            const heartbeatNow = Date.now();
+            const currentDoghouseHostUid = window.GameLogic.currentScene === 'doghouse' && window.getCurrentDoghouseHostUid
+                ? window.getCurrentDoghouseHostUid()
+                : '';
+
             update(ref(window.GameLogic.db, window.getServerRoomPath(`onlinePlayers/${window.GameLogic.currentUser.uid}`)), {
-                lastActive: Date.now(),
+                lastActive: heartbeatNow,
                 name: window.GameLogic.myProfile.name || '匿名',
                 color: window.GameLogic.myProfile.color || '#fff',
-                scene: window.GameLogic.currentScene || 'doghouse'
+                level: window.GameLogic.myProfile.level || 1,
+                scene: window.GameLogic.currentScene || 'doghouse',
+                doghouseHostUid: currentDoghouseHostUid
             });
+
+            if (this.sceneName === 'doghouse' && window.writeMyDoghousePresenceNow) {
+                window.writeMyDoghousePresenceNow(currentDoghouseHostUid, {
+                    scene: this,
+                    reason: 'doghouseHeartbeat'
+                });
+            }
         }
 
         // 獨樂雞 Phaser overlay 開啟期間：玩家停住、提示隱藏、背景互動不繼續處理
