@@ -267,6 +267,49 @@ window.scheduleDoghousePresenceRefresh = function(delayMs = 650) {
     }, delay);
 };
 
+window.getMyDoghouseInteractionPresencePayload = function(options = {}) {
+    const emptyPayload = {
+        interactionType: 'none',
+        interactingFurnitureId: '',
+        interactingFurnitureKey: '',
+        interactingFurnitureDirection: '',
+        interactingFurnitureX: 0,
+        interactingFurnitureY: 0,
+        interactionUpdatedAt: 0,
+        isSeated: false
+    };
+
+    if (!window.GameLogic || window.GameLogic.currentScene !== 'doghouse') return emptyPayload;
+
+    const phaserScene = options.scene || (
+        window.GameLogic.phaserGame && window.GameLogic.phaserGame.scene
+            ? window.GameLogic.phaserGame.scene.getScene('MainScene')
+            : null
+    );
+    const player = phaserScene && phaserScene.localPlayer ? phaserScene.localPlayer : null;
+
+    if (!player || !player.isSeated || !player.seatedFurnitureKey) return emptyPayload;
+
+    const furnitureId = player.seatedFurnitureKey;
+    const furnitureData = window.GameLogic.doghouseFurniture && window.GameLogic.doghouseFurniture[furnitureId]
+        ? window.GameLogic.doghouseFurniture[furnitureId]
+        : {};
+    const baseKey = window.getDoghouseFurnitureBaseKey
+        ? window.getDoghouseFurnitureBaseKey(furnitureId, furnitureData)
+        : (furnitureData.furnitureKey || furnitureId);
+
+    return {
+        interactionType: 'cushion',
+        interactingFurnitureId: furnitureId,
+        interactingFurnitureKey: baseKey,
+        interactingFurnitureDirection: player.seatedCushionDirection || furnitureData.direction || 'front',
+        interactingFurnitureX: Number.isFinite(Number(player.seatedCushionX)) ? Number(player.seatedCushionX) : Number(furnitureData.x || 0),
+        interactingFurnitureY: Number.isFinite(Number(player.seatedCushionY)) ? Number(player.seatedCushionY) : Number(furnitureData.y || 0),
+        interactionUpdatedAt: window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now(),
+        isSeated: true
+    };
+};
+
 window.getMyDoghousePresencePayload = function(hostUid = null, options = {}) {
     if (!window.GameLogic || !window.GameLogic.currentUser) return null;
 
@@ -280,6 +323,9 @@ window.getMyDoghousePresencePayload = function(hostUid = null, options = {}) {
     const sprite = phaserScene && phaserScene.localPlayer && phaserScene.localPlayer.sprite
         ? phaserScene.localPlayer.sprite
         : null;
+    const interactionPayload = window.getMyDoghouseInteractionPresencePayload
+        ? window.getMyDoghouseInteractionPresencePayload({ scene: phaserScene })
+        : {};
 
     return {
         uid: myUid,
@@ -291,6 +337,7 @@ window.getMyDoghousePresencePayload = function(hostUid = null, options = {}) {
         scene: 'doghouse',
         isHost: safeHostUid === myUid,
         hostUid: safeHostUid,
+        ...interactionPayload,
         lastActive: window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now()
     };
 };
@@ -14664,6 +14711,14 @@ class MainScene extends Phaser.Scene {
                 scene: 'doghouse',
                 isHost: doghouseHostUid === window.GameLogic.currentUser.uid,
                 hostUid: doghouseHostUid,
+                interactionType: 'none',
+                interactingFurnitureId: '',
+                interactingFurnitureKey: '',
+                interactingFurnitureDirection: '',
+                interactingFurnitureX: 0,
+                interactingFurnitureY: 0,
+                interactionUpdatedAt: 0,
+                isSeated: false,
                 lastActive: window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now()
             }).then(() => {
                 if (window.scheduleDoghousePresenceRefresh) window.scheduleDoghousePresenceRefresh(420);
@@ -27066,6 +27121,12 @@ if (activeBubbleMsg) {
         this.localPlayer.sprite.setPosition(f.sprite.x, f.sprite.y - this.localPlayer.seatedCushionVisualOffsetY);
 
         this.applyDoghouseCushionSittingVisual();
+        if (window.writeMyDoghousePresenceNow) {
+            window.writeMyDoghousePresenceNow(null, {
+                scene: this,
+                reason: 'doghouseCushionSit'
+            });
+        }
         sendBubble("坐下來休息一下。");
         return true;
     }
@@ -27082,7 +27143,55 @@ if (activeBubbleMsg) {
         this.localPlayer.sprite.setAngle(0).setFlipX(false);
 
         if (this.anims && this.anims.exists('idle')) this.localPlayer.sprite.play('idle', true);
+        if (window.writeMyDoghousePresenceNow) {
+            window.writeMyDoghousePresenceNow(null, {
+                scene: this,
+                reason: 'doghouseCushionLeave'
+            });
+        }
         return true;
+    }
+
+    applyRemoteDoghouseInteractionVisual(op, pd = {}) {
+        if (this.sceneName !== 'doghouse' || !op || !op.sprite || !op.sprite.active || !pd) return false;
+
+        const interactionType = pd.interactionType || (pd.isSeated ? 'cushion' : 'none');
+
+        if (interactionType === 'cushion') {
+            const direction = pd.interactingFurnitureDirection || pd.seatedCushionDirection || 'front';
+            const textureKey = this.getDoghouseCushionSitTextureKey ? this.getDoghouseCushionSitTextureKey(direction) : 'onion-sit-cushion-front';
+            const animKey = `${textureKey}-anim`;
+            const furnitureX = Number(pd.interactingFurnitureX);
+            const furnitureY = Number(pd.interactingFurnitureY);
+            const offsetY = Number.isFinite(Number(pd.interactingFurnitureVisualOffsetY)) ? Number(pd.interactingFurnitureVisualOffsetY) : 12;
+
+            op.sprite.setVelocity(0, 0);
+            op.sprite.setAngle(0).setFlipX(false);
+
+            if (Number.isFinite(furnitureX) && Number.isFinite(furnitureY) && furnitureX > 0 && furnitureY > 0) {
+                op.sprite.setPosition(furnitureX, furnitureY - offsetY);
+            }
+
+            if (this.anims && this.anims.exists(animKey)) {
+                op.sprite.play(animKey, true);
+            } else if (this.textures && this.textures.exists(textureKey)) {
+                op.sprite.setTexture(textureKey, 0);
+            } else if (this.anims && this.anims.exists('seat-idle')) {
+                op.sprite.play('seat-idle', true);
+            } else if (this.anims && this.anims.exists('idle')) {
+                op.sprite.play('idle', true);
+            }
+
+            op.sprite._onionRemoteFurnitureInteraction = true;
+            return true;
+        }
+
+        if (op.sprite._onionRemoteFurnitureInteraction) {
+            op.sprite._onionRemoteFurnitureInteraction = false;
+            op.sprite.setAngle(0).setFlipX(false);
+        }
+
+        return false;
     }
 
     hasDoghouseCushionExitInput() {
@@ -27311,13 +27420,14 @@ if (activeBubbleMsg) {
 
     trySelectDoghouseFurnitureForStow(key, f) {
         if (this.sceneName !== 'doghouse' || !window.GameLogic || !window.GameLogic.currentUser) return false;
+
+        const targetBaseKey = window.GameLogic.stowDoghouseFurnitureBaseKey;
+        if (!targetBaseKey || !key || !f || !f.sprite || !f.sprite.active) return false;
+
         if (window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) {
             sendBubble('這是好友的家，不能收起屋主家具。');
             return true;
         }
-
-        const targetBaseKey = window.GameLogic.stowDoghouseFurnitureBaseKey;
-        if (!targetBaseKey || !key || !f || !f.sprite || !f.sprite.active) return false;
 
         const furnData = window.GameLogic.doghouseFurniture || {};
         const currentData = furnData[key] || {};
@@ -27340,13 +27450,14 @@ if (activeBubbleMsg) {
 
     trySelectDoghouseFurnitureForReposition(key, f) {
         if (this.sceneName !== 'doghouse' || !window.GameLogic || !window.GameLogic.currentUser) return false;
+
+        const targetBaseKey = window.GameLogic.repositionDoghouseFurnitureBaseKey;
+        if (!targetBaseKey || !key || !f || !f.sprite || !f.sprite.active) return false;
+
         if (window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) {
             sendBubble('這是好友的家，不能重新擺設屋主家具。');
             return true;
         }
-
-        const targetBaseKey = window.GameLogic.repositionDoghouseFurnitureBaseKey;
-        if (!targetBaseKey || !key || !f || !f.sprite || !f.sprite.active) return false;
 
         const furnData = window.GameLogic.doghouseFurniture || {};
         const currentData = furnData[key] || {};
@@ -28716,6 +28827,13 @@ if (activeBubbleMsg) {
         }
 
         if (this.handleDoghouseBedDirectInteraction(key, f)) return true;
+        if (this.sceneName === 'doghouse' && this.isDoghouseCushionFurniture(key, f)) {
+            if (this.localPlayer && this.localPlayer.isSeated) {
+                this.stopDoghouseCushionSitting();
+                return true;
+            }
+            return this.startDoghouseCushionSitting(key, f);
+        }
         if (this.handleShrineSeatDirectInteraction(key, f)) return true;
 
         if (this.sceneName === 'shrine' && key === 'altar') {
@@ -28842,6 +28960,17 @@ if (activeBubbleMsg) {
         if (type === 'furniture') {
             const key = payload.key;
             const f = payload.f || (key && this.furnitureSprites ? this.furnitureSprites[key] : null);
+
+            if (
+                this.sceneName === 'doghouse' &&
+                window.isVisitingFriendDoghouse &&
+                window.isVisitingFriendDoghouse() &&
+                this.isDoghouseInteractiveFurniture &&
+                this.isDoghouseInteractiveFurniture(key, f)
+            ) {
+                return this.handleFurnitureDirectInteraction(key, f);
+            }
+
             if (this.trySelectDoghouseFurnitureForStow && this.trySelectDoghouseFurnitureForStow(key, f)) return true;
             if (this.trySelectDoghouseFurnitureForReposition && this.trySelectDoghouseFurnitureForReposition(key, f)) return true;
             return this.handleFurnitureDirectInteraction(key, f);
@@ -29655,6 +29784,10 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
                                         ? window.getServerRoomPath(`playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`)
                                         : window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`)))); 
                         const payload = { x: this.localPlayer.sprite.x, y: this.localPlayer.sprite.y, lastActive: Date.now(), name: window.GameLogic.myProfile.name || '匿名', color: window.GameLogic.myProfile.color || '#fff', level: window.GameLogic.myProfile.level || 1 };
+                        if (this.sceneName === 'doghouse' && window.getMyDoghouseInteractionPresencePayload) {
+                            Object.assign(payload, window.getMyDoghouseInteractionPresencePayload({ scene: this }));
+                            payload.lastActive = window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now();
+                        }
                         if (this.sceneName === 'partyroom') {
                             payload.online = true;
                             payload.left = false;
@@ -29974,6 +30107,8 @@ if (dist < 30) {
         op.sprite.setTexture('onion');
         op.sprite.play('idle', true);
     }
+                } else if (this.applyRemoteDoghouseInteractionVisual && this.applyRemoteDoghouseInteractionVisual(op, pd)) {
+                    // 狗窩家具互動狀態已由 doghousePlayers presence 同步。
                 } else if (pd.isSweeping) { 
                     op.sprite.play('clean', true); 
                 } else if (pd.isSeated) {
