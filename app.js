@@ -13876,12 +13876,17 @@ class BootScene extends Phaser.Scene {
         this.load.image('hall-screen', 'hall-screen.png'); // 改為靜態圖
         // 獨樂雞與火箭巡航素材。火箭素材若缺失，後續會用 fallback，避免黑屏。
         this.load.image('solochicken', 'me_play_cock.png');
+        this.load.image('solo-cleaning-room-npc-onion1', 'solo-cleaning-room-npc-onion1.png');
+        this.load.image('solo-cleaning-room-npc-onion2', 'solo-cleaning-room-npc-onion2.png');
+        this.load.image('solo-cleaning-room-washbasin', 'solo-cleaning-room-washbasin.png');
         this.load.image('solo-rocket-bg', 'solo-rocket-bg.png');
         this.load.image('rocket-onion-player', 'rocket-onion-player.png');
         this.load.image('solo-rocket-moon-rabbit', 'solo-rocket-moon-rabbit.png');
         this.load.image('solo-rocket-monster-chicken', 'solo-rocket-monster-chicken.png');
         this.load.image('solo-rocket-heart-life-container', 'solo-rocket-heart-life-container.png');
         this.load.image('solo-rocket-space-rock', 'solo-rocket-space-rock.png');
+        this.load.audio('solo-cleaning-room-bgm', 'solo-cleaning-room-bgm.mp3');
+        this.load.audio('solo-cleaning-room-whistle', 'solo-cleaning-room-whistle.mp3');
         this.load.audio('solo-rocket-cruise-bgm', 'solo-rocket-cruise-bgm.mp3');
         this.load.audio('solo-rocket-landing', 'solo-rocket-landing.mp3');
         this.load.audio('solo-rocket-typing', 'solo-rocket-typing.mp3');
@@ -14690,6 +14695,20 @@ class MainScene extends Phaser.Scene {
         this.soloChickenMenuRipples = null;
         this.soloChickenMenuRippleCount = 0;
         this.soloChickenMenuBlocker = null;
+
+        // 第一包：獨樂雞大掃除入口狀態初始化。正式副本內容由後續包接上。
+        this.soloCleaningRoom = {
+            active: false,
+            paid: false,
+            paymentPending: false,
+            uiContainer: null,
+            messageText: null,
+            timers: [],
+            objects: []
+        };
+        this.soloCleaningRoomPaymentConfirmContainer = null;
+        this.soloCleaningRoomPaymentConfirmBlocker = null;
+        this.soloCleaningRoomConfirmLockUntil = 0;
 
         // 階段2：獨樂雞火箭巡航最小副本狀態初始化
         this.soloRocketCruiseActive = false;
@@ -17327,13 +17346,18 @@ if (!data.scoreHandled && data.attacker) {
         this.localPlayer.sprite.play('idle', true);
 
         const panelW = Math.min(460, sw - 44);
-        const panelH = Math.min(330, sh - 44);
+        const panelH = Math.min(380, sh - 44);
         const left = cx - panelW / 2;
         const top = cy - panelH / 2;
 
+        const rocketBtnY = top + 140;
+        const cleaningBtnY = top + 204;
+        const closeBtnY = top + panelH - 62;
+
         // 獨樂雞選單點擊安全區：避免全螢幕 blocker 吃掉按鈕事件
-        const rocketBtnHit = { x: cx, y: cy + 24, w: panelW - 120, h: 54 };
-        const closeBtnHit = { x: cx, y: cy + 92, w: panelW - 120, h: 44 };
+        const rocketBtnHit = { x: cx, y: rocketBtnY, w: panelW - 120, h: 54 };
+        const cleaningBtnHit = { x: cx, y: cleaningBtnY, w: panelW - 120, h: 54 };
+        const closeBtnHit = { x: cx, y: closeBtnY, w: panelW - 120, h: 44 };
         const closeIconHit = { x: left + panelW - 34, y: top + 32, w: 48, h: 48 };
 
         const isPointInHitRect = (px, py, rect) => {
@@ -17356,9 +17380,14 @@ if (!data.scoreHandled && data.attacker) {
             const py = pointer ? pointer.y : null;
 
             if (px !== null && py !== null) {
-                // 若 Phaser 把按鈕點擊誤送到 blocker，這裡直接補救觸發火箭巡航
+                // 若 Phaser 把按鈕點擊誤送到 blocker，這裡直接補救觸發對應小遊戲
                 if (isPointInHitRect(px, py, rocketBtnHit)) {
                     this.confirmStartSoloRocketCruise();
+                    return;
+                }
+
+                if (isPointInHitRect(px, py, cleaningBtnHit)) {
+                    this.confirmStartSoloCleaningRoom();
                     return;
                 }
 
@@ -17424,8 +17453,8 @@ if (!data.scoreHandled && data.attacker) {
             strokeThickness: 3
         }).setOrigin(0.5);
 
-        const hint = this.add.text(cx, top + panelH - 34, 'A / B / 點背景 / 點右上角都可關閉', {
-            fontSize: '13px',
+        const hint = this.add.text(cx, top + panelH - 22, 'A / B / 點背景 / 點右上角都可關閉', {
+            fontSize: '12px',
             fontFamily: 'Arial, sans-serif',
             color: '#ffffff'
         }).setOrigin(0.5).setAlpha(0.82);
@@ -17460,11 +17489,15 @@ if (!data.scoreHandled && data.attacker) {
             container.add([bg, txt]);
         };
 
-        makeButton(cx, cy + 24, panelW - 120, 54, '火箭巡航', () => {
+        makeButton(cx, rocketBtnY, panelW - 120, 54, '火箭巡航', () => {
             this.confirmStartSoloRocketCruise();
         });
 
-        makeButton(cx, cy + 92, panelW - 120, 44, '關閉', () => {
+        makeButton(cx, cleaningBtnY, panelW - 120, 54, '大掃除', () => {
+            this.confirmStartSoloCleaningRoom();
+        });
+
+        makeButton(cx, closeBtnY, panelW - 120, 44, '關閉', () => {
             this.closeSoloChickenMenu();
         });
 
@@ -17660,9 +17693,423 @@ if (!data.scoreHandled && data.attacker) {
         }
     }
 
+    getSoloCleaningRoomState() {
+        if (!this.soloCleaningRoom || typeof this.soloCleaningRoom !== 'object') {
+            this.soloCleaningRoom = {
+                active: false,
+                paid: false,
+                paymentPending: false,
+                uiContainer: null,
+                messageText: null,
+                timers: [],
+                objects: []
+            };
+        }
+
+        if (!Array.isArray(this.soloCleaningRoom.timers)) this.soloCleaningRoom.timers = [];
+        if (!Array.isArray(this.soloCleaningRoom.objects)) this.soloCleaningRoom.objects = [];
+        return this.soloCleaningRoom;
+    }
+
+    confirmStartSoloCleaningRoom() {
+        const state = this.getSoloCleaningRoomState();
+        if (state.active || state.paymentPending) return;
+
+        // 防止 blocker 與按鈕事件同時觸發，造成 confirm / 扣款流程重複。
+        const now = Date.now();
+        if (this.soloCleaningRoomConfirmLockUntil && now < this.soloCleaningRoomConfirmLockUntil) return;
+        this.soloCleaningRoomConfirmLockUntil = now + 500;
+
+        const cost = 50;
+
+        if (!window.GameLogic.currentUser) {
+            this.openSoloCleaningRoomPaymentConfirm(cost, {
+                mode: 'notice',
+                title: '尚未登入',
+                body: '請先登入後再遊玩大掃除。'
+            });
+            return;
+        }
+
+        const localCoins = Number(
+            window.GameLogic.myProfile && window.GameLogic.myProfile.coins
+                ? window.GameLogic.myProfile.coins
+                : 0
+        );
+
+        if (!Number.isFinite(localCoins) || localCoins < cost) {
+            this.openSoloCleaningRoomPaymentConfirm(cost, {
+                mode: 'notice',
+                title: '馬德幣不足',
+                body: `馬德幣不足，還不能開始大掃除喔！\n大掃除需要 ${cost} 馬德幣。\n你目前持有 ${Number.isFinite(localCoins) ? localCoins : 0} 馬德幣。`
+            });
+            return;
+        }
+
+        this.openSoloCleaningRoomPaymentConfirm(cost);
+    }
+
+    async requestSoloCleaningRoomPayment(cost = 50) {
+        const state = this.getSoloCleaningRoomState();
+        if (state.paymentPending) return;
+        state.paymentPending = true;
+
+        const uid = window.GameLogic.currentUser && window.GameLogic.currentUser.uid
+            ? window.GameLogic.currentUser.uid
+            : null;
+
+        if (!uid) {
+            state.paymentPending = false;
+            this.openSoloCleaningRoomPaymentConfirm(cost, {
+                mode: 'notice',
+                title: '登入資料異常',
+                body: '找不到登入資料，無法進入大掃除。'
+            });
+            return;
+        }
+
+        try {
+            const coinSnap = await get(ref(window.GameLogic.db, `users/${uid}/coins`));
+            const latestCoinsRaw = coinSnap.val();
+            const latestCoins = Number(latestCoinsRaw || 0);
+
+            if (!Number.isFinite(latestCoins)) {
+                console.warn('[大掃除] coins 資料異常：', latestCoinsRaw);
+                this.openSoloCleaningRoomPaymentConfirm(cost, {
+                    mode: 'notice',
+                    title: '馬德幣資料異常',
+                    body: '目前無法確認你的馬德幣資料，請稍後再試。'
+                });
+                return;
+            }
+
+            if (latestCoins < cost) {
+                window.GameLogic.myProfile.coins = latestCoins;
+                this.syncSoloCleaningRoomCoinUi(latestCoins);
+                this.openSoloCleaningRoomPaymentConfirm(cost, {
+                    mode: 'notice',
+                    title: '馬德幣不足',
+                    body: `馬德幣不足，還不能開始大掃除喔！\n大掃除需要 ${cost} 馬德幣。\n你目前持有 ${latestCoins} 馬德幣。`
+                });
+                return;
+            }
+
+            const newCoins = latestCoins - cost;
+            await update(ref(window.GameLogic.db, `users/${uid}`), { coins: newCoins });
+
+            window.GameLogic.myProfile.coins = newCoins;
+            this.syncSoloCleaningRoomCoinUi(newCoins);
+            state.paid = true;
+            state.active = false;
+            console.log('[大掃除] 已支付 50 馬德幣，入口已開啟。');
+
+            this.closeSoloCleaningRoomPaymentConfirm();
+            this.closeSoloChickenMenu();
+            this.showSoloCleaningRoomPendingMessage();
+        } catch (err) {
+            console.warn('[大掃除] 扣款失敗，已阻擋進入副本：', err);
+            this.openSoloCleaningRoomPaymentConfirm(cost, {
+                mode: 'notice',
+                title: '扣款失敗',
+                body: '扣款失敗，請稍後再試。'
+            });
+        } finally {
+            state.paymentPending = false;
+        }
+    }
+
+    syncSoloCleaningRoomCoinUi(coins) {
+        const val = Math.max(0, Math.floor(Number(coins || 0)));
+        if (window.GameLogic && window.GameLogic.myProfile) window.GameLogic.myProfile.coins = val;
+
+        if (window.syncPlayerCoinsUi) {
+            window.syncPlayerCoinsUi(val);
+            return;
+        }
+
+        const coinsEl = document.getElementById('vp-coins');
+        if (coinsEl) coinsEl.innerText = val;
+        const storeCoinsEl = document.getElementById('store-current-coins');
+        if (storeCoinsEl) storeCoinsEl.innerText = `💰 ${val}`;
+    }
+
+    closeSoloCleaningRoomPaymentConfirm() {
+        const container = this.soloCleaningRoomPaymentConfirmContainer;
+        const blocker = this.soloCleaningRoomPaymentConfirmBlocker;
+
+        this.soloCleaningRoomPaymentConfirmContainer = null;
+        this.soloCleaningRoomPaymentConfirmBlocker = null;
+
+        try {
+            if (container && container.destroy) container.destroy(true);
+        } catch (err) {
+            console.warn('[大掃除] 支付確認面板清理失敗，已略過：', err);
+        }
+
+        try {
+            if (blocker && blocker.destroy) blocker.destroy();
+        } catch (err) {
+            console.warn('[大掃除] 支付確認遮罩清理失敗，已略過：', err);
+        }
+    }
+
+    openSoloCleaningRoomPaymentConfirm(cost = 50, options = {}) {
+        this.closeSoloCleaningRoomPaymentConfirm();
+
+        const cam = this.cameras.main;
+        const isNotice = options.mode === 'notice';
+        const localCoinsRaw = Number(
+            window.GameLogic.myProfile && window.GameLogic.myProfile.coins
+                ? window.GameLogic.myProfile.coins
+                : 0
+        );
+        const localCoins = Number.isFinite(localCoinsRaw) ? localCoinsRaw : 0;
+        const afterCoins = Math.max(0, localCoins - cost);
+
+        const cx = cam.width / 2;
+        const cy = cam.height / 2;
+        const panelW = Math.min(370, Math.max(286, cam.width - 40));
+        const panelH = isNotice ? 230 : 278;
+        const px = cx - panelW / 2;
+        const py = cy - panelH / 2;
+
+        const isPointInHitRect = (pointX, pointY, rect) => {
+            return pointX >= rect.x - rect.w / 2 &&
+                   pointX <= rect.x + rect.w / 2 &&
+                   pointY >= rect.y - rect.h / 2 &&
+                   pointY <= rect.y + rect.h / 2;
+        };
+
+        const noticeBtnHit = { x: cx, y: py + panelH - 44, w: 170, h: 62 };
+        const cancelBtnHit = { x: cx - 82, y: py + panelH - 48, w: 152, h: 62 };
+        const payBtnHit = { x: cx + 82, y: py + panelH - 48, w: 152, h: 62 };
+
+        const safeClosePaymentConfirm = () => {
+            this.closeSoloCleaningRoomPaymentConfirm();
+        };
+
+        const safePayAndOpenCleaningRoom = () => {
+            this.closeSoloCleaningRoomPaymentConfirm();
+            this.requestSoloCleaningRoomPayment(cost);
+        };
+
+        const blocker = this.add.rectangle(cx, cy, cam.width, cam.height, 0x000000, 0.74)
+            .setDepth(9888)
+            .setScrollFactor(0)
+            .setInteractive();
+
+        blocker.on('pointerdown', (pointer, localX, localY, event) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+
+            const pointX = pointer ? pointer.x : null;
+            const pointY = pointer ? pointer.y : null;
+            if (pointX === null || pointY === null) return;
+
+            if (isNotice && isPointInHitRect(pointX, pointY, noticeBtnHit)) {
+                safeClosePaymentConfirm();
+                return;
+            }
+
+            if (!isNotice && isPointInHitRect(pointX, pointY, cancelBtnHit)) {
+                safeClosePaymentConfirm();
+                return;
+            }
+
+            if (!isNotice && isPointInHitRect(pointX, pointY, payBtnHit)) {
+                safePayAndOpenCleaningRoom();
+                return;
+            }
+
+            if (pointX >= px && pointX <= px + panelW && pointY >= py && pointY <= py + panelH) {
+                return;
+            }
+
+            safeClosePaymentConfirm();
+        });
+
+        const container = this.add.container(0, 0)
+            .setDepth(9890)
+            .setScrollFactor(0);
+
+        this.soloCleaningRoomPaymentConfirmBlocker = blocker;
+        this.soloCleaningRoomPaymentConfirmContainer = container;
+
+        const panel = this.add.graphics();
+        panel.fillStyle(0x031017, 0.98);
+        panel.fillRoundedRect(px, py, panelW, panelH, 18);
+        panel.lineStyle(5, 0x16e0d6, 1);
+        panel.strokeRoundedRect(px, py, panelW, panelH, 18);
+        panel.lineStyle(2, 0xa7ffbd, 0.88);
+        panel.strokeRoundedRect(px + 8, py + 8, panelW - 16, panelH - 16, 14);
+
+        const title = this.add.text(cx, py + 42, options.title || '開始大掃除', {
+            fontSize: '24px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#006b66',
+            strokeThickness: 5
+        }).setOrigin(0.5);
+
+        const bodyText = options.body || `要花 ${cost} 馬德幣開始大掃除嗎？`;
+        const body = this.add.text(cx, py + 96, bodyText, {
+            fontSize: '16px',
+            fontFamily: 'Arial, sans-serif',
+            color: '#ffffff',
+            align: 'center',
+            lineSpacing: 6,
+            wordWrap: { width: panelW - 48 }
+        }).setOrigin(0.5);
+
+        const coinInfo = this.add.text(cx, py + 150, isNotice ? '' : `目前持有：${localCoins}　支付後：${afterCoins}`, {
+            fontSize: '14px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#fff1a8',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+
+        container.add([panel, title, body, coinInfo]);
+
+        const makeConfirmBtn = (x, y, w, h, label, fillColor, callback) => {
+            const btnBg = this.add.rectangle(x, y, w, h, fillColor, 1)
+                .setStrokeStyle(3, 0xffffff, 0.9)
+                .setInteractive({ useHandCursor: true });
+
+            const btnText = this.add.text(x, y, label, {
+                fontSize: '17px',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold',
+                color: fillColor === 0xffffff ? '#003333' : '#ffffff',
+                stroke: fillColor === 0xffffff ? '#ffffff' : '#000000',
+                strokeThickness: fillColor === 0xffffff ? 0 : 3
+            }).setOrigin(0.5);
+
+            const hit = this.add.zone(x, y, w + 18, h + 18)
+                .setInteractive({ useHandCursor: true });
+
+            const handler = (pointer, localX, localY, event) => {
+                if (event && event.stopPropagation) event.stopPropagation();
+                callback();
+            };
+
+            btnBg.on('pointerdown', handler);
+            btnText.setInteractive({ useHandCursor: true }).on('pointerdown', handler);
+            hit.on('pointerdown', handler);
+
+            container.add([btnBg, btnText, hit]);
+        };
+
+        if (isNotice) {
+            makeConfirmBtn(cx, py + panelH - 44, 150, 42, '知道了', 0xffffff, () => {
+                safeClosePaymentConfirm();
+            });
+        } else {
+            makeConfirmBtn(cx - 82, py + panelH - 48, 132, 42, '取消', 0x444444, () => {
+                safeClosePaymentConfirm();
+            });
+
+            makeConfirmBtn(cx + 82, py + panelH - 48, 132, 42, '支付啟動', 0xffffff, () => {
+                safePayAndOpenCleaningRoom();
+            });
+        }
+    }
+
+    showSoloCleaningRoomPendingMessage() {
+        const state = this.getSoloCleaningRoomState();
+
+        try {
+            if (state.uiContainer && state.uiContainer.destroy) state.uiContainer.destroy(true);
+        } catch (err) {
+            console.warn('[大掃除] 舊提示清理失敗，已略過：', err);
+        }
+
+        const cam = this.cameras.main;
+        const cx = cam.width / 2;
+        const cy = cam.height / 2;
+        const panelW = Math.min(430, Math.max(286, cam.width - 44));
+        const panelH = 150;
+        const px = cx - panelW / 2;
+        const py = cy - panelH / 2;
+
+        const container = this.add.container(0, 0)
+            .setDepth(9900)
+            .setScrollFactor(0)
+            .setAlpha(0);
+
+        const panel = this.add.graphics();
+        panel.fillStyle(0x031017, 0.94);
+        panel.fillRoundedRect(px, py, panelW, panelH, 18);
+        panel.lineStyle(4, 0x16e0d6, 1);
+        panel.strokeRoundedRect(px, py, panelW, panelH, 18);
+        panel.lineStyle(2, 0xa7ffbd, 0.88);
+        panel.strokeRoundedRect(px + 8, py + 8, panelW - 16, panelH - 16, 14);
+
+        const title = this.add.text(cx, py + 38, '大掃除入口已開啟', {
+            fontSize: '23px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#006b66',
+            strokeThickness: 5
+        }).setOrigin(0.5);
+
+        const message = this.add.text(cx, py + 84, '大掃除入口已開啟，副本內容將由下一包接上。', {
+            fontSize: '15px',
+            fontFamily: 'Arial, sans-serif',
+            color: '#eafffb',
+            align: 'center',
+            wordWrap: { width: panelW - 48 }
+        }).setOrigin(0.5);
+
+        const okBg = this.add.rectangle(cx, py + 122, 132, 34, 0xffffff, 1)
+            .setStrokeStyle(2, 0xa7ffbd, 0.9)
+            .setInteractive({ useHandCursor: true });
+        const okText = this.add.text(cx, py + 122, '知道了', {
+            fontSize: '15px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#003333'
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+        const closePending = (pointer, localX, localY, event) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+            try {
+                if (state.uiContainer && state.uiContainer.destroy) state.uiContainer.destroy(true);
+            } catch (err) {
+                console.warn('[大掃除] 提示關閉失敗，已略過：', err);
+            }
+            state.uiContainer = null;
+            state.messageText = null;
+        };
+
+        okBg.on('pointerdown', closePending);
+        okText.on('pointerdown', closePending);
+
+        container.add([panel, title, message, okBg, okText]);
+        state.uiContainer = container;
+        state.messageText = message;
+        state.objects = Array.isArray(state.objects) ? state.objects : [];
+        state.objects.push(container);
+
+        const tw = this.tweens.add({
+            targets: container,
+            alpha: { from: 0, to: 1 },
+            y: { from: 12, to: 0 },
+            duration: 160,
+            ease: 'Sine.easeOut'
+        });
+
+        const timer = this.time.delayedCall(4200, () => {
+            if (state.uiContainer === container) closePending();
+        });
+        state.timers.push(timer);
+        state.objects.push(tw);
+    }
+
     confirmStartSoloRocketCruise() {
         if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished || this.soloRocketPaymentPending) return;
-
         // 防止 blocker 與按鈕事件同時觸發，造成 confirm / 扣款流程重複
         const now = Date.now();
         if (this.soloRocketConfirmLockUntil && now < this.soloRocketConfirmLockUntil) return;
