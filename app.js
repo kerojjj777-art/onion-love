@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getDatabase, ref, set, onValue, push, remove, onDisconnect, update, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getDatabase, ref, set, onValue, push, remove, onDisconnect, update, get, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 const firebaseConfig = {
@@ -96,7 +96,7 @@ window.GameLogic = {
     authGuardSigningOut: false
 };
 
-let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, pmUnreadUnsubscribe = null, friendRequestsUnsubscribe = null, friendVisitRequestsUnsubscribe = null, friendVisitRepliesUnsubscribe = null, profileViewingUid = null;
+let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, pmUnreadUnsubscribe = null, friendRequestsUnsubscribe = null, friendVisitRequestsUnsubscribe = null, friendVisitRepliesUnsubscribe = null, friendVisitLoveNoticesUnsubscribe = null, profileViewingUid = null;
 window.switchScene = switchScene; window.showProfileModal = showProfileModal; window.leaveCafe = leaveCafe; window.signOut = signOut; window.auth = auth;
 
 // ====== 入口房間共用工具 ======
@@ -10002,6 +10002,153 @@ window.addFriendLovePercent = async function(friendUid, amount = 0.1, options = 
     }
 };
 
+window.getFriendVisitLoveDateKey = function(date = new Date()) {
+    if (window.getMeowlimeTodayDateString) return window.getMeowlimeTodayDateString(date);
+
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
+window.getFriendVisitLoveDirectionKey = function(visitorUid, hostUid) {
+    return `${visitorUid || ''}_to_${hostUid || ''}`.replace(/[.#$[\]/]/g, '_');
+};
+
+window.tryGrantFriendVisitLoveReward = async function(hostUid, hostName = '') {
+    if (!hostUid || !window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return { ok: false, reason: 'missing-context' };
+
+    const visitorUid = window.GameLogic.currentUser.uid;
+    if (!visitorUid || hostUid === visitorUid) return { ok: false, reason: 'not-visitor' };
+
+    const safeHostName = hostName || (window.GameLogic.doghouseHostProfile && window.GameLogic.doghouseHostProfile.name) || '好友';
+    const visitorName = window.GameLogic.myProfile && window.GameLogic.myProfile.name ? window.GameLogic.myProfile.name : '好友';
+    const dateKey = window.getFriendVisitLoveDateKey ? window.getFriendVisitLoveDateKey() : '';
+    const directionKey = window.getFriendVisitLoveDirectionKey ? window.getFriendVisitLoveDirectionKey(visitorUid, hostUid) : `${visitorUid}_to_${hostUid}`;
+    const localLockKey = `${dateKey}_${directionKey}`;
+
+    if (!dateKey || !directionKey) return { ok: false, reason: 'missing-date-or-direction' };
+
+    if (!window.__friendVisitLoveRewardLocalLocks) window.__friendVisitLoveRewardLocalLocks = {};
+    if (window.__friendVisitLoveRewardLocalLocks[localLockKey]) return { ok: false, reason: 'local-locked' };
+    window.__friendVisitLoveRewardLocalLocks[localLockKey] = true;
+
+    try {
+        const friendData = (window.GameLogic.friends && window.GameLogic.friends[hostUid]) || {};
+        const pairId = friendData.pairId || (window.getFriendPairId ? window.getFriendPairId(visitorUid, hostUid) : '');
+        if (!pairId) return { ok: false, reason: 'missing-pair' };
+
+        const uidList = [visitorUid, hostUid].sort();
+        const addVal = 0.1;
+        const now = Date.now();
+        let alreadyGranted = false;
+        let nextLove = 0;
+
+        const txResult = await runTransaction(ref(window.GameLogic.db, `friendPairs/${pairId}`), (pairData) => {
+            const currentPair = pairData || {};
+            const dailyVisitLove = currentPair.dailyVisitLove || {};
+            const todayMap = dailyVisitLove[dateKey] || {};
+
+            if (todayMap[directionKey]) {
+                alreadyGranted = true;
+                nextLove = Number(currentPair.lovePercent || 0);
+                return currentPair;
+            }
+
+            const oldLove = Number(currentPair.lovePercent || friendData.lovePercent || 0);
+            nextLove = Number(Math.max(0, oldLove + addVal).toFixed(1));
+
+            return Object.assign({}, currentPair, {
+                uidA: currentPair.uidA || uidList[0],
+                uidB: currentPair.uidB || uidList[1],
+                createdAt: currentPair.createdAt || now,
+                lovePercent: nextLove,
+                updatedAt: now,
+                dailyVisitLove: Object.assign({}, dailyVisitLove, {
+                    [dateKey]: Object.assign({}, todayMap, {
+                        [directionKey]: {
+                            visitorUid: visitorUid,
+                            hostUid: hostUid,
+                            visitorName: visitorName,
+                            hostName: safeHostName,
+                            amount: addVal,
+                            date: dateKey,
+                            createdAt: now
+                        }
+                    })
+                })
+            });
+        });
+
+        const nextPairData = txResult && txResult.snapshot ? (txResult.snapshot.val() || {}) : {};
+        if (!window.GameLogic.friendPairs) window.GameLogic.friendPairs = {};
+        window.GameLogic.friendPairs[pairId] = nextPairData;
+
+        if (alreadyGranted) return { ok: true, alreadyGranted: true, pairId, lovePercent: nextLove, dateKey, directionKey };
+
+        set(ref(window.GameLogic.db, `users/${hostUid}/friendVisitLoveNotices/${dateKey}_${directionKey}`), {
+            type: 'friendVisitLove',
+            pairId: pairId,
+            visitorUid: visitorUid,
+            hostUid: hostUid,
+            visitorName: visitorName,
+            hostName: safeHostName,
+            amount: addVal,
+            lovePercent: Number(nextPairData.lovePercent || nextLove || 0),
+            date: dateKey,
+            createdAt: now
+        }).catch(err => console.warn('[好友拜訪] 發送屋主友好度提示失敗：', err));
+
+        if (window.showFriendLoveToast) window.showFriendLoveToast(`去 ${safeHostName} 家拜訪成功，友好度 +0.1%`);
+        return { ok: true, alreadyGranted: false, pairId, lovePercent: Number(nextPairData.lovePercent || nextLove || 0), dateKey, directionKey };
+    } catch (err) {
+        delete window.__friendVisitLoveRewardLocalLocks[localLockKey];
+        console.warn('[好友拜訪] 拜訪友好度加成失敗：', err);
+        return { ok: false, reason: 'grant-failed', error: err };
+    }
+};
+
+window.startFriendVisitLoveNoticesListener = function() {
+    if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return;
+
+    const myUid = window.GameLogic.currentUser.uid;
+
+    if (friendVisitLoveNoticesUnsubscribe) {
+        friendVisitLoveNoticesUnsubscribe();
+        friendVisitLoveNoticesUnsubscribe = null;
+    }
+
+    friendVisitLoveNoticesUnsubscribe = onValue(ref(window.GameLogic.db, `users/${myUid}/friendVisitLoveNotices`), snap => {
+        const notices = snap.val() || {};
+        if (!window.__shownFriendVisitLoveNoticeKeys) window.__shownFriendVisitLoveNoticeKeys = {};
+
+        Object.keys(notices).forEach(noticeKey => {
+            const item = notices[noticeKey] || {};
+            if (!item || item.type !== 'friendVisitLove' || !item.createdAt) return;
+
+            if (Date.now() - Number(item.createdAt || 0) > 120000) {
+                remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitLoveNotices/${noticeKey}`));
+                return;
+            }
+
+            if (window.__shownFriendVisitLoveNoticeKeys[noticeKey]) return;
+            window.__shownFriendVisitLoveNoticeKeys[noticeKey] = true;
+
+            if (item.pairId) {
+                if (!window.GameLogic.friendPairs) window.GameLogic.friendPairs = {};
+                window.GameLogic.friendPairs[item.pairId] = Object.assign({}, window.GameLogic.friendPairs[item.pairId] || {}, {
+                    lovePercent: Number(item.lovePercent || 0),
+                    updatedAt: Number(item.createdAt || Date.now())
+                });
+            }
+
+            const visitorName = item.visitorName || '好友';
+            if (window.showFriendLoveToast) window.showFriendLoveToast(`${visitorName}來你家拜訪成功，友好度 +0.1%`);
+            remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitLoveNotices/${noticeKey}`));
+        });
+    });
+};
+
 window.getCurrentDoghouseHostUid = function() {
     if (!window.GameLogic || !window.GameLogic.currentUser) return '';
     return window.GameLogic.doghouseHostUid || window.GameLogic.currentUser.uid;
@@ -12058,6 +12205,7 @@ onAuthStateChanged(auth, async (user) => {
         if (window.startFriendRequestsListener) window.startFriendRequestsListener();
         if (window.startFriendVisitRequestsListener) window.startFriendVisitRequestsListener();
         if (window.startFriendVisitRepliesListener) window.startFriendVisitRepliesListener();
+        if (window.startFriendVisitLoveNoticesListener) window.startFriendVisitLoveNoticesListener();
         if (window.refreshMyFriendsCache) window.refreshMyFriendsCache();
         onValue(ref(db, 'manuals'), snap => { const data = snap.val(); window.manualPages = []; if (data) { Object.keys(data).forEach(key => { const item = data[key] || {}; if (!item.imgBase64) return; window.manualPages.push({ key: key, imgBase64: item.imgBase64, timestamp: item.timestamp || 0, title: item.title || '', description: item.description || '', categoryId: item.categoryId || 'uncategorized' }); }); window.manualPages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); } window.renderManualPage(); });
         onValue(ref(db, 'manualCategories'), snap => { window.manualCategories = snap.val() || {}; window.renderManualPage(); });
@@ -12130,6 +12278,7 @@ onAuthStateChanged(auth, async (user) => {
         if (friendRequestsUnsubscribe) { friendRequestsUnsubscribe(); friendRequestsUnsubscribe = null; }
         if (friendVisitRequestsUnsubscribe) { friendVisitRequestsUnsubscribe(); friendVisitRequestsUnsubscribe = null; }
         if (friendVisitRepliesUnsubscribe) { friendVisitRepliesUnsubscribe(); friendVisitRepliesUnsubscribe = null; }
+        if (friendVisitLoveNoticesUnsubscribe) { friendVisitLoveNoticesUnsubscribe(); friendVisitLoveNoticesUnsubscribe = null; }
         if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
         if (memoryUnsubscribe) { memoryUnsubscribe(); memoryUnsubscribe = null; }
         if (cafeFurnitureUnsubscribe) { cafeFurnitureUnsubscribe(); cafeFurnitureUnsubscribe = null; }
@@ -13836,6 +13985,9 @@ class MainScene extends Phaser.Scene {
 
             if (window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) {
                 this.time.delayedCall(300, () => sendBubble(`正在拜訪 ${doghouseHostName} 的家`));
+                this.time.delayedCall(900, () => {
+                    if (window.tryGrantFriendVisitLoveReward) window.tryGrantFriendVisitLoveReward(doghouseHostUid, doghouseHostName);
+                });
             }
         } else if (this.sceneName === "farm") {
             this.add.image(mapW/2, mapH/2, 'bgFarm').setDisplaySize(mapW, mapH);
