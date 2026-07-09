@@ -14715,6 +14715,22 @@ class MainScene extends Phaser.Scene {
             deodorizeCount: 0,
             prevUiState: null,
             hiddenFurnitureObjects: [],
+            soloPlayerEntity: null,
+            soloPlayerSpeed: 324,
+            soloPlayerFacing: { x: 0, y: 1 },
+            soloPlayerThrowing: false,
+            soloWaterBalls: [],
+            soloActionButtonMode: 'clean',
+            soloActionCooldownUntil: 0,
+            soloActionUiContainer: null,
+            soloActionButtonBg: null,
+            soloActionButtonText: null,
+            soloActionButtonGlow: null,
+            soloActionButtonHit: null,
+            soloJoystickOuter: null,
+            soloJoystickInner: null,
+            soloJoystickState: null,
+            soloJoystickHandlers: null,
             playerUiState: null,
             returnPosition: null,
             tutorialContainer: null,
@@ -15262,6 +15278,13 @@ class MainScene extends Phaser.Scene {
         this.spaceKey.on('down', (e) => {
             if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
 
+            // 大掃除中，Space 只觸發副本右下角主按鍵，不走大廳 A 鍵流程。
+            if (this.soloCleaningRoom && this.soloCleaningRoom.active) {
+                if (e && e.preventDefault) e.preventDefault();
+                if (!e.repeat && this.triggerSoloCleaningAction) this.triggerSoloCleaningAction();
+                return;
+            }
+
             // 火箭巡航中，Space 不再走大廳 A 鍵流程，改為直接發射光束。
             if (this.soloRocketCruiseActive && !this.soloRocketCruiseFinished) {
                 if (e && e.preventDefault) e.preventDefault();
@@ -15274,6 +15297,12 @@ class MainScene extends Phaser.Scene {
 
         this.spaceKey.on('up', (e) => {
             if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+
+            // 大掃除中避免 Space keyup 觸發原本 A 鍵短按/長按事件。
+            if (this.soloCleaningRoom && this.soloCleaningRoom.active) {
+                if (e && e.preventDefault) e.preventDefault();
+                return;
+            }
 
             // 火箭巡航中避免 Space keyup 觸發原本 A 鍵短按/長按事件。
             if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished) {
@@ -17735,6 +17764,22 @@ if (!data.scoreHandled && data.attacker) {
                 deodorizeCount: 0,
                 prevUiState: null,
                 hiddenFurnitureObjects: [],
+                soloPlayerEntity: null,
+                soloPlayerSpeed: 324,
+                soloPlayerFacing: { x: 0, y: 1 },
+                soloPlayerThrowing: false,
+                soloWaterBalls: [],
+                soloActionButtonMode: 'clean',
+                soloActionCooldownUntil: 0,
+                soloActionUiContainer: null,
+                soloActionButtonBg: null,
+                soloActionButtonText: null,
+                soloActionButtonGlow: null,
+                soloActionButtonHit: null,
+                soloJoystickOuter: null,
+                soloJoystickInner: null,
+                soloJoystickState: null,
+                soloJoystickHandlers: null,
                 playerUiState: null,
                 returnPosition: null,
                 tutorialContainer: null,
@@ -17754,6 +17799,10 @@ if (!data.scoreHandled && data.attacker) {
         if (!Array.isArray(this.soloCleaningRoom.timers)) this.soloCleaningRoom.timers = [];
         if (!Array.isArray(this.soloCleaningRoom.objects)) this.soloCleaningRoom.objects = [];
         if (!Array.isArray(this.soloCleaningRoom.hiddenFurnitureObjects)) this.soloCleaningRoom.hiddenFurnitureObjects = [];
+        if (!Array.isArray(this.soloCleaningRoom.soloWaterBalls)) this.soloCleaningRoom.soloWaterBalls = [];
+        if (!this.soloCleaningRoom.soloPlayerFacing || typeof this.soloCleaningRoom.soloPlayerFacing !== 'object') this.soloCleaningRoom.soloPlayerFacing = { x: 0, y: 1 };
+        if (!this.soloCleaningRoom.soloActionButtonMode) this.soloCleaningRoom.soloActionButtonMode = 'clean';
+        if (!Number.isFinite(Number(this.soloCleaningRoom.soloPlayerSpeed))) this.soloCleaningRoom.soloPlayerSpeed = 324;
         return this.soloCleaningRoom;
     }
 
@@ -18318,6 +18367,23 @@ if (!data.scoreHandled && data.attacker) {
         }
 
         try {
+            (this.trashes || []).forEach(trash => remember(trash));
+            this.closestTrash = null;
+        } catch (err) {
+            console.warn('[大掃除] 暫時隱藏大廳洋蔥皮失敗，已略過：', err);
+        }
+
+        try {
+            remember(this.princeCatSprite);
+            remember(this.princeCatNameText);
+            remember(this.princeCatNameBg);
+            remember(this.princeCatBubbleText);
+            remember(this.princeCatBubbleBg);
+        } catch (err) {
+            console.warn('[大掃除] 暫時隱藏王子麵失敗，已略過：', err);
+        }
+
+        try {
             if (this.closestFurniture && this.closestFurniture.prompt) remember(this.closestFurniture.prompt);
             if (this.furniturePrompt) remember(this.furniturePrompt);
         } catch (_) {}
@@ -18661,6 +18727,7 @@ if (!data.scoreHandled && data.attacker) {
 
             this.createSoloCleaningRoomLayer();
             this.createSoloCleaningRoomUiLayer();
+            this.createSoloCleaningRoomPlayerAndControls();
             this.playSoloCleaningRoomBgm();
             this.startSoloCleaningRoomCountdown();
             this.playSoloCleaningRoomIntro();
@@ -19037,6 +19104,516 @@ if (!data.scoreHandled && data.attacker) {
         state.timers.push(whistleTimer);
     }
 
+    createSoloCleaningRoomPlayerAndControls() {
+        const state = this.getSoloCleaningRoomState();
+        const worldBounds = this.physics && this.physics.world && this.physics.world.bounds
+            ? this.physics.world.bounds
+            : { x: 0, y: 0, width: 2048, height: 2048 };
+        const spawnX = worldBounds.x + worldBounds.width / 2;
+        const spawnY = worldBounds.y + worldBounds.height / 2;
+
+        this.clearSoloCleaningRoomGameplayObjects(false);
+
+        const profile = {
+            ...(window.GameLogic && window.GameLogic.myProfile ? window.GameLogic.myProfile : {}),
+            name: (window.GameLogic && window.GameLogic.myProfile && window.GameLogic.myProfile.name) || '初心者',
+            color: (window.GameLogic && window.GameLogic.myProfile && window.GameLogic.myProfile.color) || '#ffffff',
+            level: (window.GameLogic && window.GameLogic.myProfile && window.GameLogic.myProfile.level) || 1
+        };
+
+        const entity = this.createPlayerEntity(spawnX, spawnY, profile, true);
+        const sprite = entity && entity.sprite ? entity.sprite : null;
+
+        if (sprite) {
+            sprite.setDepth(9615);
+            sprite.setVisible(true);
+            sprite.setAlpha(1);
+            sprite.setVelocity(0, 0);
+            sprite.setCollideWorldBounds(true);
+            if (sprite.body) {
+                sprite.body.enable = true;
+                sprite.body.setAllowGravity(false);
+            }
+            if (this.anims && this.anims.exists('idle')) sprite.play('idle', true);
+        }
+
+        if (entity.nameContainer) entity.nameContainer.setVisible(false);
+        if (entity.bubbleContainer) entity.bubbleContainer.setVisible(false);
+        if (entity.partyScoreContainer) entity.partyScoreContainer.setVisible(false);
+        if (entity.localAura) entity.localAura.setVisible(false);
+
+        state.soloPlayerEntity = entity;
+        state.soloPlayerSpeed = 324;
+        state.soloPlayerFacing = { x: 0, y: 1 };
+        state.soloPlayerThrowing = false;
+        state.soloWaterBalls = [];
+        state.soloActionCooldownUntil = 0;
+
+        state.objects.push(
+            entity.sprite,
+            entity.nameContainer,
+            entity.bubbleContainer,
+            entity.partyScoreContainer,
+            entity.localAura
+        );
+
+        if (this.minimap && this.minimap.ignore) {
+            this.minimap.ignore([entity.sprite, entity.nameContainer, entity.bubbleContainer, entity.partyScoreContainer, entity.localAura].filter(Boolean));
+        }
+
+        this.cameras.main.startFollow(sprite, true, 0.12, 0.12);
+        this.createSoloCleaningActionControls();
+        this.setupSoloCleaningDynamicJoystick();
+    }
+
+    createSoloCleaningActionControls() {
+        const state = this.getSoloCleaningRoomState();
+        const cam = this.cameras.main;
+
+        if (state.soloActionUiContainer && state.soloActionUiContainer.destroy) {
+            try { state.soloActionUiContainer.destroy(true); } catch (_) {}
+        }
+
+        const container = this.add.container(0, 0)
+            .setDepth(9760)
+            .setScrollFactor(0);
+
+        const isMobile = cam.width <= 768 || cam.height > cam.width;
+        const btnRadius = isMobile ? 46 : 42;
+        const x = cam.width - (isMobile ? 72 : 78);
+        const y = cam.height - (isMobile ? 82 : 72);
+
+        const glow = this.add.circle(x, y, btnRadius + 10, 0x36baff, 0.22)
+            .setBlendMode(Phaser.BlendModes.ADD)
+            .setScrollFactor(0);
+        const bg = this.add.circle(x, y, btnRadius, 0x1fa8ff, 0.96)
+            .setStrokeStyle(4, 0xeaffff, 1)
+            .setScrollFactor(0)
+            .setInteractive({ useHandCursor: true });
+        const text = this.add.text(x, y, '清理', {
+            fontSize: isMobile ? '22px' : '21px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#003d66',
+            strokeThickness: 5
+        }).setOrigin(0.5).setScrollFactor(0).setInteractive({ useHandCursor: true });
+        const hit = this.add.zone(x, y, btnRadius * 2.45, btnRadius * 2.45)
+            .setScrollFactor(0)
+            .setInteractive({ useHandCursor: true });
+
+        const fire = (pointer, localX, localY, event) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+            this.triggerSoloCleaningAction();
+        };
+
+        bg.on('pointerdown', fire);
+        text.on('pointerdown', fire);
+        hit.on('pointerdown', fire);
+
+        container.add([glow, bg, text, hit]);
+
+        state.soloActionUiContainer = container;
+        state.soloActionButtonBg = bg;
+        state.soloActionButtonText = text;
+        state.soloActionButtonGlow = glow;
+        state.soloActionButtonHit = hit;
+        state.objects.push(container);
+        this.setSoloCleaningActionButtonMode('clean');
+    }
+
+    setSoloCleaningActionButtonMode(mode = 'clean') {
+        const state = this.getSoloCleaningRoomState();
+        const nextMode = mode === 'deodorize' ? 'deodorize' : 'clean';
+        state.soloActionButtonMode = nextMode;
+
+        const isDeodorize = nextMode === 'deodorize';
+        const color = isDeodorize ? 0x20d767 : 0x1fa8ff;
+        const glowColor = isDeodorize ? 0x7dff9b : 0x36baff;
+        const strokeColor = isDeodorize ? 0xeaffee : 0xeaffff;
+        const textStroke = isDeodorize ? '#064d19' : '#003d66';
+
+        if (state.soloActionButtonBg && state.soloActionButtonBg.setFillStyle) {
+            state.soloActionButtonBg.setFillStyle(color, 0.96);
+            state.soloActionButtonBg.setStrokeStyle(4, strokeColor, 1);
+        }
+        if (state.soloActionButtonGlow && state.soloActionButtonGlow.setFillStyle) {
+            state.soloActionButtonGlow.setFillStyle(glowColor, 0.22);
+        }
+        if (state.soloActionButtonText && state.soloActionButtonText.setText) {
+            state.soloActionButtonText.setText(isDeodorize ? '除臭！' : '清理');
+            state.soloActionButtonText.setStyle({
+                color: '#ffffff',
+                stroke: textStroke,
+                strokeThickness: 5
+            });
+        }
+    }
+
+    triggerSoloCleaningAction() {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active || state.inputLocked || state.shellEnding) return;
+
+        const now = Date.now();
+        if (state.soloActionCooldownUntil && now < state.soloActionCooldownUntil) return;
+        state.soloActionCooldownUntil = now + 260;
+
+        if (state.soloActionButtonMode === 'deodorize') {
+            if (state.soloActionButtonBg) {
+                this.tweens.add({ targets: state.soloActionButtonBg, scaleX: 0.9, scaleY: 0.9, yoyo: true, duration: 80 });
+            }
+            return;
+        }
+
+        this.fireSoloCleaningWaterBall();
+    }
+
+    fireSoloCleaningWaterBall() {
+        const state = this.getSoloCleaningRoomState();
+        const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
+        if (!state.active || state.inputLocked || !player || !player.active) return;
+
+        const facing = state.soloPlayerFacing || { x: 0, y: 1 };
+        let dx = Number(facing.x || 0);
+        let dy = Number(facing.y || 0);
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        dx /= len;
+        dy /= len;
+
+        try { window.playSFX(this, 'minimum_laser'); } catch (_) {}
+
+        state.soloPlayerThrowing = true;
+        if (this.anims && this.anims.exists('throw')) player.play('throw', true);
+        this.time.delayedCall(260, () => {
+            const st = this.getSoloCleaningRoomState();
+            st.soloPlayerThrowing = false;
+        });
+
+        const startX = player.x + dx * 26;
+        const startY = player.y + dy * 26;
+        const range = 780;
+        const bounds = this.physics && this.physics.world && this.physics.world.bounds
+            ? this.physics.world.bounds
+            : { x: 0, y: 0, width: 2048, height: 2048 };
+        const pad = 24;
+        const endX = Phaser.Math.Clamp(startX + dx * range, bounds.x + pad, bounds.x + bounds.width - pad);
+        const endY = Phaser.Math.Clamp(startY + dy * range, bounds.y + pad, bounds.y + bounds.height - pad);
+
+        let ball = null;
+        if (this.textures.exists('water-ball-blast')) {
+            ball = this.physics.add.sprite(startX, startY, 'water-ball-blast').setDepth(9625).setScale(1.05);
+            if (this.anims && this.anims.exists('wb-blast')) ball.play('wb-blast', true);
+        } else {
+            ball = this.add.circle(startX, startY, 12, 0x8ffcff, 0.95).setDepth(9625);
+        }
+
+        if (ball.body) {
+            ball.body.setAllowGravity(false);
+            ball.body.enable = false;
+        }
+
+        state.soloWaterBalls.push(ball);
+        state.objects.push(ball);
+
+        this.tweens.add({
+            targets: ball,
+            x: endX,
+            y: endY,
+            alpha: { from: 1, to: 0.9 },
+            duration: 520,
+            ease: 'Sine.easeOut',
+            onComplete: () => {
+                try { if (ball && ball.active && ball.destroy) ball.destroy(); } catch (_) {}
+                state.soloWaterBalls = (state.soloWaterBalls || []).filter(item => item !== ball);
+            }
+        });
+    }
+
+    setupSoloCleaningDynamicJoystick() {
+        const state = this.getSoloCleaningRoomState();
+        const cam = this.cameras.main;
+
+        this.destroySoloCleaningDynamicJoystick(true);
+
+        const outer = this.add.circle(-9999, -9999, 56, 0x111827, 0.32)
+            .setDepth(9762)
+            .setScrollFactor(0)
+            .setStrokeStyle(3, 0x8ffcff, 0.72)
+            .setVisible(false);
+        const inner = this.add.circle(-9999, -9999, 24, 0x8ffcff, 0.72)
+            .setDepth(9763)
+            .setScrollFactor(0)
+            .setStrokeStyle(2, 0xffffff, 0.9)
+            .setVisible(false);
+
+        state.soloJoystickOuter = outer;
+        state.soloJoystickInner = inner;
+        state.objects.push(outer, inner);
+
+        const joy = {
+            active: false,
+            pointerId: null,
+            startX: 0,
+            startY: 0,
+            vx: 0,
+            vy: 0,
+            force: 0,
+            radius: 62,
+            deadZone: 10
+        };
+        state.soloJoystickState = joy;
+
+        const clear = () => {
+            joy.active = false;
+            joy.pointerId = null;
+            joy.vx = 0;
+            joy.vy = 0;
+            joy.force = 0;
+            if (outer && outer.setVisible) outer.setVisible(false);
+            if (inner && inner.setVisible) inner.setVisible(false);
+        };
+
+        const shouldStartJoystick = (pointer) => {
+            if (!pointer || !state.active || state.inputLocked || state.shellEnding) return false;
+            if (pointer.x > cam.width * 0.52) return false;
+            if (pointer.y < cam.height * 0.30) return false;
+            return true;
+        };
+
+        const onDown = (pointer) => {
+            if (!shouldStartJoystick(pointer)) return;
+            if (pointer.event && pointer.event.stopPropagation) pointer.event.stopPropagation();
+
+            joy.active = true;
+            joy.pointerId = pointer.id;
+            joy.startX = pointer.x;
+            joy.startY = pointer.y;
+            joy.vx = 0;
+            joy.vy = 0;
+            joy.force = 0;
+            outer.setPosition(joy.startX, joy.startY).setVisible(true);
+            inner.setPosition(joy.startX, joy.startY).setVisible(true);
+        };
+
+        const onMove = (pointer) => {
+            if (!joy.active || pointer.id !== joy.pointerId) return;
+            if (pointer.event && pointer.event.stopPropagation) pointer.event.stopPropagation();
+
+            const mx = pointer.x - joy.startX;
+            const my = pointer.y - joy.startY;
+            const dist = Math.sqrt(mx * mx + my * my);
+            const clampedDist = Math.min(dist, joy.radius);
+            const nx = dist > 0 ? mx / dist : 0;
+            const ny = dist > 0 ? my / dist : 0;
+
+            if (dist <= joy.deadZone) {
+                joy.vx = 0;
+                joy.vy = 0;
+                joy.force = 0;
+                inner.setPosition(joy.startX, joy.startY);
+                return;
+            }
+
+            joy.vx = nx;
+            joy.vy = ny;
+            joy.force = clampedDist / joy.radius;
+            inner.setPosition(joy.startX + nx * clampedDist, joy.startY + ny * clampedDist);
+        };
+
+        const onUp = (pointer) => {
+            if (!joy.active || pointer.id !== joy.pointerId) return;
+            if (pointer.event && pointer.event.stopPropagation) pointer.event.stopPropagation();
+            clear();
+        };
+
+        const onGameOut = clear;
+        const onVisibilityChange = () => { if (document.hidden) clear(); };
+        const onPointerCancel = clear;
+        const canvas = this.game && this.game.canvas ? this.game.canvas : null;
+
+        this.input.on('pointerdown', onDown);
+        this.input.on('pointermove', onMove);
+        this.input.on('pointerup', onUp);
+        this.input.on('pointerupoutside', onUp);
+        this.input.on('gameout', onGameOut);
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        if (canvas && canvas.addEventListener) canvas.addEventListener('pointercancel', onPointerCancel, { passive: true });
+
+        state.soloJoystickHandlers = {
+            onDown,
+            onMove,
+            onUp,
+            onGameOut,
+            onVisibilityChange,
+            onPointerCancel,
+            canvas
+        };
+    }
+
+    destroySoloCleaningDynamicJoystick(destroyObjects = true) {
+        const state = this.getSoloCleaningRoomState();
+        const h = state.soloJoystickHandlers;
+
+        if (h && this.input) {
+            this.input.off('pointerdown', h.onDown);
+            this.input.off('pointermove', h.onMove);
+            this.input.off('pointerup', h.onUp);
+            this.input.off('pointerupoutside', h.onUp);
+            this.input.off('gameout', h.onGameOut);
+            document.removeEventListener('visibilitychange', h.onVisibilityChange);
+            if (h.canvas && h.canvas.removeEventListener) h.canvas.removeEventListener('pointercancel', h.onPointerCancel);
+        }
+
+        state.soloJoystickHandlers = null;
+        if (state.soloJoystickState) {
+            state.soloJoystickState.active = false;
+            state.soloJoystickState.pointerId = null;
+            state.soloJoystickState.vx = 0;
+            state.soloJoystickState.vy = 0;
+            state.soloJoystickState.force = 0;
+        }
+
+        if (destroyObjects) {
+            try { if (state.soloJoystickOuter) state.soloJoystickOuter.destroy(); } catch (_) {}
+            try { if (state.soloJoystickInner) state.soloJoystickInner.destroy(); } catch (_) {}
+            state.soloJoystickOuter = null;
+            state.soloJoystickInner = null;
+            state.soloJoystickState = null;
+        } else {
+            if (state.soloJoystickOuter && state.soloJoystickOuter.setVisible) state.soloJoystickOuter.setVisible(false);
+            if (state.soloJoystickInner && state.soloJoystickInner.setVisible) state.soloJoystickInner.setVisible(false);
+        }
+    }
+
+    getSoloCleaningJoystickVector() {
+        const state = this.getSoloCleaningRoomState();
+        const joy = state.soloJoystickState;
+        if (!joy || !joy.active) return null;
+
+        return {
+            active: true,
+            vx: joy.vx || 0,
+            vy: joy.vy || 0,
+            force: Phaser.Math.Clamp(joy.force || 0, 0, 1)
+        };
+    }
+
+    clearSoloCleaningRoomGameplayObjects(destroyObjects = true) {
+        const state = this.getSoloCleaningRoomState();
+        this.destroySoloCleaningDynamicJoystick(destroyObjects);
+
+        try {
+            (state.soloWaterBalls || []).forEach(ball => {
+                try { if (ball && ball.destroy) ball.destroy(); } catch (_) {}
+            });
+        } catch (_) {}
+
+        if (destroyObjects) {
+            try { if (state.soloActionUiContainer && state.soloActionUiContainer.destroy) state.soloActionUiContainer.destroy(true); } catch (_) {}
+            const entity = state.soloPlayerEntity;
+            if (entity) {
+                [entity.sprite, entity.nameContainer, entity.bubbleContainer, entity.partyScoreContainer, entity.localAura].forEach(obj => {
+                    try { if (obj && obj.destroy) obj.destroy(true); } catch (_) {}
+                });
+            }
+        }
+
+        state.soloPlayerEntity = null;
+        state.soloPlayerThrowing = false;
+        state.soloWaterBalls = [];
+        state.soloActionUiContainer = null;
+        state.soloActionButtonBg = null;
+        state.soloActionButtonText = null;
+        state.soloActionButtonGlow = null;
+        state.soloActionButtonHit = null;
+        state.soloActionButtonMode = 'clean';
+        state.soloActionCooldownUntil = 0;
+        state.soloPlayerFacing = { x: 0, y: 1 };
+    }
+
+    updateSoloCleaningRoomGameplay(time, delta) {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active) return;
+
+        const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
+        if (!player || !player.active) return;
+
+        if (this.smartPromptBg) this.smartPromptBg.setVisible(false);
+        if (this.smartPromptText) this.smartPromptText.setVisible(false);
+        if (this.waterPromptBg) this.waterPromptBg.setVisible(false);
+        if (this.waterPromptText) this.waterPromptText.setVisible(false);
+        if (this.lockOnTarget) this.lockOnTarget.setVisible(false);
+        if (this.placePrompt) this.placePrompt.setVisible(false);
+
+        const locked = !!(state.inputLocked || !state.gameplayStarted || state.shellEnding);
+        if (state.soloActionUiContainer && state.soloActionUiContainer.setAlpha) {
+            state.soloActionUiContainer.setAlpha(locked ? 0.55 : 1);
+        }
+
+        if (locked) {
+            player.setVelocity(0, 0);
+            if (!state.soloPlayerThrowing && this.anims && this.anims.exists('idle')) player.play('idle', true);
+            return;
+        }
+
+        const dt = Math.min(delta || 16, 50) / 1000;
+        const speed = Number(state.soloPlayerSpeed || 324);
+        let ix = 0;
+        let iy = 0;
+
+        const joy = this.getSoloCleaningJoystickVector ? this.getSoloCleaningJoystickVector() : null;
+        if (joy && joy.active) {
+            ix = joy.vx * joy.force;
+            iy = joy.vy * joy.force;
+        } else if (!(document.activeElement && document.activeElement.tagName === 'INPUT')) {
+            if (!this.soloCleaningWasd) this.soloCleaningWasd = this.input.keyboard.addKeys('W,A,S,D');
+            if (this.cursors.left.isDown || this.soloCleaningWasd.A.isDown) ix -= 1;
+            if (this.cursors.right.isDown || this.soloCleaningWasd.D.isDown) ix += 1;
+            if (this.cursors.up.isDown || this.soloCleaningWasd.W.isDown) iy -= 1;
+            if (this.cursors.down.isDown || this.soloCleaningWasd.S.isDown) iy += 1;
+        }
+
+        if (ix !== 0 || iy !== 0) {
+            const len = Math.sqrt(ix * ix + iy * iy) || 1;
+            if (len > 1) {
+                ix /= len;
+                iy /= len;
+            }
+            state.soloPlayerFacing = { x: ix / (Math.sqrt(ix * ix + iy * iy) || 1), y: iy / (Math.sqrt(ix * ix + iy * iy) || 1) };
+        }
+
+        const bounds = this.physics && this.physics.world && this.physics.world.bounds
+            ? this.physics.world.bounds
+            : { x: 0, y: 0, width: 2048, height: 2048 };
+        const pad = 34;
+        const vx = ix * speed;
+        const vy = iy * speed;
+        const nextX = Phaser.Math.Clamp(player.x + vx * dt, bounds.x + pad, bounds.x + bounds.width - pad);
+        const nextY = Phaser.Math.Clamp(player.y + vy * dt, bounds.y + pad, bounds.y + bounds.height - pad);
+
+        player.setPosition(nextX, nextY);
+        player.setVelocity(0, 0);
+
+        if (!state.soloPlayerThrowing) {
+            const absX = Math.abs(ix);
+            const absY = Math.abs(iy);
+            if (absX < 0.01 && absY < 0.01) {
+                if (this.anims && this.anims.exists('idle')) player.play('idle', true);
+            } else if (absX >= absY) {
+                player.setFlipX(ix < 0);
+                if (this.anims && this.anims.exists('walk')) player.play('walk', true);
+            } else if (iy < 0) {
+                player.setFlipX(false);
+                if (this.anims && this.anims.exists('walk-up')) player.play('walk-up', true);
+            } else {
+                player.setFlipX(false);
+                if (this.anims && this.anims.exists('walk-down')) player.play('walk-down', true);
+            }
+        }
+
+        this.cameras.main.startFollow(player, true, 0.12, 0.12);
+    }
+
     showSoloCleaningRoomShellEndAndReturn() {
         const state = this.getSoloCleaningRoomState();
         if (!state.active || state.shellEnding) return;
@@ -19073,6 +19650,7 @@ if (!data.scoreHandled && data.attacker) {
         const state = this.getSoloCleaningRoomState();
 
         this.clearSoloCleaningRoomTutorial();
+        this.clearSoloCleaningRoomGameplayObjects(true);
 
         try {
             (state.timers || []).forEach(timer => {
@@ -19166,6 +19744,22 @@ if (!data.scoreHandled && data.attacker) {
         state.tutorialPointerHandler = null;
         state.tutorialActive = false;
         state.tutorialStartPending = false;
+        state.soloPlayerEntity = null;
+        state.soloPlayerSpeed = 324;
+        state.soloPlayerFacing = { x: 0, y: 1 };
+        state.soloPlayerThrowing = false;
+        state.soloWaterBalls = [];
+        state.soloActionButtonMode = 'clean';
+        state.soloActionCooldownUntil = 0;
+        state.soloActionUiContainer = null;
+        state.soloActionButtonBg = null;
+        state.soloActionButtonText = null;
+        state.soloActionButtonGlow = null;
+        state.soloActionButtonHit = null;
+        state.soloJoystickOuter = null;
+        state.soloJoystickInner = null;
+        state.soloJoystickState = null;
+        state.soloJoystickHandlers = null;
         state.bgm = null;
         window.GameLogic.soloCleaningRoomActive = false;
     }
@@ -31153,6 +31747,11 @@ if (activeBubbleMsg) {
 
         this.processShrineEventLogic(time);
         if (this.sceneName === 'partyroom') window.processPartyEventLogic(this);
+
+        if (this.soloCleaningRoom && this.soloCleaningRoom.active) {
+            this.updateSoloCleaningRoomGameplay(time, delta);
+            return;
+        }
 
       if (this.isCafe && !(this.soloRocketCruiseActive || this.soloRocketCruiseFinished || window.GameLogic.soloRocketCruiseActive)) {
         let pUids = Object.keys(window.GameLogic.cafePlayers || {}).filter(uid => window.GameLogic.onlinePlayers && window.GameLogic.onlinePlayers[uid]);
