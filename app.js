@@ -150,6 +150,111 @@ window.updateCurrentRoomLabel = function() {
         topBar.innerText = `系統通知：目前房間：${roomName}`;
     }
 };
+
+window.ONLINE_PLAYER_LIST_FRESH_MS = 90 * 1000;
+window.ONLINE_PLAYER_VISIT_FRESH_MS = 5 * 60 * 1000;
+
+window.isFreshOnlinePlayer = function(player, options = {}) {
+    if (!player || typeof player !== 'object') return false;
+    if (player.online === false || player.left === true) return false;
+
+    const mode = options.mode || 'list';
+    const maxAge = Number(options.maxAge || (mode === 'visit' ? window.ONLINE_PLAYER_VISIT_FRESH_MS : window.ONLINE_PLAYER_LIST_FRESH_MS));
+    const lastActive = Number(player.lastActive || player.updatedAt || player.connectedAt || 0);
+
+    if (!lastActive) return !!options.allowMissingLastActive;
+    return Date.now() - lastActive <= maxAge;
+};
+
+window.refreshMyOnlinePresenceNow = async function(options = {}) {
+    if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return false;
+
+    const now = Date.now();
+    const force = !!options.force;
+    if (!force && window.__lastOnlinePresenceRefreshAt && now - window.__lastOnlinePresenceRefreshAt < 10000) return true;
+
+    window.__lastOnlinePresenceRefreshAt = now;
+
+    try {
+        const uid = window.GameLogic.currentUser.uid;
+        const payload = {
+            name: window.GameLogic.myProfile.name || '匿名',
+            color: window.GameLogic.myProfile.color || '#fff',
+            level: window.GameLogic.myProfile.level || 1,
+            scene: window.GameLogic.currentScene || 'doghouse',
+            doghouseHostUid: window.GameLogic.currentScene === 'doghouse' && window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : '',
+            lastActive: now
+        };
+
+        await update(ref(window.GameLogic.db, window.getServerRoomPath(`onlinePlayers/${uid}`)), payload);
+        window.GameLogic.onlinePlayers = window.GameLogic.onlinePlayers || {};
+        window.GameLogic.onlinePlayers[uid] = Object.assign({}, window.GameLogic.onlinePlayers[uid] || {}, payload);
+        if (window.updateOnlinePlayersUI) window.updateOnlinePlayersUI();
+        return true;
+    } catch (err) {
+        console.warn('[在線狀態] 立即刷新 presence 失敗：', err);
+        return false;
+    }
+};
+
+window.startOnlinePlayersUiTicker = function() {
+    if (window.__onlinePlayersUiTicker) clearInterval(window.__onlinePlayersUiTicker);
+    window.__onlinePlayersUiTicker = setInterval(() => {
+        if (!window.GameLogic || !window.GameLogic.currentUser) return;
+        if (window.updateOnlinePlayersUI) window.updateOnlinePlayersUI();
+    }, 15000);
+};
+
+window.stopOnlinePlayersUiTicker = function() {
+    if (window.__onlinePlayersUiTicker) {
+        clearInterval(window.__onlinePlayersUiTicker);
+        window.__onlinePlayersUiTicker = null;
+    }
+};
+
+window.fetchFriendOnlineInfoNow = async function(uid) {
+    const localInfo = window.getFriendOnlineInfo ? window.getFriendOnlineInfo(uid, null, { mode: 'visit' }) : { online: false };
+    if (localInfo && localInfo.online) return localInfo;
+
+    if (!uid || !window.GameLogic || !window.GameLogic.db) return localInfo || { online: false };
+
+    try {
+        const snap = await get(ref(window.GameLogic.db, window.getServerRoomPath(`onlinePlayers/${uid}`)));
+        const data = snap.exists() ? (snap.val() || {}) : null;
+
+        if (data) {
+            window.GameLogic.onlinePlayers = window.GameLogic.onlinePlayers || {};
+            window.GameLogic.onlinePlayers[uid] = Object.assign({}, window.GameLogic.onlinePlayers[uid] || {}, data);
+
+            const fresh = window.isFreshOnlinePlayer ? window.isFreshOnlinePlayer(data, { mode: 'visit' }) : false;
+            if (fresh) {
+                return {
+                    online: true,
+                    name: data.name || '',
+                    color: data.color || '',
+                    level: data.level !== undefined ? data.level : null,
+                    source: 'onlinePlayers'
+                };
+            }
+        }
+
+        const dogSnap = await get(ref(window.GameLogic.db, `users/${uid}/doghousePlayers/${uid}`));
+        const dogData = dogSnap.exists() ? (dogSnap.val() || {}) : null;
+        if (dogData && window.isFreshOnlinePlayer && window.isFreshOnlinePlayer(dogData, { mode: 'visit' })) {
+            return {
+                online: true,
+                name: dogData.name || (data && data.name) || '',
+                color: dogData.color || (data && data.color) || '',
+                level: dogData.level !== undefined ? dogData.level : (data && data.level !== undefined ? data.level : null),
+                source: 'doghousePlayers'
+            };
+        }
+    } catch (err) {
+        console.warn('[好友拜訪] 讀取好友最新在線狀態失敗：', err);
+    }
+
+    return window.getFriendOnlineInfo ? window.getFriendOnlineInfo(uid, null, { mode: 'visit' }) : { online: false };
+};
 // ====== 入口房間共用工具結束 ======
 
 window.fullscreenZoom = 1;
@@ -7750,6 +7855,7 @@ window.updateOnlinePlayersUI = function() {
     if (window.GameLogic.currentScene === 'cafe') roomPlayers = window.GameLogic.cafePlayers || {};
     else if (window.GameLogic.currentScene === 'shrine') roomPlayers = window.GameLogic.shrinePlayers || {};
     else if (window.GameLogic.currentScene === 'playroom') roomPlayers = window.GameLogic.playroomPlayers || {};
+    else if (window.GameLogic.currentScene === 'doghouse') roomPlayers = window.GameLogic.doghousePlayers || {};
     else if (window.GameLogic.currentScene === 'partyroom' && window.PartyLogic) roomPlayers = window.PartyLogic.players || {};
 
     for (let uid in roomPlayers) {
@@ -7769,8 +7875,10 @@ window.updateOnlinePlayersUI = function() {
 
     for (let uid in players) {
         let p = players[uid];
-        if (!p.roomFallback && p.lastActive && (now - p.lastActive > 30000)) continue;
-        if (!p.lastActive && uid !== currentUid && !roomPlayers[uid]) continue;
+        const isCurrentUser = uid === currentUid;
+        const isRoomFallback = !!p.roomFallback || !!roomPlayers[uid];
+        const isFresh = isCurrentUser || isRoomFallback || (window.isFreshOnlinePlayer ? window.isFreshOnlinePlayer(p, { mode: 'list' }) : true);
+        if (!isFresh) continue;
         html += `<div style="margin-top:5px; display:flex; align-items:center;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${p.color || '#fff'}; margin-right:8px; border:1px solid #000;"></span>${p.name || '匿名'}</div>`;
     }
 
@@ -9566,16 +9674,29 @@ window.getShortFriendUid = function(uid) {
     return `${raw.slice(0, 6)}…${raw.slice(-4)}`;
 };
 
-window.getFriendOnlineInfo = function(uid, onlinePlayers = null) {
+window.getFriendOnlineInfo = function(uid, onlinePlayers = null, options = {}) {
     const players = onlinePlayers || (window.GameLogic && window.GameLogic.onlinePlayers) || {};
     const p = players && players[uid] ? players[uid] : null;
-    const fresh = p && window.isFreshPhoneOnlinePlayer ? window.isFreshPhoneOnlinePlayer(p) : false;
+    const mode = options.mode || 'visit';
+    let fresh = p && window.isFreshOnlinePlayer ? window.isFreshOnlinePlayer(p, { mode }) : false;
+    let source = p ? 'onlinePlayers' : '';
+    let data = p;
+
+    if (!fresh && window.GameLogic && window.GameLogic.doghousePlayers && window.GameLogic.doghousePlayers[uid]) {
+        const dogPlayer = window.GameLogic.doghousePlayers[uid];
+        if (window.isFreshOnlinePlayer && window.isFreshOnlinePlayer(dogPlayer, { mode: 'visit' })) {
+            fresh = true;
+            source = 'doghousePlayers';
+            data = Object.assign({}, p || {}, dogPlayer || {});
+        }
+    }
 
     return {
         online: !!fresh,
-        name: p && p.name ? p.name : '',
-        color: p && p.color ? p.color : '',
-        level: p && p.level !== undefined ? p.level : null
+        name: data && data.name ? data.name : '',
+        color: data && data.color ? data.color : '',
+        level: data && data.level !== undefined ? data.level : null,
+        source: source
     };
 };
 
@@ -10409,7 +10530,6 @@ window.startFriendVisitRequestsListener = function() {
             const aTime = Number(requests[a].updatedAt || requests[a].createdAt || 0);
             return bTime - aTime;
         });
-        if (requestUids.length > 0) window.showFriendSystemNotice('有蔥想來你家拜訪');
 
         if (!window.__shownFriendVisitRequestKeys) window.__shownFriendVisitRequestKeys = {};
 
@@ -10434,6 +10554,7 @@ window.startFriendVisitRequestsListener = function() {
             const freshItem = requests[freshUid] || {};
             const freshKey = freshItem.requestId || `${freshUid}_${freshItem.updatedAt || freshItem.createdAt || 0}`;
             window.__shownFriendVisitRequestKeys[freshKey] = true;
+            window.showFriendSystemNotice('有蔥想來你家拜訪');
             window.showIncomingFriendVisitRequest(freshUid, freshItem);
         }
     });
@@ -10479,15 +10600,20 @@ window.sendFriendVisitRequest = async function(targetUid) {
     if (targetUid === myUid) return;
 
     const meta = (window.GameLogic.phoneContactMeta && window.GameLogic.phoneContactMeta[targetUid]) || {};
-    const onlineInfo = window.getFriendOnlineInfo ? window.getFriendOnlineInfo(targetUid) : { online: false };
-    const targetName = onlineInfo.name || meta.name || '對方';
-
-    if (!onlineInfo.online) {
-        window.showFriendSystemNotice('對方不在家……');
-        return;
-    }
 
     try {
+        if (window.refreshMyOnlinePresenceNow) await window.refreshMyOnlinePresenceNow({ force: true });
+
+        const onlineInfo = window.fetchFriendOnlineInfoNow
+            ? await window.fetchFriendOnlineInfoNow(targetUid)
+            : (window.getFriendOnlineInfo ? window.getFriendOnlineInfo(targetUid, null, { mode: 'visit' }) : { online: false });
+        const targetName = onlineInfo.name || meta.name || '對方';
+
+        if (!onlineInfo.online) {
+            window.showFriendSystemNotice('對方不在家……');
+            return;
+        }
+
         const friendSnap = await get(ref(window.GameLogic.db, `users/${myUid}/friends/${targetUid}`));
         if (!friendSnap.exists()) {
             window.showFriendSystemNotice('要先成為好蔥友才能拜訪喔');
@@ -10515,13 +10641,9 @@ window.sendFriendVisitRequest = async function(targetUid) {
     }
 };
 
-window.openFriendVisitEntry = function(uid, isOnline = false) {
-    if (!isOnline) {
-        window.showFriendSystemNotice('對方不在家……');
-        return;
-    }
-
-    window.sendFriendVisitRequest(uid);
+window.openFriendVisitEntry = async function(uid) {
+    if (!uid) return;
+    await window.sendFriendVisitRequest(uid);
 };
 
 window.acceptCurrentFriendVisitRequest = function() {
@@ -10753,12 +10875,11 @@ window.safePhoneColor = function(val) {
 };
 
 window.isFreshPhoneOnlinePlayer = function(player) {
+    if (window.isFreshOnlinePlayer) return window.isFreshOnlinePlayer(player, { mode: 'visit' });
     if (!player || typeof player !== 'object') return false;
 
-    // onlinePlayers 已經有 onDisconnect remove，lastActive 主要用來擋很舊的殘留資料。
-    // 放寬到 5 分鐘，避免玩家還在線但 lastActive 沒被頻繁更新時被誤判消失。
     const lastActive = Number(player.lastActive || 0);
-    if (!lastActive) return true;
+    if (!lastActive) return false;
 
     return Date.now() - lastActive <= 5 * 60 * 1000;
 };
@@ -10859,7 +10980,7 @@ window.bindPhoneContactButtons = function(contactsEl) {
     contactsEl.querySelectorAll('[data-phone-action="visit-entry"]').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            window.openFriendVisitEntry(btn.dataset.uid, btn.dataset.online === '1');
+            window.openFriendVisitEntry(btn.dataset.uid);
         });
     });
 };
@@ -12325,13 +12446,7 @@ onAuthStateChanged(auth, async (user) => {
         connectedUnsubscribe = onValue(ref(db, '.info/connected'), (snap) => {
             if (snap.val() === true && window.GameLogic.currentUser) {
                 const globalPlayerRef = ref(db, window.getServerRoomPath(`onlinePlayers/${window.GameLogic.currentUser.uid}`));
-                set(globalPlayerRef, {
-                     name: window.GameLogic.myProfile.name || '匿名',
-                     color: window.GameLogic.myProfile.color || '#fff',
-                     scene: window.GameLogic.currentScene || 'doghouse',
-                     doghouseHostUid: window.GameLogic.currentScene === 'doghouse' && window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : '',
-                     lastActive: Date.now()
-                 });
+                if (window.refreshMyOnlinePresenceNow) window.refreshMyOnlinePresenceNow({ force: true });
                 onDisconnect(globalPlayerRef).remove();
 
                 if (window.GameLogic.currentScene === 'cafe') {
@@ -12347,6 +12462,7 @@ onAuthStateChanged(auth, async (user) => {
             window.GameLogic.onlinePlayers = snapshot.val() || {};
             window.updateOnlinePlayersUI();
         });
+        if (window.startOnlinePlayersUiTicker) window.startOnlinePlayersUiTicker();
         if (pmUnreadUnsubscribe) { pmUnreadUnsubscribe(); pmUnreadUnsubscribe = null; }
         pmUnreadUnsubscribe = onValue(ref(db, `users/${user.uid}/unreadPMs`), snap => {
         window.normalizeUnreadPMs(snap.val() || {});
@@ -12436,6 +12552,7 @@ onAuthStateChanged(auth, async (user) => {
         if (shrineUnsubscribe) { shrineUnsubscribe(); shrineUnsubscribe = null; }
         if (shrineEventUnsubscribe) { shrineEventUnsubscribe(); shrineEventUnsubscribe = null; }
         if (partyInvitesUnsubscribe) { partyInvitesUnsubscribe(); partyInvitesUnsubscribe = null; }
+        if (window.stopOnlinePlayersUiTicker) window.stopOnlinePlayersUiTicker();
         if (window.stopMeowlimeDailyWatcher) window.stopMeowlimeDailyWatcher();
 
         window.GameLogic.dailyMeowlime = { lastCheckinDate: "", totalCheckins: 0, checkinHistory: {} };
