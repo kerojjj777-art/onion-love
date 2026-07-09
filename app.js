@@ -2208,6 +2208,28 @@ window.submitMeowlimeCheckin = async function() {
 
 // 新增：空間傳送門點擊時的粒子噴發效果
 
+window.popPortalParticles = function(e) {
+    const x = e && Number.isFinite(e.clientX) ? e.clientX : window.innerWidth / 2;
+    const y = e && Number.isFinite(e.clientY) ? e.clientY : window.innerHeight / 2;
+
+    for (let i = 0; i < 12; i++) {
+        const p = document.createElement('div');
+        p.style.cssText = `position:fixed; width:6px; height:6px; background:#fff; border-radius:50%; left:${x}px; top:${y}px; pointer-events:none; z-index:9999; transition: all 0.4s cubic-bezier(0.1, 0.8, 0.3, 1); transform: translate(-50%, -50%); box-shadow: 0 0 8px #fff, 0 0 15px #d8bfd8;`;
+        document.body.appendChild(p);
+
+        setTimeout(() => {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = Math.random() * 60 + 20;
+            p.style.transform = `translate(calc(-50% + ${Math.cos(angle) * dist}px), calc(-50% + ${Math.sin(angle) * dist}px)) scale(0)`;
+            p.style.opacity = 0;
+        }, 10);
+
+        setTimeout(() => {
+            if (p && p.parentNode) p.parentNode.removeChild(p);
+        }, 400);
+    }
+};
+
 window.popPhoneHeaderParticles = function(e) {
     const target = e && e.currentTarget ? e.currentTarget : (e && e.target ? e.target : null);
     const rect = target && target.getBoundingClientRect ? target.getBoundingClientRect() : null;
@@ -6517,10 +6539,10 @@ function createSystemUI() {
             <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; width:100%; height:100%; padding: 40px 20px; box-sizing: border-box; position: relative; z-index: 1;">
                 <h3 style="margin-top:0; color:#fff; border:none; text-shadow: 0 0 10px #8a2be2, 0 0 20px #8a2be2; font-size: 22px;">🌀 空間傳送門</h3>
                 <div style="display:flex; flex-direction:column; gap:12px; width: 100%; padding: 0 15px; box-sizing:border-box; margin-top: 10px;">
-                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); window.switchScene('doghouse'); document.getElementById('portal-modal').style.display='none';">🏠 我的狗窩</button>
-                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); window.switchScene('cafe'); document.getElementById('portal-modal').style.display='none';">☕ 洋蔥大廳</button>
-                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); window.switchScene('farm'); document.getElementById('portal-modal').style.display='none';">🌱 我的蔥田</button>
-                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles(event); window.switchScene('7eonion'); document.getElementById('portal-modal').style.display='none';">🏪 7-EONION</button>
+                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles && window.popPortalParticles(event); window.switchScene('doghouse'); document.getElementById('portal-modal').style.display='none';">🏠 我的狗窩</button>
+                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles && window.popPortalParticles(event); window.switchScene('cafe'); document.getElementById('portal-modal').style.display='none';">☕ 洋蔥大廳</button>
+                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles && window.popPortalParticles(event); window.switchScene('farm'); document.getElementById('portal-modal').style.display='none';">🌱 我的蔥田</button>
+                    <button class="portal-btn-style" style="padding:12px; font-size:16px; width:100%;" onclick="window.popPortalParticles && window.popPortalParticles(event); window.switchScene('7eonion'); document.getElementById('portal-modal').style.display='none';">🏪 7-EONION</button>
                 </div>
                 <button class="close-modal-btn btn-secondary" style="margin-top: 25px; width: 70%; border-radius: 20px; position:relative; z-index:10;" onclick="window.closeInventoryChildModal ? window.closeInventoryChildModal('portal-modal') : document.getElementById('portal-modal').style.display='none'">關閉傳送門</button>
             </div>
