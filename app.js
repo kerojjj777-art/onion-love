@@ -14344,9 +14344,10 @@ this.btnB.on('pointerout', () => {
     update() {
         this.expLiquid.tilePositionX -= 0.5;
 
-        if (window.GameLogic.soloRocketCruiseActive) {
+        if (window.GameLogic.soloRocketCruiseActive || window.GameLogic.soloCleaningRoomActive) {
             [this.furnBtn, this.furnText, this.itemBtn, this.itemText, this.btnA, this.txtA, this.btnB, this.txtB, this.statusContainer, this.sweepBtn, this.sweepText, this.sweepBtnGlow].forEach(obj => {
                 if (obj && obj.setVisible) obj.setVisible(false);
+                if (obj && obj.__onionUiSkin && obj.__onionUiSkin.setVisible) obj.__onionUiSkin.setVisible(false);
             });
 
             if (this.partyDash) this.partyDash.setVisible(false);
@@ -14696,11 +14697,13 @@ class MainScene extends Phaser.Scene {
         this.soloChickenMenuRippleCount = 0;
         this.soloChickenMenuBlocker = null;
 
-        // 第二包：獨樂雞大掃除副本外殼狀態初始化。正式玩法內容由後續包接上。
+        // 第 2-1 包：獨樂雞大掃除副本外殼狀態初始化。正式玩法內容由後續包接上。
         this.soloCleaningRoom = {
             active: false,
             paid: false,
             paymentPending: false,
+            tutorialActive: false,
+            tutorialStartPending: false,
             inputLocked: true,
             gameplayStarted: false,
             startTime: 0,
@@ -14711,8 +14714,11 @@ class MainScene extends Phaser.Scene {
             mouseCount: 0,
             deodorizeCount: 0,
             prevUiState: null,
+            hiddenFurnitureObjects: [],
             playerUiState: null,
             returnPosition: null,
+            tutorialContainer: null,
+            tutorialPointerHandler: null,
             layerContainer: null,
             uiContainer: null,
             introContainer: null,
@@ -17716,6 +17722,8 @@ if (!data.scoreHandled && data.attacker) {
                 active: false,
                 paid: false,
                 paymentPending: false,
+                tutorialActive: false,
+                tutorialStartPending: false,
                 inputLocked: true,
                 gameplayStarted: false,
                 startTime: 0,
@@ -17726,8 +17734,11 @@ if (!data.scoreHandled && data.attacker) {
                 mouseCount: 0,
                 deodorizeCount: 0,
                 prevUiState: null,
+                hiddenFurnitureObjects: [],
                 playerUiState: null,
                 returnPosition: null,
+                tutorialContainer: null,
+                tutorialPointerHandler: null,
                 layerContainer: null,
                 uiContainer: null,
                 introContainer: null,
@@ -17742,6 +17753,7 @@ if (!data.scoreHandled && data.attacker) {
 
         if (!Array.isArray(this.soloCleaningRoom.timers)) this.soloCleaningRoom.timers = [];
         if (!Array.isArray(this.soloCleaningRoom.objects)) this.soloCleaningRoom.objects = [];
+        if (!Array.isArray(this.soloCleaningRoom.hiddenFurnitureObjects)) this.soloCleaningRoom.hiddenFurnitureObjects = [];
         return this.soloCleaningRoom;
     }
 
@@ -17839,7 +17851,7 @@ if (!data.scoreHandled && data.attacker) {
 
             this.closeSoloCleaningRoomPaymentConfirm();
             this.closeSoloChickenMenu();
-            this.startSoloCleaningRoom();
+            this.showSoloCleaningRoomTutorial();
         } catch (err) {
             console.warn('[大掃除] 扣款失敗，已阻擋進入副本：', err);
             this.openSoloCleaningRoomPaymentConfirm(cost, {
@@ -18050,6 +18062,193 @@ if (!data.scoreHandled && data.attacker) {
         }
     }
 
+    clearSoloCleaningRoomTutorial() {
+        const state = this.getSoloCleaningRoomState();
+
+        try {
+            if (state.tutorialPointerHandler && this.input) {
+                this.input.off('pointerdown', state.tutorialPointerHandler);
+                this.input.off('pointerup', state.tutorialPointerHandler);
+            }
+        } catch (err) {
+            console.warn('[大掃除] 說明介面點擊監聽清理失敗，已略過：', err);
+        }
+
+        try {
+            if (state.tutorialContainer && state.tutorialContainer.destroy) {
+                state.tutorialContainer.destroy(true);
+            }
+        } catch (err) {
+            console.warn('[大掃除] 說明介面清理失敗，已略過：', err);
+        }
+
+        state.tutorialContainer = null;
+        state.tutorialPointerHandler = null;
+        state.tutorialActive = false;
+        state.tutorialStartPending = false;
+    }
+
+    showSoloCleaningRoomTutorial() {
+        const state = this.getSoloCleaningRoomState();
+        if (state.active || state.paymentPending) return;
+
+        this.clearSoloCleaningRoomTutorial();
+        state.paid = true;
+        state.tutorialActive = true;
+        state.tutorialStartPending = false;
+        state.inputLocked = true;
+        state.gameplayStarted = false;
+
+        const cam = this.cameras.main;
+        const rect = this.getSoloCleaningRoomSafeRect ? this.getSoloCleaningRoomSafeRect() : {
+            x: 16,
+            y: 16,
+            w: cam.width - 32,
+            h: cam.height - 32,
+            centerX: cam.width / 2,
+            centerY: cam.height / 2
+        };
+        const panelW = Math.min(rect.w - 28, cam.width <= 768 ? 430 : 520);
+        const panelH = Math.min(rect.h - 30, cam.height <= 620 ? 560 : 620);
+        const px = rect.centerX - panelW / 2;
+        const py = rect.centerY - panelH / 2;
+
+        const container = this.add.container(0, 0)
+            .setDepth(9900)
+            .setScrollFactor(0);
+
+        state.tutorialContainer = container;
+
+        const fullBlocker = this.add.zone(cam.width / 2, cam.height / 2, cam.width, cam.height)
+            .setInteractive();
+
+        const panel = this.add.graphics();
+        panel.fillStyle(0x031017, 0.88);
+        panel.fillRoundedRect(px, py, panelW, panelH, 18);
+        panel.lineStyle(5, 0x16e0d6, 1);
+        panel.strokeRoundedRect(px, py, panelW, panelH, 18);
+        panel.lineStyle(2, 0xa7ffbd, 0.86);
+        panel.strokeRoundedRect(px + 8, py + 8, panelW - 16, panelH - 16, 14);
+
+        const title = this.add.text(rect.centerX, py + 38, '大掃除說明', {
+            fontSize: '25px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#006b66',
+            strokeThickness: 5
+        }).setOrigin(0.5);
+
+        const bodyText =
+            '洋蔥大廳被鼠偷米米一族佔據了！\n' +
+            '甚至電線被咬壞燈泡都快不亮了！\n\n' +
+            '趕緊追逐米米，用水球把他們驅逐\n' +
+            '看準時機點擊「清理」按鍵丟水球（空白鍵）\n' +
+            '小心米米偶爾會攻擊你！趕快跑就對了！\n' +
+            '地板的污泥也需要你幫忙順手清理一下！\n' +
+            '對著污泥點擊「清理」三次即可完成除垢\n' +
+            '被米米弄髒的話記得去水桶除臭一下\n\n' +
+            '偶爾巨大鼠偷米米會出現，小心他噴出的超級污泥\n' +
+            '小心當你的潔淨度歸零時就只能先撤退囉！\n' +
+            '[備註：大掃除完記得去洗澡。]';
+
+        const body = this.add.text(rect.centerX, py + 78, bodyText, {
+            fontSize: cam.width <= 420 ? '13px' : '14px',
+            fontFamily: 'Arial, sans-serif',
+            color: '#eafffb',
+            align: 'left',
+            lineSpacing: cam.height <= 620 ? 4 : 7,
+            wordWrap: { width: panelW - 44 }
+        }).setOrigin(0.5, 0);
+
+        const btnY = py + panelH - 42;
+        const btnW = Math.min(220, panelW - 74);
+        const btnH = 46;
+        const hitW = btnW + 48;
+        const hitH = btnH + 32;
+
+        const btnGlow = this.add.circle(rect.centerX, btnY, btnW * 0.48, 0x7fffea, 0.18)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        const btnBg = this.add.rectangle(rect.centerX, btnY, btnW, btnH, 0xffffff, 1)
+            .setStrokeStyle(3, 0xa7ffbd, 1)
+            .setInteractive({ useHandCursor: true });
+
+        const btnText = this.add.text(rect.centerX, btnY, '開始大掃除！', {
+            fontSize: '20px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#003333'
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+        const startHit = this.add.zone(rect.centerX, btnY, hitW, hitH)
+            .setInteractive({ useHandCursor: true });
+
+        const isPointInStart = (pointer) => {
+            if (!pointer) return false;
+            const pxNow = Number(pointer.x);
+            const pyNow = Number(pointer.y);
+            if (!Number.isFinite(pxNow) || !Number.isFinite(pyNow)) return false;
+
+            return pxNow >= rect.centerX - hitW / 2 &&
+                   pxNow <= rect.centerX + hitW / 2 &&
+                   pyNow >= btnY - hitH / 2 &&
+                   pyNow <= btnY + hitH / 2;
+        };
+
+        const start = (pointer, localX, localY, event) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+            if (state.active || state.tutorialStartPending) return;
+
+            state.tutorialStartPending = true;
+
+            this.tweens.add({
+                targets: [btnBg, btnText, btnGlow],
+                scaleX: 0.94,
+                scaleY: 0.94,
+                yoyo: true,
+                duration: 80,
+                onComplete: () => {
+                    this.beginSoloCleaningRoomAfterTutorial();
+                }
+            });
+
+            this.time.delayedCall(180, () => {
+                if (!state.active && state.tutorialStartPending) {
+                    this.beginSoloCleaningRoomAfterTutorial();
+                }
+            });
+        };
+
+        const tryStartFromPointer = (pointer, localX, localY, event) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+            if (isPointInStart(pointer)) start(pointer, localX, localY, event);
+        };
+
+        fullBlocker.on('pointerdown', tryStartFromPointer);
+        fullBlocker.on('pointerup', tryStartFromPointer);
+        btnBg.on('pointerdown', start);
+        btnBg.on('pointerup', start);
+        btnText.on('pointerdown', start);
+        btnText.on('pointerup', start);
+        startHit.on('pointerdown', start);
+        startHit.on('pointerup', start);
+
+        state.tutorialPointerHandler = tryStartFromPointer;
+        this.input.on('pointerdown', state.tutorialPointerHandler);
+        this.input.on('pointerup', state.tutorialPointerHandler);
+
+        container.add([fullBlocker, panel, title, body, btnGlow, btnBg, btnText, startHit]);
+    }
+
+    beginSoloCleaningRoomAfterTutorial() {
+        const state = this.getSoloCleaningRoomState();
+        if (state.active) return;
+
+        this.clearSoloCleaningRoomTutorial();
+        this.startSoloCleaningRoom();
+    }
+  
     getSoloCleaningRoomSafeRect() {
         if (this.getSoloRocketSafeRect) return this.getSoloRocketSafeRect();
 
@@ -18067,11 +18266,97 @@ if (!data.scoreHandled && data.attacker) {
         };
     }
 
+    rememberSoloCleaningRoomFurnitureObject(recordList, obj) {
+        if (!obj || !recordList) return;
+
+        recordList.push({
+            obj: obj,
+            visible: obj.visible,
+            active: obj.active,
+            alpha: obj.alpha,
+            inputEnabled: !!(obj.input && obj.input.enabled),
+            bodyEnable: !!(obj.body && obj.body.enable)
+        });
+
+        try { if (obj.setVisible) obj.setVisible(false); } catch (_) {}
+        try { if (obj.disableInteractive && obj.input) obj.disableInteractive(); } catch (_) {}
+        try { if (obj.body) obj.body.enable = false; } catch (_) {}
+    }
+
+    hideSoloCleaningRoomFurnitureObjects() {
+        const state = this.getSoloCleaningRoomState();
+        state.hiddenFurnitureObjects = [];
+        const records = state.hiddenFurnitureObjects;
+        const seen = new Set();
+
+        const remember = (obj) => {
+            if (!obj || seen.has(obj)) return;
+            seen.add(obj);
+            this.rememberSoloCleaningRoomFurnitureObject(records, obj);
+        };
+
+        const rememberFurniturePack = (pack) => {
+            if (!pack || typeof pack !== 'object') return;
+            remember(pack.sprite);
+            remember(pack.textContainer);
+            remember(pack.particleEmitter);
+            remember(pack.rewardNoticeText);
+            remember(pack.meowlimeContainer);
+            remember(pack.meowlimeDailyGlow);
+            remember(pack.meowlimeDailyDot);
+        };
+
+        try {
+            Object.keys(this.furnitureSprites || {}).forEach(key => rememberFurniturePack(this.furnitureSprites[key]));
+            Object.keys(this.dummySprites || {}).forEach(key => rememberFurniturePack(this.dummySprites[key]));
+        } catch (err) {
+            console.warn('[大掃除] 暫時隱藏大廳家具失敗，已略過：', err);
+        }
+
+        try {
+            if (this.closestFurniture && this.closestFurniture.prompt) remember(this.closestFurniture.prompt);
+            if (this.furniturePrompt) remember(this.furniturePrompt);
+        } catch (_) {}
+    }
+
+    restoreSoloCleaningRoomFurnitureObjects() {
+        const state = this.getSoloCleaningRoomState();
+
+        try {
+            (state.hiddenFurnitureObjects || []).forEach(record => {
+                const obj = record && record.obj ? record.obj : null;
+                if (!obj || obj.destroyed || obj.active === false && record.active !== false) return;
+
+                try { if (obj.setVisible) obj.setVisible(record.visible !== false); } catch (_) {}
+                try { if (obj.setAlpha && Number.isFinite(record.alpha)) obj.setAlpha(record.alpha); } catch (_) {}
+                try {
+                    if (record.inputEnabled && obj.setInteractive && !obj.input) obj.setInteractive({ useHandCursor: true });
+                    else if (obj.input) obj.input.enabled = !!record.inputEnabled;
+                } catch (_) {}
+                try { if (obj.body) obj.body.enable = !!record.bodyEnable; } catch (_) {}
+            });
+        } catch (err) {
+            console.warn('[大掃除] 恢復大廳家具失敗，已略過：', err);
+        }
+
+        state.hiddenFurnitureObjects = [];
+    }
+
     hideSoloCleaningRoomLobbyUi() {
         const state = this.getSoloCleaningRoomState();
         if (!state.prevUiState) state.prevUiState = { dom: {}, phaser: {}, cameras: {} };
 
-        const domIds = this.soloRocketDomUiIds || ['chat-section', 'online-players-container', 'top-notification-bar', 'action-menu', 'quick-select-menu', 'prince-cat-menu', 'magic-menu-blocker', 'party-minimized-list'];
+        const domIds = [
+            ...(this.soloRocketDomUiIds || []),
+            'chat-section',
+            'online-players-container',
+            'top-notification-bar',
+            'action-menu',
+            'quick-select-menu',
+            'prince-cat-menu',
+            'magic-menu-blocker',
+            'party-minimized-list'
+        ].filter((id, idx, arr) => id && arr.indexOf(id) === idx);
 
         const rememberDomUiState = (id, el) => {
             if (!el || (id in state.prevUiState.dom)) return;
@@ -18103,6 +18388,19 @@ if (!data.scoreHandled && data.attacker) {
         if (uiScene) {
             const hideKeys = [
                 'statusContainer',
+                'statusBg',
+                'portrait',
+                'nameLevelText',
+                'energyBg',
+                'energyLiquid',
+                'energyZone',
+                'energyText',
+                'expBarBg',
+                'expLiquid',
+                'expText',
+                'statusText',
+                'equipText',
+                'statusToggleBtn',
                 'btnA',
                 'txtA',
                 'btnB',
@@ -18122,6 +18420,7 @@ if (!data.scoreHandled && data.attacker) {
                 if (!obj || !obj.setVisible) return;
                 if (!(key in state.prevUiState.phaser)) state.prevUiState.phaser[key] = obj.visible;
                 obj.setVisible(false);
+                if (obj.__onionUiSkin && obj.__onionUiSkin.setVisible) obj.__onionUiSkin.setVisible(false);
             });
 
             if (uiScene.joyStick && uiScene.disableLegacyVirtualJoystick) {
@@ -18137,8 +18436,10 @@ if (!data.scoreHandled && data.attacker) {
             if (this.minimap.setVisible) this.minimap.setVisible(false);
             else this.minimap.visible = false;
         }
-    }
 
+        this.hideSoloCleaningRoomFurnitureObjects();
+    }
+  
     restoreSoloCleaningRoomLobbyUi() {
         const state = this.getSoloCleaningRoomState();
         const prev = state.prevUiState || { dom: {}, phaser: {}, cameras: {} };
@@ -18151,6 +18452,8 @@ if (!data.scoreHandled && data.attacker) {
                 el.style.setProperty(prop, value, priority || '');
             }
         };
+
+        this.restoreSoloCleaningRoomFurnitureObjects();
 
         Object.keys(prev.dom || {}).forEach(id => {
             const el = document.getElementById(id);
@@ -18175,7 +18478,10 @@ if (!data.scoreHandled && data.attacker) {
         if (uiScene) {
             Object.keys(prev.phaser || {}).forEach(key => {
                 const obj = uiScene[key];
-                if (obj && obj.setVisible) obj.setVisible(!!prev.phaser[key]);
+                if (obj && obj.setVisible) {
+                    obj.setVisible(!!prev.phaser[key]);
+                    if (obj.__onionUiSkin && obj.__onionUiSkin.setVisible) obj.__onionUiSkin.setVisible(!!prev.phaser[key]);
+                }
             });
         }
 
@@ -18186,7 +18492,7 @@ if (!data.scoreHandled && data.attacker) {
 
         state.prevUiState = null;
     }
-
+  
     stopLobbyBgmForSoloCleaningRoom() {
         if (this.stopLobbyBgmForSoloRocket) {
             this.stopLobbyBgmForSoloRocket();
@@ -18317,6 +18623,7 @@ if (!data.scoreHandled && data.attacker) {
             state.grimeCount = 0;
             state.mouseCount = 0;
             state.deodorizeCount = 0;
+            this.clearSoloCleaningRoomTutorial();
             state.timers = [];
             state.objects = [];
             window.GameLogic.soloCleaningRoomActive = true;
@@ -18361,8 +18668,8 @@ if (!data.scoreHandled && data.attacker) {
     }
 
     showSoloCleaningRoomPendingMessage() {
-        // 相容第一包暫時函式：第二包開始，扣款成功後直接進入副本外殼。
-        this.startSoloCleaningRoom();
+        // 相容第一包暫時函式：第 2-1 包開始，扣款成功後先進入大掃除說明介面。
+        this.showSoloCleaningRoomTutorial();
     }
 
     createSoloCleaningRoomLayer() {
@@ -18417,7 +18724,8 @@ if (!data.scoreHandled && data.attacker) {
     createSoloCleaningRoomUiLayer() {
         const state = this.getSoloCleaningRoomState();
         const cam = this.cameras.main;
-        const panelW = Math.min(310, Math.max(250, cam.width - 28));
+        const panelW = Math.min(320, Math.max(260, cam.width - 28));
+        const panelH = 152;
         const px = Math.max(14, cam.width - panelW - 16);
         const py = 16;
 
@@ -18426,15 +18734,15 @@ if (!data.scoreHandled && data.attacker) {
             .setScrollFactor(0);
 
         const panel = this.add.graphics();
-        panel.fillStyle(0x021a26, 0.86);
-        panel.fillRoundedRect(px, py, panelW, 126, 14);
+        panel.fillStyle(0x021a26, 0.5);
+        panel.fillRoundedRect(px, py, panelW, panelH, 14);
         panel.lineStyle(3, 0x30dfff, 0.98);
-        panel.strokeRoundedRect(px, py, panelW, 126, 14);
+        panel.strokeRoundedRect(px, py, panelW, panelH, 14);
         panel.lineStyle(1, 0xffffff, 0.42);
-        panel.strokeRoundedRect(px + 7, py + 7, panelW - 14, 112, 10);
+        panel.strokeRoundedRect(px + 7, py + 7, panelW - 14, panelH - 14, 10);
 
-        const countdownText = this.add.text(px + panelW - 18, py + 20, '02:30', {
-            fontSize: '26px',
+        const countdownText = this.add.text(px + panelW - 18, py + 25, '02:30', {
+            fontSize: '27px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#ffffff',
@@ -18442,8 +18750,8 @@ if (!data.scoreHandled && data.attacker) {
             strokeThickness: 5
         }).setOrigin(1, 0.5);
 
-        const cleanText = this.add.text(px + 18, py + 48, '洋蔥潔淨度 100%', {
-            fontSize: '14px',
+        const cleanText = this.add.text(px + 18, py + 58, '洋蔥潔淨度 100%', {
+            fontSize: '15px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#dffcff',
@@ -18452,19 +18760,19 @@ if (!data.scoreHandled && data.attacker) {
         }).setOrigin(0, 0.5);
 
         const barX = px + 18;
-        const barY = py + 65;
+        const barY = py + 80;
         const barW = panelW - 36;
-        const barBack = this.add.rectangle(barX, barY, barW, 12, 0x001c2a, 0.9)
+        const barBack = this.add.rectangle(barX, barY, barW, 14, 0x001c2a, 0.72)
             .setOrigin(0, 0.5)
             .setStrokeStyle(2, 0x8ffcff, 0.85);
-        const barFill = this.add.rectangle(barX + 2, barY, barW - 4, 8, 0x26dfff, 1)
+        const barFill = this.add.rectangle(barX + 2, barY, barW - 4, 9, 0x26dfff, 1)
             .setOrigin(0, 0.5);
-        const barGlow = this.add.rectangle(barX + 2, barY, barW - 4, 16, 0x26dfff, 0.16)
+        const barGlow = this.add.rectangle(barX + 2, barY, barW - 4, 18, 0x26dfff, 0.16)
             .setOrigin(0, 0.5)
             .setBlendMode(Phaser.BlendModes.ADD);
 
-        const grimeText = this.add.text(px + 18, py + 92, '除垢數量：0', {
-            fontSize: '14px',
+        const grimeText = this.add.text(px + 18, py + 112, '除垢數量：0', {
+            fontSize: '15px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#fff4cc',
@@ -18472,8 +18780,8 @@ if (!data.scoreHandled && data.attacker) {
             strokeThickness: 3
         }).setOrigin(0, 0.5);
 
-        const mouseText = this.add.text(px + 18, py + 114, '驅鼠數量：0', {
-            fontSize: '14px',
+        const mouseText = this.add.text(px + 18, py + 135, '驅鼠數量：0', {
+            fontSize: '15px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#fff4cc',
@@ -18494,7 +18802,7 @@ if (!data.scoreHandled && data.attacker) {
         state.objects.push(container);
         this.updateSoloCleaningRoomUi();
     }
-
+  
     updateSoloCleaningRoomUi() {
         const state = this.getSoloCleaningRoomState();
         const remaining = Math.max(0, Math.ceil((state.remainingMs || 0) / 1000));
@@ -18535,10 +18843,10 @@ if (!data.scoreHandled && data.attacker) {
         const state = this.getSoloCleaningRoomState();
         const cam = this.cameras.main;
         const rect = this.getSoloCleaningRoomSafeRect();
-        const bubbleW = Math.min(560, Math.max(300, rect.w - 38));
-        const bubbleH = 150;
+        const bubbleW = Math.min(rect.w * 0.9, Math.max(330, rect.w - 32));
+        const bubbleH = cam.width <= 420 ? 168 : 156;
         const bubbleX = rect.centerX;
-        const bubbleY = rect.y + Math.min(160, Math.max(118, rect.h * 0.2));
+        const bubbleY = rect.y + Math.min(168, Math.max(122, rect.h * 0.22));
 
         const container = this.add.container(0, 0)
             .setDepth(9820)
@@ -18546,26 +18854,42 @@ if (!data.scoreHandled && data.attacker) {
             .setAlpha(0);
 
         const bg = this.add.graphics();
-        bg.fillStyle(0xdffcff, 0.86);
-        bg.fillRoundedRect(bubbleX - bubbleW / 2, bubbleY - bubbleH / 2, bubbleW, bubbleH, 28);
-        bg.lineStyle(4, 0xffffff, 0.96);
-        bg.strokeRoundedRect(bubbleX - bubbleW / 2, bubbleY - bubbleH / 2, bubbleW, bubbleH, 28);
+        bg.fillStyle(0xdffcff, 0.84);
+        bg.fillRoundedRect(bubbleX - bubbleW / 2, bubbleY - bubbleH / 2, bubbleW, bubbleH, 32);
+        bg.lineStyle(5, 0xffffff, 0.96);
+        bg.strokeRoundedRect(bubbleX - bubbleW / 2, bubbleY - bubbleH / 2, bubbleW, bubbleH, 32);
         bg.lineStyle(2, 0x68dfff, 0.72);
-        bg.strokeRoundedRect(bubbleX - bubbleW / 2 + 9, bubbleY - bubbleH / 2 + 9, bubbleW - 18, bubbleH - 18, 20);
+        bg.strokeRoundedRect(bubbleX - bubbleW / 2 + 10, bubbleY - bubbleH / 2 + 10, bubbleW - 20, bubbleH - 20, 24);
 
         const sodaBubbles = [];
-        for (let i = 0; i < 18; i++) {
+        for (let i = 0; i < 28; i++) {
+            const baseX = bubbleX - bubbleW / 2 + Phaser.Math.Between(16, bubbleW - 16);
+            const baseY = bubbleY + bubbleH / 2 - Phaser.Math.Between(10, bubbleH - 10);
             const b = this.add.circle(
-                bubbleX - bubbleW / 2 + Phaser.Math.Between(16, bubbleW - 16),
-                bubbleY - bubbleH / 2 + Phaser.Math.Between(12, bubbleH - 12),
-                Phaser.Math.Between(2, 7),
+                baseX,
+                baseY,
+                Phaser.Math.Between(2, 8),
                 0xffffff,
-                Phaser.Math.FloatBetween(0.22, 0.54)
+                Phaser.Math.FloatBetween(0.18, 0.52)
             ).setBlendMode(Phaser.BlendModes.ADD);
+            b.__baseY = baseY;
             sodaBubbles.push(b);
+
+            this.tweens.add({
+                targets: b,
+                y: baseY - Phaser.Math.Between(12, 34),
+                alpha: { from: b.alpha, to: Phaser.Math.FloatBetween(0.08, 0.38) },
+                scaleX: { from: 0.85, to: 1.35 },
+                scaleY: { from: 0.85, to: 1.35 },
+                yoyo: true,
+                repeat: -1,
+                duration: Phaser.Math.Between(1050, 1900),
+                delay: Phaser.Math.Between(0, 550),
+                ease: 'Sine.easeInOut'
+            });
         }
 
-        const npcX = bubbleX - bubbleW / 2 + 72;
+        const npcX = bubbleX - bubbleW / 2 + Math.min(78, bubbleW * 0.16);
         const npcY = bubbleY;
         let npc = null;
         if (this.textures.exists('solo-cleaning-room-npc-onion1')) {
@@ -18587,13 +18911,13 @@ if (!data.scoreHandled && data.attacker) {
             strokeThickness: 3
         }).setOrigin(0.5);
 
-        const lineText = this.add.text(bubbleX - bubbleW / 2 + 132, bubbleY - 34, '', {
-            fontSize: '19px',
+        const lineText = this.add.text(bubbleX - bubbleW / 2 + 136, bubbleY - 38, '', {
+            fontSize: cam.width <= 420 ? '16px' : '18px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#003b45',
-            lineSpacing: 7,
-            wordWrap: { width: bubbleW - 162 }
+            lineSpacing: 8,
+            wordWrap: { width: bubbleW - 160 }
         }).setOrigin(0, 0);
 
         container.add([bg, ...sodaBubbles, npc, nameText, lineText]);
@@ -18733,6 +19057,8 @@ if (!data.scoreHandled && data.attacker) {
     clearSoloCleaningRoom(skipMusicResume = false) {
         const state = this.getSoloCleaningRoomState();
 
+        this.clearSoloCleaningRoomTutorial();
+
         try {
             (state.timers || []).forEach(timer => {
                 try {
@@ -18820,6 +19146,11 @@ if (!data.scoreHandled && data.attacker) {
         state.deodorizeCount = 0;
         state.returnPosition = null;
         state.playerUiState = null;
+        state.hiddenFurnitureObjects = [];
+        state.tutorialContainer = null;
+        state.tutorialPointerHandler = null;
+        state.tutorialActive = false;
+        state.tutorialStartPending = false;
         state.bgm = null;
         window.GameLogic.soloCleaningRoomActive = false;
     }
