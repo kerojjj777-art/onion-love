@@ -96,7 +96,7 @@ window.GameLogic = {
     authGuardSigningOut: false
 };
 
-let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, pmUnreadUnsubscribe = null, friendRequestsUnsubscribe = null, friendVisitRequestsUnsubscribe = null, friendVisitRepliesUnsubscribe = null, friendVisitSessionsUnsubscribe = null, friendVisitLoveNoticesUnsubscribe = null, profileViewingUid = null;
+let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, serverTimeOffsetUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, pmUnreadUnsubscribe = null, friendRequestsUnsubscribe = null, friendVisitRequestsUnsubscribe = null, friendVisitRepliesUnsubscribe = null, friendVisitSessionsUnsubscribe = null, friendVisitLoveNoticesUnsubscribe = null, profileViewingUid = null;
 window.switchScene = switchScene; window.showProfileModal = showProfileModal; window.leaveCafe = leaveCafe; window.signOut = signOut; window.auth = auth;
 
 // ====== 入口房間共用工具 ======
@@ -151,6 +151,40 @@ window.updateCurrentRoomLabel = function() {
     }
 };
 
+window.__firebaseServerTimeOffset = 0;
+window.__firebaseServerTimeOffsetReady = false;
+
+window.getFirebaseServerNow = function() {
+    const offset = Number(window.__firebaseServerTimeOffset || 0);
+    return Date.now() + offset;
+};
+
+window.startFirebaseServerTimeOffsetListener = function() {
+    if (!window.GameLogic || !window.GameLogic.db) return;
+
+    if (serverTimeOffsetUnsubscribe) {
+        serverTimeOffsetUnsubscribe();
+        serverTimeOffsetUnsubscribe = null;
+    }
+
+    serverTimeOffsetUnsubscribe = onValue(ref(window.GameLogic.db, '.info/serverTimeOffset'), snap => {
+        const offset = Number(snap.val() || 0);
+        window.__firebaseServerTimeOffset = Number.isFinite(offset) ? offset : 0;
+        window.__firebaseServerTimeOffsetReady = true;
+        if (window.GameLogic) window.GameLogic.serverTimeOffset = window.__firebaseServerTimeOffset;
+    }, err => {
+        console.warn('[Server Time] 讀取 Firebase serverTimeOffset 失敗，暫用本機時間：', err);
+    });
+};
+
+window.stopFirebaseServerTimeOffsetListener = function() {
+    if (serverTimeOffsetUnsubscribe) {
+        serverTimeOffsetUnsubscribe();
+        serverTimeOffsetUnsubscribe = null;
+    }
+    window.__firebaseServerTimeOffsetReady = false;
+};
+
 window.ONLINE_PLAYER_LIST_FRESH_MS = 90 * 1000;
 window.ONLINE_PLAYER_VISIT_FRESH_MS = 5 * 60 * 1000;
 
@@ -161,19 +195,21 @@ window.isFreshOnlinePlayer = function(player, options = {}) {
     const mode = options.mode || 'list';
     const maxAge = Number(options.maxAge || (mode === 'visit' ? window.ONLINE_PLAYER_VISIT_FRESH_MS : window.ONLINE_PLAYER_LIST_FRESH_MS));
     const lastActive = Number(player.lastActive || player.updatedAt || player.connectedAt || 0);
+    const now = window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now();
 
     if (!lastActive) return !!options.allowMissingLastActive;
-    return Date.now() - lastActive <= maxAge;
+    return now - lastActive <= maxAge;
 };
 
 window.refreshMyOnlinePresenceNow = async function(options = {}) {
     if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return false;
 
-    const now = Date.now();
+    const throttleNow = Date.now();
+    const serverNow = window.getFirebaseServerNow ? window.getFirebaseServerNow() : throttleNow;
     const force = !!options.force;
-    if (!force && window.__lastOnlinePresenceRefreshAt && now - window.__lastOnlinePresenceRefreshAt < 10000) return true;
+    if (!force && window.__lastOnlinePresenceRefreshAt && throttleNow - window.__lastOnlinePresenceRefreshAt < 10000) return true;
 
-    window.__lastOnlinePresenceRefreshAt = now;
+    window.__lastOnlinePresenceRefreshAt = throttleNow;
 
     try {
         const uid = window.GameLogic.currentUser.uid;
@@ -183,7 +219,7 @@ window.refreshMyOnlinePresenceNow = async function(options = {}) {
             level: window.GameLogic.myProfile.level || 1,
             scene: window.GameLogic.currentScene || 'doghouse',
             doghouseHostUid: window.GameLogic.currentScene === 'doghouse' && window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : '',
-            lastActive: now
+            lastActive: serverNow
         };
 
         await update(ref(window.GameLogic.db, window.getServerRoomPath(`onlinePlayers/${uid}`)), payload);
@@ -255,7 +291,7 @@ window.getMyDoghousePresencePayload = function(hostUid = null, options = {}) {
         scene: 'doghouse',
         isHost: safeHostUid === myUid,
         hostUid: safeHostUid,
-        lastActive: Date.now()
+        lastActive: window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now()
     };
 };
 
@@ -10724,7 +10760,9 @@ window.startFriendVisitRepliesListener = function() {
 
             if (window.__processingFriendVisitReplyKeys && window.__processingFriendVisitReplyKeys[replyKey]) return;
 
-            if (createdAt && Date.now() - createdAt > 120000) {
+            const serverNow = window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now();
+
+            if (createdAt && serverNow - createdAt > 120000) {
                 remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitReplies/${hostUid}`));
                 return;
             }
@@ -10795,7 +10833,9 @@ window.startFriendVisitSessionsListener = function() {
 
             if (window.__processingFriendVisitSessionKeys && window.__processingFriendVisitSessionKeys[sessionKey]) return;
 
-            if (createdAt && Date.now() - createdAt > 120000) {
+            const serverNow = window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now();
+
+            if (createdAt && serverNow - createdAt > 120000) {
                 remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitSessions/${hostUid}`));
                 return;
             }
@@ -10803,7 +10843,7 @@ window.startFriendVisitSessionsListener = function() {
             if (retryCount >= 4) {
                 update(ref(window.GameLogic.db, `users/${myUid}/friendVisitSessions/${hostUid}`), {
                     status: 'failed',
-                    updatedAt: Date.now(),
+                    updatedAt: serverNow,
                     lastError: 'retry-limit'
                 }).catch(err => console.warn('[好友拜訪] 標記 visitSession 失敗狀態失敗：', err));
                 return;
@@ -10855,10 +10895,11 @@ window.startFriendVisitSessionsListener = function() {
                     : enterOk;
 
                 if (finalAck) {
+                    const arrivedNow = window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now();
                     await update(ref(window.GameLogic.db, `users/${myUid}/friendVisitSessions/${hostUid}`), {
                         status: 'arrived',
-                        arrivedAt: Date.now(),
-                        updatedAt: Date.now()
+                        arrivedAt: arrivedNow,
+                        updatedAt: arrivedNow
                     });
                     await remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitSessions/${hostUid}`));
                     await remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitReplies/${hostUid}`)).catch(() => {});
@@ -10866,7 +10907,7 @@ window.startFriendVisitSessionsListener = function() {
                     await update(ref(window.GameLogic.db, `users/${myUid}/friendVisitSessions/${hostUid}`), {
                         status: 'go',
                         retryCount: retryCount + 1,
-                        updatedAt: Date.now(),
+                        updatedAt: window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now(),
                         lastError: 'ack-missing'
                     });
                     console.warn('[好友拜訪] visitSession 尚未取得 doghousePlayers ack：', sessionKey);
@@ -10909,7 +10950,7 @@ window.sendFriendVisitRequest = async function(targetUid) {
             return;
         }
 
-        const now = Date.now();
+        const now = window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now();
         const requestData = {
             fromUid: myUid,
             fromName: window.GameLogic.myProfile.name || '匿名',
@@ -10952,7 +10993,7 @@ window.acceptFriendVisitRequest = async function(fromUid) {
     const myName = window.GameLogic.myProfile.name || '匿名';
 
     try {
-        const now = Date.now();
+        const now = window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now();
         const sessionId = `${myUid}_${fromUid}_${now}`;
         const updates = {};
         updates[`users/${myUid}/friendVisitRequests/${fromUid}`] = null;
@@ -11012,7 +11053,7 @@ window.rejectFriendVisitRequest = async function(fromUid) {
             status: 'rejected',
             hostUid: myUid,
             hostName: myName,
-            createdAt: Date.now()
+            createdAt: window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now()
         };
 
         await update(ref(window.GameLogic.db), updates);
@@ -12756,6 +12797,7 @@ onAuthStateChanged(auth, async (user) => {
 
         if (window.startMeowlimeDailyWatcher) window.startMeowlimeDailyWatcher();
         if (window.refreshDailyMeowlimeStatus) window.refreshDailyMeowlimeStatus({ reason: 'login' });
+        if (window.startFirebaseServerTimeOffsetListener) window.startFirebaseServerTimeOffsetListener();
 
         if (connectedUnsubscribe) { connectedUnsubscribe(); connectedUnsubscribe = null; }
         connectedUnsubscribe = onValue(ref(db, '.info/connected'), (snap) => {
@@ -12854,6 +12896,7 @@ onAuthStateChanged(auth, async (user) => {
         document.body.classList.add('login-bg-active');
 
         if (connectedUnsubscribe) { connectedUnsubscribe(); connectedUnsubscribe = null; }
+        if (window.stopFirebaseServerTimeOffsetListener) window.stopFirebaseServerTimeOffsetListener();
         if (onlinePlayersUnsubscribe) { onlinePlayersUnsubscribe(); onlinePlayersUnsubscribe = null; }
         if (pmUnreadUnsubscribe) { pmUnreadUnsubscribe(); pmUnreadUnsubscribe = null; }
         if (friendRequestsUnsubscribe) { friendRequestsUnsubscribe(); friendRequestsUnsubscribe = null; }
@@ -13112,7 +13155,7 @@ function switchScene(sceneName, extraData = null) {
             update(ref(window.GameLogic.db, window.getServerRoomPath(`onlinePlayers/${window.GameLogic.currentUser.uid}`)), {
                 scene: sceneName,
                 doghouseHostUid: sceneName === 'doghouse' && window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : '',
-                lastActive: Date.now(),
+                lastActive: window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now(),
                 name: window.GameLogic.myProfile.name || '匿名',
                 color: window.GameLogic.myProfile.color || '#fff',
                 level: window.GameLogic.myProfile.level || 1
@@ -14560,7 +14603,7 @@ class MainScene extends Phaser.Scene {
                 scene: 'doghouse',
                 isHost: doghouseHostUid === window.GameLogic.currentUser.uid,
                 hostUid: doghouseHostUid,
-                lastActive: Date.now()
+                lastActive: window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now()
             }).then(() => {
                 if (window.scheduleDoghousePresenceRefresh) window.scheduleDoghousePresenceRefresh(420);
             }).catch(err => console.warn('[好友拜訪] 寫入狗窩玩家狀態失敗：', err));
@@ -15214,7 +15257,17 @@ if (itemName === '月光饅頭') {
                             }
                         });
                     } else {
-                        update(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/globalFireworks')), { time: Date.now(), scene: this.sceneName, initiator: window.GameLogic.currentUser.uid });
+                        const globalFwNow = window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now();
+                        const globalFwEventId = `${window.GameLogic.currentUser.uid}_${globalFwNow}_${Math.random().toString(36).slice(2, 8)}`;
+                        update(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/globalFireworks')), {
+                            eventId: globalFwEventId,
+                            type: 'globalFireworks',
+                            time: globalFwNow,
+                            createdAt: globalFwNow,
+                            scene: this.sceneName,
+                            initiator: window.GameLogic.currentUser.uid,
+                            initiatorName: window.GameLogic.myProfile.name || '匿名'
+                        });
                         sendBubble("施放了全頻煙火！");
                     }
                 } else {
@@ -15880,7 +15933,36 @@ if (!data.scoreHandled && data.attacker) {
         this.fwHitListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`)), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 2000)) { if (this.localPlayer.isInvincible) return; window.playSFX(this, 'bomb'); this.localPlayer.isInvincible = true; this.localPlayer.isStunned = true; this.localPlayer.sprite.play('fw-hit', true); let p = window.GameLogic.myProfile; let loss = Math.min(p.coins || 0, 100); p.coins -= loss; update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { coins: p.coins }).catch(err => console.warn('Firebase 被擊中扣款失敗:', err)); let coinsEl = document.getElementById("vp-coins"); if (coinsEl) coinsEl.innerText = p.coins; if (loss > 0) { let amounts = [Math.floor(loss * 0.4), Math.floor(loss * 0.3), loss - Math.floor(loss * 0.4) - Math.floor(loss * 0.3)]; for (let i = 0; i < 3; i++) { if(amounts[i] <= 0) continue; let angle = (Math.PI * 2 / 3) * i + Phaser.Math.FloatBetween(-0.25, 0.25); let dist = Phaser.Math.Between(100, 160); let cx = Phaser.Math.Clamp(this.localPlayer.sprite.x + Math.cos(angle) * dist, 80, this.physics.world.bounds.width - 80); let cy = Phaser.Math.Clamp(this.localPlayer.sprite.y + Math.sin(angle) * dist + 20, 80, this.physics.world.bounds.height - 80); push(ref(window.GameLogic.db, window.getServerRoomPath('droppedCoins')), { x: cx, y: cy, amount: amounts[i], scene: this.sceneName }); } } this.time.delayedCall(500, () => { this.localPlayer.isStunned = false; }); this.time.delayedCall(1500, () => { this.localPlayer.isInvincible = false; }); remove(ref(window.GameLogic.db, window.getServerRoomPath(`serverEvents/fireworksHits/${window.GameLogic.currentUser.uid}`))); } });
         this.fwPlayersHitListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/fireworksHits')), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { window.playSFX(this, 'bomb'); opSprite.isStunned = true; opSprite.play('fw-hit', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
         this.fwDummyHitListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/fireworksDummyHits')), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { window.playSFX(this, 'bomb'); dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
-        this.globalFwListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/globalFireworks')), (snap) => { let data = snap.val(); if (data && data.time && (Date.now() - data.time < 3000) && data.scene === this.sceneName) { if (this.lastGlobalFwTime !== data.time) { this.lastGlobalFwTime = data.time; this.playGlobalFireworks(); } } });
+        this.globalFwListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/globalFireworks')), (snap) => {
+            let data = snap.val();
+            if (!data || !data.time || data.scene !== this.sceneName) return;
+
+            const serverNow = window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now();
+            const eventTime = Number(data.createdAt || data.time || 0);
+            const eventKey = data.eventId || `${data.initiator || 'unknown'}_${eventTime}`;
+            if (!eventKey) return;
+
+            if (!window.__seenGlobalFireworksEvents) window.__seenGlobalFireworksEvents = {};
+
+            if (eventTime && serverNow - eventTime > 30000) {
+                remove(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/globalFireworks')))
+                    .catch(err => console.warn('[全域煙火] 清理過期事件失敗：', err));
+                return;
+            }
+
+            if (eventTime && eventTime - serverNow > 10000) {
+                remove(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/globalFireworks')))
+                    .catch(err => console.warn('[全域煙火] 清理異常未來事件失敗：', err));
+                return;
+            }
+
+            if (eventTime && serverNow - eventTime < 0) return;
+            if (window.__seenGlobalFireworksEvents[eventKey]) return;
+
+            window.__seenGlobalFireworksEvents[eventKey] = serverNow;
+            this.lastGlobalFwTime = eventTime;
+            this.playGlobalFireworks();
+        });
 
         // 補丁 6-2 後續：月光法杖全域祝福，同一張地圖中的玩家都會播放特效與音效。
                     this.moonStaffBlessingListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/moonStaffBlessings')), (snap) => {
@@ -29271,7 +29353,7 @@ if (activeBubbleMsg) {
         // 修正4：心跳機制更新，每 5 秒上傳一次當前時間戳，用於徹底過濾斷線與幽靈人口
         if (!this.lastHeartbeatSync || time - this.lastHeartbeatSync > 5000) {
             this.lastHeartbeatSync = time;
-            const heartbeatNow = Date.now();
+            const heartbeatNow = window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now();
             const currentDoghouseHostUid = window.GameLogic.currentScene === 'doghouse' && window.getCurrentDoghouseHostUid
                 ? window.getCurrentDoghouseHostUid()
                 : '';
