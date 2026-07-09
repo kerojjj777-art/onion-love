@@ -10108,8 +10108,6 @@ window.tryGrantFriendVisitLoveReward = async function(hostUid, hostName = '') {
     }
 };
 
-};
-
 window.tryGrantFriendDailyLoveAction = async function(friendUid, actionKey, actionLabel = '共同活動', options = {}) {
     if (!friendUid || !actionKey || !window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return { ok: false, reason: 'missing-context' };
 
@@ -10220,8 +10218,6 @@ window.tryGrantFriendDailyLoveAction = async function(friendUid, actionKey, acti
         return { ok: false, reason: 'grant-failed', error: err };
     }
 };
-
-window.getCurrentDoghouseHostUid = function() {
 
 window.startFriendVisitLoveNoticesListener = function() {
     if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return;
