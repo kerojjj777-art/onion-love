@@ -18102,16 +18102,16 @@ if (!data.scoreHandled && data.attacker) {
         state.gameplayStarted = false;
 
         const cam = this.cameras.main;
-        const rect = this.getSoloCleaningRoomSafeRect ? this.getSoloCleaningRoomSafeRect() : {
+        const rect = {
             x: 16,
             y: 16,
-            w: cam.width - 32,
-            h: cam.height - 32,
+            w: Math.max(280, cam.width - 32),
+            h: Math.max(320, cam.height - 32),
             centerX: cam.width / 2,
             centerY: cam.height / 2
         };
-        const panelW = Math.min(rect.w - 28, cam.width <= 768 ? 430 : 520);
-        const panelH = Math.min(rect.h - 30, cam.height <= 620 ? 560 : 620);
+        const panelW = Math.min(rect.w - 24, cam.width <= 768 ? Math.max(300, cam.width * 0.94) : 760);
+        const panelH = Math.min(rect.h - 24, cam.height <= 620 ? rect.h - 24 : 650);
         const px = rect.centerX - panelW / 2;
         const py = rect.centerY - panelH / 2;
 
@@ -18125,7 +18125,7 @@ if (!data.scoreHandled && data.attacker) {
             .setInteractive();
 
         const panel = this.add.graphics();
-        panel.fillStyle(0x031017, 0.88);
+        panel.fillStyle(0x031017, 0.9);
         panel.fillRoundedRect(px, py, panelW, panelH, 18);
         panel.lineStyle(5, 0x16e0d6, 1);
         panel.strokeRoundedRect(px, py, panelW, panelH, 18);
@@ -18133,7 +18133,7 @@ if (!data.scoreHandled && data.attacker) {
         panel.strokeRoundedRect(px + 8, py + 8, panelW - 16, panelH - 16, 14);
 
         const title = this.add.text(rect.centerX, py + 38, '大掃除說明', {
-            fontSize: '25px',
+            fontSize: cam.width <= 420 ? '23px' : '27px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#ffffff',
@@ -18154,17 +18154,19 @@ if (!data.scoreHandled && data.attacker) {
             '小心當你的潔淨度歸零時就只能先撤退囉！\n' +
             '[備註：大掃除完記得去洗澡。]';
 
-        const body = this.add.text(rect.centerX, py + 78, bodyText, {
-            fontSize: cam.width <= 420 ? '13px' : '14px',
+        const bodyFontSize = cam.height <= 560 ? '14px' : (cam.width <= 420 ? '15px' : '16px');
+        const bodyLineSpacing = cam.height <= 560 ? 3 : (cam.width <= 420 ? 5 : 7);
+        const body = this.add.text(px + 28, py + 78, bodyText, {
+            fontSize: bodyFontSize,
             fontFamily: 'Arial, sans-serif',
             color: '#eafffb',
             align: 'left',
-            lineSpacing: cam.height <= 620 ? 4 : 7,
-            wordWrap: { width: panelW - 44 }
-        }).setOrigin(0.5, 0);
+            lineSpacing: bodyLineSpacing,
+            wordWrap: { width: panelW - 56 }
+        }).setOrigin(0, 0);
 
         const btnY = py + panelH - 42;
-        const btnW = Math.min(220, panelW - 74);
+        const btnW = Math.min(250, panelW - 74);
         const btnH = 46;
         const hitW = btnW + 48;
         const hitH = btnH + 32;
@@ -18252,12 +18254,12 @@ if (!data.scoreHandled && data.attacker) {
     }
   
     getSoloCleaningRoomSafeRect() {
-        if (this.getSoloRocketSafeRect) return this.getSoloRocketSafeRect();
-
+        // 第 2-2 包：大掃除是全畫面大廳式副本，不沿用火箭巡航中央小框 safe rect。
         const cam = this.cameras.main;
-        const margin = cam.width <= 768 ? 12 : 24;
-        const safeW = Math.max(320, cam.width - margin * 2);
-        const safeH = Math.max(420, cam.height - margin * 2);
+        const margin = cam.width <= 768 ? 14 : 24;
+        const safeW = Math.max(280, cam.width - margin * 2);
+        const safeH = Math.max(320, cam.height - margin * 2);
+
         return {
             x: margin,
             y: margin,
@@ -18683,25 +18685,35 @@ if (!data.scoreHandled && data.attacker) {
             .setDepth(9580)
             .setScrollFactor(0);
 
-        const blocker = this.add.zone(cam.width / 2, cam.height / 2, cam.width, cam.height)
-            .setInteractive();
-        blocker.__soloCleaningKind = 'screenBlocker';
-
-        const dim = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x08100a, 0.14)
+        const dim = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x050300, 0.08)
             .setScrollFactor(0);
 
         const frame = this.add.graphics();
-        frame.fillStyle(0x251206, 0.56);
-        frame.fillRoundedRect(rect.x - 8, rect.y - 8, rect.w + 16, rect.h + 16, 24);
-        frame.lineStyle(10, 0x7b4a21, 1);
-        frame.strokeRoundedRect(rect.x - 8, rect.y - 8, rect.w + 16, rect.h + 16, 24);
-        frame.lineStyle(4, 0xd7a35b, 0.95);
-        frame.strokeRoundedRect(rect.x + 4, rect.y + 4, rect.w - 8, rect.h - 8, 18);
-        frame.lineStyle(2, 0x3b1f0d, 0.9);
-        frame.strokeRoundedRect(rect.x + 16, rect.y + 16, rect.w - 32, rect.h - 32, 12);
+        const outerX = rect.x;
+        const outerY = rect.y;
+        const outerW = rect.w;
+        const outerH = rect.h;
 
-        const title = this.add.text(rect.centerX, rect.y + 24, '大掃除', {
-            fontSize: '24px',
+        frame.lineStyle(12, 0x8a5618, 0.96);
+        frame.strokeRoundedRect(outerX, outerY, outerW, outerH, 20);
+        frame.lineStyle(5, 0xffd45a, 1);
+        frame.strokeRoundedRect(outerX + 8, outerY + 8, outerW - 16, outerH - 16, 16);
+        frame.lineStyle(2, 0xffffbd, 0.72);
+        frame.strokeRoundedRect(outerX + 18, outerY + 18, outerW - 36, outerH - 36, 12);
+
+        const glowTop = this.add.rectangle(rect.centerX, outerY + 7, outerW - 36, 12, 0xffd45a, 0.18)
+            .setBlendMode(Phaser.BlendModes.ADD);
+        const glowBottom = this.add.rectangle(rect.centerX, outerY + outerH - 7, outerW - 36, 12, 0xffd45a, 0.18)
+            .setBlendMode(Phaser.BlendModes.ADD);
+        const glowLeft = this.add.rectangle(outerX + 7, rect.centerY, 12, outerH - 36, 0xffd45a, 0.18)
+            .setBlendMode(Phaser.BlendModes.ADD);
+        const glowRight = this.add.rectangle(outerX + outerW - 7, rect.centerY, 12, outerH - 36, 0xffd45a, 0.18)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        const titleBg = this.add.rectangle(rect.x + 88, rect.y + 25, 148, 34, 0x3b1f0d, 0.62)
+            .setStrokeStyle(2, 0xffd45a, 0.95);
+        const title = this.add.text(rect.x + 88, rect.y + 25, '大掃除', {
+            fontSize: '22px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#fff4cc',
@@ -18709,15 +18721,15 @@ if (!data.scoreHandled && data.attacker) {
             strokeThickness: 5
         }).setOrigin(0.5);
 
-        const hint = this.add.text(rect.centerX, rect.y + rect.h - 24, '開場演出中，正式操作由下一包接上', {
-            fontSize: '14px',
+        const hint = this.add.text(rect.centerX, rect.y + rect.h - 26, '開場演出中，正式操作由下一包接上', {
+            fontSize: cam.width <= 420 ? '12px' : '14px',
             fontFamily: 'Arial, sans-serif',
             color: '#fff4cc',
             stroke: '#3b1f0d',
             strokeThickness: 4
         }).setOrigin(0.5);
 
-        container.add([blocker, dim, frame, title, hint]);
+        container.add([dim, glowTop, glowBottom, glowLeft, glowRight, frame, titleBg, title, hint]);
         state.layerContainer = container;
         state.objects.push(container);
         return container;
@@ -18845,10 +18857,10 @@ if (!data.scoreHandled && data.attacker) {
         const state = this.getSoloCleaningRoomState();
         const cam = this.cameras.main;
         const rect = this.getSoloCleaningRoomSafeRect();
-        const bubbleW = Math.min(rect.w * 0.9, Math.max(330, rect.w - 32));
-        const bubbleH = cam.width <= 420 ? 168 : 156;
+        const bubbleW = Math.min(rect.w * (cam.width <= 768 ? 0.94 : 0.86), rect.w - 20);
+        const bubbleH = cam.width <= 420 ? 172 : 160;
         const bubbleX = rect.centerX;
-        const bubbleY = rect.y + Math.min(168, Math.max(122, rect.h * 0.22));
+        const bubbleY = rect.y + Math.min(178, Math.max(126, rect.h * 0.22));
 
         const container = this.add.container(0, 0)
             .setDepth(9820)
@@ -18864,7 +18876,7 @@ if (!data.scoreHandled && data.attacker) {
         bg.strokeRoundedRect(bubbleX - bubbleW / 2 + 10, bubbleY - bubbleH / 2 + 10, bubbleW - 20, bubbleH - 20, 24);
 
         const sodaBubbles = [];
-        for (let i = 0; i < 28; i++) {
+        for (let i = 0; i < 32; i++) {
             const baseX = bubbleX - bubbleW / 2 + Phaser.Math.Between(16, bubbleW - 16);
             const baseY = bubbleY + bubbleH / 2 - Phaser.Math.Between(10, bubbleH - 10);
             const b = this.add.circle(
@@ -18891,7 +18903,8 @@ if (!data.scoreHandled && data.attacker) {
             });
         }
 
-        const npcX = bubbleX - bubbleW / 2 + Math.min(78, bubbleW * 0.16);
+        const portraitSpace = cam.width <= 420 ? 108 : 136;
+        const npcX = bubbleX - bubbleW / 2 + Math.min(84, bubbleW * 0.13);
         const npcY = bubbleY;
         let npc = null;
         if (this.textures.exists('solo-cleaning-room-npc-onion1')) {
@@ -18913,13 +18926,13 @@ if (!data.scoreHandled && data.attacker) {
             strokeThickness: 3
         }).setOrigin(0.5);
 
-        const lineText = this.add.text(bubbleX - bubbleW / 2 + 136, bubbleY - 38, '', {
-            fontSize: cam.width <= 420 ? '16px' : '18px',
+        const lineText = this.add.text(bubbleX - bubbleW / 2 + portraitSpace, bubbleY - 40, '', {
+            fontSize: cam.width <= 420 ? '16px' : '19px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#003b45',
             lineSpacing: 8,
-            wordWrap: { width: bubbleW - 160 }
+            wordWrap: { width: bubbleW - portraitSpace - 28 }
         }).setOrigin(0, 0);
 
         container.add([bg, ...sodaBubbles, npc, nameText, lineText]);
