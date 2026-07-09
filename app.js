@@ -10108,6 +10108,121 @@ window.tryGrantFriendVisitLoveReward = async function(hostUid, hostName = '') {
     }
 };
 
+};
+
+window.tryGrantFriendDailyLoveAction = async function(friendUid, actionKey, actionLabel = '共同活動', options = {}) {
+    if (!friendUid || !actionKey || !window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return { ok: false, reason: 'missing-context' };
+
+    const myUid = window.GameLogic.currentUser.uid;
+    if (!myUid || friendUid === myUid) return { ok: false, reason: 'invalid-friend' };
+
+    let friendData = (window.GameLogic.friends && window.GameLogic.friends[friendUid]) || null;
+
+    try {
+        if (!friendData || !friendData.pairId) {
+            const friendSnap = await get(ref(window.GameLogic.db, `users/${myUid}/friends/${friendUid}`));
+            if (!friendSnap.exists()) return { ok: false, reason: 'not-friends' };
+            friendData = friendSnap.val() || {};
+            if (!window.GameLogic.friends) window.GameLogic.friends = {};
+            window.GameLogic.friends[friendUid] = friendData;
+        }
+
+        const pairId = friendData.pairId || (window.getFriendPairId ? window.getFriendPairId(myUid, friendUid) : '');
+        if (!pairId) return { ok: false, reason: 'missing-pair' };
+
+        const dateKey = window.getFriendVisitLoveDateKey ? window.getFriendVisitLoveDateKey() : '';
+        const safeActionKey = String(actionKey).replace(/[.#$[\]/]/g, '_');
+        if (!dateKey || !safeActionKey) return { ok: false, reason: 'missing-date-or-action' };
+
+        const localLockKey = `${dateKey}_${pairId}_${safeActionKey}`;
+        if (!window.__friendDailyLoveActionLocalLocks) window.__friendDailyLoveActionLocalLocks = {};
+        if (window.__friendDailyLoveActionLocalLocks[localLockKey]) return { ok: false, reason: 'local-locked' };
+        window.__friendDailyLoveActionLocalLocks[localLockKey] = true;
+
+        const addVal = Number(options.amount || 0.1);
+        const now = Date.now();
+        const myName = window.GameLogic.myProfile && window.GameLogic.myProfile.name ? window.GameLogic.myProfile.name : '好友';
+        const meta = (window.GameLogic.phoneContactMeta && window.GameLogic.phoneContactMeta[friendUid]) || {};
+        const friendName = options.friendName || meta.name || friendData.name || '好友';
+        const uidList = [myUid, friendUid].sort();
+        let alreadyGranted = false;
+        let nextLove = 0;
+
+        const txResult = await runTransaction(ref(window.GameLogic.db, `friendPairs/${pairId}`), (pairData) => {
+            const currentPair = pairData || {};
+            const dailyLoveActions = currentPair.dailyLoveActions || {};
+            const todayMap = dailyLoveActions[dateKey] || {};
+
+            if (todayMap[safeActionKey]) {
+                alreadyGranted = true;
+                nextLove = Number(currentPair.lovePercent || friendData.lovePercent || 0);
+                return currentPair;
+            }
+
+            const oldLove = Number(currentPair.lovePercent || friendData.lovePercent || 0);
+            nextLove = Number(Math.max(0, oldLove + addVal).toFixed(1));
+
+            return Object.assign({}, currentPair, {
+                uidA: currentPair.uidA || uidList[0],
+                uidB: currentPair.uidB || uidList[1],
+                createdAt: currentPair.createdAt || now,
+                lovePercent: nextLove,
+                updatedAt: now,
+                dailyLoveActions: Object.assign({}, dailyLoveActions, {
+                    [dateKey]: Object.assign({}, todayMap, {
+                        [safeActionKey]: {
+                            actorUid: myUid,
+                            friendUid: friendUid,
+                            actorName: myName,
+                            friendName: friendName,
+                            actionKey: safeActionKey,
+                            actionLabel: actionLabel || '共同活動',
+                            amount: addVal,
+                            date: dateKey,
+                            createdAt: now
+                        }
+                    })
+                })
+            });
+        });
+
+        const nextPairData = txResult && txResult.snapshot ? (txResult.snapshot.val() || {}) : {};
+        if (!window.GameLogic.friendPairs) window.GameLogic.friendPairs = {};
+        window.GameLogic.friendPairs[pairId] = nextPairData;
+
+        if (alreadyGranted) return { ok: true, alreadyGranted: true, pairId, lovePercent: Number(nextPairData.lovePercent || nextLove || 0), dateKey, actionKey: safeActionKey };
+
+        const lovePercent = Number(nextPairData.lovePercent || nextLove || 0);
+        const toastMessage = options.toastMessage || `和 ${friendName} 完成${actionLabel || '共同活動'}，友好度 +${addVal.toFixed(1)}%`;
+        const noticeMessage = options.noticeMessage || `${myName}和你完成${actionLabel || '共同活動'}，友好度 +${addVal.toFixed(1)}%`;
+        const noticeKey = `${dateKey}_${pairId}_${safeActionKey}`.replace(/[.#$[\]/]/g, '_');
+
+        set(ref(window.GameLogic.db, `users/${friendUid}/friendVisitLoveNotices/${noticeKey}`), {
+            type: 'friendLoveAction',
+            pairId: pairId,
+            actorUid: myUid,
+            friendUid: friendUid,
+            actorName: myName,
+            friendName: friendName,
+            actionKey: safeActionKey,
+            actionLabel: actionLabel || '共同活動',
+            amount: addVal,
+            lovePercent: lovePercent,
+            message: noticeMessage,
+            date: dateKey,
+            createdAt: now
+        }).catch(err => console.warn('[共同友好度] 發送好友提示失敗：', err));
+
+        if (window.showFriendLoveToast) window.showFriendLoveToast(toastMessage);
+        return { ok: true, alreadyGranted: false, pairId, lovePercent, dateKey, actionKey: safeActionKey };
+    } catch (err) {
+        console.warn('[共同友好度] 活動友好度加成失敗：', err);
+        return { ok: false, reason: 'grant-failed', error: err };
+    }
+};
+
+window.getCurrentDoghouseHostUid = function() {
+
 window.startFriendVisitLoveNoticesListener = function() {
     if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return;
 
@@ -10124,7 +10239,7 @@ window.startFriendVisitLoveNoticesListener = function() {
 
         Object.keys(notices).forEach(noticeKey => {
             const item = notices[noticeKey] || {};
-            if (!item || item.type !== 'friendVisitLove' || !item.createdAt) return;
+            if (!item || !item.createdAt) return;
 
             if (Date.now() - Number(item.createdAt || 0) > 120000) {
                 remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitLoveNotices/${noticeKey}`));
@@ -10142,8 +10257,15 @@ window.startFriendVisitLoveNoticesListener = function() {
                 });
             }
 
-            const visitorName = item.visitorName || '好友';
-            if (window.showFriendLoveToast) window.showFriendLoveToast(`${visitorName}來你家拜訪成功，友好度 +0.1%`);
+            if (item.type === 'friendLoveAction') {
+                if (window.showFriendLoveToast) window.showFriendLoveToast(item.message || '好友共同活動完成，友好度 +0.1%');
+            } else if (item.type === 'friendVisitLove') {
+                const visitorName = item.visitorName || '好友';
+                if (window.showFriendLoveToast) window.showFriendLoveToast(`${visitorName}來你家拜訪成功，友好度 +0.1%`);
+            } else {
+                return;
+            }
+
             remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitLoveNotices/${noticeKey}`));
         });
     });
@@ -30780,6 +30902,14 @@ window.syncRpsState = function(roomId) {
                 else tDesc += iWinMoney ? `🎉 最終勝利！贏得了 ${getAmt} 馬德幣！` : `😭 最終敗北... 失去所有押注。`;
                 
                 document.getElementById('rps-result-desc').innerHTML = tDesc;
+
+                if (otherUid && window.tryGrantFriendDailyLoveAction) {
+                    window.tryGrantFriendDailyLoveAction(otherUid, 'shrineFriendMachine', '蔥友機', {
+                        friendName: opName,
+                        toastMessage: `和 ${opName} 完成蔥友機，友好度 +0.1%`,
+                        noticeMessage: `${myName}和你完成蔥友機，友好度 +0.1%`
+                    });
+                }
                 
                 // ==========================================
                 // 新增：雙方在本機端同步發放最終獲得的獎金，並立即更新 UI
@@ -31518,6 +31648,18 @@ window.processPartyEventLogic = function(scene) {
                     if (b.hitCount !== a.hitCount) return b.hitCount - a.hitCount;
                     return b.ammo - a.ammo;
                 });
+
+                if (window.tryGrantFriendDailyLoveAction && window.GameLogic && window.GameLogic.currentUser) {
+                    const myUidForPartyLove = window.GameLogic.currentUser.uid;
+                    results.forEach((r) => {
+                        if (!r || !r.uid || r.uid === myUidForPartyLove || r.left) return;
+                        window.tryGrantFriendDailyLoveAction(r.uid, 'partyHornGame', '派對喇叭活動', {
+                            friendName: r.name || '好友',
+                            toastMessage: `和 ${r.name || '好友'} 完成派對喇叭活動，友好度 +0.1%`,
+                            noticeMessage: `${window.GameLogic.myProfile.name || '好友'}和你完成派對喇叭活動，友好度 +0.1%`
+                        });
+                    });
+                }
                 
                 let html = '';
                 let isTwoPlayers = (results.length === 2);
