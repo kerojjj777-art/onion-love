@@ -212,6 +212,21 @@ window.stopOnlinePlayersUiTicker = function() {
     }
 };
 
+window.scheduleDoghousePresenceRefresh = function(delayMs = 650) {
+    const delay = Math.max(120, Math.min(1800, Number(delayMs || 650)));
+
+    setTimeout(async () => {
+        if (!window.GameLogic || !window.GameLogic.currentUser) return;
+        if (window.GameLogic.currentScene !== 'doghouse') return;
+
+        if (window.refreshMyOnlinePresenceNow) {
+            await window.refreshMyOnlinePresenceNow({ force: true });
+        }
+
+        if (window.updateOnlinePlayersUI) window.updateOnlinePlayersUI();
+    }, delay);
+};
+
 window.fetchFriendOnlineInfoNow = async function(uid) {
     const localInfo = window.getFriendOnlineInfo ? window.getFriendOnlineInfo(uid, null, { mode: 'visit' }) : { online: false };
     if (localInfo && localInfo.online) return localInfo;
@@ -10444,7 +10459,7 @@ window.enterFriendDoghouse = async function(hostUid, hostName = '', options = {}
     if (!hostUid || !window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return false;
 
     const myUid = window.GameLogic.currentUser.uid;
-    const safeHostName = hostName || '好友';
+    const safeHostName = hostName || (hostUid === myUid ? (window.GameLogic.myProfile.name || '我') : '好友');
 
     try {
         if (hostUid !== myUid) {
@@ -10456,8 +10471,25 @@ window.enterFriendDoghouse = async function(hostUid, hostName = '', options = {}
         }
 
         if (window.applyDoghouseHost) window.applyDoghouseHost(hostUid, safeHostName);
-        window.switchScene('doghouse', { doghouseHostUid: hostUid, doghouseHostName: safeHostName, visitSource: options.source || 'friendVisit' });
-        return true;
+
+        window.GameLogic.pendingDoghouseHostUid = hostUid;
+        window.GameLogic.pendingDoghouseHostName = safeHostName;
+
+        window.switchScene('doghouse', {
+            doghouseHostUid: hostUid,
+            doghouseHostName: safeHostName,
+            visitSource: options.source || 'friendVisit'
+        });
+
+        if (window.scheduleDoghousePresenceRefresh) {
+            window.scheduleDoghousePresenceRefresh(320);
+            window.scheduleDoghousePresenceRefresh(950);
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 680));
+
+        const currentHostUid = window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : '';
+        return currentHostUid === hostUid;
     } catch (err) {
         console.warn('[好友拜訪] 進入好友狗窩失敗：', err);
         window.showFriendSystemNotice('前往好友家失敗，請稍後再試');
@@ -10570,25 +10602,61 @@ window.startFriendVisitRepliesListener = function() {
         friendVisitRepliesUnsubscribe = null;
     }
 
+    window.__processingFriendVisitReplyKeys = {};
+
     friendVisitRepliesUnsubscribe = onValue(ref(window.GameLogic.db, `users/${myUid}/friendVisitReplies`), snap => {
         const replies = snap.val() || {};
-        Object.keys(replies).forEach(hostUid => {
+
+        Object.keys(replies).forEach(async hostUid => {
             const item = replies[hostUid] || {};
             if (!item || !item.status || !item.createdAt) return;
-            if (Date.now() - Number(item.createdAt || 0) > 60000) {
+
+            const createdAt = Number(item.createdAt || item.updatedAt || 0);
+            const replyKey = item.replyId || `${hostUid}_${createdAt || item.updatedAt || item.status || 'reply'}`;
+
+            if (window.__processingFriendVisitReplyKeys && window.__processingFriendVisitReplyKeys[replyKey]) return;
+
+            if (createdAt && Date.now() - createdAt > 120000) {
                 remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitReplies/${hostUid}`));
                 return;
             }
 
-            const hostName = item.hostName || '對方';
-            if (item.status === 'accepted') {
-                window.showFriendSystemNotice(`${hostName}答應你去他家囉！`);
-                if (window.enterFriendDoghouse) window.enterFriendDoghouse(hostUid, hostName, { source: 'visitReply' });
-            } else if (item.status === 'rejected') {
-                window.showFriendSystemNotice(`${hostName}說下次再來。`);
-            }
+            if (!window.__processingFriendVisitReplyKeys) window.__processingFriendVisitReplyKeys = {};
+            window.__processingFriendVisitReplyKeys[replyKey] = true;
 
-            remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitReplies/${hostUid}`));
+            const hostName = item.hostName || '對方';
+
+            try {
+                if (item.status === 'accepted') {
+                    window.showFriendSystemNotice(`${hostName}答應你去他家囉！`);
+
+                    let enterOk = false;
+                    if (window.enterFriendDoghouse) {
+                        enterOk = await window.enterFriendDoghouse(hostUid, hostName, { source: 'visitReply', replyKey });
+                    }
+
+                    if (!enterOk && window.enterFriendDoghouse) {
+                        await new Promise(resolve => setTimeout(resolve, 900));
+                        enterOk = await window.enterFriendDoghouse(hostUid, hostName, { source: 'visitReplyRetry', replyKey });
+                    }
+
+                    if (enterOk) {
+                        await remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitReplies/${hostUid}`));
+                    } else {
+                        console.warn('[好友拜訪] accepted reply 已保留，等待下次同步重試：', replyKey);
+                        window.showFriendSystemNotice('好友答應了，但前往他家暫時失敗，請再試一次');
+                    }
+                } else if (item.status === 'rejected') {
+                    window.showFriendSystemNotice(`${hostName}說下次再來。`);
+                    await remove(ref(window.GameLogic.db, `users/${myUid}/friendVisitReplies/${hostUid}`));
+                }
+            } catch (err) {
+                console.warn('[好友拜訪] 處理拜訪回覆失敗：', err);
+            } finally {
+                setTimeout(() => {
+                    if (window.__processingFriendVisitReplyKeys) delete window.__processingFriendVisitReplyKeys[replyKey];
+                }, 1200);
+            }
         });
     });
 };
@@ -10663,13 +10731,16 @@ window.acceptFriendVisitRequest = async function(fromUid) {
     const myName = window.GameLogic.myProfile.name || '匿名';
 
     try {
+        const now = Date.now();
         const updates = {};
         updates[`users/${myUid}/friendVisitRequests/${fromUid}`] = null;
         updates[`users/${fromUid}/friendVisitReplies/${myUid}`] = {
             status: 'accepted',
             hostUid: myUid,
             hostName: myName,
-            createdAt: Date.now()
+            createdAt: now,
+            updatedAt: now,
+            replyId: `${myUid}_${fromUid}_${now}`
         };
 
         await update(ref(window.GameLogic.db), updates);
@@ -10677,7 +10748,11 @@ window.acceptFriendVisitRequest = async function(fromUid) {
         if (window.GameLogic.friendVisitRequests) delete window.GameLogic.friendVisitRequests[fromUid];
         window.closeFriendVisitRequestModal();
         window.showFriendSystemNotice('已答應拜訪邀請，準備回到你的狗窩。');
-        if (window.enterFriendDoghouse) window.enterFriendDoghouse(myUid, myName, { source: 'visitHostAccepted', guestUid: fromUid });
+
+        if (window.enterFriendDoghouse) {
+            const enterOk = await window.enterFriendDoghouse(myUid, myName, { source: 'visitHostAccepted', guestUid: fromUid });
+            if (!enterOk) console.warn('[好友拜訪] host 回自己狗窩切換未完成，仍保留線上狀態刷新。');
+        }
     } catch (err) {
         console.warn('[好友拜訪] 接受拜訪邀請失敗：', err);
         window.showFriendSystemNotice('接受拜訪邀請失敗，請稍後再試');
@@ -12797,7 +12872,8 @@ function switchScene(sceneName, extraData = null) {
                 doghouseHostUid: sceneName === 'doghouse' && window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : '',
                 lastActive: Date.now(),
                 name: window.GameLogic.myProfile.name || '匿名',
-                color: window.GameLogic.myProfile.color || '#fff'
+                color: window.GameLogic.myProfile.color || '#fff',
+                level: window.GameLogic.myProfile.level || 1
             }).catch(err => console.warn('[我們的愛] 更新在線場景失敗：', err));
         }
         if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput(); 
@@ -14242,11 +14318,14 @@ class MainScene extends Phaser.Scene {
                 isHost: doghouseHostUid === window.GameLogic.currentUser.uid,
                 hostUid: doghouseHostUid,
                 lastActive: Date.now()
+            }).then(() => {
+                if (window.scheduleDoghousePresenceRefresh) window.scheduleDoghousePresenceRefresh(420);
             }).catch(err => console.warn('[好友拜訪] 寫入狗窩玩家狀態失敗：', err));
             onDisconnect(doghousePlayerRef).remove();
 
             this.doghousePlayersListener = onValue(ref(window.GameLogic.db, doghousePlayersPath), (snap) => {
                 window.GameLogic.doghousePlayers = snap.val() || {};
+                if (window.updateOnlinePlayersUI) window.updateOnlinePlayersUI();
             });
 
             if (window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) {
@@ -15825,7 +15904,10 @@ if (!data.scoreHandled && data.attacker) {
             // 修復：清理忘記註銷的家俱監聽器 (解決記憶體流失死碼)
             if (this.doghouseFurnListener) this.doghouseFurnListener();
             if (this.doghousePlayersListener) this.doghousePlayersListener();
-            if (this.doghousePlayerPresenceRef) remove(this.doghousePlayerPresenceRef).catch(err => console.warn('[好友拜訪] 清理狗窩玩家狀態失敗：', err));
+            const oldDoghousePresenceRef = this.doghousePlayerPresenceRef;
+            this.doghousePlayerPresenceRef = null;
+            if (oldDoghousePresenceRef) remove(oldDoghousePresenceRef).catch(err => console.warn('[好友拜訪] 清理狗窩玩家狀態失敗：', err));
+            if (window.updateOnlinePlayersUI) window.updateOnlinePlayersUI();
             if (this.shrineFurnListener) this.shrineFurnListener();
             
             // 【v1.3 修正】：離開場景時，徹底註銷米米監聽器並強制切斷走路音效
