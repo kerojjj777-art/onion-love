@@ -17849,6 +17849,8 @@ if (!data.scoreHandled && data.attacker) {
             state.active = false;
             console.log('[大掃除] 已支付 50 馬德幣，入口已開啟。');
 
+            // 第 2-1 修正：扣款成功後要先解除付款鎖，否則 showSoloCleaningRoomTutorial() 會因 paymentPending 仍為 true 而直接 return。
+            state.paymentPending = false;
             this.closeSoloCleaningRoomPaymentConfirm();
             this.closeSoloChickenMenu();
             this.showSoloCleaningRoomTutorial();
