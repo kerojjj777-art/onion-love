@@ -10355,13 +10355,18 @@ window.normalizeFriendVisitRequests = function(rawRequests = {}) {
         if (!fromUid || fromUid === myUid) return;
         if (item.status && item.status !== 'pending') return;
 
+        const createdAt = Number(item.createdAt || item.updatedAt || 0);
+        const updatedAt = Number(item.updatedAt || item.createdAt || createdAt || 0);
+        const requestId = item.requestId || (createdAt ? `${fromUid}_${createdAt}` : `legacy_${fromUid}`);
+
         result[fromUid] = {
             fromUid: item.fromUid || fromUid,
             fromName: item.fromName || '匿名洋蔥',
             fromColor: item.fromColor || '#fff',
             hostUid: item.hostUid || myUid,
-            createdAt: Number(item.createdAt || 0),
-            requestId: item.requestId || `${fromUid}_${item.createdAt || Date.now()}`
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            requestId: requestId
         };
     });
 
@@ -10393,18 +10398,43 @@ window.startFriendVisitRequestsListener = function() {
         friendVisitRequestsUnsubscribe = null;
     }
 
+    window.__shownFriendVisitRequestKeys = {};
+
     friendVisitRequestsUnsubscribe = onValue(ref(window.GameLogic.db, `users/${myUid}/friendVisitRequests`), snap => {
         const requests = window.normalizeFriendVisitRequests ? window.normalizeFriendVisitRequests(snap.val() || {}) : {};
         window.GameLogic.friendVisitRequests = requests;
 
-        const requestUids = Object.keys(requests).sort((a, b) => Number(requests[b].createdAt || 0) - Number(requests[a].createdAt || 0));
+        const requestUids = Object.keys(requests).sort((a, b) => {
+            const bTime = Number(requests[b].updatedAt || requests[b].createdAt || 0);
+            const aTime = Number(requests[a].updatedAt || requests[a].createdAt || 0);
+            return bTime - aTime;
+        });
         if (requestUids.length > 0) window.showFriendSystemNotice('有蔥想來你家拜訪');
 
         if (!window.__shownFriendVisitRequestKeys) window.__shownFriendVisitRequestKeys = {};
-        const freshUid = requestUids.find(uid => !window.__shownFriendVisitRequestKeys[uid]);
+
+        const activeRequestKeys = {};
+        requestUids.forEach(uid => {
+            const item = requests[uid] || {};
+            const key = item.requestId || `${uid}_${item.updatedAt || item.createdAt || 0}`;
+            if (key) activeRequestKeys[key] = true;
+        });
+
+        Object.keys(window.__shownFriendVisitRequestKeys).forEach(key => {
+            if (!activeRequestKeys[key]) delete window.__shownFriendVisitRequestKeys[key];
+        });
+
+        const freshUid = requestUids.find(uid => {
+            const item = requests[uid] || {};
+            const key = item.requestId || `${uid}_${item.updatedAt || item.createdAt || 0}`;
+            return key && !window.__shownFriendVisitRequestKeys[key];
+        });
+
         if (freshUid) {
-            window.__shownFriendVisitRequestKeys[freshUid] = true;
-            window.showIncomingFriendVisitRequest(freshUid, requests[freshUid]);
+            const freshItem = requests[freshUid] || {};
+            const freshKey = freshItem.requestId || `${freshUid}_${freshItem.updatedAt || freshItem.createdAt || 0}`;
+            window.__shownFriendVisitRequestKeys[freshKey] = true;
+            window.showIncomingFriendVisitRequest(freshUid, freshItem);
         }
     });
 };
@@ -10471,6 +10501,7 @@ window.sendFriendVisitRequest = async function(targetUid) {
             fromColor: window.GameLogic.myProfile.color || '#fff',
             hostUid: targetUid,
             createdAt: now,
+            updatedAt: now,
             status: 'pending',
             requestId: `${myUid}_${now}`,
             roomId: window.getCurrentServerRoomId ? window.getCurrentServerRoomId() : (window.GameLogic.currentServerRoom || '')
