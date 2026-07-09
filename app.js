@@ -87,7 +87,7 @@ const initialServerRoom = window.getRememberedServerRoom();
 window.GameLogic = {
     currentUser: null, currentScene: "doghouse",
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0, inventoryOrder: [], princeBond: 0, princePetCountToday: 0, princeLastPetDate: "", princeRewardsClaimed: {}, princeFeedCountToday: 0, princeLastFeedDate: "" },
-    cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, friendRequests: {}, friendVisitRequests: {}, friends: {}, friendPairs: {}, activeFriendLoveBonus: null, placingFurnitureKey: null, 
+    cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, doghouseHostUid: null, doghouseHostProfile: null, doghousePlayers: {}, isDoghouseVisitor: false, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, friendRequests: {}, friendVisitRequests: {}, friends: {}, friendPairs: {}, activeFriendLoveBonus: null, placingFurnitureKey: null, 
     phaserGame: null, phaserLoaded: false, pendingScene: null, db: db, storage: storage,
     armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false, rpsModalActive: false, moonBunBuffUntil: 0, moonBunSweepPressCount: 0, moonBunBuffEndNotified: false, moonBunBuffRemainingMs: 0, moonBunBuffLastSaveAt: 0,
     selectedServerRoom: initialServerRoom, currentServerRoom: initialServerRoom, serverRooms: SERVER_ROOMS,
@@ -10002,6 +10002,83 @@ window.addFriendLovePercent = async function(friendUid, amount = 0.1, options = 
     }
 };
 
+window.getCurrentDoghouseHostUid = function() {
+    if (!window.GameLogic || !window.GameLogic.currentUser) return '';
+    return window.GameLogic.doghouseHostUid || window.GameLogic.currentUser.uid;
+};
+
+window.isVisitingFriendDoghouse = function() {
+    if (!window.GameLogic || !window.GameLogic.currentUser) return false;
+    const hostUid = window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : window.GameLogic.currentUser.uid;
+    return !!(hostUid && hostUid !== window.GameLogic.currentUser.uid);
+};
+
+window.applyDoghouseHost = function(hostUid = null, hostName = '') {
+    if (!window.GameLogic || !window.GameLogic.currentUser) return '';
+
+    const myUid = window.GameLogic.currentUser.uid;
+    const safeHostUid = hostUid || myUid;
+    const isVisitor = safeHostUid !== myUid;
+
+    window.GameLogic.doghouseHostUid = safeHostUid;
+    window.GameLogic.isDoghouseVisitor = isVisitor;
+    window.GameLogic.doghouseHostProfile = {
+        uid: safeHostUid,
+        name: hostName || (isVisitor ? '好友' : (window.GameLogic.myProfile && window.GameLogic.myProfile.name ? window.GameLogic.myProfile.name : '我'))
+    };
+
+    if (!isVisitor) {
+        window.GameLogic.doghouseVisitHostName = '';
+    } else if (hostName) {
+        window.GameLogic.doghouseVisitHostName = hostName;
+    }
+
+    return safeHostUid;
+};
+
+window.getDoghouseFurniturePath = function(hostUid = null) {
+    const safeHostUid = hostUid || (window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : (window.GameLogic && window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : ''));
+    return safeHostUid ? `users/${safeHostUid}/doghouseFurniture` : '';
+};
+
+window.getDoghousePlayersPath = function(hostUid = null) {
+    const safeHostUid = hostUid || (window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : (window.GameLogic && window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : ''));
+    return safeHostUid ? `users/${safeHostUid}/doghousePlayers` : '';
+};
+
+window.enterOwnDoghouse = function() {
+    if (!window.GameLogic || !window.GameLogic.currentUser) return;
+    const myUid = window.GameLogic.currentUser.uid;
+    const myName = window.GameLogic.myProfile && window.GameLogic.myProfile.name ? window.GameLogic.myProfile.name : '我';
+    if (window.applyDoghouseHost) window.applyDoghouseHost(myUid, myName);
+    window.switchScene('doghouse', { doghouseHostUid: myUid, doghouseHostName: myName });
+};
+
+window.enterFriendDoghouse = async function(hostUid, hostName = '', options = {}) {
+    if (!hostUid || !window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) return false;
+
+    const myUid = window.GameLogic.currentUser.uid;
+    const safeHostName = hostName || '好友';
+
+    try {
+        if (hostUid !== myUid) {
+            const friendSnap = await get(ref(window.GameLogic.db, `users/${myUid}/friends/${hostUid}`));
+            if (!friendSnap.exists()) {
+                window.showFriendSystemNotice('要先成為好蔥友才能拜訪喔');
+                return false;
+            }
+        }
+
+        if (window.applyDoghouseHost) window.applyDoghouseHost(hostUid, safeHostName);
+        window.switchScene('doghouse', { doghouseHostUid: hostUid, doghouseHostName: safeHostName, visitSource: options.source || 'friendVisit' });
+        return true;
+    } catch (err) {
+        console.warn('[好友拜訪] 進入好友狗窩失敗：', err);
+        window.showFriendSystemNotice('前往好友家失敗，請稍後再試');
+        return false;
+    }
+};
+
 window.normalizeFriendVisitRequests = function(rawRequests = {}) {
     const result = {};
     const myUid = window.GameLogic && window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : '';
@@ -10089,7 +10166,8 @@ window.startFriendVisitRepliesListener = function() {
 
             const hostName = item.hostName || '對方';
             if (item.status === 'accepted') {
-                window.showFriendSystemNotice(`${hostName}答應你去他家囉，下一包會接上轉跳。`);
+                window.showFriendSystemNotice(`${hostName}答應你去他家囉！`);
+                if (window.enterFriendDoghouse) window.enterFriendDoghouse(hostUid, hostName, { source: 'visitReply' });
             } else if (item.status === 'rejected') {
                 window.showFriendSystemNotice(`${hostName}說下次再來。`);
             }
@@ -10180,7 +10258,8 @@ window.acceptFriendVisitRequest = async function(fromUid) {
 
         if (window.GameLogic.friendVisitRequests) delete window.GameLogic.friendVisitRequests[fromUid];
         window.closeFriendVisitRequestModal();
-        window.showFriendSystemNotice('已答應拜訪邀請，下一包會接上共同轉跳。');
+        window.showFriendSystemNotice('已答應拜訪邀請，準備回到你的狗窩。');
+        if (window.enterFriendDoghouse) window.enterFriendDoghouse(myUid, myName, { source: 'visitHostAccepted', guestUid: fromUid });
     } catch (err) {
         console.warn('[好友拜訪] 接受拜訪邀請失敗：', err);
         window.showFriendSystemNotice('接受拜訪邀請失敗，請稍後再試');
@@ -11954,6 +12033,7 @@ onAuthStateChanged(auth, async (user) => {
                      name: window.GameLogic.myProfile.name || '匿名',
                      color: window.GameLogic.myProfile.color || '#fff',
                      scene: window.GameLogic.currentScene || 'doghouse',
+                     doghouseHostUid: window.GameLogic.currentScene === 'doghouse' && window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : '',
                      lastActive: Date.now()
                  });
                 onDisconnect(globalPlayerRef).remove();
@@ -12274,6 +12354,16 @@ function switchScene(sceneName, extraData = null) {
     // 切換場景時，強制清空所有浮動視窗與特效 UI
     window.clearAllModals();
 
+    if (window.GameLogic.currentUser && window.applyDoghouseHost) {
+        if (sceneName === 'doghouse') {
+            const requestedHostUid = extraData && extraData.doghouseHostUid ? extraData.doghouseHostUid : window.GameLogic.currentUser.uid;
+            const requestedHostName = extraData && extraData.doghouseHostName ? extraData.doghouseHostName : (requestedHostUid === window.GameLogic.currentUser.uid ? (window.GameLogic.myProfile.name || '我') : '好友');
+            window.applyDoghouseHost(requestedHostUid, requestedHostName);
+        } else {
+            window.applyDoghouseHost(window.GameLogic.currentUser.uid, window.GameLogic.myProfile.name || '我');
+        }
+    }
+
     if (sceneName !== 'doghouse') {
     if (window.GameLogic.myProfile && window.GameLogic.myProfile.sleepStartTime > 0) {
         window.GameLogic.myProfile.sleepStartTime = 0; 
@@ -12289,6 +12379,7 @@ function switchScene(sceneName, extraData = null) {
         if (window.GameLogic.currentUser && window.GameLogic.db) {
             update(ref(window.GameLogic.db, window.getServerRoomPath(`onlinePlayers/${window.GameLogic.currentUser.uid}`)), {
                 scene: sceneName,
+                doghouseHostUid: sceneName === 'doghouse' && window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : '',
                 lastActive: Date.now(),
                 name: window.GameLogic.myProfile.name || '匿名',
                 color: window.GameLogic.myProfile.color || '#fff'
@@ -12352,8 +12443,9 @@ function switchScene(sceneName, extraData = null) {
             let newMapH = (sceneName === 'cafe') ? 2048 : 720;
             let entranceX = newMapW / 2 + 100; let entranceY = newMapH / 2;
             
-            // 只有一般場景需要記錄位置，副本不覆蓋最後重生點
-            if (sceneName !== 'playroom' && sceneName !== 'partyroom') {
+            // 只有一般場景需要記錄位置，副本與拜訪好友家不覆蓋最後重生點
+            const isFriendDoghouseVisit = sceneName === 'doghouse' && window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse();
+            if (sceneName !== 'playroom' && sceneName !== 'partyroom' && !isFriendDoghouseVisit) {
                 update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { lastScene: sceneName, lastX: entranceX, lastY: entranceY });
                 window.GameLogic.myProfile.lastScene = sceneName; window.GameLogic.myProfile.lastX = entranceX; window.GameLogic.myProfile.lastY = entranceY;
             }
@@ -13710,9 +13802,41 @@ class MainScene extends Phaser.Scene {
 } return false; } return true; }); });
        } else if (this.sceneName === "doghouse") {
             this.add.image(mapW/2, mapH/2, 'bgDoghouse').setDisplaySize(mapW, mapH); 
-            this.doghouseFurnListener = onValue(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}/doghouseFurniture`), (snap) => { 
+
+            const doghouseHostUid = window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : window.GameLogic.currentUser.uid;
+            const doghouseHostName = window.GameLogic.doghouseHostProfile && window.GameLogic.doghouseHostProfile.name
+                ? window.GameLogic.doghouseHostProfile.name
+                : (doghouseHostUid === window.GameLogic.currentUser.uid ? (window.GameLogic.myProfile.name || '我') : '好友');
+            if (window.applyDoghouseHost) window.applyDoghouseHost(doghouseHostUid, doghouseHostName);
+
+            const furnPath = window.getDoghouseFurniturePath ? window.getDoghouseFurniturePath(doghouseHostUid) : `users/${doghouseHostUid}/doghouseFurniture`;
+            this.doghouseFurnListener = onValue(ref(window.GameLogic.db, furnPath), (snap) => { 
                 window.GameLogic.doghouseFurniture = snap.val() || {}; 
             });
+
+            const doghousePlayersPath = window.getDoghousePlayersPath ? window.getDoghousePlayersPath(doghouseHostUid) : `users/${doghouseHostUid}/doghousePlayers`;
+            const doghousePlayerRef = ref(window.GameLogic.db, `${doghousePlayersPath}/${window.GameLogic.currentUser.uid}`);
+            this.doghousePlayerPresenceRef = doghousePlayerRef;
+            set(doghousePlayerRef, {
+                uid: window.GameLogic.currentUser.uid,
+                name: window.GameLogic.myProfile.name || '匿名',
+                color: window.GameLogic.myProfile.color || '#fff',
+                level: window.GameLogic.myProfile.level || 1,
+                x: window.GameLogic.myProfile.lastX || 640,
+                y: window.GameLogic.myProfile.lastY || 360,
+                isHost: doghouseHostUid === window.GameLogic.currentUser.uid,
+                hostUid: doghouseHostUid,
+                lastActive: Date.now()
+            }).catch(err => console.warn('[好友拜訪] 寫入狗窩玩家狀態失敗：', err));
+            onDisconnect(doghousePlayerRef).remove();
+
+            this.doghousePlayersListener = onValue(ref(window.GameLogic.db, doghousePlayersPath), (snap) => {
+                window.GameLogic.doghousePlayers = snap.val() || {};
+            });
+
+            if (window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) {
+                this.time.delayedCall(300, () => sendBubble(`正在拜訪 ${doghouseHostName} 的家`));
+            }
         } else if (this.sceneName === "farm") {
             this.add.image(mapW/2, mapH/2, 'bgFarm').setDisplaySize(mapW, mapH);
         } else if (this.sceneName === "shrine") {
@@ -14051,6 +14175,13 @@ class MainScene extends Phaser.Scene {
         this.events.off('action_B');
 
         this.events.on('action_A_place', () => {
+            if (this.sceneName === 'doghouse' && window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) {
+                window.GameLogic.placingFurnitureKey = null;
+                if (this.clearCanvasDirectionalInput) this.clearCanvasDirectionalInput();
+                sendBubble('這是好友的家，家具只能由屋主調整。');
+                return;
+            }
+
             let key = window.GameLogic.placingFurnitureKey;
             if (key && this.furnitureSprites[key]) {
                 let f = this.furnitureSprites[key];
@@ -14063,7 +14194,7 @@ class MainScene extends Phaser.Scene {
                 let path = this.isCafe
                     ? window.getServerRoomPath(`cafeFurniture/${key}`)
                     : (this.sceneName === 'doghouse'
-                        ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}`
+                        ? `${window.getDoghouseFurniturePath ? window.getDoghouseFurniturePath() : `users/${window.GameLogic.currentUser.uid}/doghouseFurniture`}/${key}`
                         : window.getServerRoomPath(`shrineFurniture/${key}`));
 
                 const savePayload = {
@@ -15275,6 +15406,8 @@ if (!data.scoreHandled && data.attacker) {
             
             // 修復：清理忘記註銷的家俱監聽器 (解決記憶體流失死碼)
             if (this.doghouseFurnListener) this.doghouseFurnListener();
+            if (this.doghousePlayersListener) this.doghousePlayersListener();
+            if (this.doghousePlayerPresenceRef) remove(this.doghousePlayerPresenceRef).catch(err => console.warn('[好友拜訪] 清理狗窩玩家狀態失敗：', err));
             if (this.shrineFurnListener) this.shrineFurnListener();
             
             // 【v1.3 修正】：離開場景時，徹底註銷米米監聽器並強制切斷走路音效
@@ -23677,6 +23810,7 @@ if (!data.scoreHandled && data.attacker) {
         if (!window.GameLogic.currentUser) return null;
         const uid = window.GameLogic.currentUser.uid;
         if (this.isCafe) return window.getServerRoomPath(`cafePlayers/${uid}`);
+        if (this.sceneName === 'doghouse' && window.getDoghousePlayersPath) return `${window.getDoghousePlayersPath()}/${uid}`;
         if (this.sceneName === 'shrine') return window.getServerRoomPath(`shrinePlayers/${uid}`);
         if (this.sceneName === 'playroom' && window.GameLogic.currentRoomId) return window.getServerRoomPath(`playroomPlayers/${window.GameLogic.currentRoomId}/${uid}`);
         if (this.sceneName === 'partyroom' && window.PartyLogic && window.PartyLogic.roomId) return window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${uid}`);
@@ -25793,6 +25927,11 @@ if (activeBubbleMsg) {
     }
 
     rotatePlacingFurnitureByTap(key, f) {
+        if (this.sceneName === 'doghouse' && window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) {
+            sendBubble('這是好友的家，家具只能由屋主調整。');
+            return true;
+        }
+
         const placingKey = window.GameLogic ? window.GameLogic.placingFurnitureKey : null;
         if (!placingKey || placingKey !== key) return false;
         if (!f || !f.sprite || !f.sprite.active) return false;
@@ -25824,7 +25963,7 @@ if (activeBubbleMsg) {
         const path = this.isCafe
             ? window.getServerRoomPath(`cafeFurniture/${key}`)
             : (this.sceneName === 'doghouse'
-                ? `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${key}`
+                ? `${window.getDoghouseFurniturePath ? window.getDoghouseFurniturePath() : `users/${window.GameLogic.currentUser.uid}/doghouseFurniture`}/${key}`
                 : window.getServerRoomPath(`shrineFurniture/${key}`));
 
         update(ref(window.GameLogic.db, path), { direction: nextDirection, rotatable: true })
@@ -26078,6 +26217,10 @@ if (activeBubbleMsg) {
 
     startDoghouseSleepingFromFurniture(key, f) {
         if (this.sceneName !== 'doghouse') return false;
+        if (window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) {
+            sendBubble('這是屋主的床，訪客不能睡覺喔。');
+            return true;
+        }
         if (!this.isDoghouseBedFurniture(key, f)) return false;
         if (!f || !f.sprite || !f.sprite.active || !f.sprite.isLocked) return false;
         if (!this.localPlayer || !this.localPlayer.sprite) return false;
@@ -26282,6 +26425,10 @@ if (activeBubbleMsg) {
 
     trySelectDoghouseFurnitureForStow(key, f) {
         if (this.sceneName !== 'doghouse' || !window.GameLogic || !window.GameLogic.currentUser) return false;
+        if (window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) {
+            sendBubble('這是好友的家，不能收起屋主家具。');
+            return true;
+        }
 
         const targetBaseKey = window.GameLogic.stowDoghouseFurnitureBaseKey;
         if (!targetBaseKey || !key || !f || !f.sprite || !f.sprite.active) return false;
@@ -26307,6 +26454,10 @@ if (activeBubbleMsg) {
 
     trySelectDoghouseFurnitureForReposition(key, f) {
         if (this.sceneName !== 'doghouse' || !window.GameLogic || !window.GameLogic.currentUser) return false;
+        if (window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) {
+            sendBubble('這是好友的家，不能重新擺設屋主家具。');
+            return true;
+        }
 
         const targetBaseKey = window.GameLogic.repositionDoghouseFurnitureBaseKey;
         if (!targetBaseKey || !key || !f || !f.sprite || !f.sprite.active) return false;
@@ -28353,7 +28504,7 @@ if (activeBubbleMsg) {
         }
 
         // 修正2：確保進入狗窩後，等到家具完全載入並產生實體後，再把睡覺的玩家放到床上
-        if (this.sceneName === 'doghouse' && window.GameLogic.myProfile.sleepStartTime > 0 && !this.sleepInitDone && this.localPlayer) {
+        if (this.sceneName === 'doghouse' && !(window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) && window.GameLogic.myProfile.sleepStartTime > 0 && !this.sleepInitDone && this.localPlayer) {
             for (let key in this.furnitureSprites) {
                 const f = this.furnitureSprites[key];
                 if (this.isDoghouseBedFurniture(key, f) && f.sprite && f.sprite.isLocked) {
@@ -28591,11 +28742,19 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
                 if (!this.localPlayer.isShowingOff && !this.localPlayer.sprite.isPettingPrinceCat) {
                     if (vx === 0 && vy === 0) { this.localPlayer.sprite.play('idle', true); } else if (absX >= absY) { this.localPlayer.sprite.setFlipX(vx < 0); this.localPlayer.sprite.play('walk', true); } else { if (vy < 0) { this.localPlayer.sprite.play('walk-up', true); } else { this.localPlayer.sprite.play('walk-down', true); } }
                 }
-                if ((this.isCafe || this.sceneName === 'shrine' || this.sceneName === 'playroom' || this.sceneName === 'partyroom') && (vx !== 0 || vy !== 0)) { 
+                if ((this.isCafe || this.sceneName === 'doghouse' || this.sceneName === 'shrine' || this.sceneName === 'playroom' || this.sceneName === 'partyroom') && (vx !== 0 || vy !== 0)) { 
                     const syncInterval = this.sceneName === 'partyroom' ? (window.PARTY_MOVE_SYNC_MS || 220) : 100;
                     if(!this.lastSyncTime || Date.now() - this.lastSyncTime > syncInterval) { 
-                        let path = this.isCafe ? window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`) : (this.sceneName === 'shrine' ? window.getServerRoomPath(`shrinePlayers/${window.GameLogic.currentUser.uid}`) : (this.sceneName === 'playroom' ? window.getServerRoomPath(`playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`) : window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`))); 
-                        const payload = { x: this.localPlayer.sprite.x, y: this.localPlayer.sprite.y };
+                        let path = this.isCafe
+                            ? window.getServerRoomPath(`cafePlayers/${window.GameLogic.currentUser.uid}`)
+                            : (this.sceneName === 'doghouse'
+                                ? (window.getDoghousePlayersPath ? `${window.getDoghousePlayersPath()}/${window.GameLogic.currentUser.uid}` : `users/${window.GameLogic.currentUser.uid}/doghousePlayers/${window.GameLogic.currentUser.uid}`)
+                                : (this.sceneName === 'shrine'
+                                    ? window.getServerRoomPath(`shrinePlayers/${window.GameLogic.currentUser.uid}`)
+                                    : (this.sceneName === 'playroom'
+                                        ? window.getServerRoomPath(`playroomPlayers/${window.GameLogic.currentRoomId}/${window.GameLogic.currentUser.uid}`)
+                                        : window.getServerRoomPath(`partyRooms/${window.PartyLogic.roomId}/players/${window.GameLogic.currentUser.uid}`)))); 
+                        const payload = { x: this.localPlayer.sprite.x, y: this.localPlayer.sprite.y, lastActive: Date.now(), name: window.GameLogic.myProfile.name || '匿名', color: window.GameLogic.myProfile.color || '#fff', level: window.GameLogic.myProfile.level || 1 };
                         if (this.sceneName === 'partyroom') {
                             payload.online = true;
                             payload.left = false;
@@ -28630,7 +28789,7 @@ const isPrinceCatInteractionLocked = isPrinceCatPettingLocked || isPrinceCatFeed
                             else if (key.includes('fridge')) nextPromptMsg = "按A打開冰箱";
                             else if (key.includes('shrine')) nextPromptMsg = "按A參拜神龕";
                             else if (key.includes('dummy')) nextPromptMsg = "假人洋蔥 (裝飾中)";
-                            else if (this.isDoghouseBedFurniture(key, f)) nextPromptMsg = "按A歐歐睏";
+                            else if (this.isDoghouseBedFurniture(key, f)) nextPromptMsg = (window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) ? "屋主的床只能看看" : "按A歐歐睏";
                             else if (this.isDoghouseCushionFurniture(key, f)) nextPromptMsg = "按A坐下休息";
                             else if (key.includes('scoreboard')) nextPromptMsg = "按A查看洋蔥王排行榜";
                             else if (key.includes('solochicken')) nextPromptMsg = "按A打開獨樂雞";
@@ -28830,8 +28989,16 @@ if (dist < 30) {
             }
         }
 
-        if (this.isCafe || this.sceneName === 'shrine' || this.sceneName === 'playroom' || this.sceneName === 'partyroom') {
-            const playersData = this.isCafe ? window.GameLogic.cafePlayers : (this.sceneName === 'shrine' ? window.GameLogic.shrinePlayers : (this.sceneName === 'playroom' ? window.GameLogic.playroomPlayers : (window.PartyLogic ? window.PartyLogic.players : {})));
+        if (this.isCafe || this.sceneName === 'doghouse' || this.sceneName === 'shrine' || this.sceneName === 'playroom' || this.sceneName === 'partyroom') {
+            const playersData = this.isCafe
+                ? window.GameLogic.cafePlayers
+                : (this.sceneName === 'doghouse'
+                    ? (window.GameLogic.doghousePlayers || {})
+                    : (this.sceneName === 'shrine'
+                        ? window.GameLogic.shrinePlayers
+                        : (this.sceneName === 'playroom'
+                            ? window.GameLogic.playroomPlayers
+                            : (window.PartyLogic ? window.PartyLogic.players : {}))));
             const globalOnline = window.GameLogic.onlinePlayers || {};
             for (let uid in playersData) {
                 if (uid === window.GameLogic.currentUser.uid) continue;
@@ -29016,6 +29183,18 @@ function openFurnitureCatalog() {
         ];
     }
     else if (window.GameLogic.currentScene === "doghouse") {
+        if (window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) {
+            const hostName = window.GameLogic.doghouseHostProfile && window.GameLogic.doghouseHostProfile.name ? window.GameLogic.doghouseHostProfile.name : '好友';
+            list.className = 'catalog-grid';
+            modal.classList.add('room-roof-ui', 'doghouse-furniture-library-ui');
+            title.innerText = `🏠 ${hostName} 的家`;
+            list.innerHTML = `<div class="doghouse-furniture-empty">正在拜訪好友家。家具擺設、收起、重新擺設與睡覺只能由屋主使用。</div>`;
+            detail.innerHTML = '';
+            if (window.showFurnitureCatalogModal) window.showFurnitureCatalogModal();
+            else modal.style.display = 'block';
+            return;
+        }
+
         modal.classList.add('room-roof-ui', 'doghouse-furniture-library-ui');
         title.innerText = "🏠 房間家具庫";
         list.className = 'catalog-grid doghouse-furniture-grid';
@@ -29188,13 +29367,17 @@ function openFurnitureCatalog() {
 
 window.startDoghouseFurniturePlacement = function(furnitureKey, options = {}) {
     if (!window.GameLogic || window.GameLogic.currentScene !== 'doghouse' || !window.GameLogic.currentUser) return;
+    if (window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) {
+        sendBubble('這是好友的家，家具只能由屋主擺設。');
+        return;
+    }
 
     const def = window.getFurnitureDefinition ? window.getFurnitureDefinition(furnitureKey) : { key: furnitureKey, rotatable: false, defaultDirection: 'front' };
     const baseKey = def.key || furnitureKey;
     const existingData = window.GameLogic.doghouseFurniture || {};
     const requestedInstanceKey = options && options.instanceKey && existingData[options.instanceKey] ? options.instanceKey : null;
     const instanceKey = requestedInstanceKey || (window.createDoghouseFurnitureInstanceId ? window.createDoghouseFurnitureInstanceId(baseKey) : `${baseKey}__${Date.now()}`);
-    const path = `users/${window.GameLogic.currentUser.uid}/doghouseFurniture/${instanceKey}`;
+    const path = `${window.getDoghouseFurniturePath ? window.getDoghouseFurniturePath() : `users/${window.GameLogic.currentUser.uid}/doghouseFurniture`}/${instanceKey}`;
     const currentData = existingData[instanceKey] || {};
 
     let pX = Number(currentData.x);
@@ -29252,6 +29435,10 @@ window.startDoghouseFurniturePlacement = function(furnitureKey, options = {}) {
 
 window.startDoghouseFurnitureReposition = function(furnitureKey) {
     if (!window.GameLogic || window.GameLogic.currentScene !== 'doghouse' || !window.GameLogic.currentUser) return;
+    if (window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) {
+        sendBubble('這是好友的家，不能重新擺設屋主家具。');
+        return;
+    }
 
     const def = window.getFurnitureDefinition ? window.getFurnitureDefinition(furnitureKey) : { key: furnitureKey };
     const baseKey = def.key || furnitureKey;
@@ -29288,6 +29475,10 @@ window.startDoghouseFurnitureReposition = function(furnitureKey) {
 
 window.stowDoghouseFurnitureInstance = function(instanceKey) {
     if (!window.GameLogic || window.GameLogic.currentScene !== 'doghouse' || !window.GameLogic.currentUser) return;
+    if (window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) {
+        sendBubble('這是好友的家，不能收起屋主家具。');
+        return;
+    }
 
     const source = window.GameLogic.doghouseFurniture || {};
     const targetData = source[instanceKey] || null;
@@ -29339,6 +29530,10 @@ window.stowDoghouseFurnitureInstance = function(instanceKey) {
 
 window.stowDoghouseFurniture = function(furnitureKey) {
     if (!window.GameLogic || window.GameLogic.currentScene !== 'doghouse' || !window.GameLogic.currentUser) return;
+    if (window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse()) {
+        sendBubble('這是好友的家，不能收起屋主家具。');
+        return;
+    }
 
     const source = window.GameLogic.doghouseFurniture || {};
     const exactData = source[furnitureKey] || null;
