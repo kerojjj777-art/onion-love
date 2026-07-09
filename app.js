@@ -2160,21 +2160,36 @@ window.submitMeowlimeCheckin = async function() {
 };
 
 // 新增：空間傳送門點擊時的粒子噴發效果
-window.popPortalParticles = function(e) {
-    let x = e.clientX; let y = e.clientY;
-    for(let i=0; i<12; i++) {
-        let p = document.createElement('div');
-        p.style.cssText = `position:fixed; width:6px; height:6px; background:#fff; border-radius:50%; left:${x}px; top:${y}px; pointer-events:none; z-index:9999; transition: all 0.4s cubic-bezier(0.1, 0.8, 0.3, 1); transform: translate(-50%, -50%); box-shadow: 0 0 8px #fff, 0 0 15px #d8bfd8;`;
+
+window.popPhoneHeaderParticles = function(e) {
+    const target = e && e.currentTarget ? e.currentTarget : (e && e.target ? e.target : null);
+    const rect = target && target.getBoundingClientRect ? target.getBoundingClientRect() : null;
+    const x = e && Number.isFinite(e.clientX) ? e.clientX : (rect ? rect.left + rect.width / 2 : window.innerWidth - 52);
+    const y = e && Number.isFinite(e.clientY) ? e.clientY : (rect ? rect.top + rect.height / 2 : 58);
+    const colors = ['#ffffff', '#ff8bd4', '#7fffea', '#fff1a8', '#ff4fa3'];
+
+    for (let i = 0; i < 16; i++) {
+        const p = document.createElement('div');
+        const size = 4 + Math.random() * 5;
+        const color = colors[Math.floor(Math.random() * colors.length)] || '#ffffff';
+        const shape = Math.random() > 0.35 ? '50%' : '3px';
+
+        p.style.cssText = `position:fixed; width:${size}px; height:${size}px; left:${x}px; top:${y}px; border-radius:${shape}; background:${color}; pointer-events:none; z-index:9999; opacity:1; transform:translate(-50%, -50%) scale(1); transition:transform 0.42s cubic-bezier(0.12, 0.84, 0.24, 1), opacity 0.42s ease-out; box-shadow:0 0 8px ${color}, 0 0 16px rgba(255,255,255,0.7);`;
         document.body.appendChild(p);
+
         setTimeout(() => {
-            let angle = Math.random() * Math.PI * 2; let dist = Math.random() * 60 + 20;
-            p.style.transform = `translate(calc(-50% + ${Math.cos(angle)*dist}px), calc(-50% + ${Math.sin(angle)*dist}px)) scale(0)`;
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 26 + Math.random() * 54;
+            const spin = -70 + Math.random() * 140;
+            p.style.transform = `translate(calc(-50% + ${Math.cos(angle) * dist}px), calc(-50% + ${Math.sin(angle) * dist}px)) rotate(${spin}deg) scale(0)`;
             p.style.opacity = 0;
-        }, 10);
-        setTimeout(() => p.remove(), 400);
+        }, 12);
+
+        setTimeout(() => {
+            if (p && p.parentNode) p.parentNode.removeChild(p);
+        }, 520);
     }
 };
-
 function createSystemUI() {
     const appContainer = document.getElementById('app-container');
     if (!appContainer) return;
@@ -2302,6 +2317,14 @@ function createSystemUI() {
                 background:radial-gradient(circle at 35% 28%, rgba(255,255,255,0.88), var(--friend-love-color, #ff8bd4) 48%, rgba(67,15,78,0.98));
                 box-shadow:0 0 14px var(--friend-love-color, rgba(255,139,212,0.82)), inset 0 0 12px rgba(255,255,255,0.26);
             }
+            .friend-love-avatar img {
+                width:42px;
+                height:42px;
+                object-fit:contain;
+                image-rendering:auto;
+                filter:drop-shadow(0 0 6px rgba(255,255,255,0.86)) drop-shadow(0 0 10px var(--friend-love-color, rgba(255,139,212,0.72)));
+                pointer-events:none;
+            }
             .friend-love-name {
                 max-width:100%;
                 font-size:12px;
@@ -2386,6 +2409,10 @@ function createSystemUI() {
                 width:76%;
                 margin-top:2px;
             }
+            .friend-love-actions.single {
+                grid-template-columns:1fr;
+                width:48%;
+            }
             .friend-love-actions button {
                 min-height:34px;
                 border-radius:999px !important;
@@ -2446,6 +2473,7 @@ function createSystemUI() {
                 .friend-love-percent { font-size:16px; min-width:118px; }
                 .friend-love-bonus { width:92%; font-size:11px; padding:7px 9px; }
                 .friend-love-actions { width:84%; }
+                .friend-love-actions.single { width:58%; }
                 .friend-love-toast { width:82vw; font-size:17px; }
             }
             .phone-header-row { position:relative; display:flex; align-items:center; justify-content:center; gap:8px; min-height:42px; padding:0 96px 0 8px; box-sizing:border-box; }
@@ -3696,6 +3724,11 @@ function createSystemUI() {
             .phone-pink-btn:active {
                 transform:scale(0.96);
                 box-shadow:0 0 18px rgba(255,64,160,0.92), inset 0 0 10px rgba(255,255,255,0.28) !important;
+            }
+            #phone-modal.phone-pink-ui .phone-friends-top-btn:active,
+            .phone-friends-top-btn:active {
+                transform:translateY(-50%) !important;
+                box-shadow:0 0 18px rgba(255,64,160,0.92), 0 0 18px rgba(126,255,238,0.35), inset 0 0 10px rgba(255,255,255,0.28) !important;
             }
             #pm-modal.phone-pink-chat-ui {
                 background: linear-gradient(180deg, #ff9ac9 0%, #ffd0e7 100%) !important;
@@ -6562,7 +6595,7 @@ function createSystemUI() {
             </div>
             <div class="phone-header-row">
                 <h3 style="color: var(--mucha-green);">📱 洋蔥手機</h3>
-                <button id="phone-friends-btn" class="phone-pink-btn phone-friends-top-btn" type="button" onclick="window.openMyFriendsPhonePanel && window.openMyFriendsPhonePanel()">我的好友</button>
+                <button id="phone-friends-btn" class="phone-pink-btn phone-friends-top-btn" type="button" onclick="window.popPhoneHeaderParticles && window.popPhoneHeaderParticles(event); window.openMyFriendsPhonePanel && window.openMyFriendsPhonePanel()">我的好友</button>
             </div>
             <p id="phone-subtitle" style="font-size: 12px; color: #fff; text-shadow:1px 1px 2px #000; margin-top: 0;">點擊聯絡人發送私訊</p>
             <div id="phone-contacts"></div>
@@ -9820,6 +9853,16 @@ window.getShortFriendUid = function(uid) {
     return `${raw.slice(0, 6)}…${raw.slice(-4)}`;
 };
 
+window.getFriendMottoText = function(profile = {}, fallback = '期待發芽') {
+    const raw = profile && profile.motto !== undefined ? String(profile.motto || '').trim() : '';
+    if (!raw || raw === '無' || raw === '未知') return fallback;
+    return raw.length > 42 ? `${raw.slice(0, 42)}…` : raw;
+};
+
+window.getFriendOnionImgHtml = function(altText = '洋蔥') {
+    return `<img src="onion-sprite.png" alt="${window.phoneEscapeHtml ? window.phoneEscapeHtml(altText) : '洋蔥'}">`;
+};
+
 window.getFriendOnlineInfo = function(uid, onlinePlayers = null, options = {}) {
     const players = onlinePlayers || (window.GameLogic && window.GameLogic.onlinePlayers) || {};
     const p = players && players[uid] ? players[uid] : null;
@@ -9858,14 +9901,14 @@ window.makePhoneFriendCard = function(uid, friendData = {}, options = {}) {
     const statusClass = onlineInfo.online ? 'online' : 'offline';
     const statusText = onlineInfo.online ? '在線' : '離線';
     const visitClass = onlineInfo.online ? 'phone-visit-ready' : 'phone-visit-disabled';
-    const shortUid = window.getShortFriendUid ? window.getShortFriendUid(uid) : uid;
+    const mottoText = window.getFriendMottoText ? window.getFriendMottoText(friendData, '期待發芽') : (friendData.motto || '期待發芽');
 
     return `<div class="phone-friend-card" data-friend-uid="${window.phoneEscapeHtml(uid)}">
         <div class="phone-friend-title">
             <div class="phone-friend-name" style="color:${color};">🌱 ${window.phoneEscapeHtml(name)}</div>
             <div class="phone-friend-status ${statusClass}">${statusText}</div>
         </div>
-        <div class="phone-friend-meta">ID：${window.phoneEscapeHtml(shortUid)}｜❤️ ${window.phoneEscapeHtml(loveText)}%</div>
+        <div class="phone-friend-meta">座右銘：${window.phoneEscapeHtml(mottoText)}｜❤️ ${window.phoneEscapeHtml(loveText)}%</div>
         <div class="phone-friend-actions">
             <button class="btn-secondary" style="color:#333;" data-phone-action="profile" data-uid="${window.phoneEscapeHtml(uid)}">查看</button>
             <button class="btn-primary" data-phone-action="pm" data-uid="${window.phoneEscapeHtml(uid)}">私訊</button>
@@ -9892,7 +9935,10 @@ window.openMyFriendsPhonePanel = async function() {
         if (phoneModal) phoneModal.style.display = 'block';
         if (subtitleEl) subtitleEl.innerText = '好蔥友名單｜查看、私訊、我們的愛、去你家';
         if (friendsBtn) friendsBtn.innerText = '聯絡人';
-        if (friendsBtn) friendsBtn.onclick = () => window.openPhoneModal && window.openPhoneModal();
+        if (friendsBtn) friendsBtn.onclick = (e) => {
+            if (window.popPhoneHeaderParticles) window.popPhoneHeaderParticles(e);
+            if (window.openPhoneModal) window.openPhoneModal();
+        };
         if (!contactsEl) return;
 
         contactsEl.innerHTML = '<div style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">讀取我的好友中...</div>';
@@ -9933,8 +9979,15 @@ window.openMyFriendsPhonePanel = async function() {
                 ? get(ref(window.GameLogic.db, `friendPairs/${pairId}`)).then(snap => [uid, snap.val() || {}]).catch(() => [uid, {}])
                 : Promise.resolve([uid, {}]);
         }));
+        const profileSnaps = await Promise.all(friendUids.map(uid => {
+            return get(ref(window.GameLogic.db, `users/${uid}`))
+                .then(snap => [uid, snap.val() || {}])
+                .catch(() => [uid, {}]);
+        }));
         const pairMap = {};
+        const profileMap = {};
         pairSnaps.forEach(([uid, pairData]) => { pairMap[uid] = pairData || {}; });
+        profileSnaps.forEach(([uid, profileData]) => { profileMap[uid] = profileData || {}; });
 
         if (!window.GameLogic.friendPairs) window.GameLogic.friendPairs = {};
         friendUids.forEach(uid => {
@@ -9957,11 +10010,17 @@ window.openMyFriendsPhonePanel = async function() {
         } else {
             friendUids.forEach(uid => {
                 const onlineInfo = window.getFriendOnlineInfo ? window.getFriendOnlineInfo(uid, onlinePlayers) : { online: false };
-                const friendData = friends[uid] || {};
+                const profileData = profileMap[uid] || {};
+                const friendData = Object.assign({}, friends[uid] || {}, {
+                    name: profileData.name || (friends[uid] && friends[uid].name) || '',
+                    color: profileData.color || (friends[uid] && friends[uid].color) || '',
+                    motto: profileData.motto || (friends[uid] && friends[uid].motto) || ''
+                });
                 const meta = {
                     uid: uid,
                     name: onlineInfo.name || friendData.name || '匿名好友',
                     color: onlineInfo.color || friendData.color || '#fff',
+                    motto: window.getFriendMottoText ? window.getFriendMottoText(friendData, '期待發芽') : (friendData.motto || '期待發芽'),
                     pairId: friendData.pairId || (window.getFriendPairId ? window.getFriendPairId(myUid, uid) : ''),
                     lovePercent: Number((pairMap[uid] && pairMap[uid].lovePercent) || friendData.lovePercent || 0),
                     online: !!onlineInfo.online
@@ -10084,7 +10143,7 @@ window.renderFriendLoveModal = function(friendUid, data = {}) {
         <h3 class="friend-love-title">💖 我們的愛</h3>
         <div class="friend-love-people-row">
             <div class="friend-love-person">
-                <div class="friend-love-avatar" style="--friend-love-color:${myColor};">🧅</div>
+                <div class="friend-love-avatar" style="--friend-love-color:${myColor};">${window.getFriendOnionImgHtml ? window.getFriendOnionImgHtml(myName) : '<img src="onion-sprite.png" alt="洋蔥">'}</div>
                 <div class="friend-love-name">${window.phoneEscapeHtml(myName)}</div>
                 <div class="friend-love-id">ID：${window.phoneEscapeHtml(myShortId)}</div>
             </div>
@@ -10092,15 +10151,14 @@ window.renderFriendLoveModal = function(friendUid, data = {}) {
                 <div class="friend-love-heart">❤️</div>
             </div>
             <div class="friend-love-person">
-                <div class="friend-love-avatar" style="--friend-love-color:${friendColor};">🧅</div>
+                <div class="friend-love-avatar" style="--friend-love-color:${friendColor};">${window.getFriendOnionImgHtml ? window.getFriendOnionImgHtml(friendName) : '<img src="onion-sprite.png" alt="洋蔥">'}</div>
                 <div class="friend-love-name">${window.phoneEscapeHtml(friendName)}</div>
                 <div class="friend-love-id">ID：${window.phoneEscapeHtml(friendShortId)}</div>
             </div>
         </div>
         <div class="friend-love-percent">❤️=${window.phoneEscapeHtml(loveText)}%</div>
         <div class="friend-love-bonus">${window.phoneEscapeHtml(bonusText)}</div>
-        <div class="friend-love-actions">
-            <button class="btn-primary phone-pink-btn" type="button" onclick="window.openMyFriendsPhonePanel && window.openMyFriendsPhonePanel()">回好友</button>
+        <div class="friend-love-actions single">
             <button class="btn-secondary" type="button" onclick="window.closeFriendLoveModal && window.closeFriendLoveModal()">關閉</button>
         </div>
     `;
@@ -11371,7 +11429,10 @@ window.openPhoneModal = async function() {
         if (subtitleEl) subtitleEl.innerText = '點擊聯絡人發送私訊';
         if (friendsBtn) {
             friendsBtn.innerText = '我的好友';
-            friendsBtn.onclick = () => window.openMyFriendsPhonePanel && window.openMyFriendsPhonePanel();
+            friendsBtn.onclick = (e) => {
+                if (window.popPhoneHeaderParticles) window.popPhoneHeaderParticles(e);
+                if (window.openMyFriendsPhonePanel) window.openMyFriendsPhonePanel();
+            };
         }
 
         const [onlineSnap, recentSnap, friendRequestsSnap] = await Promise.all([
