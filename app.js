@@ -15378,7 +15378,7 @@ class MainScene extends Phaser.Scene {
                 if (this.minimap) this.minimap.setPosition(gameSize.width - mapSize - marginX, marginY);
             };
             this.scale.on('resize', this.handleMinimapResize, this);
-            this.trashListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('cafeTrashes')), (snap) => {
+            this.trashListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('cafeTrashes')), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.trashes.find(t => t.key === key)) { let tData = data[key]; let isOld = tData.type === 'old'; let spriteKey = isOld ? 'onion-skin-old' : 'onion-skin'; let animKey = isOld ? 'skin-old-anim' : 'skin-anim'; let skin = this.physics.add.sprite(tData.x, tData.y, spriteKey).setDepth(4); skin.play(animKey); skin.type = isOld ? 'onion-skin-old' : 'onion-skin'; skin.key = key; this.bindDirectSceneTap(skin, 'trash'); this.trashes.push(skin); } } this.trashes = this.trashes.filter(t => { if (!data[t.key]) { t.destroy(); if (this.closestTrash === t) { 
     this.closestTrash = null; 
 
     if (this.localPlayer && this.localPlayer.isSweeping) { 
