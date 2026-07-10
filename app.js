@@ -17828,6 +17828,8 @@ if (!data.scoreHandled && data.attacker) {
                 soloFailed: false,
                 soloResultData: null,
                 soloResultPanel: null,
+                soloResultBlocker: null,
+                soloResultButtonHit: null,
                 soloResultErrorText: null,
                 soloWashbasin: null,
                 soloWashbasinAura: null,
@@ -20249,9 +20251,56 @@ if (!data.scoreHandled && data.attacker) {
         return true;
     }
 
+    clearSoloCleaningResultUi() {
+        const state = this.getSoloCleaningRoomState();
+
+        const clearInteractive = (obj) => {
+            if (!obj) return;
+            try {
+                if (obj.removeAllListeners) obj.removeAllListeners();
+            } catch (_) {}
+            try {
+                if (obj.disableInteractive) obj.disableInteractive();
+            } catch (_) {}
+        };
+
+        clearInteractive(state.soloResultButtonHit);
+
+        if (state.soloResultBlocker) {
+            clearInteractive(state.soloResultBlocker);
+            try {
+                if (this.tweens) this.tweens.killTweensOf(state.soloResultBlocker);
+                if (state.soloResultBlocker.destroy) state.soloResultBlocker.destroy();
+            } catch (_) {}
+        }
+
+        const resultObjects = new Set([
+            ...(Array.isArray(state.soloResultObjects) ? state.soloResultObjects : []),
+            state.soloResultPanel
+        ].filter(Boolean));
+
+        resultObjects.forEach(obj => {
+            try {
+                if (obj.list && Array.isArray(obj.list)) {
+                    obj.list.forEach(child => clearInteractive(child));
+                }
+                if (this.tweens) this.tweens.killTweensOf(obj);
+                if (obj.destroy) obj.destroy(true);
+            } catch (_) {}
+        });
+
+        state.soloResultObjects = [];
+        state.soloResultPanel = null;
+        state.soloResultBlocker = null;
+        state.soloResultButtonHit = null;
+        state.soloResultErrorText = null;
+    }
+
     showSoloCleaningResultPanel() {
         const state = this.getSoloCleaningRoomState();
         if (!state.active) return;
+
+        this.clearSoloCleaningResultUi();
 
         const cam = this.cameras.main;
         const data = this.getSoloCleaningResultData();
@@ -20263,13 +20312,16 @@ if (!data.scoreHandled && data.attacker) {
         const x = cam.width / 2;
         const targetY = cam.height / 2;
         const startY = -panelH;
-        const container = this.add.container(x, startY).setDepth(12000).setScrollFactor(0);
 
-        const resultBlocker = this.add.zone(0, 0, cam.width, cam.height)
+        const resultBlocker = this.add.zone(cam.width / 2, cam.height / 2, cam.width, cam.height)
+            .setDepth(11999)
+            .setScrollFactor(0)
             .setInteractive();
         resultBlocker.on('pointerdown', (pointer, localX, localY, event) => {
             if (event && event.stopPropagation) event.stopPropagation();
         });
+
+        const container = this.add.container(x, startY).setDepth(12000).setScrollFactor(0);
 
         const bg = this.add.graphics();
         bg.fillStyle(0x000000, 0.78);
@@ -20320,8 +20372,7 @@ if (!data.scoreHandled && data.attacker) {
         const buttonY = panelH / 2 - (compact ? 48 : 58);
         const buttonW = panelW - 86;
         const btnBg = this.add.rectangle(0, buttonY, buttonW, 48, 0x1ed760, 0.92)
-            .setStrokeStyle(3, 0xffffff, 0.86)
-            .setInteractive({ useHandCursor: true });
+            .setStrokeStyle(3, 0xffffff, 0.86);
         const btnText = this.add.text(0, buttonY, '領取獎勵並返回', {
             fontSize: '20px',
             fontFamily: 'Arial, sans-serif',
@@ -20329,7 +20380,7 @@ if (!data.scoreHandled && data.attacker) {
             color: '#06230f',
             stroke: '#ffffff',
             strokeThickness: 3
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        }).setOrigin(0.5);
         const btnHit = this.add.zone(0, buttonY, buttonW + 24, 64)
             .setInteractive({ useHandCursor: true });
         const errorText = this.add.text(0, panelH / 2 - 18, '', {
@@ -20341,22 +20392,20 @@ if (!data.scoreHandled && data.attacker) {
             strokeThickness: 3
         }).setOrigin(0.5);
 
-        const claimReward = (pointer, localX, localY, event) => {
+        btnHit.on('pointerdown', (pointer, localX, localY, event) => {
             if (event && event.stopPropagation) event.stopPropagation();
             this.claimSoloCleaningRewardAndReturn(btnBg, btnText, btnHit);
-        };
+        });
 
-        btnBg.on('pointerdown', claimReward);
-        btnText.on('pointerdown', claimReward);
-        btnHit.on('pointerdown', claimReward);
-
-        container.add([resultBlocker, bg, title, body, failText, btnBg, btnText, btnHit, errorText]);
+        container.add([bg, title, body, failText, btnBg, btnText, btnHit, errorText]);
         state.soloResultPanel = container;
+        state.soloResultBlocker = resultBlocker;
+        state.soloResultButtonHit = btnHit;
         state.soloResultErrorText = errorText;
         state.soloResultObjects.push(container);
-        state.objects.push(container);
 
         this.tweens.add({ targets: container, y: targetY, duration: 620, ease: 'Back.easeOut' });
+    }
     }
 
     async claimSoloCleaningRewardAndReturn(buttonBg = null, buttonText = null, buttonHit = null) {
@@ -20373,8 +20422,6 @@ if (!data.scoreHandled && data.attacker) {
         }
 
         state.soloRewardPending = true;
-        if (buttonBg && buttonBg.disableInteractive) buttonBg.disableInteractive();
-        if (buttonText && buttonText.disableInteractive) buttonText.disableInteractive();
         if (buttonHit && buttonHit.disableInteractive) buttonHit.disableInteractive();
         if (buttonBg && buttonBg.setAlpha) buttonBg.setAlpha(0.55);
         if (buttonText && buttonText.setText) buttonText.setText('發放中……');
@@ -20399,8 +20446,6 @@ if (!data.scoreHandled && data.attacker) {
             console.warn('[大掃除] 獎勵發放失敗：', err);
             state.soloRewardPending = false;
             if (state.soloResultErrorText) state.soloResultErrorText.setText('獎勵發放失敗，請再試一次。');
-            if (buttonBg && buttonBg.setInteractive) buttonBg.setInteractive({ useHandCursor: true });
-            if (buttonText && buttonText.setInteractive) buttonText.setInteractive({ useHandCursor: true });
             if (buttonHit && buttonHit.setInteractive) buttonHit.setInteractive({ useHandCursor: true });
             if (buttonBg && buttonBg.setAlpha) buttonBg.setAlpha(1);
             if (buttonText && buttonText.setText) buttonText.setText('領取獎勵並返回');
@@ -21129,9 +21174,7 @@ if (!data.scoreHandled && data.attacker) {
             });
             this.clearSoloCleaningBigMimiBoss();
             this.clearSoloCleaningPowerOutage();
-            (state.soloResultObjects || []).forEach(obj => {
-                try { if (obj && obj.destroy) obj.destroy(true); } catch (_) {}
-            });
+            this.clearSoloCleaningResultUi();
         } catch (_) {}
 
         if (destroyObjects) {
