@@ -88,7 +88,10 @@ window.GameLogic = {
     currentUser: null, currentScene: "doghouse",
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0, inventoryOrder: [], princeBond: 0, princePetCountToday: 0, princeLastPetDate: "", princeRewardsClaimed: {}, princeFeedCountToday: 0, princeLastFeedDate: "" },
     cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, doghouseHostUid: null, doghouseHostProfile: null, doghousePlayers: {}, isDoghouseVisitor: false, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, friendRequests: {}, friendVisitRequests: {}, friends: {}, friendPairs: {}, activeFriendLoveBonus: null, placingFurnitureKey: null, 
-    phaserGame: null, phaserLoaded: false, pendingScene: null, db: db, storage: storage,
+    phaserGame: null, phaserLoaded: false, pendingScene: null,
+    sceneSwitchInProgress: false, sceneSwitchTarget: null, sceneSwitchPromise: null,
+    sceneReadyToken: 0, sceneReadyScene: "", sceneReadyResolved: false,
+    sceneInputLocked: true, authState: "checking", db: db, storage: storage,
     armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false, rpsModalActive: false, moonBunBuffUntil: 0, moonBunSweepPressCount: 0, moonBunBuffEndNotified: false, moonBunBuffRemainingMs: 0, moonBunBuffLastSaveAt: 0,
     selectedServerRoom: initialServerRoom, currentServerRoom: initialServerRoom, serverRooms: SERVER_ROOMS,
     dailyMeowlime: { lastCheckinDate: "", totalCheckins: 0, checkinHistory: {} },
@@ -96,7 +99,7 @@ window.GameLogic = {
     authGuardSigningOut: false
 };
 
-let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, serverTimeOffsetUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, pmUnreadUnsubscribe = null, friendRequestsUnsubscribe = null, friendVisitRequestsUnsubscribe = null, friendVisitRepliesUnsubscribe = null, friendVisitSessionsUnsubscribe = null, friendVisitLoveNoticesUnsubscribe = null, profileViewingUid = null;
+let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, serverTimeOffsetUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, pmUnreadUnsubscribe = null, friendRequestsUnsubscribe = null, friendVisitRequestsUnsubscribe = null, friendVisitRepliesUnsubscribe = null, friendVisitSessionsUnsubscribe = null, friendVisitLoveNoticesUnsubscribe = null, manualsUnsubscribe = null, manualCategoriesUnsubscribe = null, profileViewingUid = null;
 window.switchScene = switchScene; window.showProfileModal = showProfileModal; window.leaveCafe = leaveCafe; window.signOut = signOut; window.auth = auth;
 
 // ====== 入口房間共用工具 ======
@@ -2009,7 +2012,7 @@ window.recordDailyMeowlimeCheckin = async function(signatureInfo = {}) {
             };
 
             return userData;
-        });
+        }, { applyLocally: false });
     } catch (err) {
         console.warn('[喵萊姆] 每日簽到 transaction 失敗：', err);
         return { ok: false, reason: err && err.code ? err.code : 'transaction-failed' };
@@ -2433,7 +2436,14 @@ function createSystemUI() {
             body.login-bg-active::before { content: ""; position: fixed; inset: 0; background-image: url('cover_pc_2880x1864.png'); background-size: cover; background-position: center; background-repeat: no-repeat; z-index: 0; pointer-events: none; }
             @media (max-width: 768px), (orientation: portrait) { body.login-bg-active::before { background-image: url('cover_phone_1080x1920.png'); } }
             body.login-bg-active #app-container { position: relative; z-index: 1; }
-            #login-screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(244, 236, 216, 0.9); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); padding: 30px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 300; text-align: center; width: 80%; max-width: 340px; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
+            #app-loading-screen { display:flex; position:fixed; inset:0; z-index:12000; align-items:center; justify-content:center; padding:24px; box-sizing:border-box; background:radial-gradient(circle at 50% 42%, rgba(84,54,25,0.56), rgba(12,8,5,0.96)); color:#fff8df; text-align:center; pointer-events:auto; }
+            #app-loading-screen[data-mode="scene"] { background:rgba(0,0,0,0.28); backdrop-filter:blur(1.5px); -webkit-backdrop-filter:blur(1.5px); }
+            #app-loading-card { width:min(86vw, 360px); padding:20px 18px; border:2px solid rgba(232,199,120,0.92); border-radius:18px; background:rgba(35,22,12,0.92); box-shadow:0 0 22px rgba(197,160,89,0.48), 0 14px 34px rgba(0,0,0,0.56); }
+            #app-loading-title { font-size:19px; font-weight:900; letter-spacing:1px; color:#fff4c4; text-shadow:0 0 10px rgba(255,210,105,0.72); }
+            #app-loading-subtitle { margin-top:8px; font-size:13px; line-height:1.55; color:rgba(255,248,223,0.82); }
+            #app-loading-spinner { width:34px; height:34px; margin:0 auto 14px auto; border-radius:50%; border:4px solid rgba(255,255,255,0.2); border-top-color:#ffd86b; border-right-color:#8effd2; animation:app-loading-spin 0.85s linear infinite; }
+            @keyframes app-loading-spin { 100% { transform:rotate(360deg); } }
+            #login-screen { display:none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(244, 236, 216, 0.9); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); padding: 30px; border: 3px solid var(--mucha-gold); border-radius: 12px; z-index: 300; text-align: center; width: 80%; max-width: 340px; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
             #login-screen input, #login-screen select { padding: 10px; border: 1px solid var(--mucha-gold); border-radius: 4px; background: #fffdf5; margin-bottom: 15px; width: 85%; font-size: 16px; box-sizing: border-box; font-family: inherit; color: var(--mucha-brown); }
             .login-room-label { display:block; width:85%; margin: 0 auto 6px auto; text-align:left; color:var(--mucha-brown); font-size:13px; font-weight:bold; }
             #join-btn { background: var(--mucha-gold); color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; width: 95%; }
@@ -6487,6 +6497,13 @@ function createSystemUI() {
         <div id="action-menu" class="action-menu"><button id="view-profile-btn">洋蔥身分證</button></div>
         <div id="online-players-container" class="online-collapsed"><button id="online-toggle-btn">👥</button><div id="online-list-wrapper"><div id="online-players-list"></div></div></div>
         <div id="purchase-success-msg" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:#ffcc00; font-size:48px; z-index:400; font-weight:bold; text-align:center; pointer-events:none; -webkit-text-stroke: 2px #d4af37;">你大撒幣！</div>
+        <div id="app-loading-screen" data-mode="auth">
+            <div id="app-loading-card">
+                <div id="app-loading-spinner"></div>
+                <div id="app-loading-title">正在恢復登入狀態</div>
+                <div id="app-loading-subtitle">請稍候，洋蔥世界正在確認玩家資料。</div>
+            </div>
+        </div>
         <div id="login-screen">
             <h2 style="color: var(--mucha-green); border-bottom: 2px solid var(--mucha-gold); padding-bottom: 10px;">入館登記</h2>
             <label class="login-room-label" for="server-room-select">選擇入口房間</label>
@@ -6807,7 +6824,7 @@ function createSystemUI() {
         </div>
         <div id="party-red-flash"></div>
 
-        <div id="game-layout-container"><div id="phaser-app"></div><div id="chat-section" class="chat-collapsed"><button id="chat-toggle-btn">展開對話 ▼</button><div id="chat-content"><div id="chat-box"></div><div id="chat-input-area"><input type="text" id="chat-input" placeholder="說點什麼..."><button id="send-btn">發送</button></div></div></div></div>
+        <div id="game-layout-container" style="display:none;"><div id="phaser-app"></div><div id="chat-section" class="chat-collapsed"><button id="chat-toggle-btn">展開對話 ▼</button><div id="chat-content"><div id="chat-box"></div><div id="chat-input-area"><input type="text" id="chat-input" placeholder="說點什麼..."><button id="send-btn">發送</button></div></div></div></div>
         
         <div id="magic-modal" class="modal" style="z-index: 260; width: 85%; max-width: 340px; max-height:82vh; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; touch-action:pan-y; position:relative;">
             <div class="water-drop" style="left: 15%; animation-duration: 2s; animation-delay: 0.1s;"></div>
@@ -13004,6 +13021,86 @@ window.confirmPurchase = function() {
 };
 
 const loginScreen = document.getElementById("login-screen"); const gameLayoutContainer = document.getElementById("game-layout-container"); const chatSection = document.getElementById("chat-section"); const actionMenu = document.getElementById("action-menu"); const viewProfileModal = document.getElementById("view-profile-modal"); const chatInput = document.getElementById("chat-input");
+const appLoadingScreen = document.getElementById('app-loading-screen');
+const appLoadingTitle = document.getElementById('app-loading-title');
+const appLoadingSubtitle = document.getElementById('app-loading-subtitle');
+
+window.setAppLoadingState = function(visible, options = {}) {
+    if (!appLoadingScreen) return;
+
+    const mode = options.mode === 'scene' ? 'scene' : 'auth';
+    appLoadingScreen.dataset.mode = mode;
+    appLoadingScreen.style.display = visible ? 'flex' : 'none';
+
+    if (appLoadingTitle && options.title) appLoadingTitle.innerText = options.title;
+    if (appLoadingSubtitle && options.subtitle !== undefined) appLoadingSubtitle.innerText = options.subtitle;
+};
+
+window.setAppAuthState = function(state, message = '') {
+    const nextState = ['checking', 'loading', 'ready', 'unauthenticated', 'error'].includes(state) ? state : 'checking';
+    window.GameLogic.authState = nextState;
+
+    if (nextState === 'unauthenticated') {
+        if (loginScreen) loginScreen.style.display = 'block';
+        if (gameLayoutContainer) gameLayoutContainer.style.display = 'none';
+        document.body.classList.add('login-bg-active');
+        window.setAppLoadingState(false);
+        return;
+    }
+
+    if (loginScreen) loginScreen.style.display = 'none';
+
+    if (nextState === 'ready') {
+        if (gameLayoutContainer) gameLayoutContainer.style.display = 'block';
+        document.body.classList.remove('login-bg-active');
+        window.setAppLoadingState(false);
+        return;
+    }
+
+    if (nextState === 'loading') {
+        if (gameLayoutContainer) gameLayoutContainer.style.display = 'block';
+        document.body.classList.remove('login-bg-active');
+        window.setAppLoadingState(true, {
+            mode: 'auth',
+            title: '正在載入洋蔥世界',
+            subtitle: message || '玩家資料與場景正在同步，完成後才會顯示遊戲。'
+        });
+        return;
+    }
+
+    if (gameLayoutContainer) gameLayoutContainer.style.display = 'none';
+    document.body.classList.add('login-bg-active');
+    window.setAppLoadingState(true, {
+        mode: 'auth',
+        title: nextState === 'error' ? '玩家資料載入失敗' : '正在恢復登入狀態',
+        subtitle: message || (nextState === 'error' ? '請確認網路後重新開啟遊戲。' : '請稍候，洋蔥世界正在確認玩家資料。')
+    });
+};
+
+window.setSceneLoadingState = function(visible, sceneName = '') {
+    if (!visible) {
+        if (window.GameLogic && window.GameLogic.authState === 'ready') window.setAppLoadingState(false);
+        return;
+    }
+
+    const sceneLabels = {
+        doghouse: '我的狗窩',
+        cafe: '洋蔥大廳',
+        farm: '我的蔥田',
+        shrine: '神龕',
+        '7eonion': '7-EONION',
+        playroom: '遊戲室',
+        partyroom: '派對房間'
+    };
+
+    window.setAppLoadingState(true, {
+        mode: 'scene',
+        title: `正在前往${sceneLabels[sceneName] || '下一個場景'}`,
+        subtitle: '正在同步家具、玩家與場景狀態。'
+    });
+};
+
+window.setAppAuthState('checking');
 if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 window.addEventListener('pointerdown', (e) => { 
     if (window.GameLogic && window.GameLogic.rpsModalActive) {
@@ -13064,6 +13161,7 @@ document.getElementById("join-btn").addEventListener("click", () => {
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
+        if (window.setAppAuthState) window.setAppAuthState('loading', '正在確認入口房間與玩家資料。');
         const requestedRoom = window.getRememberedServerRoom();
 
         window.GameLogic.selectedServerRoom = requestedRoom;
@@ -13086,9 +13184,7 @@ onAuthStateChanged(auth, async (user) => {
 
             window.syncLoginRoomSelect(fallbackRoom);
 
-            loginScreen.style.display = "block";
-            gameLayoutContainer.style.display = "none";
-            document.body.classList.add('login-bg-active');
+            if (window.setAppAuthState) window.setAppAuthState('unauthenticated');
 
             await signOut(auth);
             window.GameLogic.authGuardSigningOut = false;
@@ -13098,12 +13194,17 @@ onAuthStateChanged(auth, async (user) => {
         window.rememberServerRoom(requestedRoom);
 
         window.GameLogic.currentUser = user;
-        loginScreen.style.display = "none";
-        gameLayoutContainer.style.display = "block";
-        document.body.classList.remove('login-bg-active');
+        if (window.setAppAuthState) window.setAppAuthState('loading', '正在同步個人資料與場景內容。');
         window.updateCurrentRoomLabel();
 
-        const profileSnap = await get(ref(db, `users/${user.uid}`));
+        let profileSnap = null;
+        try {
+            profileSnap = await get(ref(db, `users/${user.uid}`));
+        } catch (err) {
+            console.error('[登入] 玩家資料讀取失敗：', err);
+            if (window.setAppAuthState) window.setAppAuthState('error', '玩家資料讀取失敗，請確認網路後重新開啟遊戲。');
+            return;
+        }
         if (profileSnap.exists()) {
             window.GameLogic.myProfile = Object.assign({}, window.GameLogic.myProfile, profileSnap.val());
 
@@ -13179,8 +13280,10 @@ onAuthStateChanged(auth, async (user) => {
         if (window.startFriendVisitSessionsListener) window.startFriendVisitSessionsListener();
         if (window.startFriendVisitLoveNoticesListener) window.startFriendVisitLoveNoticesListener();
         if (window.refreshMyFriendsCache) window.refreshMyFriendsCache();
-        onValue(ref(db, 'manuals'), snap => { const data = snap.val(); window.manualPages = []; if (data) { Object.keys(data).forEach(key => { const item = data[key] || {}; if (!item.imgBase64) return; window.manualPages.push({ key: key, imgBase64: item.imgBase64, timestamp: item.timestamp || 0, title: item.title || '', description: item.description || '', categoryId: item.categoryId || 'uncategorized' }); }); window.manualPages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); } window.renderManualPage(); });
-        onValue(ref(db, 'manualCategories'), snap => { window.manualCategories = snap.val() || {}; window.renderManualPage(); });
+        if (manualsUnsubscribe) { manualsUnsubscribe(); manualsUnsubscribe = null; }
+        manualsUnsubscribe = onValue(ref(db, 'manuals'), snap => { const data = snap.val(); window.manualPages = []; if (data) { Object.keys(data).forEach(key => { const item = data[key] || {}; if (!item.imgBase64) return; window.manualPages.push({ key: key, imgBase64: item.imgBase64, timestamp: item.timestamp || 0, title: item.title || '', description: item.description || '', categoryId: item.categoryId || 'uncategorized' }); }); window.manualPages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); } window.renderManualPage(); });
+        if (manualCategoriesUnsubscribe) { manualCategoriesUnsubscribe(); manualCategoriesUnsubscribe = null; }
+        manualCategoriesUnsubscribe = onValue(ref(db, 'manualCategories'), snap => { window.manualCategories = snap.val() || {}; window.renderManualPage(); });
         if (cafeFurnitureUnsubscribe) { cafeFurnitureUnsubscribe(); cafeFurnitureUnsubscribe = null; }
         cafeFurnitureUnsubscribe = onValue(ref(db, window.getServerRoomPath('cafeFurniture')), snap => {
             window.GameLogic.cafeFurniture = snap.val() || {};
@@ -13234,15 +13337,18 @@ onAuthStateChanged(auth, async (user) => {
             if (window.startPartyInviteListener) window.startPartyInviteListener();
         }, 0);
 
-        if (!window.GameLogic.phaserGame) { window.GameLogic.pendingScene = window.GameLogic.myProfile.lastScene || "doghouse"; initPhaser(); } else { switchScene(window.GameLogic.myProfile.lastScene || "doghouse"); }
+        if (!window.GameLogic.phaserGame) {
+            window.GameLogic.pendingScene = window.GameLogic.myProfile.lastScene || "doghouse";
+            initPhaser();
+        } else {
+            await switchScene(window.GameLogic.myProfile.lastScene || "doghouse");
+        }
         listenToChat(); listenToMemories();
     } else {
         window.GameLogic.currentUser = null;
         window.GameLogic.onlinePlayers = {};
         window.GameLogic.cafePlayers = {};
-        loginScreen.style.display = "block";
-        gameLayoutContainer.style.display = "none";
-        document.body.classList.add('login-bg-active');
+        if (window.setAppAuthState) window.setAppAuthState('unauthenticated');
 
         if (connectedUnsubscribe) { connectedUnsubscribe(); connectedUnsubscribe = null; }
         if (window.stopFirebaseServerTimeOffsetListener) window.stopFirebaseServerTimeOffsetListener();
@@ -13255,6 +13361,8 @@ onAuthStateChanged(auth, async (user) => {
         if (friendVisitLoveNoticesUnsubscribe) { friendVisitLoveNoticesUnsubscribe(); friendVisitLoveNoticesUnsubscribe = null; }
         if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
         if (memoryUnsubscribe) { memoryUnsubscribe(); memoryUnsubscribe = null; }
+        if (manualsUnsubscribe) { manualsUnsubscribe(); manualsUnsubscribe = null; }
+        if (manualCategoriesUnsubscribe) { manualCategoriesUnsubscribe(); manualCategoriesUnsubscribe = null; }
         if (cafeFurnitureUnsubscribe) { cafeFurnitureUnsubscribe(); cafeFurnitureUnsubscribe = null; }
         if (summonUnsubscribe) { summonUnsubscribe(); summonUnsubscribe = null; }
         if (cafeUnsubscribe) { cafeUnsubscribe(); cafeUnsubscribe = null; }
@@ -13282,6 +13390,9 @@ window.updateOnlinePlayersUI();
 });
 
 function joinShrine() {
+    if (shrineUnsubscribe) { shrineUnsubscribe(); shrineUnsubscribe = null; }
+    if (shrineEventUnsubscribe) { shrineEventUnsubscribe(); shrineEventUnsubscribe = null; }
+
     const playerRef = ref(db, window.getServerRoomPath(`shrinePlayers/${window.GameLogic.currentUser.uid}`));
     // 【修正 BUG 2】補上 level 屬性，讓其他玩家能看見真實等級
     set(playerRef, { x: window.GameLogic.myProfile.lastX || 640, y: window.GameLogic.myProfile.lastY || 360, name: window.GameLogic.myProfile.name, color: window.GameLogic.myProfile.color, level: window.GameLogic.myProfile.level || 1, isSeated: false });
@@ -13472,74 +13583,334 @@ window.clearAllModals = function() {
     });
 };
 
-function switchScene(sceneName, extraData = null) {
-    if (window.GameLogic.phaserGame && !window.GameLogic.muteSFX) { let scene = window.GameLogic.phaserGame.scene.getScene('MainScene'); if (scene) window.playSFX(scene, 'jump04'); }
-    
-    // 切換場景時，強制清空所有浮動視窗與特效 UI
-    window.clearAllModals();
+window.createDefaultPrinceCatData = function(now = Date.now()) {
+    return {
+        x: 1024,
+        y: 1024,
+        targetX: 1200,
+        targetY: 1024,
+        state: 'idle',
+        direction: 'right',
+        stateStartTime: now,
+        stateUntil: now + 3000,
+        interactingUid: null,
+        lockedUntil: 0
+    };
+};
 
-    if (window.GameLogic.currentUser && window.applyDoghouseHost) {
-        if (sceneName === 'doghouse') {
-            const requestedHostUid = extraData && extraData.doghouseHostUid ? extraData.doghouseHostUid : window.GameLogic.currentUser.uid;
-            const requestedHostName = extraData && extraData.doghouseHostName ? extraData.doghouseHostName : (requestedHostUid === window.GameLogic.currentUser.uid ? (window.GameLogic.myProfile.name || '我') : '好友');
-            window.applyDoghouseHost(requestedHostUid, requestedHostName);
-        } else {
-            window.applyDoghouseHost(window.GameLogic.currentUser.uid, window.GameLogic.myProfile.name || '我');
-        }
+window.prepareSceneFirstSnapshot = async function(sceneName, extraData = null) {
+    if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) {
+        throw new Error('scene-first-snapshot-no-user');
     }
 
-    if (sceneName !== 'doghouse') {
-    if (window.GameLogic.myProfile && window.GameLogic.myProfile.sleepStartTime > 0) {
-        window.GameLogic.myProfile.sleepStartTime = 0;
-        window.GameLogic.myProfile.sleepFurnitureId = '';
-        window.GameLogic.myProfile.sleepFurnitureKey = '';
-        window.GameLogic.myProfile.sleepFurnitureDirection = '';
-        localStorage.removeItem('onion_sleepStartTime');
-        localStorage.removeItem('onion_sleepFurnitureId');
-        update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), {
-            sleepStartTime: 0,
-            sleepFurnitureId: '',
-            sleepFurnitureKey: '',
-            sleepFurnitureDirection: ''
+    const safeExtraData = extraData || {};
+    const jobs = [];
+    const readInto = (path, applyValue) => {
+        jobs.push(
+            get(ref(window.GameLogic.db, path)).then((snap) => {
+                applyValue(snap.exists() ? (snap.val() || {}) : {});
+            })
+        );
+    };
+
+    if (sceneName === 'cafe') {
+        readInto(window.getServerRoomPath('cafeFurniture'), (data) => {
+            window.GameLogic.cafeFurniture = data || {};
+        });
+        readInto(window.getServerRoomPath('cafePlayers'), (data) => {
+            window.GameLogic.cafePlayers = data || {};
+        });
+        readInto(window.getServerRoomPath('cafePrinceCat'), (data) => {
+            const hasData = data && typeof data === 'object' && Object.keys(data).length > 0;
+            window.GameLogic.princeCatData = hasData
+                ? data
+                : window.createDefaultPrinceCatData(window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now());
+        });
+    } else if (sceneName === 'doghouse') {
+        const hostUid = safeExtraData.doghouseHostUid || (window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : window.GameLogic.currentUser.uid);
+        const furniturePath = window.getDoghouseFurniturePath ? window.getDoghouseFurniturePath(hostUid) : `users/${hostUid}/doghouseFurniture`;
+        const playersPath = window.getDoghousePlayersPath ? window.getDoghousePlayersPath(hostUid) : `users/${hostUid}/doghousePlayers`;
+
+        readInto(furniturePath, (data) => {
+            window.GameLogic.doghouseFurniture = data || {};
+        });
+        readInto(playersPath, (data) => {
+            window.GameLogic.doghousePlayers = data || {};
+        });
+    } else if (sceneName === 'shrine') {
+        readInto(window.getServerRoomPath('shrineFurniture'), (data) => {
+            window.GameLogic.shrineFurniture = data || {};
+        });
+        readInto(window.getServerRoomPath('shrinePlayers'), (data) => {
+            window.GameLogic.shrinePlayers = data || {};
+        });
+        readInto(window.getServerRoomPath('shrineEvents/current'), (data) => {
+            window.GameLogic.shrineEventData = data && Object.keys(data).length > 0 ? data : null;
+        });
+    } else if (sceneName === 'playroom' && safeExtraData.roomId) {
+        readInto(window.getServerRoomPath(`playroomPlayers/${safeExtraData.roomId}`), (data) => {
+            window.GameLogic.playroomPlayers = data || {};
         });
     }
-        if (window.GameLogic.phaserGame) { let ms = window.GameLogic.phaserGame.scene.getScene('MainScene'); if (ms && ms.sound && ms.sound.get('onion-sleep')) ms.sound.stopByKey('onion-sleep'); }
+
+    await Promise.all(jobs);
+    return true;
+};
+
+window.beginSceneReadyGate = function(sceneName) {
+    const token = Number(window.GameLogic.sceneReadyToken || 0) + 1;
+    window.GameLogic.sceneReadyToken = token;
+    window.GameLogic.sceneReadyScene = sceneName;
+    window.GameLogic.sceneReadyResolved = false;
+    window.GameLogic.sceneInputLocked = true;
+
+    if (window.__onionSceneReadyGate && window.__onionSceneReadyGate.timeoutId) {
+        clearTimeout(window.__onionSceneReadyGate.timeoutId);
     }
 
-    const doSwitch = () => {
-        window.GameLogic.currentScene = sceneName;
-        window.GameLogic.placingFurnitureKey = null;
-        if (window.GameLogic.currentUser && window.GameLogic.db) {
-            update(ref(window.GameLogic.db, window.getServerRoomPath(`onlinePlayers/${window.GameLogic.currentUser.uid}`)), {
-                scene: sceneName,
-                doghouseHostUid: sceneName === 'doghouse' && window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : '',
-                lastActive: window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now(),
-                name: window.GameLogic.myProfile.name || '匿名',
-                color: window.GameLogic.myProfile.color || '#fff',
-                level: window.GameLogic.myProfile.level || 1
-            }).catch(err => console.warn('[我們的愛] 更新在線場景失敗：', err));
-        }
-        if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput(); 
-        
-        // 離開原本的房間
-        leaveCafe(); leaveShrine(); leavePlayroom();
-        if (sceneName !== "partyroom") {
-            window.leavePartyroom(true);
-        } else if (window.PartyLogic && window.PartyLogic.roomId && extraData && extraData.roomId && window.PartyLogic.roomId !== extraData.roomId) {
-            window.leavePartyroom(true);
-        }
+    let resolveGate;
+    let rejectGate;
+    const promise = new Promise((resolve, reject) => {
+        resolveGate = resolve;
+        rejectGate = reject;
+    });
 
-        if (sceneName === "cafe") joinCafe(); 
-        else if (sceneName === "shrine") joinShrine(); 
-        else if (sceneName === "playroom") joinPlayroom(extraData.roomId);
-        else if (sceneName === "partyroom") window.joinPartyroom(extraData.roomId);
+    const timeoutId = setTimeout(() => {
+        if (!window.__onionSceneReadyGate || window.__onionSceneReadyGate.token !== token) return;
+        window.__onionSceneReadyGate = null;
+        rejectGate(new Error(`scene-ready-timeout:${sceneName}`));
+    }, 15000);
 
-        window.updateOnlinePlayersUI();
-        if (window.GameLogic.phaserGame && window.GameLogic.phaserLoaded) { 
-            const game = window.GameLogic.phaserGame; 
+    window.__onionSceneReadyGate = {
+        token,
+        sceneName,
+        promise,
+        resolve: resolveGate,
+        reject: rejectGate,
+        timeoutId
+    };
 
-            try {
-                const oldMain = game.scene.getScene('MainScene');
+    return window.__onionSceneReadyGate;
+};
+
+window.markSceneReady = function(sceneName) {
+    const gate = window.__onionSceneReadyGate;
+    if (!gate || gate.sceneName !== sceneName) return false;
+
+    clearTimeout(gate.timeoutId);
+    window.__onionSceneReadyGate = null;
+    window.GameLogic.sceneReadyResolved = true;
+    window.GameLogic.sceneInputLocked = false;
+    gate.resolve({ sceneName, token: gate.token });
+
+    if (window.GameLogic.currentUser && window.setAppAuthState) {
+        window.setAppAuthState('ready');
+    }
+    return true;
+};
+
+window.failSceneReadyGate = function(error) {
+    const gate = window.__onionSceneReadyGate;
+    if (!gate) return;
+
+    clearTimeout(gate.timeoutId);
+    window.__onionSceneReadyGate = null;
+    window.GameLogic.sceneInputLocked = false;
+    gate.reject(error instanceof Error ? error : new Error(String(error || 'scene-ready-failed')));
+};
+
+async function switchScene(sceneName, extraData = null) {
+    const targetScene = String(sceneName || '').trim();
+    const safeExtraData = extraData || {};
+    const logic = window.GameLogic;
+
+    if (!targetScene || !logic || !logic.currentUser) return false;
+
+    const game = logic.phaserGame;
+    const currentMainScene = game && game.scene ? game.scene.getScene('MainScene') : null;
+    const mainSceneActive = !!(
+        currentMainScene &&
+        currentMainScene.sys &&
+        currentMainScene.sys.isActive &&
+        currentMainScene.sys.isActive()
+    );
+
+    let sameDestination = targetScene === logic.currentScene;
+    if (sameDestination && targetScene === 'doghouse') {
+        const requestedHostUid = safeExtraData.doghouseHostUid || logic.currentUser.uid;
+        const currentHostUid = window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : logic.currentUser.uid;
+        sameDestination = requestedHostUid === currentHostUid;
+    } else if (sameDestination && targetScene === 'playroom') {
+        sameDestination = !!safeExtraData.roomId && safeExtraData.roomId === logic.currentRoomId;
+    } else if (sameDestination && targetScene === 'partyroom') {
+        sameDestination = !!safeExtraData.roomId && window.PartyLogic && safeExtraData.roomId === window.PartyLogic.roomId;
+    }
+
+    if (logic.sceneSwitchInProgress) {
+        return logic.sceneSwitchPromise || false;
+    }
+
+    if (sameDestination && mainSceneActive) {
+        logic.sceneInputLocked = false;
+        if (window.setAppAuthState) window.setAppAuthState('ready');
+        return false;
+    }
+
+    logic.sceneSwitchInProgress = true;
+    logic.sceneSwitchTarget = targetScene;
+    logic.sceneInputLocked = true;
+
+    const operation = (async () => {
+        let sceneReadyGate = null;
+        let switchSucceeded = false;
+
+        try {
+            if (window.setSceneLoadingState) window.setSceneLoadingState(true, targetScene);
+
+            if (logic.phaserGame && !logic.muteSFX) {
+                const soundScene = logic.phaserGame.scene.getScene('MainScene');
+                if (soundScene) window.playSFX(soundScene, 'jump04');
+            }
+
+            window.clearAllModals();
+
+            if (logic.currentUser && window.applyDoghouseHost) {
+                if (targetScene === 'doghouse') {
+                    const requestedHostUid = safeExtraData.doghouseHostUid || logic.currentUser.uid;
+                    const requestedHostName = safeExtraData.doghouseHostName || (requestedHostUid === logic.currentUser.uid ? (logic.myProfile.name || '我') : '好友');
+                    window.applyDoghouseHost(requestedHostUid, requestedHostName);
+                } else {
+                    window.applyDoghouseHost(logic.currentUser.uid, logic.myProfile.name || '我');
+                }
+            }
+
+            if (window.prepareSceneFirstSnapshot) {
+                await window.prepareSceneFirstSnapshot(targetScene, safeExtraData);
+            }
+
+            if (targetScene !== 'doghouse') {
+                if (logic.myProfile && logic.myProfile.sleepStartTime > 0) {
+                    logic.myProfile.sleepStartTime = 0;
+                    logic.myProfile.sleepFurnitureId = '';
+                    logic.myProfile.sleepFurnitureKey = '';
+                    logic.myProfile.sleepFurnitureDirection = '';
+                    localStorage.removeItem('onion_sleepStartTime');
+                    localStorage.removeItem('onion_sleepFurnitureId');
+                    await update(ref(logic.db, `users/${logic.currentUser.uid}`), {
+                        sleepStartTime: 0,
+                        sleepFurnitureId: '',
+                        sleepFurnitureKey: '',
+                        sleepFurnitureDirection: ''
+                    }).catch(err => console.warn('[場景切換] 清除睡眠狀態寫入失敗，先繼續切換：', err));
+                }
+
+                if (logic.phaserGame) {
+                    const mainScene = logic.phaserGame.scene.getScene('MainScene');
+                    if (mainScene && mainScene.sound && mainScene.sound.get('onion-sleep')) {
+                        mainScene.sound.stopByKey('onion-sleep');
+                    }
+                }
+            }
+
+            const previousScene = logic.currentScene;
+            const activeScene = logic.phaserGame && logic.phaserLoaded
+                ? logic.phaserGame.scene.getScene('MainScene')
+                : null;
+
+            if (activeScene && activeScene.localPlayer && activeScene.sys && activeScene.sys.isActive && activeScene.sys.isActive()) {
+                const newMapW = targetScene === 'cafe' ? 2048 : (targetScene === 'partyroom' ? 1920 : 1280);
+                const newMapH = targetScene === 'cafe' ? 2048 : (targetScene === 'partyroom' ? 1080 : 720);
+                const entranceX = newMapW / 2 + 100;
+                const entranceY = newMapH / 2;
+                const isFriendDoghouseVisit = targetScene === 'doghouse' && window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse();
+
+                if (targetScene !== 'playroom' && targetScene !== 'partyroom' && !isFriendDoghouseVisit) {
+                    await update(ref(db, `users/${logic.currentUser.uid}`), {
+                        lastScene: targetScene,
+                        lastX: entranceX,
+                        lastY: entranceY
+                    }).catch(err => console.warn('[場景切換] 儲存下一場景出生點失敗，先繼續切換：', err));
+                    logic.myProfile.lastScene = targetScene;
+                    logic.myProfile.lastX = entranceX;
+                    logic.myProfile.lastY = entranceY;
+                }
+
+                await new Promise((resolve) => {
+                    try {
+                        const cam = activeScene.cameras.main;
+                        const topBlack = activeScene.add.rectangle(cam.width / 2, 0, cam.width, cam.height / 2, 0x000000).setOrigin(0.5, 0).setDepth(9999).setScrollFactor(0);
+                        const botBlack = activeScene.add.rectangle(cam.width / 2, cam.height, cam.width, cam.height / 2, 0x000000).setOrigin(0.5, 1).setDepth(9999).setScrollFactor(0);
+                        const whiteLine = activeScene.add.rectangle(cam.width / 2, cam.height / 2, cam.width, 4, 0xffffff).setDepth(10000).setScrollFactor(0).setAlpha(0);
+                        topBlack.scaleY = 0;
+                        botBlack.scaleY = 0;
+
+                        activeScene.tweens.add({
+                            targets: [topBlack, botBlack],
+                            scaleY: 1,
+                            duration: 200,
+                            ease: 'Cubic.easeIn',
+                            onComplete: () => {
+                                whiteLine.setAlpha(1);
+                                activeScene.tweens.add({
+                                    targets: whiteLine,
+                                    scaleX: 0,
+                                    duration: 150,
+                                    ease: 'Power2',
+                                    onComplete: resolve
+                                });
+                            }
+                        });
+                    } catch (err) {
+                        console.warn('[場景切換] 關閉轉場建立失敗，改為直接切換：', err);
+                        resolve();
+                    }
+                });
+            }
+
+            logic.currentScene = targetScene;
+            logic.placingFurnitureKey = null;
+
+            if (logic.currentUser && logic.db) {
+                await update(ref(logic.db, window.getServerRoomPath(`onlinePlayers/${logic.currentUser.uid}`)), {
+                    scene: targetScene,
+                    doghouseHostUid: targetScene === 'doghouse' && window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : '',
+                    lastActive: window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now(),
+                    name: logic.myProfile.name || '匿名',
+                    color: logic.myProfile.color || '#fff',
+                    level: logic.myProfile.level || 1
+                }).catch(err => console.warn('[場景切換] 更新在線場景失敗，先繼續切換：', err));
+            }
+
+            if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput();
+
+            if (previousScene === 'cafe') {
+                leaveCafe();
+            } else if (previousScene === 'shrine') {
+                leaveShrine();
+            } else if (previousScene === 'playroom') {
+                leavePlayroom();
+            } else if (previousScene === 'partyroom' && window.leavePartyroom) {
+                window.leavePartyroom(true);
+            }
+
+            if (targetScene === 'cafe') {
+                joinCafe();
+            } else if (targetScene === 'shrine') {
+                joinShrine();
+            } else if (targetScene === 'playroom') {
+                if (!safeExtraData.roomId) throw new Error('playroom-room-id-missing');
+                joinPlayroom(safeExtraData.roomId);
+            } else if (targetScene === 'partyroom') {
+                if (!safeExtraData.roomId) throw new Error('partyroom-room-id-missing');
+                window.joinPartyroom(safeExtraData.roomId);
+            }
+
+            window.updateOnlinePlayersUI();
+
+            if (logic.phaserGame && logic.phaserLoaded) {
+                const activeGame = logic.phaserGame;
+                const oldMain = activeGame.scene.getScene('MainScene');
+
                 if (oldMain && oldMain.clearPrinceCatPetMiniGame) {
                     try {
                         oldMain.clearPrinceCatPetMiniGame(false);
@@ -13548,60 +13919,71 @@ function switchScene(sceneName, extraData = null) {
                     }
                 }
 
-                game.scene.stop('MainScene');
-            } catch (err) {
-                console.warn('[場景切換] 停止 MainScene 時發生錯誤，改用保護模式繼續啟動新場景：', err);
+                sceneReadyGate = window.beginSceneReadyGate(targetScene);
+
+                if (oldMain && oldMain.sys && oldMain.sys.isActive && oldMain.sys.isActive()) {
+                    activeGame.scene.stop('MainScene');
+                }
+
+                activeGame.scene.start('MainScene');
+                activeGame.scene.bringToTop('UIScene');
+                await sceneReadyGate.promise;
+            } else {
+                logic.pendingScene = targetScene;
             }
 
-            try {
-                game.scene.start('MainScene');
-                game.scene.bringToTop('UIScene');
-            } catch (err) {
-                console.warn('[場景切換] 啟動 MainScene 失敗，稍後重試一次：', err);
-                setTimeout(() => {
-                    try {
-                        game.scene.start('MainScene');
-                        game.scene.bringToTop('UIScene');
-                    } catch (retryErr) {
-                        console.error('[場景切換] MainScene 重試仍失敗：', retryErr);
-                    }
-                }, 0);
+            switchSucceeded = true;
+            return true;
+        } catch (err) {
+            if (sceneReadyGate && window.__onionSceneReadyGate) {
+                window.failSceneReadyGate(err);
+                try {
+                    await sceneReadyGate.promise;
+                } catch (_) {}
             }
-        }
-    };
 
-    if (window.GameLogic.currentUser && window.GameLogic.phaserGame && window.GameLogic.phaserLoaded) {
-        let scene = window.GameLogic.phaserGame.scene.getScene('MainScene');
-        if (scene && scene.localPlayer) {
-            let newMapW = (sceneName === 'cafe') ? 2048 : 1280;
-            let newMapH = (sceneName === 'cafe') ? 2048 : 720;
-            let entranceX = newMapW / 2 + 100; let entranceY = newMapH / 2;
-            
-            // 只有一般場景需要記錄位置，副本與拜訪好友家不覆蓋最後重生點
-            const isFriendDoghouseVisit = sceneName === 'doghouse' && window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse();
-            if (sceneName !== 'playroom' && sceneName !== 'partyroom' && !isFriendDoghouseVisit) {
-                update(ref(db, `users/${window.GameLogic.currentUser.uid}`), { lastScene: sceneName, lastX: entranceX, lastY: entranceY });
-                window.GameLogic.myProfile.lastScene = sceneName; window.GameLogic.myProfile.lastX = entranceX; window.GameLogic.myProfile.lastY = entranceY;
+            console.error('[場景切換] 場景載入失敗：', err);
+            const topBar = document.getElementById('top-notification-bar');
+            if (topBar) topBar.innerText = '系統通知：場景載入失敗，請稍後再點一次傳送門。';
+
+            const fallbackMain = logic.phaserGame && logic.phaserGame.scene
+                ? logic.phaserGame.scene.getScene('MainScene')
+                : null;
+            const fallbackActive = !!(
+                fallbackMain &&
+                fallbackMain.sys &&
+                fallbackMain.sys.isActive &&
+                fallbackMain.sys.isActive()
+            );
+
+            if (fallbackActive && window.setAppAuthState) {
+                window.setAppAuthState('ready');
+            } else if (window.setAppAuthState) {
+                window.setAppAuthState('error', '場景資料載入失敗，請確認網路後重新開啟遊戲。');
             }
-            
-            let cam = scene.cameras.main; 
-            let topBlack = scene.add.rectangle(cam.width/2, 0, cam.width, cam.height/2, 0x000000).setOrigin(0.5, 0).setDepth(9999).setScrollFactor(0);
-            let botBlack = scene.add.rectangle(cam.width/2, cam.height, cam.width, cam.height/2, 0x000000).setOrigin(0.5, 1).setDepth(9999).setScrollFactor(0);
-            topBlack.scaleY = 0; botBlack.scaleY = 0;
-            let whiteLine = scene.add.rectangle(cam.width/2, cam.height/2, cam.width, 4, 0xffffff).setDepth(10000).setScrollFactor(0).setAlpha(0);
-            
-            scene.tweens.add({ targets: [topBlack, botBlack], scaleY: 1, duration: 200, ease: 'Cubic.easeIn', onComplete: () => {
-                whiteLine.setAlpha(1);
-                scene.tweens.add({ targets: whiteLine, scaleX: 0, duration: 150, ease: 'Power2', onComplete: () => { doSwitch(); } });
-            }});
-            return; 
+            return false;
+        } finally {
+            logic.sceneSwitchInProgress = false;
+            logic.sceneSwitchTarget = null;
+            logic.sceneInputLocked = false;
+
+            if (switchSucceeded && window.setAppAuthState) {
+                window.setAppAuthState('ready');
+            }
         }
+    })();
+
+    logic.sceneSwitchPromise = operation;
+
+    try {
+        return await operation;
+    } finally {
+        if (logic.sceneSwitchPromise === operation) logic.sceneSwitchPromise = null;
     }
-    doSwitch();
 }
-
 let playroomUnsubscribe = null;
 function joinPlayroom(roomId) {
+    if (playroomUnsubscribe) { playroomUnsubscribe(); playroomUnsubscribe = null; }
     window.GameLogic.currentRoomId = roomId;
 
     const playerRef = ref(db, window.getServerRoomPath(`playroomPlayers/${roomId}/${window.GameLogic.currentUser.uid}`));
@@ -14992,8 +15374,11 @@ class MainScene extends Phaser.Scene {
             this.add.tileSprite(0, 0, mapW, mapH, 'bgCafe').setOrigin(0, 0); this.time.addEvent({ delay: 2000, callback: this.spawnTrash, callbackScope: this, loop: true });
             const mapSize = 120; const marginX = 20; const marginY = 60;
             this.minimap = this.cameras.add(this.cameras.main.width - mapSize - marginX, marginY, mapSize, mapSize).setZoom(mapSize / 2048).setName('minimap'); this.minimap.setBackgroundColor('rgba(26, 16, 8, 0.7)'); this.minimap.centerOn(1024, 1024);
-            this.scale.on('resize', (gameSize) => { if (this.minimap) this.minimap.setPosition(gameSize.width - mapSize - marginX, marginY); });
-            this.trashListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('cafeTrashes')), (snap) => { let data = snap.val() || {}; for (let key in data) { if (!this.trashes.find(t => t.key === key)) { let tData = data[key]; let isOld = tData.type === 'old'; let spriteKey = isOld ? 'onion-skin-old' : 'onion-skin'; let animKey = isOld ? 'skin-old-anim' : 'skin-anim'; let skin = this.physics.add.sprite(tData.x, tData.y, spriteKey).setDepth(4); skin.play(animKey); skin.type = isOld ? 'onion-skin-old' : 'onion-skin'; skin.key = key; this.bindDirectSceneTap(skin, 'trash'); this.trashes.push(skin); } } this.trashes = this.trashes.filter(t => { if (!data[t.key]) { t.destroy(); if (this.closestTrash === t) { 
+            this.handleMinimapResize = (gameSize) => {
+                if (this.minimap) this.minimap.setPosition(gameSize.width - mapSize - marginX, marginY);
+            };
+            this.scale.on('resize', this.handleMinimapResize, this);
+            this.trashListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('cafeTrashes')), (snap) => {
     this.closestTrash = null; 
 
     if (this.localPlayer && this.localPlayer.isSweeping) { 
@@ -15286,6 +15671,18 @@ class MainScene extends Phaser.Scene {
         if (this.sceneName === "partyroom" && this.partyStonesGroup) this.physics.add.collider(this.localPlayer.sprite, this.partyStonesGroup);
         this.followLocalPlayerCamera(0.08, 0.08);
 
+        const initialFurnitureData = this.isCafe
+            ? (window.GameLogic.cafeFurniture || {})
+            : (this.sceneName === 'doghouse'
+                ? (window.GameLogic.doghouseFurniture || {})
+                : (this.sceneName === 'shrine' ? (window.GameLogic.shrineFurniture || {}) : {}));
+
+        Object.keys(initialFurnitureData).forEach((key) => {
+            const furnitureData = initialFurnitureData[key];
+            if (!furnitureData || this.furnitureSprites[key]) return;
+            this.furnitureSprites[key] = this.createFurniture(key, furnitureData);
+        });
+
         // 修正：重置文字緩存變數，避免 Phaser 重新啟動場景時因為變數殘留，導致判定相同而不更新 UI，進而使法寶提示字消失
         this.lastPromptMsg = null; this.lastPromptDrawX = null; this.lastPromptDrawY = null; this.lastPromptDrawMsg = null;
         this.lastWaterPromptMsg = null; this.lastWaterDrawX = null; this.lastWaterDrawY = null; this.lastWaterDrawMsg = null;
@@ -15295,6 +15692,13 @@ class MainScene extends Phaser.Scene {
         this.lockOnTarget = this.add.text(0, 0, '🎯', { fontSize: '28px' }).setOrigin(0.5).setDepth(150).setVisible(false); this.tweens.add({ targets: this.lockOnTarget, scaleX: 1.2, scaleY: 1.2, yoyo: true, repeat: -1, duration: 400 });
         if (this.minimap) this.minimap.ignore([this.smartPromptBg, this.smartPromptText, this.waterPromptBg, this.waterPromptText, this.lockOnTarget]);
         this.initPrinceCatSync();
+
+        if (window.markSceneReady) {
+            this.game.events.once('postrender', () => {
+                if (!this.sys || !this.sys.isActive || !this.sys.isActive()) return;
+                window.markSceneReady(this.sceneName);
+            });
+        }
 
         this.cursors = this.input.keyboard.createCursorKeys(); this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE); this.shiftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT); this.altKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ALT); this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
         this.setupCanvasDirectionalInput();
@@ -16702,6 +17106,10 @@ if (!data.scoreHandled && data.attacker) {
             if (this.clearMoonStaffBlessing) this.clearMoonStaffBlessing();
             this.closeSoloChickenMenu();
             this.scale.off('resize', this.updateCameraBounds, this); // 確保離開場景時註銷視窗尺寸監聽，防止記憶體溢出卡頓
+            if (this.handleMinimapResize) {
+                this.scale.off('resize', this.handleMinimapResize, this);
+                this.handleMinimapResize = null;
+            }
             if (this.leaderboardListener) this.leaderboardListener(); 
             if (this.trashListener) this.trashListener();
             if (this.coinsListener) this.coinsListener();
@@ -29256,45 +29664,59 @@ entity.showOffRainbowTween = this.tweens.add({
     initPrinceCatSync() {
         if (!this.isCafe || this.princeCatListener) return;
 
-        this.princeCatSprite = this.physics.add.sprite(1024, 1024, 'prince-cat-stand-sheet').setDepth(9).setScale(1.35);
+        const initialData = window.GameLogic.princeCatData && typeof window.GameLogic.princeCatData === 'object'
+            ? window.GameLogic.princeCatData
+            : null;
+        const startX = initialData && Number.isFinite(Number(initialData.x)) ? Number(initialData.x) : 1024;
+        const startY = initialData && Number.isFinite(Number(initialData.y)) ? Number(initialData.y) : 1024;
+        const shouldShowInitially = !!initialData;
+
+        this.princeCatSprite = this.physics.add.sprite(startX, startY, 'prince-cat-stand-sheet').setDepth(9).setScale(1.35).setVisible(shouldShowInitially);
         this.bindDirectSceneTap(this.princeCatSprite, 'princeCat');
         this.princeCatSprite.setCollideWorldBounds(true);
         if (this.princeCatSprite.body) this.princeCatSprite.body.setAllowGravity(false);
 
-        this.princeCatNameBg = this.add.graphics().setDepth(12);
-        this.princeCatNameText = this.add.text(0, 0, '王子麵', { fontSize: '14px', color: '#ffcc00', fontStyle: 'bold', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5).setDepth(13);
+        this.princeCatNameBg = this.add.graphics().setDepth(12).setVisible(shouldShowInitially);
+        this.princeCatNameText = this.add.text(0, 0, '王子麵', { fontSize: '14px', color: '#ffcc00', fontStyle: 'bold', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5).setDepth(13).setVisible(shouldShowInitially);
 
         if (this.minimap) this.minimap.ignore([this.princeCatNameBg, this.princeCatNameText]);
 
         window.selectPrinceCatInteraction = (type) => {
-        if (type === 'pet') this.startPrinceCatPetting();
-        if (type === 'feed') this.startPrinceCatFeeding();
-     };
+            if (type === 'pet') this.startPrinceCatPetting();
+            if (type === 'feed') this.startPrinceCatFeeding();
+        };
+
+        if (initialData) this.updatePrinceCatVisual();
 
         this.princeCatListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat')), (snap) => {
             const data = snap.val();
 
             if (!data) {
-                window.GameLogic.princeCatData = null;
+                const fallbackData = window.GameLogic.princeCatData && typeof window.GameLogic.princeCatData === 'object'
+                    ? window.GameLogic.princeCatData
+                    : window.createDefaultPrinceCatData(window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now());
+
+                window.GameLogic.princeCatData = fallbackData;
 
                 if (this.isPrinceCatHost()) {
-                    set(ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat')), {
-                        x: 1024,
-                        y: 1024,
-                        targetX: 1200,
-                        targetY: 1024,
-                        state: 'idle',
-                        direction: 'right',
-                        stateStartTime: Date.now(),
-                        stateUntil: Date.now() + 3000,
-                        interactingUid: null,
-                        lockedUntil: 0
-                    });
+                    set(ref(window.GameLogic.db, window.getServerRoomPath('cafePrinceCat')), fallbackData)
+                        .catch(err => console.warn('Firebase 建立王子麵預設狀態失敗:', err));
                 }
-                return;
+            } else {
+                window.GameLogic.princeCatData = data;
             }
 
-            window.GameLogic.princeCatData = data;
+            const nextData = window.GameLogic.princeCatData;
+            if (!nextData || !this.princeCatSprite) return;
+
+            const nextX = Number.isFinite(Number(nextData.x)) ? Number(nextData.x) : 1024;
+            const nextY = Number.isFinite(Number(nextData.y)) ? Number(nextData.y) : 1024;
+            this.princeCatSprite.setPosition(nextX, nextY).setVisible(true);
+            if (this.princeCatNameBg) this.princeCatNameBg.setVisible(true);
+            if (this.princeCatNameText) this.princeCatNameText.setVisible(true);
+            this.updatePrinceCatVisual();
+        }, (err) => {
+            console.warn('Firebase 讀取王子麵狀態失敗:', err);
         });
     }
 
@@ -33510,6 +33932,12 @@ if (activeBubbleMsg) {
 
     update(time, delta) {
         if (!window.GameLogic.currentUser) return;
+        if (window.GameLogic.sceneInputLocked) {
+            if (this.localPlayer && this.localPlayer.sprite && this.localPlayer.sprite.body) {
+                this.localPlayer.sprite.setVelocity(0, 0);
+            }
+            return;
+        }
         if (this.updateMoonBunBuffUi) this.updateMoonBunBuffUi(time);
         let vx = 0; let vy = 0; let speed = 180; const uiScene = this.scene.manager.getScene('UIScene'); let px = this.localPlayer.sprite.x; let py = this.localPlayer.sprite.y;
         let evData = window.GameLogic.shrineEventData; let isPurifying = (this.sceneName === 'shrine' && evData && evData.state === 'purifying');
@@ -34342,7 +34770,24 @@ if (dist < 30) {
     }
 }
 
-function initPhaser() { const config = { type: Phaser.AUTO, parent: 'phaser-app', width: '100%', height: '100%', backgroundColor: '#1a1008', scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH }, input: { activePointers: 3 }, physics: { default: 'arcade', arcade: { debug: false } }, scene: [ BootScene, MainScene, UIScene ] }; window.GameLogic.phaserGame = new Phaser.Game(config); }
+function initPhaser() {
+    if (window.GameLogic.phaserGame) return window.GameLogic.phaserGame;
+
+    const config = {
+        type: Phaser.AUTO,
+        parent: 'phaser-app',
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#1a1008',
+        scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
+        input: { activePointers: 3 },
+        physics: { default: 'arcade', arcade: { debug: false } },
+        scene: [ BootScene, MainScene, UIScene ]
+    };
+
+    window.GameLogic.phaserGame = new Phaser.Game(config);
+    return window.GameLogic.phaserGame;
+}
 
 window.getDoghouseFurnitureBaseKey = function(instanceKey, data = {}) {
     if (data && data.furnitureKey) return data.furnitureKey;
