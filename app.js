@@ -20406,7 +20406,6 @@ if (!data.scoreHandled && data.attacker) {
 
         this.tweens.add({ targets: container, y: targetY, duration: 620, ease: 'Back.easeOut' });
     }
-    }
 
     async claimSoloCleaningRewardAndReturn(buttonBg = null, buttonText = null, buttonHit = null) {
         const state = this.getSoloCleaningRoomState();
