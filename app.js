@@ -15106,6 +15106,10 @@ class MainScene extends Phaser.Scene {
                 if (this.isCafe || this.sceneName === "shrine") { 
             this.coinsListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('droppedCoins')), (snap) => { 
                 let data = snap.val() || {}; 
+                if (this.isSoloCleaningRoomIsolationActive && this.isSoloCleaningRoomIsolationActive()) {
+                    this.refreshSoloCleaningRoomIsolationObjects();
+                    return;
+                }
                 for (let key in data) { 
                     let cData = data[key] || {};
                     let coinScene = cData.scene || (key.startsWith('shrine_coin_') ? 'shrine' : 'cafe');
@@ -16406,6 +16410,7 @@ if (!data.scoreHandled && data.attacker) {
         this.fwPlayersHitListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/fireworksHits')), (snap) => { let hits = snap.val() || {}; for (let uid in hits) { if (uid === window.GameLogic.currentUser.uid) continue; let data = hits[uid]; if (data && data.time && (Date.now() - data.time < 2000)) { if (this.otherPlayers[uid] && this.otherPlayers[uid].sprite) { let opSprite = this.otherPlayers[uid].sprite; if (!opSprite.isStunned) { window.playSFX(this, 'bomb'); opSprite.isStunned = true; opSprite.play('fw-hit', true); this.time.delayedCall(1500, () => { if (opSprite && opSprite.active) opSprite.isStunned = false; }); } } } } });
         this.fwDummyHitListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/fireworksDummyHits')), (snap) => { let hits = snap.val() || {}; for (let key in hits) { let data = hits[key]; if (data && data.time && (Date.now() - data.time < 2000) && this.furnitureSprites[key]) { let dummy = this.furnitureSprites[key].sprite; if (dummy && !dummy.isStunned) { window.playSFX(this, 'bomb'); dummy.isStunned = true; dummy.play('dummy-fw-hit', true); this.time.delayedCall(1500, () => { if (dummy && dummy.active) { dummy.isStunned = false; dummy.anims.stop(); dummy.setTexture('dummy'); } }); } } } });
         this.globalFwListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/globalFireworks')), (snap) => {
+            if (this.isSoloCleaningRoomIsolationActive && this.isSoloCleaningRoomIsolationActive()) return;
             let data = snap.val();
             if (!data || !data.time || data.scene !== this.sceneName) return;
 
@@ -16438,6 +16443,7 @@ if (!data.scoreHandled && data.attacker) {
 
         // 補丁 6-2 後續：月光法杖全域祝福，同一張地圖中的玩家都會播放特效與音效。
                     this.moonStaffBlessingListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/moonStaffBlessings')), (snap) => {
+            if (this.isSoloCleaningRoomIsolationActive && this.isSoloCleaningRoomIsolationActive()) return;
             const events = snap.val() || {};
             this.moonStaffRemoteTimes = this.moonStaffRemoteTimes || {};
 
@@ -16471,6 +16477,7 @@ if (!data.scoreHandled && data.attacker) {
         });
 
         this.fwThrowsListener = onValue(ref(window.GameLogic.db, window.getServerRoomPath('serverEvents/fireworkThrows')), (snap) => {
+            if (this.isSoloCleaningRoomIsolationActive && this.isSoloCleaningRoomIsolationActive()) return;
             let throws = snap.val() || {};
             for (let uid in throws) {
                 if (uid === window.GameLogic.currentUser.uid) continue;
@@ -17831,6 +17838,7 @@ if (!data.scoreHandled && data.attacker) {
         if (!Array.isArray(this.soloCleaningRoom.soloMimis)) this.soloCleaningRoom.soloMimis = [];
         if (!Array.isArray(this.soloCleaningRoom.soloGrimes)) this.soloCleaningRoom.soloGrimes = [];
         if (!Array.isArray(this.soloCleaningRoom.soloDirtyProjectiles)) this.soloCleaningRoom.soloDirtyProjectiles = [];
+        if (!Array.isArray(this.soloCleaningRoom.soloFxObjects)) this.soloCleaningRoom.soloFxObjects = [];
         if (!this.soloCleaningRoom.soloPlayerFacing || typeof this.soloCleaningRoom.soloPlayerFacing !== 'object') this.soloCleaningRoom.soloPlayerFacing = { x: 0, y: 1 };
         if (!this.soloCleaningRoom.soloActionButtonMode) this.soloCleaningRoom.soloActionButtonMode = 'clean';
         if (!Number.isFinite(Number(this.soloCleaningRoom.soloPlayerSpeed))) this.soloCleaningRoom.soloPlayerSpeed = 324;
@@ -18405,6 +18413,18 @@ if (!data.scoreHandled && data.attacker) {
             this.closestTrash = null;
         } catch (err) {
             console.warn('[大掃除] 暫時隱藏大廳洋蔥皮失敗，已略過：', err);
+        }
+
+        try {
+            Object.keys(this.coinSprites || {}).forEach(key => remember(this.coinSprites[key]));
+        } catch (err) {
+            console.warn('[大掃除] 暫時隱藏大廳金幣失敗，已略過：', err);
+        }
+
+        try {
+            if (this.clearMoonStaffBlessing) this.clearMoonStaffBlessing();
+        } catch (err) {
+            console.warn('[大掃除] 暫時清除月光法杖特效失敗，已略過：', err);
         }
 
         try {
@@ -19612,6 +19632,179 @@ if (!data.scoreHandled && data.attacker) {
         };
     }
 
+    isSoloCleaningRoomIsolationActive() {
+        return !!(this.soloCleaningRoom && this.soloCleaningRoom.active);
+    }
+
+    refreshSoloCleaningRoomIsolationObjects() {
+        if (!this.isSoloCleaningRoomIsolationActive || !this.isSoloCleaningRoomIsolationActive()) return;
+
+        try {
+            Object.keys(this.coinSprites || {}).forEach(key => {
+                const coin = this.coinSprites[key];
+                if (coin && coin.setVisible) coin.setVisible(false);
+                if (coin && coin.body) coin.body.enable = false;
+            });
+        } catch (_) {}
+
+        try {
+            if (this.lockOnTarget && this.lockOnTarget.setVisible) this.lockOnTarget.setVisible(false);
+        } catch (_) {}
+    }
+
+    turnSoloCleaningMimiTowardRoomCenter(mimi) {
+        if (!mimi || !mimi.sprite) return;
+
+        const bounds = this.getSoloCleaningRoomWorldBounds();
+        const centerX = bounds.x + bounds.width / 2;
+        const centerY = bounds.y + bounds.height / 2;
+        const dx = centerX - mimi.sprite.x;
+        const dy = centerY - mimi.sprite.y;
+        const baseAngle = Math.atan2(dy, dx);
+        const angle = baseAngle + Phaser.Math.FloatBetween(-0.85, 0.85);
+        const speed = Phaser.Math.Between(82, 124);
+
+        mimi.speed = speed;
+        mimi.vx = Math.cos(angle) * speed;
+        mimi.vy = Math.sin(angle) * speed;
+        if (Math.abs(mimi.vx) > 1) mimi.sprite.setFlipX(mimi.vx < 0);
+    }
+
+    createSoloCleaningMimiUi(mimi) {
+        if (!mimi || !mimi.sprite) return;
+
+        const targetText = this.add.text(0, 0, '🎯', {
+            fontSize: '24px',
+            fontFamily: 'Arial, sans-serif',
+            stroke: '#ffffff',
+            strokeThickness: 3
+        }).setOrigin(0.5).setDepth(9630).setVisible(false);
+
+        const hpText = this.add.text(0, 0, '❤❤❤', {
+            fontSize: '16px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ff4f7b',
+            stroke: '#ffffff',
+            strokeThickness: 3
+        }).setOrigin(0.5).setDepth(9629);
+
+        mimi.targetIcon = targetText;
+        mimi.hpText = hpText;
+        this.getSoloCleaningRoomState().objects.push(targetText, hpText);
+        this.updateSoloCleaningMimiHpUi(mimi);
+    }
+
+    updateSoloCleaningMimiHpUi(mimi) {
+        if (!mimi || !mimi.hpText || !mimi.hpText.active) return;
+        const hp = Math.max(0, Math.floor(Number(mimi.hp || 0)));
+        mimi.hpText.setText('❤'.repeat(hp) || '♡');
+    }
+
+    destroySoloCleaningMimiUi(mimi) {
+        if (!mimi) return;
+        try { if (mimi.targetIcon && mimi.targetIcon.destroy) mimi.targetIcon.destroy(); } catch (_) {}
+        try { if (mimi.hpText && mimi.hpText.destroy) mimi.hpText.destroy(); } catch (_) {}
+        mimi.targetIcon = null;
+        mimi.hpText = null;
+    }
+
+    updateSoloCleaningRoomMimiUi() {
+        const state = this.getSoloCleaningRoomState();
+        const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
+        const mimis = state.soloMimis || [];
+        let nearest = null;
+        let nearestDist = 999999;
+
+        mimis.forEach(mimi => {
+            const sprite = mimi && mimi.sprite ? mimi.sprite : null;
+            if (!sprite || !sprite.active) return;
+            if (!mimi.hpText || !mimi.targetIcon) this.createSoloCleaningMimiUi(mimi);
+
+            if (mimi.hpText && mimi.hpText.active) mimi.hpText.setPosition(sprite.x, sprite.y - 58).setVisible(true);
+            if (mimi.targetIcon && mimi.targetIcon.active) mimi.targetIcon.setPosition(sprite.x, sprite.y - 84).setVisible(false);
+
+            if (!player || !player.active) return;
+            const dist = Phaser.Math.Distance.Between(player.x, player.y, sprite.x, sprite.y);
+            if (dist < nearestDist && dist <= 260) {
+                nearest = mimi;
+                nearestDist = dist;
+            }
+        });
+
+        if (nearest && nearest.targetIcon && nearest.targetIcon.active) {
+            nearest.targetIcon.setVisible(true);
+        }
+    }
+
+    spawnSoloCleaningDirtImpactFx(x, y) {
+        const colors = [0xffffff, 0xfff6dd, 0xefe0b8, 0x5a321b, 0x3b2215];
+        for (let i = 0; i < 16; i++) {
+            const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+            const dist = Phaser.Math.Between(18, 54);
+            const p = this.add.circle(x, y, Phaser.Math.Between(3, 8), Phaser.Utils.Array.GetRandom(colors), 0.86)
+                .setDepth(9638)
+                .setBlendMode(Phaser.BlendModes.ADD);
+            this.getSoloCleaningRoomState().objects.push(p);
+            this.tweens.add({
+                targets: p,
+                x: x + Math.cos(angle) * dist,
+                y: y + Math.sin(angle) * dist,
+                alpha: 0,
+                scaleX: 0.25,
+                scaleY: 0.25,
+                duration: Phaser.Math.Between(420, 720),
+                ease: 'Sine.easeOut',
+                onComplete: () => { try { if (p && p.destroy) p.destroy(); } catch (_) {} }
+            });
+        }
+    }
+
+    spawnSoloCleaningSuccessfulPurifyFx() {
+        const state = this.getSoloCleaningRoomState();
+        const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
+        if (!player || !player.active) return;
+
+        const colors = [0xffffff, 0xdffcff, 0x8ffcff, 0x2f7dff, 0x00d4ff];
+        for (let i = 0; i < 34; i++) {
+            const angle = Math.PI * 2 * i / 34 + Phaser.Math.FloatBetween(-0.08, 0.08);
+            const dist = Phaser.Math.Between(72, 154);
+            const p = this.add.circle(player.x, player.y - 10, Phaser.Math.Between(4, 9), Phaser.Utils.Array.GetRandom(colors), 0.92)
+                .setDepth(9644)
+                .setBlendMode(Phaser.BlendModes.ADD);
+            state.objects.push(p);
+            this.tweens.add({
+                targets: p,
+                x: player.x + Math.cos(angle) * dist,
+                y: player.y - 10 + Math.sin(angle) * dist,
+                alpha: 0,
+                scaleX: 0.15,
+                scaleY: 0.15,
+                duration: Phaser.Math.Between(760, 1180),
+                ease: 'Sine.easeOut',
+                onComplete: () => { try { if (p && p.destroy) p.destroy(); } catch (_) {} }
+            });
+        }
+
+        const label = this.add.text(player.x, player.y - 118, '已淨化', {
+            fontSize: '30px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#008cff',
+            strokeThickness: 7
+        }).setOrigin(0.5).setDepth(9648).setBlendMode(Phaser.BlendModes.ADD);
+        state.objects.push(label);
+        this.tweens.add({
+            targets: label,
+            y: label.y - 36,
+            alpha: 0,
+            duration: 3000,
+            ease: 'Sine.easeOut',
+            onComplete: () => { try { if (label && label.destroy) label.destroy(); } catch (_) {} }
+        });
+    }
+
     spawnSoloCleaningRoomMimi(x = null, y = null) {
         const state = this.getSoloCleaningRoomState();
         if (!state.active) return null;
@@ -19619,12 +19812,12 @@ if (!data.scoreHandled && data.attacker) {
 
         const point = Number.isFinite(Number(x)) && Number.isFinite(Number(y))
             ? { x: Number(x), y: Number(y) }
-            : this.getSoloCleaningRoomRandomPoint(130);
-        const speed = Phaser.Math.Between(72, 106);
+            : this.getSoloCleaningRoomRandomPoint(150);
+        const speed = Phaser.Math.Between(82, 124);
         const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
         const sprite = this.physics.add.sprite(point.x, point.y, 'mimi-thief-walk')
             .setDepth(9610)
-            .setDisplaySize(56, 56)
+            .setDisplaySize(85, 85)
             .setCollideWorldBounds(false);
 
         if (sprite.body) {
@@ -19644,9 +19837,12 @@ if (!data.scoreHandled && data.attacker) {
             makingMudUntil: 0,
             mudMade: false,
             nextMudAt: (this.time ? this.time.now : 0) + Phaser.Math.Between(3200, 9000),
-            invulnUntil: 0
+            invulnUntil: 0,
+            targetIcon: null,
+            hpText: null
         };
 
+        this.createSoloCleaningMimiUi(mimi);
         state.soloMimis.push(mimi);
         state.objects.push(sprite);
         return mimi;
@@ -19656,28 +19852,30 @@ if (!data.scoreHandled && data.attacker) {
         const state = this.getSoloCleaningRoomState();
         if (!state.active || state.inputLocked || !state.gameplayStarted || state.shellEnding) return;
 
+        this.refreshSoloCleaningRoomIsolationObjects();
+
         const dt = Math.min(delta || 16, 50) / 1000;
         const bounds = this.getSoloCleaningRoomWorldBounds();
-        const pad = 42;
+        const pad = 70;
         const mimis = state.soloMimis || [];
 
         for (let i = mimis.length - 1; i >= 0; i--) {
             const mimi = mimis[i];
             const sprite = mimi && mimi.sprite ? mimi.sprite : null;
             if (!sprite || !sprite.active) {
+                this.destroySoloCleaningMimiUi(mimi);
                 mimis.splice(i, 1);
                 continue;
             }
 
             if (mimi.state === 'mud') {
-                sprite.y += Math.sin(time / 62) * 0.65;
                 if (time >= mimi.makingMudUntil) {
                     if (!mimi.mudMade) this.spawnSoloCleaningRoomGrimeNear(sprite.x, sprite.y);
                     mimi.state = 'move';
                     mimi.mudMade = false;
                     mimi.nextMudAt = time + Phaser.Math.Between(4200, 10000);
                     const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-                    const speed = Phaser.Math.Between(72, 106);
+                    const speed = Phaser.Math.Between(82, 124);
                     mimi.vx = Math.cos(angle) * speed;
                     mimi.vy = Math.sin(angle) * speed;
                     if (this.anims && this.anims.exists('mimi-walk')) sprite.play('mimi-walk', true);
@@ -19691,7 +19889,22 @@ if (!data.scoreHandled && data.attacker) {
                 mimi.mudMade = false;
                 sprite.setVelocity(0, 0);
                 if (this.tweens) {
-                    this.tweens.add({ targets: sprite, y: sprite.y - 10, yoyo: true, repeat: 5, duration: 160, ease: 'Sine.easeInOut' });
+                    this.tweens.add({
+                        targets: sprite,
+                        y: sprite.y - 28,
+                        scaleX: 1.13,
+                        scaleY: 1.13,
+                        yoyo: true,
+                        repeat: 3,
+                        duration: 240,
+                        ease: 'Sine.easeOut',
+                        onComplete: () => {
+                            if (sprite && sprite.active) {
+                                sprite.setScale(1);
+                                sprite.setDisplaySize(85, 85);
+                            }
+                        }
+                    });
                 }
                 continue;
             }
@@ -19699,14 +19912,16 @@ if (!data.scoreHandled && data.attacker) {
             sprite.x += mimi.vx * dt;
             sprite.y += mimi.vy * dt;
 
+            let touchedWall = false;
             if (sprite.x <= bounds.x + pad || sprite.x >= bounds.x + bounds.width - pad) {
-                mimi.vx *= -1;
                 sprite.x = Phaser.Math.Clamp(sprite.x, bounds.x + pad, bounds.x + bounds.width - pad);
+                touchedWall = true;
             }
             if (sprite.y <= bounds.y + pad || sprite.y >= bounds.y + bounds.height - pad) {
-                mimi.vy *= -1;
                 sprite.y = Phaser.Math.Clamp(sprite.y, bounds.y + pad, bounds.y + bounds.height - pad);
+                touchedWall = true;
             }
+            if (touchedWall) this.turnSoloCleaningMimiTowardRoomCenter(mimi);
 
             if (Math.abs(mimi.vx) > 1) sprite.setFlipX(mimi.vx < 0);
         }
@@ -19723,7 +19938,7 @@ if (!data.scoreHandled && data.attacker) {
     separateSoloCleaningMimis() {
         const state = this.getSoloCleaningRoomState();
         const mimis = state.soloMimis || [];
-        const minDist = 54;
+        const minDist = 88;
 
         for (let i = 0; i < mimis.length; i++) {
             const a = mimis[i];
@@ -19745,10 +19960,10 @@ if (!data.scoreHandled && data.attacker) {
                 a.sprite.y -= ny * push;
                 b.sprite.x += nx * push;
                 b.sprite.y += ny * push;
-                a.vx -= nx * 8;
-                a.vy -= ny * 8;
-                b.vx += nx * 8;
-                b.vy += ny * 8;
+                a.vx -= nx * 12;
+                a.vy -= ny * 12;
+                b.vx += nx * 12;
+                b.vy += ny * 12;
             }
         }
     }
@@ -19777,14 +19992,26 @@ if (!data.scoreHandled && data.attacker) {
     createSoloCleaningRoomGrime(x, y) {
         const state = this.getSoloCleaningRoomState();
         const container = this.add.container(x, y).setDepth(9607);
-        const shadow = this.add.ellipse(0, 7, 86, 30, 0x000000, 0.34);
-        const mud = this.add.ellipse(0, 0, 78, 32, 0x111111, 0.9).setStrokeStyle(2, 0x3f3f3f, 0.78);
-        const shine = this.add.ellipse(-18, -6, 22, 7, 0x5a5a5a, 0.38);
-        const smokeA = this.add.circle(-22, -18, 7, 0x646464, 0.22).setBlendMode(Phaser.BlendModes.ADD);
-        const smokeB = this.add.circle(18, -15, 5, 0x7b7b7b, 0.18).setBlendMode(Phaser.BlendModes.ADD);
+        const shadow = this.add.ellipse(0, 10, 104, 36, 0x000000, 0.32);
+        const parts = [
+            this.add.ellipse(0, 0, 92, 38, 0x111111, 0.92),
+            this.add.ellipse(-25, -4, 42, 28, 0x2a2119, 0.84),
+            this.add.ellipse(22, 1, 46, 30, 0x1a231b, 0.82),
+            this.add.ellipse(3, -10, 54, 24, 0x303030, 0.68),
+            this.add.circle(-38, 3, 14, 0x0b0b0b, 0.86),
+            this.add.circle(38, -2, 12, 0x3b2a18, 0.74)
+        ];
+        const shine = this.add.ellipse(-16, -9, 26, 7, 0x6b6b60, 0.26).setBlendMode(Phaser.BlendModes.ADD);
+        const smokeA = this.add.circle(-28, -24, 9, 0x646464, 0.22).setBlendMode(Phaser.BlendModes.ADD);
+        const smokeB = this.add.circle(24, -20, 7, 0x7b6b5a, 0.18).setBlendMode(Phaser.BlendModes.ADD);
 
-        container.add([shadow, mud, shine, smokeA, smokeB]);
-        this.tweens.add({ targets: [smokeA, smokeB], y: '-=12', alpha: 0.04, yoyo: true, repeat: -1, duration: 1200, ease: 'Sine.easeInOut' });
+        parts.forEach(part => part.setStrokeStyle(2, 0x050505, 0.28));
+        container.add([shadow, ...parts, shine, smokeA, smokeB]);
+        container.__grimeParts = parts;
+
+        this.tweens.add({ targets: parts, scaleX: 1.08, scaleY: 0.92, yoyo: true, repeat: -1, duration: 740, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: [smokeA, smokeB], y: '-=16', alpha: 0.04, yoyo: true, repeat: -1, duration: 1200, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: container, angle: 2.4, yoyo: true, repeat: -1, duration: 980, ease: 'Sine.easeInOut' });
 
         const grime = { container, x, y, hp: 3, maxHp: 3 };
         state.soloGrimes.push(grime);
@@ -19795,40 +20022,65 @@ if (!data.scoreHandled && data.attacker) {
     throwSoloCleaningDirtAtPlayer() {
         const state = this.getSoloCleaningRoomState();
         const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
-        const available = (state.soloMimis || []).filter(mimi => mimi && mimi.sprite && mimi.sprite.active);
+        const available = (state.soloMimis || []).filter(mimi => mimi && mimi.sprite && mimi.sprite.active && mimi.state !== 'mud');
         if (!state.active || !player || !available.length) return;
 
         const mimi = Phaser.Utils.Array.GetRandom(available);
         const sprite = mimi.sprite;
-        const dx = player.x - sprite.x;
-        const dy = player.y - sprite.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const approachX = sprite.x + dx / dist * Math.min(96, dist * 0.35);
-        const approachY = sprite.y + dy / dist * Math.min(96, dist * 0.35);
+        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        const distance = Phaser.Math.Between(130, 175);
+        const bounds = this.getSoloCleaningRoomWorldBounds();
+        const approachX = Phaser.Math.Clamp(player.x + Math.cos(angle) * distance, bounds.x + 90, bounds.x + bounds.width - 90);
+        const approachY = Phaser.Math.Clamp(player.y + Math.sin(angle) * distance, bounds.y + 90, bounds.y + bounds.height - 90);
 
-        this.tweens.add({ targets: sprite, x: approachX, y: approachY, duration: 280, ease: 'Sine.easeOut' });
-
-        const projectile = this.add.circle(sprite.x, sprite.y - 10, 10, 0xd8b56b, 0.95)
-            .setDepth(9626)
-            .setStrokeStyle(2, 0xfff1a8, 0.86)
-            .setBlendMode(Phaser.BlendModes.ADD);
-        projectile.__soloCleaningDirt = true;
-        projectile.__targetPlayer = player;
-
-        state.soloDirtyProjectiles.push(projectile);
-        state.objects.push(projectile);
-
+        mimi.state = 'attack';
+        mimi.vx = 0;
+        mimi.vy = 0;
         this.tweens.add({
-            targets: projectile,
-            x: player.x,
-            y: player.y - 12,
-            scaleX: 1.35,
-            scaleY: 1.35,
-            duration: 720,
-            ease: 'Sine.easeIn',
+            targets: sprite,
+            x: approachX,
+            y: approachY,
+            duration: 520,
+            ease: 'Sine.easeOut',
             onComplete: () => {
-                try { if (projectile && projectile.destroy) projectile.destroy(); } catch (_) {}
-                state.soloDirtyProjectiles = (state.soloDirtyProjectiles || []).filter(item => item !== projectile);
+                const st = this.getSoloCleaningRoomState();
+                const pl = st.soloPlayerEntity && st.soloPlayerEntity.sprite ? st.soloPlayerEntity.sprite : null;
+                if (!st.active || !pl || !sprite || !sprite.active) return;
+
+                const shot = this.add.container(sprite.x, sprite.y - 16).setDepth(9626);
+                const core = this.add.circle(0, 0, 13, 0xffffff, 0.94).setBlendMode(Phaser.BlendModes.ADD);
+                const glow = this.add.circle(0, 0, 23, 0xfff4d6, 0.28).setBlendMode(Phaser.BlendModes.ADD);
+                const chipA = this.add.circle(-9, 5, 5, 0x5a321b, 0.88);
+                const chipB = this.add.circle(8, -5, 4, 0x3b2215, 0.78);
+                shot.add([glow, core, chipA, chipB]);
+                shot.__soloCleaningDirt = true;
+                shot.__targetPlayer = pl;
+
+                st.soloDirtyProjectiles.push(shot);
+                st.objects.push(shot);
+
+                this.tweens.add({ targets: shot, angle: 360, duration: 620, ease: 'Linear' });
+                this.tweens.add({
+                    targets: shot,
+                    x: pl.x,
+                    y: pl.y - 12,
+                    scaleX: 1.35,
+                    scaleY: 1.35,
+                    duration: 620,
+                    ease: 'Sine.easeIn',
+                    onComplete: () => {
+                        if (shot && shot.active) {
+                            this.spawnSoloCleaningDirtImpactFx(shot.x, shot.y);
+                            this.applySoloCleaningDirtyState();
+                        }
+                        try { if (shot && shot.destroy) shot.destroy(true); } catch (_) {}
+                        st.soloDirtyProjectiles = (st.soloDirtyProjectiles || []).filter(item => item !== shot);
+                    }
+                });
+
+                mimi.state = 'move';
+                mimi.nextMudAt = Math.max(Number(mimi.nextMudAt || 0), this.time.now + 1800);
+                this.turnSoloCleaningMimiTowardRoomCenter(mimi);
             }
         });
     }
@@ -19847,10 +20099,11 @@ if (!data.scoreHandled && data.attacker) {
 
             const dx = projectile.x - player.x;
             const dy = projectile.y - (player.y - 12);
-            if (Math.sqrt(dx * dx + dy * dy) <= 34) {
+            if (Math.sqrt(dx * dx + dy * dy) <= 42) {
                 projectile.__hitPlayer = true;
+                this.spawnSoloCleaningDirtImpactFx(projectile.x, projectile.y);
                 this.applySoloCleaningDirtyState();
-                try { if (projectile.destroy) projectile.destroy(); } catch (_) {}
+                try { if (projectile.destroy) projectile.destroy(true); } catch (_) {}
                 state.soloDirtyProjectiles.splice(i, 1);
             }
         }
@@ -19872,14 +20125,20 @@ if (!data.scoreHandled && data.attacker) {
         try { if (state.soloDirtyFx && state.soloDirtyFx.destroy) state.soloDirtyFx.destroy(true); } catch (_) {}
 
         const container = this.add.container(0, 0).setDepth(9635);
-        const stinkA = this.add.text(-20, -42, '✦', { fontSize: '18px', color: '#5f4a1a' }).setOrigin(0.5);
-        const stinkB = this.add.text(18, -48, '☁', { fontSize: '20px', color: '#6b5a2c' }).setOrigin(0.5);
-        const speckA = this.add.circle(-14, -22, 5, 0x6f5526, 0.75);
-        const speckB = this.add.circle(16, -24, 4, 0x8b6a2d, 0.68);
-        container.add([stinkA, stinkB, speckA, speckB]);
+        const cloudA = this.add.ellipse(-22, -48, 46, 24, 0x2c281f, 0.58).setBlendMode(Phaser.BlendModes.ADD);
+        const cloudB = this.add.ellipse(24, -54, 42, 22, 0x203121, 0.52).setBlendMode(Phaser.BlendModes.ADD);
+        const cloudC = this.add.ellipse(0, -30, 58, 26, 0x3b2a18, 0.48).setBlendMode(Phaser.BlendModes.ADD);
+        const stinkA = this.add.text(-34, -68, '☁', { fontSize: '28px', color: '#2f2a1e' }).setOrigin(0.5);
+        const stinkB = this.add.text(28, -72, '✦', { fontSize: '24px', color: '#314122' }).setOrigin(0.5);
+        const stinkC = this.add.text(0, -84, '臭', { fontSize: '18px', fontStyle: 'bold', color: '#4b3218', stroke: '#1b1208', strokeThickness: 3 }).setOrigin(0.5);
+        const speckA = this.add.circle(-28, -22, 7, 0x4a321a, 0.82);
+        const speckB = this.add.circle(26, -26, 6, 0x1f2f1d, 0.76);
+        const speckC = this.add.circle(4, -18, 5, 0x151515, 0.72);
+        container.add([cloudA, cloudB, cloudC, stinkA, stinkB, stinkC, speckA, speckB, speckC]);
 
-        this.tweens.add({ targets: [stinkA, stinkB], y: '-=12', alpha: 0.32, yoyo: true, repeat: -1, duration: 760, ease: 'Sine.easeInOut' });
-        this.tweens.add({ targets: [speckA, speckB], scaleX: 1.35, scaleY: 1.35, alpha: 0.35, yoyo: true, repeat: -1, duration: 520, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: [cloudA, cloudB, cloudC], scaleX: 1.24, scaleY: 1.12, alpha: 0.28, yoyo: true, repeat: -1, duration: 820, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: [stinkA, stinkB, stinkC], y: '-=18', alpha: 0.38, yoyo: true, repeat: -1, duration: 940, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: [speckA, speckB, speckC], scaleX: 1.55, scaleY: 1.55, alpha: 0.32, yoyo: true, repeat: -1, duration: 560, ease: 'Sine.easeInOut' });
 
         state.soloDirtyFx = container;
         state.objects.push(container);
@@ -19926,7 +20185,16 @@ if (!data.scoreHandled && data.attacker) {
         if (state.soloActionButtonBg) {
             this.tweens.add({ targets: state.soloActionButtonBg, scaleX: 0.9, scaleY: 0.9, yoyo: true, duration: 80 });
         }
-        this.spawnSoloCleaningBubbleFx(state.soloWashbasin ? state.soloWashbasin.x : 0, state.soloWashbasin ? state.soloWashbasin.y : 0);
+
+        const basinX = state.soloWashbasin ? state.soloWashbasin.x : 0;
+        const basinY = state.soloWashbasin ? state.soloWashbasin.y : 0;
+        this.spawnSoloCleaningBubbleFx(basinX, basinY);
+
+        const nextCleanliness = Math.min(100, Math.max(0, Number(state.cleanliness || 0) + 1));
+        if (nextCleanliness !== state.cleanliness) {
+            state.cleanliness = nextCleanliness;
+            this.updateSoloCleaningRoomUi();
+        }
 
         if (!state.soloDirtyState) return;
 
@@ -19942,27 +20210,29 @@ if (!data.scoreHandled && data.attacker) {
             try { state.soloDirtyFx.destroy(true); } catch (_) {}
         }
         state.soloDirtyFx = null;
-        this.spawnSoloCleaningPurifyFx(state.soloWashbasin ? state.soloWashbasin.x : 0, state.soloWashbasin ? state.soloWashbasin.y : 0);
+        this.spawnSoloCleaningSuccessfulPurifyFx();
         this.updateSoloCleaningRoomUi();
     }
 
     spawnSoloCleaningBubbleFx(x, y) {
-        for (let i = 0; i < 8; i++) {
+        const colors = [0xdffcff, 0x8ffcff, 0x2577ff, 0x0a3dff, 0xffffff];
+        for (let i = 0; i < 18; i++) {
             const b = this.add.circle(
-                x + Phaser.Math.Between(-28, 28),
-                y + Phaser.Math.Between(-18, 18),
-                Phaser.Math.Between(4, 8),
-                0xdffcff,
-                0.72
+                x + Phaser.Math.Between(-54, 54),
+                y + Phaser.Math.Between(-28, 22),
+                Phaser.Math.Between(4, 11),
+                Phaser.Utils.Array.GetRandom(colors),
+                Phaser.Math.FloatBetween(0.58, 0.88)
             ).setDepth(9634).setBlendMode(Phaser.BlendModes.ADD);
             this.getSoloCleaningRoomState().objects.push(b);
             this.tweens.add({
                 targets: b,
-                y: b.y - Phaser.Math.Between(24, 52),
+                y: b.y - Phaser.Math.Between(48, 112),
+                x: b.x + Phaser.Math.Between(-22, 22),
                 alpha: 0,
-                scaleX: 1.45,
-                scaleY: 1.45,
-                duration: Phaser.Math.Between(420, 720),
+                scaleX: Phaser.Math.FloatBetween(1.35, 2.25),
+                scaleY: Phaser.Math.FloatBetween(1.35, 2.25),
+                duration: Phaser.Math.Between(680, 1120),
                 ease: 'Sine.easeOut',
                 onComplete: () => { try { if (b && b.destroy) b.destroy(); } catch (_) {} }
             });
@@ -20011,7 +20281,7 @@ if (!data.scoreHandled && data.attacker) {
 
                 const dx = ball.x - sprite.x;
                 const dy = ball.y - sprite.y;
-                if (Math.sqrt(dx * dx + dy * dy) <= 38) {
+                if (Math.sqrt(dx * dx + dy * dy) <= 58) {
                     didHit = true;
                     this.hitSoloCleaningRoomMimi(mimi);
                 }
@@ -20044,8 +20314,9 @@ if (!data.scoreHandled && data.attacker) {
         if (!mimi || !mimi.sprite || !mimi.sprite.active) return;
 
         mimi.hp = Math.max(0, Number(mimi.hp || 0) - 1);
+        this.updateSoloCleaningMimiHpUi(mimi);
         this.tweens.add({ targets: mimi.sprite, alpha: 0.36, yoyo: true, duration: 80, repeat: 2 });
-        this.tweens.add({ targets: mimi.sprite, scaleX: 1.16, scaleY: 1.16, yoyo: true, duration: 90 });
+        this.tweens.add({ targets: mimi.sprite, scaleX: 1.16, scaleY: 1.16, yoyo: true, duration: 90, onComplete: () => { if (mimi.sprite && mimi.sprite.active) mimi.sprite.setDisplaySize(85, 85); } });
 
         if (mimi.hp > 0) return;
 
@@ -20053,6 +20324,7 @@ if (!data.scoreHandled && data.attacker) {
         const x = sprite.x;
         const y = sprite.y;
         state.soloMimis = (state.soloMimis || []).filter(item => item !== mimi);
+        this.destroySoloCleaningMimiUi(mimi);
         state.mouseCount = Math.max(0, Math.floor(Number(state.mouseCount || 0))) + 1;
         this.spawnSoloCleaningPurifyFx(x, y);
         try { window.playSFX(this, 'mimi-thief-get-down'); } catch (_) {}
@@ -20093,6 +20365,7 @@ if (!data.scoreHandled && data.attacker) {
                 try { if (ball && ball.destroy) ball.destroy(); } catch (_) {}
             });
             (state.soloMimis || []).forEach(mimi => {
+                this.destroySoloCleaningMimiUi(mimi);
                 try { if (mimi && mimi.sprite && mimi.sprite.destroy) mimi.sprite.destroy(); } catch (_) {}
             });
             (state.soloGrimes || []).forEach(grime => {
@@ -20104,6 +20377,9 @@ if (!data.scoreHandled && data.attacker) {
             try { if (state.soloWashbasin && state.soloWashbasin.destroy) state.soloWashbasin.destroy(); } catch (_) {}
             try { if (state.soloWashbasinAura && state.soloWashbasinAura.destroy) state.soloWashbasinAura.destroy(); } catch (_) {}
             try { if (state.soloDirtyFx && state.soloDirtyFx.destroy) state.soloDirtyFx.destroy(true); } catch (_) {}
+            (state.soloFxObjects || []).forEach(obj => {
+                try { if (obj && obj.destroy) obj.destroy(true); } catch (_) {}
+            });
         } catch (_) {}
 
         if (destroyObjects) {
@@ -20122,6 +20398,7 @@ if (!data.scoreHandled && data.attacker) {
         state.soloMimis = [];
         state.soloGrimes = [];
         state.soloDirtyProjectiles = [];
+        state.soloFxObjects = [];
         state.soloWashbasin = null;
         state.soloWashbasinAura = null;
         state.soloDirtyFx = null;
@@ -20154,6 +20431,7 @@ if (!data.scoreHandled && data.attacker) {
         if (this.waterPromptText) this.waterPromptText.setVisible(false);
         if (this.lockOnTarget) this.lockOnTarget.setVisible(false);
         if (this.placePrompt) this.placePrompt.setVisible(false);
+        this.refreshSoloCleaningRoomIsolationObjects();
 
         const locked = !!(state.inputLocked || !state.gameplayStarted || state.shellEnding);
         if (state.soloActionUiContainer && state.soloActionUiContainer.setAlpha) {
@@ -20228,6 +20506,7 @@ if (!data.scoreHandled && data.attacker) {
 
         this.updateSoloCleaningRoomWashbasinMode();
         this.updateSoloCleaningRoomDirtyFx();
+        this.updateSoloCleaningRoomMimiUi();
         this.cameras.main.startFollow(player, true, 0.12, 0.12);
     }
 
@@ -20369,6 +20648,7 @@ if (!data.scoreHandled && data.attacker) {
         state.soloMimis = [];
         state.soloGrimes = [];
         state.soloDirtyProjectiles = [];
+        state.soloFxObjects = [];
         state.soloWashbasin = null;
         state.soloWashbasinAura = null;
         state.soloDirtyFx = null;
@@ -27893,8 +28173,9 @@ entity.showOffRainbowTween = this.tweens.add({
     }
 }
     playGlobalFireworks() {
+        if (this.isSoloCleaningRoomIsolationActive && this.isSoloCleaningRoomIsolationActive()) return;
         window.playSFX(this, 'fireworks-in-the-sky'); let cam = this.cameras.main; let colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff, 0xff8800];
-        for (let i = 0; i < 7; i++) { this.time.delayedCall(i * 500, () => { let x = cam.scrollX + Phaser.Math.Between(100, cam.width - 100); let y = cam.scrollY + Phaser.Math.Between(100, cam.height - 100); let mixColors = [Phaser.Utils.Array.GetRandom(colors), Phaser.Utils.Array.GetRandom(colors), Phaser.Utils.Array.GetRandom(colors)]; let emitter = this.add.particles(x, y, 'fw-particle', { speed: { min: 200, max: 450 }, angle: { min: 0, max: 360 }, scale: { start: 2, end: 0 }, blendMode: 'ADD', tint: mixColors, lifespan: { min: 1500, max: 3000 }, gravityY: 150, quantity: 100 }); emitter.setDepth(200); emitter.explode(); let flash = this.add.circle(x, y, 150, mixColors[0], 0.5).setDepth(199).setBlendMode('ADD'); this.tweens.add({ targets: flash, alpha: 0, scale: 2.5, duration: 600, onComplete: () => flash.destroy() }); this.time.delayedCall(3000, () => emitter.destroy()); }); }
+        for (let i = 0; i < 7; i++) { this.time.delayedCall(i * 500, () => { if (this.isSoloCleaningRoomIsolationActive && this.isSoloCleaningRoomIsolationActive()) return; let x = cam.scrollX + Phaser.Math.Between(100, cam.width - 100); let y = cam.scrollY + Phaser.Math.Between(100, cam.height - 100); let mixColors = [Phaser.Utils.Array.GetRandom(colors), Phaser.Utils.Array.GetRandom(colors), Phaser.Utils.Array.GetRandom(colors)]; let emitter = this.add.particles(x, y, 'fw-particle', { speed: { min: 200, max: 450 }, angle: { min: 0, max: 360 }, scale: { start: 2, end: 0 }, blendMode: 'ADD', tint: mixColors, lifespan: { min: 1500, max: 3000 }, gravityY: 150, quantity: 100 }); emitter.setDepth(200); emitter.explode(); let flash = this.add.circle(x, y, 150, mixColors[0], 0.5).setDepth(199).setBlendMode('ADD'); this.tweens.add({ targets: flash, alpha: 0, scale: 2.5, duration: 600, onComplete: () => flash.destroy() }); this.time.delayedCall(3000, () => emitter.destroy()); }); }
     }
     spawnTrash() {
         if (!this.isCafe) return;
