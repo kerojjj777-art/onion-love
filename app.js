@@ -18903,7 +18903,15 @@ if (!data.scoreHandled && data.attacker) {
             strokeThickness: 5
         }).setOrigin(0.5);
 
-        container.add([dim, glowTop, glowBottom, glowLeft, glowRight, frame, titleBg, title]);
+        const hint = this.add.text(rect.centerX, rect.y + rect.h - 26, '開場演出中，正式操作由下一包接上', {
+            fontSize: cam.width <= 420 ? '12px' : '14px',
+            fontFamily: 'Arial, sans-serif',
+            color: '#fff4cc',
+            stroke: '#3b1f0d',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+
+        container.add([dim, glowTop, glowBottom, glowLeft, glowRight, frame, titleBg, title, hint]);
         state.layerContainer = container;
         state.objects.push(container);
         return container;
@@ -19384,25 +19392,15 @@ if (!data.scoreHandled && data.attacker) {
         let nearest = null;
         let nearestDist = range + 1;
 
-        const checkCandidate = (type, target, sprite, icon) => {
-            if (!sprite || !sprite.active) return;
-            const dist = Phaser.Math.Distance.Between(player.x, player.y, sprite.x, sprite.y);
-            if (dist <= range && dist < nearestDist) {
-                nearest = { type, target, sprite, icon };
-                nearestDist = dist;
-            }
-        };
-
         (state.soloMimis || []).forEach(mimi => {
             const sprite = mimi && mimi.sprite ? mimi.sprite : null;
             if (!sprite || !sprite.active || Number(mimi.hp || 0) <= 0) return;
-            checkCandidate('mimi', mimi, sprite, '🎯');
-        });
 
-        (state.soloGrimes || []).forEach(grime => {
-            const sprite = grime && grime.container ? grime.container : null;
-            if (!sprite || !sprite.active || Number(grime.hp || 0) <= 0) return;
-            checkCandidate('grime', grime, sprite, '🧹');
+            const dist = Phaser.Math.Distance.Between(player.x, player.y, sprite.x, sprite.y);
+            if (dist <= range && dist < nearestDist) {
+                nearest = mimi;
+                nearestDist = dist;
+            }
         });
 
         return nearest;
@@ -19790,10 +19788,7 @@ if (!data.scoreHandled && data.attacker) {
     updateSoloCleaningRoomMimiUi() {
         const state = this.getSoloCleaningRoomState();
         const mimis = state.soloMimis || [];
-        const grimes = state.soloGrimes || [];
         const nearest = this.getSoloCleaningAutoLockTarget ? this.getSoloCleaningAutoLockTarget(320) : null;
-        const nearestType = nearest && nearest.type ? nearest.type : '';
-        const nearestTarget = nearest && nearest.target ? nearest.target : null;
 
         mimis.forEach(mimi => {
             const sprite = mimi && mimi.sprite ? mimi.sprite : null;
@@ -19801,26 +19796,7 @@ if (!data.scoreHandled && data.attacker) {
             if (!mimi.hpText || !mimi.targetIcon) this.createSoloCleaningMimiUi(mimi);
 
             if (mimi.hpText && mimi.hpText.active) mimi.hpText.setPosition(sprite.x, sprite.y - 58).setVisible(true);
-            if (mimi.targetIcon && mimi.targetIcon.active) {
-                mimi.targetIcon.setText('🎯').setPosition(sprite.x, sprite.y - 84).setVisible(nearestType === 'mimi' && nearestTarget === mimi);
-            }
-        });
-
-        grimes.forEach(grime => {
-            const sprite = grime && grime.container ? grime.container : null;
-            if (!sprite || !sprite.active) return;
-
-            if (!grime.targetIcon || !grime.targetIcon.active) {
-                grime.targetIcon = this.add.text(sprite.x, sprite.y - 62, '🧹', {
-                    fontSize: '24px',
-                    fontFamily: 'Arial, sans-serif',
-                    stroke: '#ffffff',
-                    strokeThickness: 3
-                }).setOrigin(0.5).setDepth(9630).setVisible(false);
-                state.objects.push(grime.targetIcon);
-            }
-
-            grime.targetIcon.setPosition(sprite.x, sprite.y - 62).setVisible(nearestType === 'grime' && nearestTarget === grime);
+            if (mimi.targetIcon && mimi.targetIcon.active) mimi.targetIcon.setPosition(sprite.x, sprite.y - 84).setVisible(mimi === nearest);
         });
     }
 
@@ -20064,29 +20040,6 @@ if (!data.scoreHandled && data.attacker) {
         const speed = 205;
         sprite.x += (dx / dist) * speed * dt;
         sprite.y += (dy / dist) * speed * dt;
-
-        const basin = state.soloWashbasin && state.soloWashbasin.active ? state.soloWashbasin : null;
-        if (basin) {
-            const safeRadius = 150;
-            let awayX = sprite.x - basin.x;
-            let awayY = sprite.y - basin.y;
-            let awayDist = Math.sqrt(awayX * awayX + awayY * awayY);
-
-            if (awayDist < safeRadius) {
-                if (awayDist < 0.001) {
-                    awayX = basin.x - player.x;
-                    awayY = basin.y - player.y;
-                    awayDist = Math.sqrt(awayX * awayX + awayY * awayY) || 1;
-                }
-
-                sprite.x = basin.x + (awayX / awayDist) * safeRadius;
-                sprite.y = basin.y + (awayY / awayDist) * safeRadius;
-            }
-        }
-
-        const bounds = this.getSoloCleaningRoomWorldBounds ? this.getSoloCleaningRoomWorldBounds() : { x: 0, y: 0, width: 2048, height: 2048 };
-        sprite.x = Phaser.Math.Clamp(sprite.x, bounds.x + 60, bounds.x + bounds.width - 60);
-        sprite.y = Phaser.Math.Clamp(sprite.y, bounds.y + 60, bounds.y + bounds.height - 60);
         sprite.setFlipX(dx < 0);
         this.updateSoloCleaningBigMimiVisuals(boss);
 
@@ -20182,7 +20135,7 @@ if (!data.scoreHandled && data.attacker) {
         if (!state.active || state.shellEnding) return;
 
         const cam = this.cameras.main;
-        const overlay = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x020204, 0.62)
+        const overlay = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x020204, 0.82)
             .setDepth(9840)
             .setScrollFactor(0);
         state.soloOutageOverlay = overlay;
@@ -20202,19 +20155,19 @@ if (!data.scoreHandled && data.attacker) {
 
         const targets = [];
         const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
-        if (player && player.active) targets.push({ sprite: player, radius: 128, color: 0x8ffcff, alpha: 0.68 });
-        if (state.soloWashbasin && state.soloWashbasin.active) targets.push({ sprite: state.soloWashbasin, radius: 124, color: 0xa7ffbd, alpha: 0.66 });
-        if (state.soloBigMimi && state.soloBigMimi.sprite && state.soloBigMimi.sprite.active) {
-            targets.push({ sprite: state.soloBigMimi.sprite, radius: 168, color: 0xff3333, alpha: 0.72 });
-        }
+        if (player && player.active) targets.push({ sprite: player, radius: 112, color: 0x8ffcff, alpha: 0.36 });
+        if (state.soloWashbasin && state.soloWashbasin.active) targets.push({ sprite: state.soloWashbasin, radius: 104, color: 0xa7ffbd, alpha: 0.34 });
         (state.soloMimis || []).forEach(mimi => {
-            if (mimi && mimi.sprite && mimi.sprite.active) targets.push({ sprite: mimi.sprite, radius: 98, color: 0xffc15a, alpha: 0.56 });
+            if (mimi && mimi.sprite && mimi.sprite.active) targets.push({ sprite: mimi.sprite, radius: 86, color: 0xffc15a, alpha: 0.32 });
         });
         (state.soloGrimes || []).forEach(grime => {
-            if (grime && grime.container && grime.container.active) targets.push({ sprite: grime.container, radius: 62, color: 0x617044, alpha: 0.18 });
+            if (grime && grime.container && grime.container.active) targets.push({ sprite: grime.container, radius: 58, color: 0x617044, alpha: 0.14 });
         });
+        if (state.soloBigMimi && state.soloBigMimi.sprite && state.soloBigMimi.sprite.active) {
+            targets.push({ sprite: state.soloBigMimi.sprite, radius: 146, color: 0xff3333, alpha: 0.42 });
+        }
 
-        targets.slice(0, 28).forEach(item => {
+        targets.slice(0, 20).forEach(item => {
             const glow = this.add.circle(item.sprite.x, item.sprite.y, item.radius, item.color, item.alpha || 0.28)
                 .setDepth(9842)
                 .setBlendMode(Phaser.BlendModes.ADD);
@@ -20222,7 +20175,7 @@ if (!data.scoreHandled && data.attacker) {
             state.soloOutageGlows.push(glow);
             state.soloOutageObjects.push(glow);
             state.objects.push(glow);
-            this.tweens.add({ targets: glow, alpha: Math.min(0.78, (item.alpha || 0.28) + 0.12), scaleX: 1.08, scaleY: 1.08, yoyo: true, repeat: -1, duration: 520, ease: 'Sine.easeInOut' });
+            this.tweens.add({ targets: glow, alpha: Math.min(0.52, (item.alpha || 0.28) + 0.16), scaleX: 1.1, scaleY: 1.1, yoyo: true, repeat: -1, duration: 520, ease: 'Sine.easeInOut' });
         });
     }
 
@@ -20273,10 +20226,10 @@ if (!data.scoreHandled && data.attacker) {
         const grimeCount = Math.max(0, Math.floor(Number(state.grimeCount || 0)));
         const deodorizeCount = Math.max(0, Math.floor(Number(state.deodorizeCount || 0)));
         const cleanliness = Math.max(0, Math.min(100, Number(state.cleanliness || 0)));
-        const baseScore = Math.max(0, mouseCount * 10 + grimeCount * 8 + Math.min(deodorizeCount, 8) * 3 + cleanliness * 0.7);
-        const multiplier = cleanliness >= 90 ? 1.05 : (cleanliness >= 80 ? 0.95 : (cleanliness >= 65 ? 0.88 : (cleanliness >= 45 ? 0.7 : 0.5)));
+        const baseScore = Math.max(0, mouseCount * 32 + grimeCount * 24 + Math.min(deodorizeCount, 10) * 6 + cleanliness * 1.6);
+        const multiplier = cleanliness >= 90 ? 1.05 : (cleanliness >= 70 ? 0.92 : (cleanliness >= 45 ? 0.72 : 0.5));
         const failed = !!state.soloFailed;
-        const reward = Math.max(0, Math.min(850, Math.floor(failed ? baseScore * multiplier * 0.35 : baseScore * multiplier)));
+        const reward = Math.max(0, Math.min(1500, Math.floor(failed ? baseScore * multiplier * 0.35 : baseScore * multiplier)));
 
         return {
             mouseCount,
@@ -20288,7 +20241,7 @@ if (!data.scoreHandled && data.attacker) {
             failed
         };
     }
-  
+
     checkSoloCleaningCleanlinessFail() {
         const state = this.getSoloCleaningRoomState();
         if (!state.active || state.shellEnding) return false;
@@ -20309,8 +20262,8 @@ if (!data.scoreHandled && data.attacker) {
         const data = this.getSoloCleaningResultData();
         state.soloResultData = data;
 
-        const panelW = Math.min(500, cam.width - 34);
-        const panelH = 370;
+        const panelW = Math.min(430, cam.width - 34);
+        const panelH = 350;
         const x = cam.width / 2;
         const targetY = cam.height / 2;
         const startY = -panelH;
@@ -20325,12 +20278,12 @@ if (!data.scoreHandled && data.attacker) {
         bg.strokeRoundedRect(-panelW / 2 + 9, -panelH / 2 + 9, panelW - 18, panelH - 18, 15);
 
         const title = this.add.text(0, -panelH / 2 + 42, '大掃除表現', {
-            fontSize: '28px',
+            fontSize: '30px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#eafffb',
             stroke: '#00343c',
-            strokeThickness: 5
+            strokeThickness: 6
         }).setOrigin(0.5);
 
         const cleanText = data.cleanliness >= 99.95 ? '100.0' : data.cleanliness.toFixed(1);
@@ -20343,38 +20296,36 @@ if (!data.scoreHandled && data.attacker) {
             `獲得馬德幣：${data.reward}`
         ];
 
-        const body = this.add.text(-panelW / 2 + 50, -panelH / 2 + 90, lines.join('\n'), {
+        const body = this.add.text(-panelW / 2 + 46, -panelH / 2 + 88, lines.join('\n'), {
             fontSize: '20px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#fff7d6',
             stroke: '#00151d',
             strokeThickness: 4,
-            lineSpacing: 10
+            lineSpacing: 9
         }).setOrigin(0, 0);
 
-        const failText = this.add.text(0, panelH / 2 - 92, data.failed ? '潔淨度歸零，獎勵已套用折減' : '', {
+        const failText = this.add.text(0, panelH / 2 - 88, data.failed ? '潔淨度歸零，獎勵已套用折減' : '清理完成，準備領取獎勵！', {
             fontSize: '14px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
-            color: '#ffb7b7',
+            color: data.failed ? '#ffb7b7' : '#a7ffbd',
             stroke: '#000000',
             strokeThickness: 3
         }).setOrigin(0.5);
 
-        const btnBg = this.add.rectangle(0, panelH / 2 - 46, panelW - 96, 50, 0x1ed760, 0.92)
+        const btnBg = this.add.rectangle(0, panelH / 2 - 40, panelW - 86, 48, 0x1ed760, 0.92)
             .setStrokeStyle(3, 0xffffff, 0.86)
             .setInteractive({ useHandCursor: true });
-        const btnText = this.add.text(0, panelH / 2 - 46, '領取獎勵並返回', {
+        const btnText = this.add.text(0, panelH / 2 - 40, '領取獎勵並返回', {
             fontSize: '20px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#06230f',
             stroke: '#ffffff',
             strokeThickness: 3
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-        const btnHit = this.add.rectangle(0, panelH / 2 - 46, panelW - 72, 60, 0xffffff, 0.001)
-            .setInteractive({ useHandCursor: true });
+        }).setOrigin(0.5);
         const errorText = this.add.text(0, panelH / 2 - 12, '', {
             fontSize: '13px',
             fontFamily: 'Arial, sans-serif',
@@ -20384,11 +20335,8 @@ if (!data.scoreHandled && data.attacker) {
             strokeThickness: 3
         }).setOrigin(0.5);
 
-        const handleClaim = () => this.claimSoloCleaningRewardAndReturn(btnBg, btnText, btnHit);
-        btnBg.on('pointerdown', handleClaim);
-        btnText.on('pointerdown', handleClaim);
-        btnHit.on('pointerdown', handleClaim);
-        container.add([bg, title, body, failText, btnBg, btnText, btnHit, errorText]);
+        btnBg.on('pointerdown', () => this.claimSoloCleaningRewardAndReturn(btnBg, btnText));
+        container.add([bg, title, body, failText, btnBg, btnText, errorText]);
         state.soloResultPanel = container;
         state.soloResultErrorText = errorText;
         state.soloResultObjects.push(container);
@@ -20397,34 +20345,23 @@ if (!data.scoreHandled && data.attacker) {
         this.tweens.add({ targets: container, y: targetY, duration: 620, ease: 'Back.easeOut' });
     }
 
-    async claimSoloCleaningRewardAndReturn(buttonBg = null, buttonText = null, buttonHit = null) {
+    async claimSoloCleaningRewardAndReturn(buttonBg = null, buttonText = null) {
         const state = this.getSoloCleaningRoomState();
         if (!state.active || state.soloRewardPending || state.soloRewardClaimed) return;
 
-        const restoreButton = () => {
-            [buttonBg, buttonText, buttonHit].forEach(obj => {
-                if (obj && obj.setInteractive) obj.setInteractive({ useHandCursor: true });
-            });
-            if (buttonBg && buttonBg.setAlpha) buttonBg.setAlpha(1);
-            if (buttonText && buttonText.setText) buttonText.setText('領取獎勵並返回');
-        };
-
         const data = state.soloResultData || this.getSoloCleaningResultData();
-        const reward = Math.max(0, Math.min(850, Math.floor(Number(data.reward || 0))));
+        const reward = Math.max(0, Math.min(1500, Math.floor(Number(data.reward || 0))));
         const uid = window.GameLogic && window.GameLogic.currentUser && window.GameLogic.currentUser.uid ? window.GameLogic.currentUser.uid : null;
 
         if (!uid || !window.GameLogic || !window.GameLogic.db) {
             if (state.soloResultErrorText) state.soloResultErrorText.setText('獎勵發放失敗，請再試一次。');
-            restoreButton();
             return;
         }
 
         state.soloRewardPending = true;
-        [buttonBg, buttonText, buttonHit].forEach(obj => {
-            if (obj && obj.disableInteractive) obj.disableInteractive();
-        });
+        if (buttonBg && buttonBg.disableInteractive) buttonBg.disableInteractive();
         if (buttonBg && buttonBg.setAlpha) buttonBg.setAlpha(0.55);
-        if (buttonText && buttonText.setText) buttonText.setText('領取中……');
+        if (buttonText && buttonText.setText) buttonText.setText('發放中……');
         if (state.soloResultErrorText) state.soloResultErrorText.setText('');
 
         try {
@@ -20440,7 +20377,9 @@ if (!data.scoreHandled && data.attacker) {
             console.warn('[大掃除] 獎勵發放失敗：', err);
             state.soloRewardPending = false;
             if (state.soloResultErrorText) state.soloResultErrorText.setText('獎勵發放失敗，請再試一次。');
-            restoreButton();
+            if (buttonBg && buttonBg.setInteractive) buttonBg.setInteractive({ useHandCursor: true });
+            if (buttonBg && buttonBg.setAlpha) buttonBg.setAlpha(1);
+            if (buttonText && buttonText.setText) buttonText.setText('領取獎勵並返回');
         }
     }
 
@@ -20791,16 +20730,9 @@ if (!data.scoreHandled && data.attacker) {
         this.tweens.add({ targets: [smokeA, smokeB], y: '-=16', alpha: 0.04, yoyo: true, repeat: -1, duration: 1200, ease: 'Sine.easeInOut' });
         this.tweens.add({ targets: container, angle: 2.8, yoyo: true, repeat: -1, duration: 980, ease: 'Sine.easeInOut' });
 
-        const targetIcon = this.add.text(x, y - 62, '🧹', {
-            fontSize: '24px',
-            fontFamily: 'Arial, sans-serif',
-            stroke: '#ffffff',
-            strokeThickness: 3
-        }).setOrigin(0.5).setDepth(9630).setVisible(false);
-
-        const grime = { container, targetIcon, x, y, hp: 1, maxHp: 1 };
+        const grime = { container, x, y, hp: 1, maxHp: 1 };
         state.soloGrimes.push(grime);
-        state.objects.push(container, targetIcon);
+        state.objects.push(container);
         return grime;
     }
 
@@ -21140,7 +21072,6 @@ if (!data.scoreHandled && data.attacker) {
         state.grimeCount = Math.max(0, Math.floor(Number(state.grimeCount || 0))) + 1;
         this.playSoloCleaningRoomSfx('solo-cleaning-room-cleanthepoop');
         this.spawnSoloCleaningPurifyFx(grime.x, grime.y);
-        try { if (grime.targetIcon && grime.targetIcon.destroy) grime.targetIcon.destroy(); } catch (_) {}
         try { if (grime.container.destroy) grime.container.destroy(true); } catch (_) {}
         this.updateSoloCleaningRoomUi();
     }
@@ -21158,7 +21089,6 @@ if (!data.scoreHandled && data.attacker) {
                 try { if (mimi && mimi.sprite && mimi.sprite.destroy) mimi.sprite.destroy(); } catch (_) {}
             });
             (state.soloGrimes || []).forEach(grime => {
-                try { if (grime && grime.targetIcon && grime.targetIcon.destroy) grime.targetIcon.destroy(); } catch (_) {}
                 try { if (grime && grime.container && grime.container.destroy) grime.container.destroy(true); } catch (_) {}
             });
             (state.soloDirtyProjectiles || []).forEach(projectile => {
