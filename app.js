@@ -98,6 +98,115 @@ window.GameLogic = {
     authGuardSigningOut: false
 };
 
+window.PWA_RISK_CHECKPOINT_KEY = 'onion_pwa_risk_checkpoint_v1';
+
+window.getPwaRiskSnapshot = function(operation, extra = {}) {
+    const game = window.GameLogic && window.GameLogic.phaserGame ? window.GameLogic.phaserGame : null;
+    let mainScene = null;
+    let activeSceneCount = 0;
+    let textureCount = 0;
+    let soundCount = 0;
+
+    try {
+        mainScene = game && game.scene ? game.scene.getScene('MainScene') : null;
+    } catch (_) {
+        mainScene = null;
+    }
+
+    try {
+        activeSceneCount = game && game.scene && game.scene.getScenes
+            ? (game.scene.getScenes(true) || []).length
+            : 0;
+    } catch (_) {
+        activeSceneCount = 0;
+    }
+
+    try {
+        textureCount = game && game.textures && game.textures.getTextureKeys
+            ? game.textures.getTextureKeys().length
+            : 0;
+    } catch (_) {
+        textureCount = 0;
+    }
+
+    try {
+        soundCount = game && game.cache && game.cache.audio && game.cache.audio.getKeys
+            ? game.cache.audio.getKeys().length
+            : (game && game.sound && Array.isArray(game.sound.sounds) ? game.sound.sounds.length : 0);
+    } catch (_) {
+        soundCount = 0;
+    }
+
+    const growthState = window.__meowlimeGrowthState || null;
+    const growthModal = document.getElementById('meowlime-growth-modal');
+    const safeExtra = {};
+
+    ['status', 'targetScene', 'batchIndex', 'queueRemaining', 'note'].forEach((key) => {
+        const value = extra ? extra[key] : undefined;
+        if (value === undefined || value === null) return;
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+            safeExtra[key] = value;
+        }
+    });
+
+    return {
+        version: 1,
+        time: Date.now(),
+        operation: String(operation || 'unknown'),
+        status: String(safeExtra.status || 'pending'),
+        scene: String((window.GameLogic && window.GameLogic.currentScene) || ''),
+        cafeFurnitureDataCount: Object.keys((window.GameLogic && window.GameLogic.cafeFurniture) || {}).length,
+        cafeFurnitureSpriteCount: mainScene && mainScene.furnitureSprites
+            ? Object.keys(mainScene.furnitureSprites).length
+            : 0,
+        playerCount: mainScene
+            ? Object.keys(mainScene.otherPlayers || {}).length + (mainScene.localPlayer ? 1 : 0)
+            : 0,
+        activeSceneCount: activeSceneCount,
+        textureCount: textureCount,
+        soundCount: soundCount,
+        meowlimeRafRunning: !!(growthState && growthState.running && growthState.rafId),
+        meowlimeGrowthVisible: !!(growthModal && growthModal.style.display !== 'none'),
+        sceneSwitchInProgress: !!(window.GameLogic && window.GameLogic.sceneSwitchInProgress),
+        ...safeExtra
+    };
+};
+
+window.recordPwaRiskCheckpoint = function(operation, extra = {}) {
+    try {
+        const snapshot = window.getPwaRiskSnapshot(operation, extra);
+        localStorage.setItem(window.PWA_RISK_CHECKPOINT_KEY, JSON.stringify(snapshot));
+        console.info('[PWA 診斷] checkpoint：', snapshot);
+        return snapshot;
+    } catch (err) {
+        console.warn('[PWA 診斷] checkpoint 寫入失敗，已略過：', err);
+        return null;
+    }
+};
+
+window.completePwaRiskCheckpoint = function(operation, extra = {}) {
+    return window.recordPwaRiskCheckpoint(operation, {
+        ...extra,
+        status: 'completed'
+    });
+};
+
+window.reportPreviousPwaRiskCheckpoint = function() {
+    try {
+        const raw = localStorage.getItem(window.PWA_RISK_CHECKPOINT_KEY);
+        if (!raw) return;
+
+        const previous = JSON.parse(raw);
+        if (previous && previous.status !== 'completed') {
+            console.warn(`[PWA 診斷] 上次程序中斷前最後紀錄：${previous.operation || 'unknown'}`, previous);
+        }
+    } catch (err) {
+        console.warn('[PWA 診斷] 上次 checkpoint 讀取失敗，已略過：', err);
+    }
+};
+
+window.reportPreviousPwaRiskCheckpoint();
+
 let cafeUnsubscribe = null, onlinePlayersUnsubscribe = null, connectedUnsubscribe = null, serverTimeOffsetUnsubscribe = null, chatUnsubscribe = null, memoryUnsubscribe = null, cafeFurnitureUnsubscribe = null, summonUnsubscribe = null, shrineUnsubscribe = null, shrineEventUnsubscribe = null, pmUnreadUnsubscribe = null, friendRequestsUnsubscribe = null, friendVisitRequestsUnsubscribe = null, friendVisitRepliesUnsubscribe = null, friendVisitSessionsUnsubscribe = null, friendVisitLoveNoticesUnsubscribe = null, manualsUnsubscribe = null, manualCategoriesUnsubscribe = null, profileViewingUid = null;
 window.switchScene = switchScene; window.showProfileModal = showProfileModal; window.leaveCafe = leaveCafe; window.signOut = signOut; window.auth = auth;
 
@@ -803,12 +912,64 @@ window.getMeowlimeGrowthExpressions = function() {
     ];
 };
 
+window.pauseGameForMeowlimeGrowth = function() {
+    const game = window.GameLogic && window.GameLogic.phaserGame ? window.GameLogic.phaserGame : null;
+    if (!game || !game.scene) return false;
+
+    try {
+        const scene = game.scene.getScene('MainScene');
+        if (!scene || !scene.sys) return false;
+
+        if (scene.sys.isPaused && scene.sys.isPaused()) {
+            return window.__meowlimePausedMainScene === scene;
+        }
+
+        if (scene.sys.isActive && scene.sys.isActive()) {
+            game.scene.pause('MainScene');
+            window.__meowlimePausedMainScene = scene;
+            return true;
+        }
+    } catch (err) {
+        console.warn('[喵萊姆] 暫停 MainScene 失敗，改由 Canvas 降幀保護：', err);
+    }
+
+    return false;
+};
+
+window.resumeGameAfterMeowlimeGrowth = function() {
+    const ownedScene = window.__meowlimePausedMainScene || null;
+    window.__meowlimePausedMainScene = null;
+
+    if (!ownedScene) return false;
+
+    const game = window.GameLogic && window.GameLogic.phaserGame ? window.GameLogic.phaserGame : null;
+    if (!game || !game.scene) return false;
+
+    try {
+        const currentScene = game.scene.getScene('MainScene');
+        if (!currentScene || currentScene !== ownedScene || !currentScene.sys) return false;
+
+        if (currentScene.sys.isPaused && currentScene.sys.isPaused()) {
+            game.scene.resume('MainScene');
+        }
+        return true;
+    } catch (err) {
+        console.warn('[喵萊姆] 恢復 MainScene 失敗，已交由場景切換保險處理：', err);
+        return false;
+    }
+};
+
 window.getMeowlimeGrowthState = function() {
     if (!window.__meowlimeGrowthState) {
         window.__meowlimeGrowthState = {
             running: false,
             rafId: null,
             lastTs: 0,
+            lastRenderAt: 0,
+            frameIntervalMs: 1000 / 30,
+            dpr: 1,
+            firstFrameRecorded: false,
+            visibilitySuspended: false,
             x: 0,
             y: 0,
             targetX: 0,
@@ -843,16 +1004,24 @@ window.getMeowlimeGrowthState = function() {
             lostPointerCaptureHandler: null,
             mouseUpHandler: null,
             modalStopHandler: null,
-            resizeHandler: null
+            resizeHandler: null,
+            orientationHandler: null,
+            visibilityHandler: null
         };
     }
     return window.__meowlimeGrowthState;
 };
 
-window.stopMeowlimeGrowthCanvas = function() {
+window.stopMeowlimeGrowthCanvas = function(options = {}) {
     const state = window.getMeowlimeGrowthState ? window.getMeowlimeGrowthState() : null;
-    if (!state) return;
+    if (!state) {
+        if (!options.keepGamePaused && window.resumeGameAfterMeowlimeGrowth) {
+            window.resumeGameAfterMeowlimeGrowth();
+        }
+        return;
+    }
 
+    const wasRunning = !!state.running;
     state.running = false;
 
     if (state.rafId) {
@@ -902,6 +1071,14 @@ window.stopMeowlimeGrowthCanvas = function() {
         window.removeEventListener('resize', state.resizeHandler);
     }
 
+    if (state.orientationHandler) {
+        window.removeEventListener('orientationchange', state.orientationHandler);
+    }
+
+    if (state.visibilityHandler) {
+        document.removeEventListener('visibilitychange', state.visibilityHandler);
+    }
+
     state.boundCanvas = null;
     state.boundModal = null;
     state.pointerHandler = null;
@@ -913,7 +1090,12 @@ window.stopMeowlimeGrowthCanvas = function() {
     state.mouseUpHandler = null;
     state.modalStopHandler = null;
     state.resizeHandler = null;
+    state.orientationHandler = null;
+    state.visibilityHandler = null;
     state.lastTs = 0;
+    state.lastRenderAt = 0;
+    state.firstFrameRecorded = false;
+    state.visibilitySuspended = false;
     state.pointerId = null;
     state.pointerDownAt = 0;
     state.pointerStartX = 0;
@@ -925,15 +1107,28 @@ window.stopMeowlimeGrowthCanvas = function() {
     state.dragDY = 0;
     state.stretchPower = 0;
     state.releaseBounceUntil = 0;
+
+    if (!options.keepGamePaused && window.resumeGameAfterMeowlimeGrowth) {
+        window.resumeGameAfterMeowlimeGrowth();
+    }
+
+    if (wasRunning && window.completePwaRiskCheckpoint) {
+        window.completePwaRiskCheckpoint('meowlime-growth-closed');
+    }
 };
 
 window.resizeMeowlimeGrowthCanvas = function(canvas) {
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const isMobile = !!(window.isMobileTouchViewport && window.isMobileTouchViewport());
+    const dprCap = isMobile ? 1.25 : 1.75;
+    const dpr = Math.max(1, Math.min(dprCap, window.devicePixelRatio || 1));
     const nextWidth = Math.max(1, Math.floor(rect.width * dpr));
     const nextHeight = Math.max(1, Math.floor(rect.height * dpr));
+    const state = window.getMeowlimeGrowthState ? window.getMeowlimeGrowthState() : null;
+
+    if (state) state.dpr = dpr;
 
     if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
         canvas.width = nextWidth;
@@ -1112,22 +1307,45 @@ window.renderMeowlimeGrowthFrame = function(ts) {
     const canvas = document.getElementById('meowlime-growth-canvas');
     const modal = document.getElementById('meowlime-growth-modal');
 
+    state.rafId = null;
+
     if (!state.running || !canvas) return;
     if (!modal || modal.style.display === 'none') {
         window.stopMeowlimeGrowthCanvas();
         return;
     }
 
-    window.resizeMeowlimeGrowthCanvas(canvas);
+    if (document.hidden) {
+        state.visibilitySuspended = true;
+        if (window.resumeGameAfterMeowlimeGrowth) window.resumeGameAfterMeowlimeGrowth();
+        return;
+    }
+
+    const frameInterval = Math.max(16, Number(state.frameIntervalMs || (1000 / 30)));
+    if (state.lastRenderAt && ts - state.lastRenderAt < frameInterval) {
+        state.rafId = requestAnimationFrame(window.renderMeowlimeGrowthFrame);
+        return;
+    }
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+        window.stopMeowlimeGrowthCanvas();
+        return;
+    }
 
     const w = canvas.width;
     const h = canvas.height;
-    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    const dt = state.lastTs ? Math.min(0.05, (ts - state.lastTs) / 1000) : 0.016;
+    const dpr = Math.max(1, Number(state.dpr || 1));
+    const dt = state.lastTs ? Math.min(0.08, (ts - state.lastTs) / 1000) : frameInterval / 1000;
     state.lastTs = ts;
+    state.lastRenderAt = ts;
+
+    if (!state.firstFrameRecorded) {
+        state.firstFrameRecorded = true;
+        if (window.recordPwaRiskCheckpoint) {
+            window.recordPwaRiskCheckpoint('meowlime-growth-first-frame');
+        }
+    }
 
     const growthSize = window.getMeowlimeGrowthSize ? window.getMeowlimeGrowthSize() : 20;
     const maxDrawableSize = Math.max(12, Math.min(w, h) - 36 * dpr);
@@ -1219,7 +1437,7 @@ window.startMeowlimeGrowthCanvas = function() {
 
     if (!modal || !canvas) return;
 
-    window.stopMeowlimeGrowthCanvas();
+    window.stopMeowlimeGrowthCanvas({ keepGamePaused: true });
 
     const state = window.getMeowlimeGrowthState();
     const growthSize = window.getMeowlimeGrowthSize ? window.getMeowlimeGrowthSize() : 20;
@@ -1227,6 +1445,12 @@ window.startMeowlimeGrowthCanvas = function() {
 
     state.running = true;
     state.lastTs = 0;
+    state.lastRenderAt = 0;
+    state.frameIntervalMs = window.isMobileTouchViewport && window.isMobileTouchViewport()
+        ? 1000 / 18
+        : 1000 / 30;
+    state.firstFrameRecorded = false;
+    state.visibilitySuspended = false;
     state.x = 0;
     state.y = 0;
     state.targetX = 0;
@@ -1288,7 +1512,7 @@ window.startMeowlimeGrowthCanvas = function() {
         const point = window.getMeowlimeGrowthPointerPoint
             ? window.getMeowlimeGrowthPointerPoint(canvas, e)
             : { x: 0, y: 0 };
-        const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        const dpr = Math.max(1, Number(state.dpr || 1));
         const size = Math.max(12, Math.min((window.getMeowlimeGrowthSize ? window.getMeowlimeGrowthSize() : 20) * dpr, Math.max(12, Math.min(canvas.width, canvas.height) - 36 * dpr)));
         const dx = point.x - state.x;
         const dy = point.y - state.y;
@@ -1335,7 +1559,7 @@ window.startMeowlimeGrowthCanvas = function() {
         const point = window.getMeowlimeGrowthPointerPoint
             ? window.getMeowlimeGrowthPointerPoint(canvas, e)
             : { x: state.pointerStartX, y: state.pointerStartY };
-        const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        const dpr = Math.max(1, Number(state.dpr || 1));
         const size = Math.max(12, Math.min((window.getMeowlimeGrowthSize ? window.getMeowlimeGrowthSize() : 20) * dpr, Math.max(12, Math.min(canvas.width, canvas.height) - 36 * dpr)));
         const rawDX = point.x - state.pointerStartX;
         const rawDY = point.y - state.pointerStartY;
@@ -1396,6 +1620,30 @@ window.startMeowlimeGrowthCanvas = function() {
         if (window.resizeMeowlimeGrowthCanvas) window.resizeMeowlimeGrowthCanvas(canvas);
     };
 
+    const visibilityHandler = () => {
+        if (document.hidden) {
+            state.visibilitySuspended = true;
+            if (state.rafId) {
+                cancelAnimationFrame(state.rafId);
+                state.rafId = null;
+            }
+            if (window.resumeGameAfterMeowlimeGrowth) window.resumeGameAfterMeowlimeGrowth();
+            return;
+        }
+
+        const growthPanel = document.getElementById('meowlime-growth-panel');
+        const modalVisible = modal.style.display !== 'none';
+        const growthVisible = !growthPanel || !growthPanel.hidden;
+
+        if (state.running && state.visibilitySuspended && modalVisible && growthVisible && !state.rafId) {
+            state.visibilitySuspended = false;
+            state.lastTs = 0;
+            state.lastRenderAt = 0;
+            if (window.pauseGameForMeowlimeGrowth) window.pauseGameForMeowlimeGrowth();
+            state.rafId = requestAnimationFrame(window.renderMeowlimeGrowthFrame);
+        }
+    };
+
     modal.addEventListener('pointerdown', stopModalEvent);
     modal.addEventListener('click', stopModalEvent);
     canvas.addEventListener('pointerdown', pointerHandler, { passive: false });
@@ -1406,6 +1654,8 @@ window.startMeowlimeGrowthCanvas = function() {
     window.addEventListener('pointercancel', endTouch, { passive: false });
     window.addEventListener('mouseup', endTouch, { passive: false });
     window.addEventListener('resize', resizeHandler);
+    window.addEventListener('orientationchange', resizeHandler);
+    document.addEventListener('visibilitychange', visibilityHandler);
 
     state.boundCanvas = canvas;
     state.boundModal = modal;
@@ -1418,10 +1668,18 @@ window.startMeowlimeGrowthCanvas = function() {
     state.mouseUpHandler = endTouch;
     state.modalStopHandler = stopModalEvent;
     state.resizeHandler = resizeHandler;
+    state.orientationHandler = resizeHandler;
+    state.visibilityHandler = visibilityHandler;
 
     canvas.style.touchAction = 'none';
     window.resizeMeowlimeGrowthCanvas(canvas);
-    state.rafId = requestAnimationFrame(window.renderMeowlimeGrowthFrame);
+
+    if (!document.hidden) {
+        if (window.pauseGameForMeowlimeGrowth) window.pauseGameForMeowlimeGrowth();
+        state.rafId = requestAnimationFrame(window.renderMeowlimeGrowthFrame);
+    } else {
+        state.visibilitySuspended = true;
+    }
 };
 
 window.getMeowlimeCheckinHistoryList = function() {
@@ -1707,6 +1965,10 @@ window.setMeowlimeGrowthTab = function(tabName = 'growth') {
 
 
 window.openMeowlimeGrowthModal = async function() {
+    if (window.recordPwaRiskCheckpoint) {
+        window.recordPwaRiskCheckpoint('meowlime-growth-opening');
+    }
+
     if (window.refreshDailyMeowlimeStatus) {
         await window.refreshDailyMeowlimeStatus({ reason: 'openMeowlimeGrowthModal', skipIfFresh: true });
     }
@@ -13815,6 +14077,10 @@ async function switchScene(sceneName, extraData = null) {
     logic.sceneSwitchTarget = targetScene;
     logic.sceneInputLocked = true;
 
+    if (window.recordPwaRiskCheckpoint) {
+        window.recordPwaRiskCheckpoint('scene-switch-start', { targetScene: targetScene });
+    }
+
     const operation = (async () => {
         const previousScene = logic.currentScene;
 
@@ -13944,7 +14210,12 @@ async function switchScene(sceneName, extraData = null) {
                 }
             }
 
-            if (oldMain && oldMain.sys && oldMain.sys.isActive && oldMain.sys.isActive()) {
+            const oldMainRunning = !!(
+                oldMain &&
+                oldMain.sys &&
+                ((oldMain.sys.isActive && oldMain.sys.isActive()) || (oldMain.sys.isPaused && oldMain.sys.isPaused()))
+            );
+            if (oldMainRunning) {
                 activeGame.scene.stop('MainScene');
             }
 
@@ -13958,8 +14229,14 @@ async function switchScene(sceneName, extraData = null) {
                 window.leavePartyroom(true);
             }
 
+            if (window.recordPwaRiskCheckpoint) {
+                window.recordPwaRiskCheckpoint('main-scene-shutdown-complete', { targetScene: targetScene });
+            }
+
             if (window.isMobileTouchViewport && window.isMobileTouchViewport()) {
-                await new Promise(resolve => requestAnimationFrame(resolve));
+                for (let frame = 0; frame < 3; frame++) {
+                    await new Promise(resolve => requestAnimationFrame(resolve));
+                }
             }
 
             if (targetScene === 'cafe') {
@@ -13983,6 +14260,10 @@ async function switchScene(sceneName, extraData = null) {
 
             if (logic.authState !== 'ready' && window.setAppAuthState) {
                 window.setAppAuthState('ready');
+            }
+
+            if (window.completePwaRiskCheckpoint) {
+                window.completePwaRiskCheckpoint('scene-switch-complete', { targetScene: targetScene });
             }
 
             return true;
@@ -15093,6 +15374,9 @@ class MainScene extends Phaser.Scene {
 
         this.sceneName = window.GameLogic.currentScene;
         this.isCafe = this.sceneName === "cafe";
+        if (window.recordPwaRiskCheckpoint) {
+            window.recordPwaRiskCheckpoint('main-scene-create-start', { targetScene: this.sceneName });
+        }
         this.mimiWalkSFX = null;
         this.handleVisibilityMimiWalk = null;
         this.lastPrinceCatState = null;
@@ -15525,6 +15809,12 @@ class MainScene extends Phaser.Scene {
         }
 
         this.otherPlayers = {}; this.furnitureSprites = {}; this.dummySprites = {}; this.coinSprites = {};
+        this.cafeFurnitureBuildQueue = [];
+        this.cafeFurnitureBuildQueued = new Set();
+        this.cafeFurnitureBuildToken = 0;
+        this.cafeFurnitureBuildTimer = null;
+        this.cafeFurnitureBuildInProgress = false;
+        this.cafeFurnitureBuildBatchIndex = 0;
         if (this.isCafe && window.refreshDailyMeowlimeStatus) window.refreshDailyMeowlimeStatus({ reason: 'cafeSceneCreate', skipIfFresh: true });
         
         
@@ -15712,11 +16002,15 @@ class MainScene extends Phaser.Scene {
                 ? (window.GameLogic.doghouseFurniture || {})
                 : (this.sceneName === 'shrine' ? (window.GameLogic.shrineFurniture || {}) : {}));
 
-        Object.keys(initialFurnitureData).forEach((key) => {
-            const furnitureData = initialFurnitureData[key];
-            if (!furnitureData || this.furnitureSprites[key]) return;
-            this.furnitureSprites[key] = this.createFurniture(key, furnitureData);
-        });
+        if (this.isCafe) {
+            this.startCafeFurnitureBuildQueue(initialFurnitureData);
+        } else {
+            Object.keys(initialFurnitureData).forEach((key) => {
+                const furnitureData = initialFurnitureData[key];
+                if (!furnitureData || this.furnitureSprites[key]) return;
+                this.furnitureSprites[key] = this.createFurniture(key, furnitureData);
+            });
+        }
 
         // 修正：重置文字緩存變數，避免 Phaser 重新啟動場景時因為變數殘留，導致判定相同而不更新 UI，進而使法寶提示字消失
         this.lastPromptMsg = null; this.lastPromptDrawX = null; this.lastPromptDrawY = null; this.lastPromptDrawMsg = null;
@@ -17130,6 +17424,7 @@ if (!data.scoreHandled && data.attacker) {
         document.addEventListener('visibilitychange', this.handleVisibilityMimiWalk);
 
         this.events.once('shutdown', () => {
+            if (this.cancelCafeFurnitureBuildQueue) this.cancelCafeFurnitureBuildQueue();
             if (this.clearMoonBunBuffFx) this.clearMoonBunBuffFx(false);
             if (this.clearMoonStaffBlessing) this.clearMoonStaffBlessing();
             this.closeSoloChickenMenu();
@@ -17201,6 +17496,9 @@ if (!data.scoreHandled && data.attacker) {
                 clearTimeout(window.GameLogic.princeCatMenuTimeout);
                 window.GameLogic.princeCatMenuTimeout = null;
             }
+            if (window.recordPwaRiskCheckpoint) {
+                window.recordPwaRiskCheckpoint('main-scene-shutdown-complete', { targetScene: this.sceneName });
+            }
         });
 
         this.events.once('destroy', () => {
@@ -17232,8 +17530,153 @@ if (!data.scoreHandled && data.attacker) {
 
             this.stopMimiWalkSFX(true);
         });
+
+        if (this.isCafe && this.cafeFurnitureBuildInProgress) {
+            if (window.recordPwaRiskCheckpoint) {
+                window.recordPwaRiskCheckpoint('main-scene-create-complete', { targetScene: this.sceneName });
+            }
+        } else if (window.completePwaRiskCheckpoint) {
+            window.completePwaRiskCheckpoint('main-scene-create-complete', { targetScene: this.sceneName });
+        }
     }
 
+    startCafeFurnitureBuildQueue(initialData = {}) {
+        if (!this.isCafe) return;
+
+        this.cancelCafeFurnitureBuildQueue();
+        this.cafeFurnitureBuildQueue = [];
+        this.cafeFurnitureBuildQueued = new Set();
+        this.cafeFurnitureBuildInProgress = true;
+        this.cafeFurnitureBuildBatchIndex = 0;
+
+        Object.keys(initialData || {}).forEach((key) => {
+            this.enqueueCafeFurnitureBuild(key, { schedule: false });
+        });
+
+        if (window.recordPwaRiskCheckpoint) {
+            window.recordPwaRiskCheckpoint('cafe-furniture-build-start', {
+                queueRemaining: this.cafeFurnitureBuildQueue.length
+            });
+        }
+
+        if (this.cafeFurnitureBuildQueue.length > 0) {
+            this.scheduleCafeFurnitureBuildBatch(this.cafeFurnitureBuildToken);
+        } else {
+            this.cafeFurnitureBuildInProgress = false;
+            if (window.completePwaRiskCheckpoint) {
+                window.completePwaRiskCheckpoint('cafe-furniture-build-complete', { queueRemaining: 0 });
+            }
+        }
+    }
+
+    enqueueCafeFurnitureBuild(key, options = {}) {
+        if (!this.isCafe || !key) return false;
+        if (!window.GameLogic.cafeFurniture || !window.GameLogic.cafeFurniture[key]) return false;
+        if (this.furnitureSprites && this.furnitureSprites[key]) return false;
+
+        if (!this.cafeFurnitureBuildQueue) this.cafeFurnitureBuildQueue = [];
+        if (!this.cafeFurnitureBuildQueued) this.cafeFurnitureBuildQueued = new Set();
+        if (this.cafeFurnitureBuildQueued.has(key)) return false;
+
+        this.cafeFurnitureBuildQueued.add(key);
+        this.cafeFurnitureBuildQueue.push(key);
+        this.cafeFurnitureBuildInProgress = true;
+
+        if (options.schedule !== false && !this.cafeFurnitureBuildTimer) {
+            this.scheduleCafeFurnitureBuildBatch(this.cafeFurnitureBuildToken);
+        }
+
+        return true;
+    }
+
+    syncCafeFurnitureBuildQueue(furnitureData = {}) {
+        if (!this.isCafe) return;
+
+        Object.keys(furnitureData || {}).forEach((key) => {
+            if (!this.furnitureSprites[key]) {
+                this.enqueueCafeFurnitureBuild(key, { schedule: false });
+            }
+        });
+
+        if (this.cafeFurnitureBuildQueue.length > 0 && !this.cafeFurnitureBuildTimer) {
+            this.scheduleCafeFurnitureBuildBatch(this.cafeFurnitureBuildToken);
+        }
+    }
+
+    scheduleCafeFurnitureBuildBatch(token) {
+        if (!this.isCafe || this.cafeFurnitureBuildTimer) return;
+        if (!this.time || !this.sys || !this.sys.isActive || !this.sys.isActive()) return;
+
+        this.cafeFurnitureBuildTimer = this.time.delayedCall(16, () => {
+            this.cafeFurnitureBuildTimer = null;
+            this.runCafeFurnitureBuildBatch(token);
+        });
+    }
+
+    runCafeFurnitureBuildBatch(token) {
+        if (!this.isCafe || token !== this.cafeFurnitureBuildToken) return;
+        if (!this.sys || !this.sys.isActive || !this.sys.isActive()) return;
+
+        const isMobile = !!(window.isMobileTouchViewport && window.isMobileTouchViewport());
+        const batchSize = isMobile ? 3 : 8;
+        let builtCount = 0;
+
+        while (this.cafeFurnitureBuildQueue.length > 0 && builtCount < batchSize) {
+            const key = this.cafeFurnitureBuildQueue.shift();
+            if (this.cafeFurnitureBuildQueued) this.cafeFurnitureBuildQueued.delete(key);
+
+            const latestData = window.GameLogic.cafeFurniture
+                ? window.GameLogic.cafeFurniture[key]
+                : null;
+
+            if (!latestData || (this.furnitureSprites && this.furnitureSprites[key])) continue;
+
+            try {
+                this.furnitureSprites[key] = this.createFurniture(key, latestData);
+                builtCount++;
+            } catch (err) {
+                console.warn(`[大廳家具] 分批建立 ${key} 失敗，將於後續同步重試：`, err);
+            }
+        }
+
+        this.cafeFurnitureBuildBatchIndex = Number(this.cafeFurnitureBuildBatchIndex || 0) + 1;
+
+        if (window.recordPwaRiskCheckpoint) {
+            window.recordPwaRiskCheckpoint(`cafe-furniture-batch-${this.cafeFurnitureBuildBatchIndex}`, {
+                batchIndex: this.cafeFurnitureBuildBatchIndex,
+                queueRemaining: this.cafeFurnitureBuildQueue.length
+            });
+        }
+
+        if (this.cafeFurnitureBuildQueue.length > 0) {
+            this.scheduleCafeFurnitureBuildBatch(token);
+        } else {
+            this.cafeFurnitureBuildInProgress = false;
+            if (window.completePwaRiskCheckpoint) {
+                window.completePwaRiskCheckpoint('cafe-furniture-build-complete', {
+                    batchIndex: this.cafeFurnitureBuildBatchIndex,
+                    queueRemaining: 0
+                });
+            }
+        }
+    }
+
+    cancelCafeFurnitureBuildQueue() {
+        this.cafeFurnitureBuildToken = Number(this.cafeFurnitureBuildToken || 0) + 1;
+
+        if (this.cafeFurnitureBuildTimer) {
+            try { this.cafeFurnitureBuildTimer.remove(false); } catch (_) {}
+            this.cafeFurnitureBuildTimer = null;
+        }
+
+        if (this.cafeFurnitureBuildQueue) this.cafeFurnitureBuildQueue.length = 0;
+        if (this.cafeFurnitureBuildQueued && this.cafeFurnitureBuildQueued.clear) {
+            this.cafeFurnitureBuildQueued.clear();
+        }
+
+        this.cafeFurnitureBuildInProgress = false;
+    }
+  
     createMiniExplosion(x, y) {
         let allColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xff8800]; let mixColors = [Phaser.Utils.Array.GetRandom(allColors), Phaser.Utils.Array.GetRandom(allColors), Phaser.Utils.Array.GetRandom(allColors)];
         let particles = this.add.particles(x, y, 'fw-particle', { speed: { min: 100, max: 250 }, angle: { min: 0, max: 360 }, scale: { start: 1.5, end: 0 }, blendMode: 'ADD', tint: mixColors, lifespan: { min: 1000, max: 2000 }, gravityY: 100, quantity: 60 });
@@ -34715,10 +35158,17 @@ if (dist < 30) {
         }
 
         const furnData = this.isCafe ? window.GameLogic.cafeFurniture : (this.sceneName === 'doghouse' ? (window.GameLogic.doghouseFurniture || {}) : (this.sceneName === 'shrine' ? window.GameLogic.shrineFurniture : {}));
+        if (this.isCafe && this.syncCafeFurnitureBuildQueue) {
+            this.syncCafeFurnitureBuildQueue(furnData || {});
+        }
         for (let key in furnData) {
             let fd = furnData[key];
-            if (!this.furnitureSprites[key]) this.furnitureSprites[key] = this.createFurniture(key, fd);
+            if (!this.furnitureSprites[key]) {
+                if (this.isCafe) continue;
+                this.furnitureSprites[key] = this.createFurniture(key, fd);
+            }
             let f = this.furnitureSprites[key];
+            if (!f || !f.sprite || !f.sprite.active) continue;
             f.sprite.isLocked = fd.locked;
             if (this.sceneName === 'doghouse') this.syncDoghouseFurniturePointerBehavior(key, f, fd || {});
             const nextDirection = this.getFurnitureDirection(key, fd || {});
