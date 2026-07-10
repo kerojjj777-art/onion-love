@@ -4637,6 +4637,46 @@ function createSystemUI() {
                 }
             }
 
+            /* 手機 PWA 給西低負載保護：保留桌機特效，手機停用高耗能持續動畫與多層濾鏡。 */
+            @media (max-width: 768px), (orientation: portrait), (pointer: coarse) {
+                #inventory-modal.inventory-red-metal-ui::before,
+                #inventory-modal.inventory-red-metal-ui::after,
+                #inventory-modal .inventory-burst-particle-field,
+                #inventory-modal .inventory-ambient-field {
+                    display:none !important;
+                    animation:none !important;
+                }
+                #inventory-modal.inventory-red-metal-ui,
+                #inventory-modal.inventory-opening,
+                #inventory-modal.inventory-closing,
+                #inventory-modal.inventory-opened {
+                    animation:none !important;
+                    filter:none !important;
+                    backdrop-filter:none !important;
+                    -webkit-backdrop-filter:none !important;
+                }
+                #inventory-modal.inventory-red-metal-ui h3,
+                #inventory-modal.inventory-opening #inventory-header,
+                #inventory-modal.inventory-opening #inventory-list,
+                #inventory-modal.inventory-opening #inventory-x-close,
+                #inventory-modal.inventory-opening #inventory-list .catalog-item,
+                #inventory-modal.inventory-closing #inventory-header,
+                #inventory-modal.inventory-closing #inventory-list,
+                #inventory-modal.inventory-closing #inventory-x-close {
+                    animation:none !important;
+                    filter:none !important;
+                    opacity:1 !important;
+                    transform:none !important;
+                }
+                #inventory-modal .sprite-waterball,
+                #inventory-modal .sprite-onion-phone,
+                #inventory-modal .sprite-magic-gap,
+                #inventory-modal .sprite-music-box {
+                    animation:none !important;
+                    background-position:left center !important;
+                }
+            }
+
             /* 補丁：大廳家具銀色金屬邊框＋給西項目切換動畫 */
             #furniture-catalog-modal.furniture-wood-ui {
                 border:3px solid rgba(230,235,240,0.96) !important;
@@ -9781,7 +9821,13 @@ window.openInventoryModal = function(options = {}) {
     list.style.alignItems = 'start';
     list.innerHTML = invHTML;
 
-    if (options && options.noFx && window.showInventoryModalWithoutFx) {
+    const shouldReduceInventoryFx = !!(
+        (options && options.noFx) ||
+        (window.isMobileTouchViewport && window.isMobileTouchViewport()) ||
+        (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+    );
+
+    if (shouldReduceInventoryFx && window.showInventoryModalWithoutFx) {
         window.showInventoryModalWithoutFx();
     } else if (window.showInventoryModalWithFx) {
         window.showInventoryModalWithFx();
@@ -14620,9 +14666,19 @@ class UIScene extends Phaser.Scene {
             fontStyle: 'bold'
         }).setOrigin(0.5).setDepth(210).setVisible(false).setShadow(0, 0, '#ffffff', 4, true, true);
 
-        this.itemBtn.on('pointerdown', () => {
+        this.itemBtn.on('pointerup', (pointer) => {
     if (isRpsModalBlocking()) return;
-    window.openInventoryModal();
+    if (window.GameLogic && window.GameLogic.sceneInputLocked) return;
+
+    const nativeEvent = pointer && pointer.event ? pointer.event : null;
+    if (nativeEvent && nativeEvent.cancelable) nativeEvent.preventDefault();
+    if (nativeEvent && nativeEvent.stopPropagation) nativeEvent.stopPropagation();
+
+    requestAnimationFrame(() => {
+        window.openInventoryModal({
+            noFx: !!(window.isMobileTouchViewport && window.isMobileTouchViewport())
+        });
+    });
 });
 
 this.furnBtn.on('pointerdown', () => {
