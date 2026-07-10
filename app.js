@@ -17804,6 +17804,25 @@ if (!data.scoreHandled && data.attacker) {
                 soloMimis: [],
                 soloGrimes: [],
                 soloDirtyProjectiles: [],
+                soloFxObjects: [],
+                soloBossObjects: [],
+                soloOutageObjects: [],
+                soloResultObjects: [],
+                soloBigMimi: null,
+                soloBigMimiNextAt: 0,
+                soloBigMimiHitCooldownUntil: 0,
+                soloOutageNextAt: 0,
+                soloOutageActive: false,
+                soloOutageEndingAt: 0,
+                soloOutageWarningText: null,
+                soloOutageOverlay: null,
+                soloOutageGlows: [],
+                soloRewardClaimed: false,
+                soloRewardPending: false,
+                soloFailed: false,
+                soloResultData: null,
+                soloResultPanel: null,
+                soloResultErrorText: null,
                 soloWashbasin: null,
                 soloWashbasinAura: null,
                 soloDirtyFx: null,
@@ -17839,6 +17858,10 @@ if (!data.scoreHandled && data.attacker) {
         if (!Array.isArray(this.soloCleaningRoom.soloGrimes)) this.soloCleaningRoom.soloGrimes = [];
         if (!Array.isArray(this.soloCleaningRoom.soloDirtyProjectiles)) this.soloCleaningRoom.soloDirtyProjectiles = [];
         if (!Array.isArray(this.soloCleaningRoom.soloFxObjects)) this.soloCleaningRoom.soloFxObjects = [];
+        if (!Array.isArray(this.soloCleaningRoom.soloBossObjects)) this.soloCleaningRoom.soloBossObjects = [];
+        if (!Array.isArray(this.soloCleaningRoom.soloOutageObjects)) this.soloCleaningRoom.soloOutageObjects = [];
+        if (!Array.isArray(this.soloCleaningRoom.soloResultObjects)) this.soloCleaningRoom.soloResultObjects = [];
+        if (!Array.isArray(this.soloCleaningRoom.soloOutageGlows)) this.soloCleaningRoom.soloOutageGlows = [];
         if (!this.soloCleaningRoom.soloPlayerFacing || typeof this.soloCleaningRoom.soloPlayerFacing !== 'object') this.soloCleaningRoom.soloPlayerFacing = { x: 0, y: 1 };
         if (!this.soloCleaningRoom.soloActionButtonMode) this.soloCleaningRoom.soloActionButtonMode = 'clean';
         if (!Number.isFinite(Number(this.soloCleaningRoom.soloPlayerSpeed))) this.soloCleaningRoom.soloPlayerSpeed = 324;
@@ -18750,6 +18773,25 @@ if (!data.scoreHandled && data.attacker) {
             state.soloMimis = [];
             state.soloGrimes = [];
             state.soloDirtyProjectiles = [];
+            state.soloFxObjects = [];
+            state.soloBossObjects = [];
+            state.soloOutageObjects = [];
+            state.soloResultObjects = [];
+            state.soloBigMimi = null;
+            state.soloBigMimiNextAt = state.startTime + 20000;
+            state.soloBigMimiHitCooldownUntil = 0;
+            state.soloOutageNextAt = state.startTime + 15000;
+            state.soloOutageActive = false;
+            state.soloOutageEndingAt = 0;
+            state.soloOutageWarningText = null;
+            state.soloOutageOverlay = null;
+            state.soloOutageGlows = [];
+            state.soloRewardClaimed = false;
+            state.soloRewardPending = false;
+            state.soloFailed = false;
+            state.soloResultData = null;
+            state.soloResultPanel = null;
+            state.soloResultErrorText = null;
             state.soloDirtyState = false;
             state.soloDirtyDrainAccumulator = 0;
             state.soloDeodorizePresses = 0;
@@ -19750,6 +19792,484 @@ if (!data.scoreHandled && data.attacker) {
         });
     }
 
+    spawnSoloCleaningBigMimiBoss() {
+        const state = this.getSoloCleaningRoomState();
+        const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
+        if (!state.active || state.shellEnding || !player || !player.active || state.soloBigMimi) return null;
+
+        const bounds = this.getSoloCleaningRoomWorldBounds();
+        const landX = Phaser.Math.Clamp(player.x - Phaser.Math.Between(120, 180), bounds.x + 110, bounds.x + bounds.width - 110);
+        const landY = Phaser.Math.Clamp(player.y + Phaser.Math.Between(-50, 55), bounds.y + 110, bounds.y + bounds.height - 110);
+        const startY = Math.max(bounds.y + 40, landY - 420);
+        const sprite = this.physics.add.sprite(landX, startY, 'mimi-thief-walk')
+            .setDepth(9648)
+            .setDisplaySize(150, 150)
+            .setAlpha(0.98);
+
+        if (this.anims && this.anims.exists('mimi-laugh')) sprite.play('mimi-laugh', true);
+
+        const eyeL = this.add.circle(landX - 24, startY - 18, 9, 0xff1b1b, 0.82).setDepth(9650).setBlendMode(Phaser.BlendModes.ADD);
+        const eyeR = this.add.circle(landX + 24, startY - 18, 9, 0xff1b1b, 0.82).setDepth(9650).setBlendMode(Phaser.BlendModes.ADD);
+        const glow = this.add.circle(landX, startY - 5, 82, 0xff0000, 0.13).setDepth(9647).setBlendMode(Phaser.BlendModes.ADD);
+
+        const boss = {
+            sprite,
+            eyeL,
+            eyeR,
+            glow,
+            smoke: [],
+            state: 'drop',
+            landedAt: 0,
+            chaseUntil: 0,
+            nextSmokeAt: 0,
+            hitCooldownUntil: 0
+        };
+
+        state.soloBigMimi = boss;
+        state.soloBossObjects.push(sprite, eyeL, eyeR, glow);
+        state.objects.push(sprite, eyeL, eyeR, glow);
+
+        try { window.playSFX(this, 'mimi-laugh'); } catch (_) {}
+
+        this.tweens.add({
+            targets: sprite,
+            y: landY,
+            scaleX: 1.05,
+            scaleY: 0.95,
+            duration: 680,
+            ease: 'Bounce.easeOut',
+            onUpdate: () => this.updateSoloCleaningBigMimiVisuals(boss),
+            onComplete: () => {
+                if (!state.active || state.shellEnding || !sprite.active) return;
+                sprite.setDisplaySize(150, 150);
+                boss.state = 'laugh';
+                boss.landedAt = this.time.now;
+                this.updateSoloCleaningBigMimiVisuals(boss);
+                try { this.cameras.main.shake(1000, 0.006); } catch (_) {}
+                this.tweens.add({ targets: sprite, x: sprite.x + 12, yoyo: true, repeat: 7, duration: 70, ease: 'Sine.easeInOut' });
+                const timer = this.time.delayedCall(1000, () => {
+                    if (!state.active || state.shellEnding || !sprite.active || state.soloBigMimi !== boss) return;
+                    boss.state = 'chase';
+                    boss.chaseUntil = this.time.now + 8000;
+                    boss.nextSmokeAt = 0;
+                    if (this.anims && this.anims.exists('mimi-walk')) sprite.play('mimi-walk', true);
+                });
+                state.timers.push(timer);
+            }
+        });
+
+        return boss;
+    }
+
+    updateSoloCleaningBigMimiVisuals(boss) {
+        if (!boss || !boss.sprite || !boss.sprite.active) return;
+        const x = boss.sprite.x;
+        const y = boss.sprite.y;
+        if (boss.eyeL && boss.eyeL.active) boss.eyeL.setPosition(x - 24, y - 18);
+        if (boss.eyeR && boss.eyeR.active) boss.eyeR.setPosition(x + 24, y - 18);
+        if (boss.glow && boss.glow.active) boss.glow.setPosition(x, y - 2);
+    }
+
+    spawnSoloCleaningBigMimiSmoke(boss) {
+        const state = this.getSoloCleaningRoomState();
+        if (!boss || !boss.sprite || !boss.sprite.active) return;
+
+        for (let i = 0; i < 3; i++) {
+            const smoke = this.add.circle(
+                boss.sprite.x + Phaser.Math.Between(-54, 54),
+                boss.sprite.y + Phaser.Math.Between(6, 58),
+                Phaser.Math.Between(10, 22),
+                Phaser.Utils.Array.GetRandom([0x000000, 0x1a1010, 0x241414, 0x3a0000]),
+                Phaser.Math.FloatBetween(0.24, 0.46)
+            ).setDepth(9646).setBlendMode(Phaser.BlendModes.MULTIPLY);
+
+            boss.smoke.push(smoke);
+            state.soloBossObjects.push(smoke);
+            state.objects.push(smoke);
+            this.tweens.add({
+                targets: smoke,
+                x: smoke.x + Phaser.Math.Between(-24, 24),
+                y: smoke.y + Phaser.Math.Between(-18, 22),
+                alpha: 0,
+                scaleX: Phaser.Math.FloatBetween(1.8, 2.8),
+                scaleY: Phaser.Math.FloatBetween(1.3, 2.2),
+                duration: Phaser.Math.Between(720, 1120),
+                ease: 'Sine.easeOut',
+                onComplete: () => {
+                    try { if (smoke && smoke.destroy) smoke.destroy(); } catch (_) {}
+                    boss.smoke = (boss.smoke || []).filter(item => item !== smoke);
+                    state.soloBossObjects = (state.soloBossObjects || []).filter(item => item !== smoke);
+                }
+            });
+        }
+    }
+
+    updateSoloCleaningBigMimiBoss(delta) {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active || !state.gameplayStarted || state.shellEnding) return;
+
+        const now = this.time.now;
+        const elapsed = Date.now() - Number(state.startTime || Date.now());
+        if (!state.soloBigMimiNextAt) state.soloBigMimiNextAt = Number(state.startTime || Date.now()) + 20000;
+        if (elapsed <= 135000 && Date.now() >= Number(state.soloBigMimiNextAt || 0)) {
+            state.soloBigMimiNextAt += 20000;
+            if (!state.soloBigMimi) this.spawnSoloCleaningBigMimiBoss();
+        }
+
+        const boss = state.soloBigMimi;
+        const sprite = boss && boss.sprite ? boss.sprite : null;
+        const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
+        if (!boss || !sprite || !sprite.active || !player || !player.active) return;
+
+        this.updateSoloCleaningBigMimiVisuals(boss);
+
+        if (boss.state !== 'chase') return;
+
+        const dt = Math.min(delta || 16, 50) / 1000;
+        const dx = player.x - sprite.x;
+        const dy = player.y - sprite.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const speed = 246;
+        sprite.x += (dx / dist) * speed * dt;
+        sprite.y += (dy / dist) * speed * dt;
+        sprite.setFlipX(dx < 0);
+        this.updateSoloCleaningBigMimiVisuals(boss);
+
+        if (now >= Number(boss.nextSmokeAt || 0)) {
+            boss.nextSmokeAt = now + 140;
+            this.spawnSoloCleaningBigMimiSmoke(boss);
+        }
+
+        if (dist <= 104 && now >= Number(boss.hitCooldownUntil || 0)) {
+            boss.hitCooldownUntil = now + 900;
+            state.cleanliness = Math.max(0, Math.min(100, Number(state.cleanliness || 0) - 10));
+            this.spawnSoloCleaningDirtImpactFx(player.x, player.y - 12);
+            this.updateSoloCleaningRoomUi();
+            if (this.checkSoloCleaningCleanlinessFail()) return;
+        }
+
+        if (now >= Number(boss.chaseUntil || 0)) {
+            this.retireSoloCleaningBigMimiBoss(boss);
+        }
+    }
+
+    retireSoloCleaningBigMimiBoss(boss) {
+        const state = this.getSoloCleaningRoomState();
+        if (!boss || !boss.sprite || !boss.sprite.active) {
+            if (state.soloBigMimi === boss) state.soloBigMimi = null;
+            return;
+        }
+
+        boss.state = 'retire';
+        this.tweens.add({
+            targets: [boss.sprite, boss.eyeL, boss.eyeR, boss.glow, ...(boss.smoke || [])].filter(Boolean),
+            alpha: 0,
+            y: '-=80',
+            duration: 620,
+            ease: 'Sine.easeIn',
+            onComplete: () => this.clearSoloCleaningBigMimiBoss()
+        });
+    }
+
+    clearSoloCleaningBigMimiBoss() {
+        const state = this.getSoloCleaningRoomState();
+        const boss = state.soloBigMimi;
+        if (boss) {
+            [boss.sprite, boss.eyeL, boss.eyeR, boss.glow, ...(boss.smoke || [])].forEach(obj => {
+                try { if (obj && obj.destroy) obj.destroy(true); } catch (_) {}
+            });
+        }
+        (state.soloBossObjects || []).forEach(obj => {
+            try { if (obj && obj.destroy) obj.destroy(true); } catch (_) {}
+        });
+        state.soloBossObjects = [];
+        state.soloBigMimi = null;
+    }
+
+    triggerSoloCleaningPowerOutage() {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active || state.shellEnding || state.soloOutageActive || state.soloOutageWarningText) return;
+
+        const cam = this.cameras.main;
+        const warning = this.add.text(cam.width / 2, cam.height / 2 - 92, '⚠ 停電警告', {
+            fontSize: cam.width <= 420 ? '26px' : '36px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#fff7a8',
+            stroke: '#2a0000',
+            strokeThickness: 7
+        }).setOrigin(0.5).setDepth(9845).setScrollFactor(0);
+        const flash = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0xfff0a0, 0.18)
+            .setDepth(9844)
+            .setScrollFactor(0)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
+        state.soloOutageWarningText = warning;
+        state.soloOutageObjects.push(warning, flash);
+        state.objects.push(warning, flash);
+        this.tweens.add({ targets: [warning, flash], alpha: 0.18, yoyo: true, repeat: 4, duration: 100, ease: 'Sine.easeInOut' });
+
+        const warnTimer = this.time.delayedCall(1000, () => {
+            try { if (warning && warning.destroy) warning.destroy(); } catch (_) {}
+            try { if (flash && flash.destroy) flash.destroy(); } catch (_) {}
+            state.soloOutageWarningText = null;
+            this.startSoloCleaningPowerOutageDarkness();
+        });
+        state.timers.push(warnTimer);
+    }
+
+    startSoloCleaningPowerOutageDarkness() {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active || state.shellEnding) return;
+
+        const cam = this.cameras.main;
+        const overlay = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x050507, 0.68)
+            .setDepth(9840)
+            .setScrollFactor(0);
+        state.soloOutageOverlay = overlay;
+        state.soloOutageActive = true;
+        state.soloOutageEndingAt = this.time.now + 3000;
+        state.soloOutageObjects.push(overlay);
+        state.objects.push(overlay);
+        this.createSoloCleaningOutageGlows();
+
+        const endTimer = this.time.delayedCall(3000, () => this.clearSoloCleaningPowerOutage());
+        state.timers.push(endTimer);
+    }
+
+    createSoloCleaningOutageGlows() {
+        const state = this.getSoloCleaningRoomState();
+        this.clearSoloCleaningOutageGlowsOnly();
+
+        const targets = [];
+        const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
+        if (player && player.active) targets.push({ sprite: player, radius: 92, color: 0x8ffcff });
+        if (state.soloWashbasin && state.soloWashbasin.active) targets.push({ sprite: state.soloWashbasin, radius: 94, color: 0xa7ffbd });
+        (state.soloMimis || []).forEach(mimi => {
+            if (mimi && mimi.sprite && mimi.sprite.active) targets.push({ sprite: mimi.sprite, radius: 74, color: 0xffb14a });
+        });
+        (state.soloGrimes || []).forEach(grime => {
+            if (grime && grime.container && grime.container.active) targets.push({ sprite: grime.container, radius: 64, color: 0x617044 });
+        });
+        if (state.soloBigMimi && state.soloBigMimi.sprite && state.soloBigMimi.sprite.active) {
+            targets.push({ sprite: state.soloBigMimi.sprite, radius: 122, color: 0xff3333 });
+        }
+
+        targets.slice(0, 20).forEach(item => {
+            const glow = this.add.circle(item.sprite.x, item.sprite.y, item.radius, item.color, 0.22)
+                .setDepth(9842)
+                .setBlendMode(Phaser.BlendModes.ADD);
+            glow.__soloOutageFollow = item.sprite;
+            state.soloOutageGlows.push(glow);
+            state.soloOutageObjects.push(glow);
+            state.objects.push(glow);
+            this.tweens.add({ targets: glow, alpha: 0.36, scaleX: 1.08, scaleY: 1.08, yoyo: true, repeat: -1, duration: 520, ease: 'Sine.easeInOut' });
+        });
+    }
+
+    clearSoloCleaningOutageGlowsOnly() {
+        const state = this.getSoloCleaningRoomState();
+        (state.soloOutageGlows || []).forEach(glow => {
+            try { if (glow && glow.destroy) glow.destroy(); } catch (_) {}
+        });
+        state.soloOutageGlows = [];
+    }
+
+    updateSoloCleaningPowerOutage() {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active || !state.gameplayStarted || state.shellEnding) return;
+
+        const elapsed = Date.now() - Number(state.startTime || Date.now());
+        if (!state.soloOutageNextAt) state.soloOutageNextAt = Number(state.startTime || Date.now()) + 15000;
+        if (elapsed <= 120000 && Date.now() >= Number(state.soloOutageNextAt || 0)) {
+            state.soloOutageNextAt += 15000;
+            this.triggerSoloCleaningPowerOutage();
+        }
+
+        if (state.soloOutageActive) {
+            (state.soloOutageGlows || []).forEach(glow => {
+                const target = glow && glow.__soloOutageFollow ? glow.__soloOutageFollow : null;
+                if (glow && glow.active && target && target.active) glow.setPosition(target.x, target.y);
+                else if (glow && glow.active) glow.setVisible(false);
+            });
+        }
+    }
+
+    clearSoloCleaningPowerOutage() {
+        const state = this.getSoloCleaningRoomState();
+        (state.soloOutageObjects || []).forEach(obj => {
+            try { if (obj && obj.destroy) obj.destroy(true); } catch (_) {}
+        });
+        state.soloOutageObjects = [];
+        state.soloOutageGlows = [];
+        state.soloOutageActive = false;
+        state.soloOutageEndingAt = 0;
+        state.soloOutageWarningText = null;
+        state.soloOutageOverlay = null;
+    }
+
+    getSoloCleaningResultData() {
+        const state = this.getSoloCleaningRoomState();
+        const mouseCount = Math.max(0, Math.floor(Number(state.mouseCount || 0)));
+        const grimeCount = Math.max(0, Math.floor(Number(state.grimeCount || 0)));
+        const deodorizeCount = Math.max(0, Math.floor(Number(state.deodorizeCount || 0)));
+        const cleanliness = Math.max(0, Math.min(100, Number(state.cleanliness || 0)));
+        const baseScore = Math.max(0, mouseCount * 70 + grimeCount * 55 + deodorizeCount * 25 + cleanliness * 4);
+        const failed = !!state.soloFailed;
+        const reward = Math.max(0, Math.min(1500, Math.floor(failed ? baseScore * 0.55 : baseScore)));
+
+        return {
+            mouseCount,
+            grimeCount,
+            deodorizeCount,
+            cleanliness,
+            score: Math.floor(baseScore),
+            reward,
+            failed
+        };
+    }
+
+    checkSoloCleaningCleanlinessFail() {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active || state.shellEnding) return false;
+        if (Number(state.cleanliness || 0) > 0) return false;
+
+        state.cleanliness = 0;
+        state.soloFailed = true;
+        this.updateSoloCleaningRoomUi();
+        this.showSoloCleaningRoomShellEndAndReturn('failed');
+        return true;
+    }
+
+    showSoloCleaningResultPanel() {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active) return;
+
+        const cam = this.cameras.main;
+        const data = this.getSoloCleaningResultData();
+        state.soloResultData = data;
+
+        const panelW = Math.min(430, cam.width - 34);
+        const panelH = 350;
+        const x = cam.width / 2;
+        const targetY = cam.height / 2;
+        const startY = -panelH;
+        const container = this.add.container(x, startY).setDepth(9915).setScrollFactor(0);
+
+        const bg = this.add.graphics();
+        bg.fillStyle(0x000000, 0.78);
+        bg.fillRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, 20);
+        bg.lineStyle(4, 0x7fffea, 0.96);
+        bg.strokeRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, 20);
+        bg.lineStyle(2, 0xff8bd4, 0.64);
+        bg.strokeRoundedRect(-panelW / 2 + 9, -panelH / 2 + 9, panelW - 18, panelH - 18, 15);
+
+        const title = this.add.text(0, -panelH / 2 + 42, '大掃除表現', {
+            fontSize: '30px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#eafffb',
+            stroke: '#00343c',
+            strokeThickness: 6
+        }).setOrigin(0.5);
+
+        const cleanText = data.cleanliness >= 99.95 ? '100.0' : data.cleanliness.toFixed(1);
+        const lines = [
+            `驅鼠數量：${data.mouseCount}`,
+            `除垢數量：${data.grimeCount}`,
+            `除臭次數：${data.deodorizeCount}`,
+            `剩餘潔淨度：${cleanText}%`,
+            `總分：${data.score}`,
+            `獲得馬德幣：${data.reward}`
+        ];
+
+        const body = this.add.text(-panelW / 2 + 46, -panelH / 2 + 88, lines.join('\n'), {
+            fontSize: '20px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#fff7d6',
+            stroke: '#00151d',
+            strokeThickness: 4,
+            lineSpacing: 9
+        }).setOrigin(0, 0);
+
+        const failText = this.add.text(0, panelH / 2 - 88, data.failed ? '潔淨度歸零，獎勵已套用折減' : '清理完成，準備領取獎勵！', {
+            fontSize: '14px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: data.failed ? '#ffb7b7' : '#a7ffbd',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+
+        const btnBg = this.add.rectangle(0, panelH / 2 - 40, panelW - 86, 48, 0x1ed760, 0.92)
+            .setStrokeStyle(3, 0xffffff, 0.86)
+            .setInteractive({ useHandCursor: true });
+        const btnText = this.add.text(0, panelH / 2 - 40, '領取獎勵並返回', {
+            fontSize: '20px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#06230f',
+            stroke: '#ffffff',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+        const errorText = this.add.text(0, panelH / 2 - 12, '', {
+            fontSize: '13px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffb7b7',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+
+        btnBg.on('pointerdown', () => this.claimSoloCleaningRewardAndReturn(btnBg, btnText));
+        container.add([bg, title, body, failText, btnBg, btnText, errorText]);
+        state.soloResultPanel = container;
+        state.soloResultErrorText = errorText;
+        state.soloResultObjects.push(container);
+        state.objects.push(container);
+
+        this.tweens.add({ targets: container, y: targetY, duration: 620, ease: 'Back.easeOut' });
+    }
+
+    async claimSoloCleaningRewardAndReturn(buttonBg = null, buttonText = null) {
+        const state = this.getSoloCleaningRoomState();
+        if (!state.active || state.soloRewardPending || state.soloRewardClaimed) return;
+
+        const data = state.soloResultData || this.getSoloCleaningResultData();
+        const reward = Math.max(0, Math.min(1500, Math.floor(Number(data.reward || 0))));
+        const uid = window.GameLogic && window.GameLogic.currentUser && window.GameLogic.currentUser.uid ? window.GameLogic.currentUser.uid : null;
+
+        if (!uid || !window.GameLogic || !window.GameLogic.db) {
+            if (state.soloResultErrorText) state.soloResultErrorText.setText('獎勵發放失敗，請再試一次。');
+            return;
+        }
+
+        state.soloRewardPending = true;
+        if (buttonBg && buttonBg.disableInteractive) buttonBg.disableInteractive();
+        if (buttonBg && buttonBg.setAlpha) buttonBg.setAlpha(0.55);
+        if (buttonText && buttonText.setText) buttonText.setText('發放中……');
+        if (state.soloResultErrorText) state.soloResultErrorText.setText('');
+
+        try {
+            const coinSnap = await get(ref(window.GameLogic.db, `users/${uid}/coins`));
+            const currentCoins = Math.max(0, Math.floor(Number(coinSnap.val() || 0)));
+            const nextCoins = currentCoins + reward;
+            await set(ref(window.GameLogic.db, `users/${uid}/coins`), nextCoins);
+            state.soloRewardClaimed = true;
+            if (window.syncPlayerCoinsUi) window.syncPlayerCoinsUi(nextCoins);
+            else if (window.GameLogic && window.GameLogic.myProfile) window.GameLogic.myProfile.coins = nextCoins;
+            this.clearSoloCleaningRoom(false);
+        } catch (err) {
+            console.warn('[大掃除] 獎勵發放失敗：', err);
+            state.soloRewardPending = false;
+            if (state.soloResultErrorText) state.soloResultErrorText.setText('獎勵發放失敗，請再試一次。');
+            if (buttonBg && buttonBg.setInteractive) buttonBg.setInteractive({ useHandCursor: true });
+            if (buttonBg && buttonBg.setAlpha) buttonBg.setAlpha(1);
+            if (buttonText && buttonText.setText) buttonText.setText('領取獎勵並返回');
+        }
+    }
+
     spawnSoloCleaningDirtImpactFx(x, y) {
         const colors = [0xffffff, 0xfff6dd, 0xefe0b8, 0x5a321b, 0x3b2215];
         for (let i = 0; i < 16; i++) {
@@ -20097,7 +20617,7 @@ if (!data.scoreHandled && data.attacker) {
         this.tweens.add({ targets: [smokeA, smokeB], y: '-=16', alpha: 0.04, yoyo: true, repeat: -1, duration: 1200, ease: 'Sine.easeInOut' });
         this.tweens.add({ targets: container, angle: 2.8, yoyo: true, repeat: -1, duration: 980, ease: 'Sine.easeInOut' });
 
-        const grime = { container, x, y, hp: 3, maxHp: 3 };
+        const grime = { container, x, y, hp: 1, maxHp: 1 };
         state.soloGrimes.push(grime);
         state.objects.push(container);
         return grime;
@@ -20464,6 +20984,11 @@ if (!data.scoreHandled && data.attacker) {
             (state.soloFxObjects || []).forEach(obj => {
                 try { if (obj && obj.destroy) obj.destroy(true); } catch (_) {}
             });
+            this.clearSoloCleaningBigMimiBoss();
+            this.clearSoloCleaningPowerOutage();
+            (state.soloResultObjects || []).forEach(obj => {
+                try { if (obj && obj.destroy) obj.destroy(true); } catch (_) {}
+            });
         } catch (_) {}
 
         if (destroyObjects) {
@@ -20483,6 +21008,18 @@ if (!data.scoreHandled && data.attacker) {
         state.soloGrimes = [];
         state.soloDirtyProjectiles = [];
         state.soloFxObjects = [];
+        state.soloBossObjects = [];
+        state.soloOutageObjects = [];
+        state.soloResultObjects = [];
+        state.soloBigMimi = null;
+        state.soloBigMimiHitCooldownUntil = 0;
+        state.soloOutageActive = false;
+        state.soloOutageEndingAt = 0;
+        state.soloOutageWarningText = null;
+        state.soloOutageOverlay = null;
+        state.soloOutageGlows = [];
+        state.soloResultPanel = null;
+        state.soloResultErrorText = null;
         state.soloWashbasin = null;
         state.soloWashbasinAura = null;
         state.soloDirtyFx = null;
@@ -20531,7 +21068,10 @@ if (!data.scoreHandled && data.attacker) {
         const dt = Math.min(delta || 16, 50) / 1000;
         if (!state.soloHazardsStarted) this.initializeSoloCleaningRoomHazards();
         this.updateSoloCleaningRoomDirtyDrain(dt);
+        if (this.checkSoloCleaningCleanlinessFail && this.checkSoloCleaningCleanlinessFail()) return;
         this.updateSoloCleaningRoomHazards(time, delta);
+        this.updateSoloCleaningBigMimiBoss(delta);
+        this.updateSoloCleaningPowerOutage();
         this.updateSoloCleaningRoomWaterballHits();
 
         const speed = Number(state.soloPlayerSpeed || 324);
@@ -20594,34 +21134,39 @@ if (!data.scoreHandled && data.attacker) {
         this.cameras.main.startFollow(player, true, 0.12, 0.12);
     }
 
-    showSoloCleaningRoomShellEndAndReturn() {
+    showSoloCleaningRoomShellEndAndReturn(reason = 'complete') {
         const state = this.getSoloCleaningRoomState();
         if (!state.active || state.shellEnding) return;
         state.shellEnding = true;
         state.inputLocked = true;
         state.gameplayStarted = false;
+        if (reason === 'failed') state.soloFailed = true;
 
         try {
             if (state.countdownTimer && state.countdownTimer.remove) state.countdownTimer.remove(false);
         } catch (_) {}
         state.countdownTimer = null;
 
+        this.clearSoloCleaningPowerOutage();
+        this.clearSoloCleaningBigMimiBoss();
         this.playSoloCleaningRoomSfx('solo-cleaning-room-whistle');
 
         const cam = this.cameras.main;
-        const text = this.add.text(cam.width / 2, cam.height / 2, '結束大掃除', {
-            fontSize: '42px',
+        const message = reason === 'failed' ? '洋蔥潔淨度歸零！' : '結束大掃除';
+        const text = this.add.text(cam.width / 2, cam.height / 2, message, {
+            fontSize: reason === 'failed' ? '36px' : '42px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
-            color: '#ffffff',
-            stroke: '#005c6b',
+            color: reason === 'failed' ? '#ffdddd' : '#ffffff',
+            stroke: reason === 'failed' ? '#6b0000' : '#005c6b',
             strokeThickness: 7
         }).setOrigin(0.5).setDepth(9905).setScrollFactor(0);
 
         state.objects.push(text);
 
-        const timer = this.time.delayedCall(3000, () => {
-            this.clearSoloCleaningRoom(false);
+        const timer = this.time.delayedCall(reason === 'failed' ? 1500 : 3000, () => {
+            try { if (text && text.destroy) text.destroy(); } catch (_) {}
+            this.showSoloCleaningResultPanel();
         });
         state.timers.push(timer);
     }
@@ -20733,6 +21278,24 @@ if (!data.scoreHandled && data.attacker) {
         state.soloGrimes = [];
         state.soloDirtyProjectiles = [];
         state.soloFxObjects = [];
+        state.soloBossObjects = [];
+        state.soloOutageObjects = [];
+        state.soloResultObjects = [];
+        state.soloBigMimi = null;
+        state.soloBigMimiNextAt = 0;
+        state.soloBigMimiHitCooldownUntil = 0;
+        state.soloOutageNextAt = 0;
+        state.soloOutageActive = false;
+        state.soloOutageEndingAt = 0;
+        state.soloOutageWarningText = null;
+        state.soloOutageOverlay = null;
+        state.soloOutageGlows = [];
+        state.soloRewardClaimed = false;
+        state.soloRewardPending = false;
+        state.soloFailed = false;
+        state.soloResultData = null;
+        state.soloResultPanel = null;
+        state.soloResultErrorText = null;
         state.soloWashbasin = null;
         state.soloWashbasinAura = null;
         state.soloDirtyFx = null;
