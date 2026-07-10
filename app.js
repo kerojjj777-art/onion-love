@@ -20226,10 +20226,10 @@ if (!data.scoreHandled && data.attacker) {
         const grimeCount = Math.max(0, Math.floor(Number(state.grimeCount || 0)));
         const deodorizeCount = Math.max(0, Math.floor(Number(state.deodorizeCount || 0)));
         const cleanliness = Math.max(0, Math.min(100, Number(state.cleanliness || 0)));
-        const baseScore = Math.max(0, mouseCount * 48 + grimeCount * 36 + Math.min(deodorizeCount, 18) * 10 + cleanliness * 2.5);
-        const multiplier = cleanliness >= 85 ? 1.12 : (cleanliness >= 65 ? 1 : (cleanliness >= 40 ? 0.82 : 0.62));
+        const baseScore = Math.max(0, mouseCount * 32 + grimeCount * 24 + Math.min(deodorizeCount, 10) * 6 + cleanliness * 1.6);
+        const multiplier = cleanliness >= 90 ? 1.05 : (cleanliness >= 70 ? 0.92 : (cleanliness >= 45 ? 0.72 : 0.5));
         const failed = !!state.soloFailed;
-        const reward = Math.max(0, Math.min(1500, Math.floor(failed ? baseScore * multiplier * 0.45 : baseScore * multiplier)));
+        const reward = Math.max(0, Math.min(1500, Math.floor(failed ? baseScore * multiplier * 0.35 : baseScore * multiplier)));
 
         return {
             mouseCount,
