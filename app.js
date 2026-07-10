@@ -18903,15 +18903,7 @@ if (!data.scoreHandled && data.attacker) {
             strokeThickness: 5
         }).setOrigin(0.5);
 
-        const hint = this.add.text(rect.centerX, rect.y + rect.h - 26, '開場演出中，正式操作由下一包接上', {
-            fontSize: cam.width <= 420 ? '12px' : '14px',
-            fontFamily: 'Arial, sans-serif',
-            color: '#fff4cc',
-            stroke: '#3b1f0d',
-            strokeThickness: 4
-        }).setOrigin(0.5);
-
-        container.add([dim, glowTop, glowBottom, glowLeft, glowRight, frame, titleBg, title, hint]);
+        container.add([dim, glowTop, glowBottom, glowLeft, glowRight, frame, titleBg, title]);
         state.layerContainer = container;
         state.objects.push(container);
         return container;
@@ -20229,7 +20221,10 @@ if (!data.scoreHandled && data.attacker) {
         const baseScore = Math.max(0, mouseCount * 32 + grimeCount * 24 + Math.min(deodorizeCount, 10) * 6 + cleanliness * 1.6);
         const multiplier = cleanliness >= 90 ? 1.05 : (cleanliness >= 70 ? 0.92 : (cleanliness >= 45 ? 0.72 : 0.5));
         const failed = !!state.soloFailed;
-        const reward = Math.max(0, Math.min(1500, Math.floor(failed ? baseScore * multiplier * 0.35 : baseScore * multiplier)));
+        const convertedReward = failed
+            ? baseScore * multiplier * 0.12 * 0.35
+            : baseScore * multiplier * 0.12 + 50;
+        const reward = Math.max(0, Math.min(600, Math.round(convertedReward)));
 
         return {
             mouseCount,
@@ -20263,11 +20258,18 @@ if (!data.scoreHandled && data.attacker) {
         state.soloResultData = data;
 
         const panelW = Math.min(430, cam.width - 34);
-        const panelH = 350;
+        const panelH = Math.max(320, Math.min(430, cam.height - 24));
+        const compact = panelH < 400;
         const x = cam.width / 2;
         const targetY = cam.height / 2;
         const startY = -panelH;
-        const container = this.add.container(x, startY).setDepth(9915).setScrollFactor(0);
+        const container = this.add.container(x, startY).setDepth(12000).setScrollFactor(0);
+
+        const resultBlocker = this.add.zone(0, 0, cam.width, cam.height)
+            .setInteractive();
+        resultBlocker.on('pointerdown', (pointer, localX, localY, event) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+        });
 
         const bg = this.add.graphics();
         bg.fillStyle(0x000000, 0.78);
@@ -20278,7 +20280,7 @@ if (!data.scoreHandled && data.attacker) {
         bg.strokeRoundedRect(-panelW / 2 + 9, -panelH / 2 + 9, panelW - 18, panelH - 18, 15);
 
         const title = this.add.text(0, -panelH / 2 + 42, '大掃除表現', {
-            fontSize: '30px',
+            fontSize: compact ? '27px' : '30px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#eafffb',
@@ -20296,37 +20298,41 @@ if (!data.scoreHandled && data.attacker) {
             `獲得馬德幣：${data.reward}`
         ];
 
-        const body = this.add.text(-panelW / 2 + 46, -panelH / 2 + 88, lines.join('\n'), {
-            fontSize: '20px',
+        const body = this.add.text(-panelW / 2 + 46, -panelH / 2 + (compact ? 78 : 92), lines.join('\n'), {
+            fontSize: compact ? '17px' : '20px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#fff7d6',
             stroke: '#00151d',
             strokeThickness: 4,
-            lineSpacing: 9
+            lineSpacing: compact ? 5 : 10
         }).setOrigin(0, 0);
 
-        const failText = this.add.text(0, panelH / 2 - 88, data.failed ? '潔淨度歸零，獎勵已套用折減' : '清理完成，準備領取獎勵！', {
+        const failText = this.add.text(0, panelH / 2 - (compact ? 92 : 104), data.failed ? '潔淨度歸零，獎勵已套用折減' : '', {
             fontSize: '14px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
-            color: data.failed ? '#ffb7b7' : '#a7ffbd',
+            color: '#ffb7b7',
             stroke: '#000000',
             strokeThickness: 3
         }).setOrigin(0.5);
 
-        const btnBg = this.add.rectangle(0, panelH / 2 - 40, panelW - 86, 48, 0x1ed760, 0.92)
+        const buttonY = panelH / 2 - (compact ? 48 : 58);
+        const buttonW = panelW - 86;
+        const btnBg = this.add.rectangle(0, buttonY, buttonW, 48, 0x1ed760, 0.92)
             .setStrokeStyle(3, 0xffffff, 0.86)
             .setInteractive({ useHandCursor: true });
-        const btnText = this.add.text(0, panelH / 2 - 40, '領取獎勵並返回', {
+        const btnText = this.add.text(0, buttonY, '領取獎勵並返回', {
             fontSize: '20px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#06230f',
             stroke: '#ffffff',
             strokeThickness: 3
-        }).setOrigin(0.5);
-        const errorText = this.add.text(0, panelH / 2 - 12, '', {
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        const btnHit = this.add.zone(0, buttonY, buttonW + 24, 64)
+            .setInteractive({ useHandCursor: true });
+        const errorText = this.add.text(0, panelH / 2 - 18, '', {
             fontSize: '13px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
@@ -20335,8 +20341,16 @@ if (!data.scoreHandled && data.attacker) {
             strokeThickness: 3
         }).setOrigin(0.5);
 
-        btnBg.on('pointerdown', () => this.claimSoloCleaningRewardAndReturn(btnBg, btnText));
-        container.add([bg, title, body, failText, btnBg, btnText, errorText]);
+        const claimReward = (pointer, localX, localY, event) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+            this.claimSoloCleaningRewardAndReturn(btnBg, btnText, btnHit);
+        };
+
+        btnBg.on('pointerdown', claimReward);
+        btnText.on('pointerdown', claimReward);
+        btnHit.on('pointerdown', claimReward);
+
+        container.add([resultBlocker, bg, title, body, failText, btnBg, btnText, btnHit, errorText]);
         state.soloResultPanel = container;
         state.soloResultErrorText = errorText;
         state.soloResultObjects.push(container);
@@ -20345,12 +20359,12 @@ if (!data.scoreHandled && data.attacker) {
         this.tweens.add({ targets: container, y: targetY, duration: 620, ease: 'Back.easeOut' });
     }
 
-    async claimSoloCleaningRewardAndReturn(buttonBg = null, buttonText = null) {
+    async claimSoloCleaningRewardAndReturn(buttonBg = null, buttonText = null, buttonHit = null) {
         const state = this.getSoloCleaningRoomState();
         if (!state.active || state.soloRewardPending || state.soloRewardClaimed) return;
 
         const data = state.soloResultData || this.getSoloCleaningResultData();
-        const reward = Math.max(0, Math.min(1500, Math.floor(Number(data.reward || 0))));
+        const reward = Math.max(0, Math.min(600, Math.floor(Number(data.reward || 0))));
         const uid = window.GameLogic && window.GameLogic.currentUser && window.GameLogic.currentUser.uid ? window.GameLogic.currentUser.uid : null;
 
         if (!uid || !window.GameLogic || !window.GameLogic.db) {
@@ -20360,15 +20374,23 @@ if (!data.scoreHandled && data.attacker) {
 
         state.soloRewardPending = true;
         if (buttonBg && buttonBg.disableInteractive) buttonBg.disableInteractive();
+        if (buttonText && buttonText.disableInteractive) buttonText.disableInteractive();
+        if (buttonHit && buttonHit.disableInteractive) buttonHit.disableInteractive();
         if (buttonBg && buttonBg.setAlpha) buttonBg.setAlpha(0.55);
         if (buttonText && buttonText.setText) buttonText.setText('發放中……');
         if (state.soloResultErrorText) state.soloResultErrorText.setText('');
 
         try {
-            const coinSnap = await get(ref(window.GameLogic.db, `users/${uid}/coins`));
-            const currentCoins = Math.max(0, Math.floor(Number(coinSnap.val() || 0)));
-            const nextCoins = currentCoins + reward;
-            await set(ref(window.GameLogic.db, `users/${uid}/coins`), nextCoins);
+            const txResult = await runTransaction(ref(window.GameLogic.db, `users/${uid}/coins`), currentValue => {
+                const currentCoins = Math.max(0, Math.floor(Number(currentValue || 0)));
+                return currentCoins + reward;
+            });
+
+            if (!txResult || !txResult.committed) {
+                throw new Error('reward-transaction-aborted');
+            }
+
+            const nextCoins = Math.max(0, Math.floor(Number(txResult.snapshot.val() || 0)));
             state.soloRewardClaimed = true;
             if (window.syncPlayerCoinsUi) window.syncPlayerCoinsUi(nextCoins);
             else if (window.GameLogic && window.GameLogic.myProfile) window.GameLogic.myProfile.coins = nextCoins;
@@ -20378,6 +20400,8 @@ if (!data.scoreHandled && data.attacker) {
             state.soloRewardPending = false;
             if (state.soloResultErrorText) state.soloResultErrorText.setText('獎勵發放失敗，請再試一次。');
             if (buttonBg && buttonBg.setInteractive) buttonBg.setInteractive({ useHandCursor: true });
+            if (buttonText && buttonText.setInteractive) buttonText.setInteractive({ useHandCursor: true });
+            if (buttonHit && buttonHit.setInteractive) buttonHit.setInteractive({ useHandCursor: true });
             if (buttonBg && buttonBg.setAlpha) buttonBg.setAlpha(1);
             if (buttonText && buttonText.setText) buttonText.setText('領取獎勵並返回');
         }
