@@ -18672,6 +18672,10 @@ if (!data.scoreHandled && data.attacker) {
             strokeThickness: 5
         }).setOrigin(0.5);
 
+        const giantMimiWarning = cam.width <= 420
+            ? '偶爾巨大鼠偷米米會出現，\n小心他噴出的超級污泥'
+            : '偶爾巨大鼠偷米米會出現，小心他噴出的超級污泥';
+
         const bodyText =
             '洋蔥大廳被鼠偷米米一族佔據了！\n' +
             '甚至電線被咬壞燈泡都快不亮了！\n\n' +
@@ -18681,7 +18685,7 @@ if (!data.scoreHandled && data.attacker) {
             '地板的污泥也需要你幫忙順手清理一下！\n' +
             '對著污泥點擊「清理」三次即可完成除垢\n' +
             '被米米弄髒的話記得去水桶除臭一下\n\n' +
-            '偶爾巨大鼠偷米米會出現，小心他噴出的超級污泥\n' +
+            giantMimiWarning + '\n' +
             '小心當你的潔淨度歸零時就只能先撤退囉！\n' +
             '[備註：大掃除完記得去洗澡。]';
 
@@ -18908,7 +18912,10 @@ if (!data.scoreHandled && data.attacker) {
 
     hideSoloCleaningRoomLobbyUi() {
         const state = this.getSoloCleaningRoomState();
-        if (!state.prevUiState) state.prevUiState = { dom: {}, phaser: {}, cameras: {} };
+
+        // 說明畫面與正式開始會共用這個方法；已隱藏時直接略過，避免覆寫原始可見狀態。
+        if (state.prevUiState) return;
+        state.prevUiState = { dom: {}, phaser: {}, cameras: {} };
 
         const domIds = [
             ...(this.soloRocketDomUiIds || []),
@@ -19170,9 +19177,14 @@ if (!data.scoreHandled && data.attacker) {
     }
 
     startSoloCleaningRoom() {
-        if (!this.localPlayer || !this.localPlayer.sprite) return;
-
         const state = this.getSoloCleaningRoomState();
+
+        if (!this.localPlayer || !this.localPlayer.sprite) {
+            console.warn('[大掃除] 找不到本機玩家，已恢復大廳介面。');
+            this.clearSoloCleaningRoom(true);
+            return;
+        }
+
         if (state.active) return;
 
         this.clearSoloCleaningResultUi();
@@ -19283,25 +19295,46 @@ if (!data.scoreHandled && data.attacker) {
             .setScrollFactor(0);
 
         const frame = this.add.graphics();
-        const outerX = rect.x;
-        const outerY = rect.y;
-        const outerW = rect.w;
-        const outerH = rect.h;
+        const compact = cam.width <= 420;
+        // 手機版只把裝飾框向畫面外側移並縮細，不改動 gameplay 使用的 safe rect。
+        const outerX = compact ? 7 : rect.x;
+        const outerY = compact ? 7 : rect.y;
+        const outerW = compact ? Math.max(280, cam.width - 14) : rect.w;
+        const outerH = compact ? Math.max(320, cam.height - 14) : rect.h;
+        const outerCenterX = outerX + outerW / 2;
+        const outerCenterY = outerY + outerH / 2;
+        const firstInset = compact ? 4 : 8;
+        const secondInset = compact ? 10 : 18;
+        const glowOffset = compact ? 4 : 7;
+        const glowThickness = compact ? 6 : 12;
+        const glowTrim = compact ? 24 : 36;
 
-        frame.lineStyle(12, 0x8a5618, 0.96);
-        frame.strokeRoundedRect(outerX, outerY, outerW, outerH, 20);
-        frame.lineStyle(5, 0xffd45a, 1);
-        frame.strokeRoundedRect(outerX + 8, outerY + 8, outerW - 16, outerH - 16, 16);
-        frame.lineStyle(2, 0xffffbd, 0.72);
-        frame.strokeRoundedRect(outerX + 18, outerY + 18, outerW - 36, outerH - 36, 12);
+        frame.lineStyle(compact ? 6 : 12, 0x8a5618, 0.96);
+        frame.strokeRoundedRect(outerX, outerY, outerW, outerH, compact ? 14 : 20);
+        frame.lineStyle(compact ? 3 : 5, 0xffd45a, 1);
+        frame.strokeRoundedRect(
+            outerX + firstInset,
+            outerY + firstInset,
+            outerW - firstInset * 2,
+            outerH - firstInset * 2,
+            compact ? 11 : 16
+        );
+        frame.lineStyle(compact ? 1 : 2, 0xffffbd, 0.72);
+        frame.strokeRoundedRect(
+            outerX + secondInset,
+            outerY + secondInset,
+            outerW - secondInset * 2,
+            outerH - secondInset * 2,
+            compact ? 8 : 12
+        );
 
-        const glowTop = this.add.rectangle(rect.centerX, outerY + 7, outerW - 36, 12, 0xffd45a, 0.18)
+        const glowTop = this.add.rectangle(outerCenterX, outerY + glowOffset, outerW - glowTrim, glowThickness, 0xffd45a, 0.18)
             .setBlendMode(Phaser.BlendModes.ADD);
-        const glowBottom = this.add.rectangle(rect.centerX, outerY + outerH - 7, outerW - 36, 12, 0xffd45a, 0.18)
+        const glowBottom = this.add.rectangle(outerCenterX, outerY + outerH - glowOffset, outerW - glowTrim, glowThickness, 0xffd45a, 0.18)
             .setBlendMode(Phaser.BlendModes.ADD);
-        const glowLeft = this.add.rectangle(outerX + 7, rect.centerY, 12, outerH - 36, 0xffd45a, 0.18)
+        const glowLeft = this.add.rectangle(outerX + glowOffset, outerCenterY, glowThickness, outerH - glowTrim, 0xffd45a, 0.18)
             .setBlendMode(Phaser.BlendModes.ADD);
-        const glowRight = this.add.rectangle(outerX + outerW - 7, rect.centerY, 12, outerH - 36, 0xffd45a, 0.18)
+        const glowRight = this.add.rectangle(outerX + outerW - glowOffset, outerCenterY, glowThickness, outerH - glowTrim, 0xffd45a, 0.18)
             .setBlendMode(Phaser.BlendModes.ADD);
 
         const titleBg = this.add.rectangle(rect.x + 88, rect.y + 25, 148, 34, 0x3b1f0d, 0.62)
@@ -19324,10 +19357,16 @@ if (!data.scoreHandled && data.attacker) {
     createSoloCleaningRoomUiLayer() {
         const state = this.getSoloCleaningRoomState();
         const cam = this.cameras.main;
-        const panelW = Math.min(320, Math.max(260, cam.width - 28));
-        const panelH = 152;
-        const px = Math.max(14, cam.width - panelW - 16);
-        const py = 16;
+        const compact = cam.width <= 420;
+        const panelW = compact
+            ? Math.min(252, Math.max(220, cam.width - 18))
+            : Math.min(320, Math.max(260, cam.width - 28));
+        const panelH = compact ? 120 : 152;
+        const px = compact
+            ? Math.max(8, cam.width - panelW - 8)
+            : Math.max(14, cam.width - panelW - 16);
+        const py = compact ? 8 : 16;
+        const sidePadding = compact ? 13 : 18;
 
         const container = this.add.container(0, 0)
             .setDepth(9720)
@@ -19335,58 +19374,69 @@ if (!data.scoreHandled && data.attacker) {
 
         const panel = this.add.graphics();
         panel.fillStyle(0x021a26, 0.5);
-        panel.fillRoundedRect(px, py, panelW, panelH, 14);
-        panel.lineStyle(3, 0x30dfff, 0.98);
-        panel.strokeRoundedRect(px, py, panelW, panelH, 14);
+        panel.fillRoundedRect(px, py, panelW, panelH, compact ? 11 : 14);
+        panel.lineStyle(compact ? 2 : 3, 0x30dfff, 0.98);
+        panel.strokeRoundedRect(px, py, panelW, panelH, compact ? 11 : 14);
         panel.lineStyle(1, 0xffffff, 0.42);
-        panel.strokeRoundedRect(px + 7, py + 7, panelW - 14, panelH - 14, 10);
+        panel.strokeRoundedRect(
+            px + (compact ? 5 : 7),
+            py + (compact ? 5 : 7),
+            panelW - (compact ? 10 : 14),
+            panelH - (compact ? 10 : 14),
+            compact ? 8 : 10
+        );
 
-        const countdownText = this.add.text(px + panelW - 18, py + 25, '02:30', {
-            fontSize: '27px',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold',
-            color: '#ffffff',
-            stroke: '#00425c',
-            strokeThickness: 5
-        }).setOrigin(1, 0.5);
+        const countdownText = this.add.text(
+            px + panelW - sidePadding,
+            py + (compact ? 19 : 25),
+            '02:30',
+            {
+                fontSize: compact ? '21px' : '27px',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold',
+                color: '#ffffff',
+                stroke: '#00425c',
+                strokeThickness: compact ? 4 : 5
+            }
+        ).setOrigin(1, 0.5);
 
-        const cleanText = this.add.text(px + 18, py + 58, '洋蔥潔淨度 100%', {
-            fontSize: '15px',
+        const cleanText = this.add.text(px + sidePadding, py + (compact ? 43 : 58), '洋蔥潔淨度 100%', {
+            fontSize: compact ? '12px' : '15px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#dffcff',
             stroke: '#00151d',
-            strokeThickness: 3
+            strokeThickness: compact ? 2 : 3
         }).setOrigin(0, 0.5);
 
-        const barX = px + 18;
-        const barY = py + 80;
-        const barW = panelW - 36;
-        const barBack = this.add.rectangle(barX, barY, barW, 14, 0x001c2a, 0.72)
+        const barX = px + sidePadding;
+        const barY = py + (compact ? 61 : 80);
+        const barW = panelW - sidePadding * 2;
+        const barBack = this.add.rectangle(barX, barY, barW, compact ? 10 : 14, 0x001c2a, 0.72)
             .setOrigin(0, 0.5)
-            .setStrokeStyle(2, 0x8ffcff, 0.85);
-        const barFill = this.add.rectangle(barX + 2, barY, barW - 4, 9, 0x26dfff, 1)
+            .setStrokeStyle(compact ? 1 : 2, 0x8ffcff, 0.85);
+        const barFill = this.add.rectangle(barX + 2, barY, barW - 4, compact ? 7 : 9, 0x26dfff, 1)
             .setOrigin(0, 0.5);
-        const barGlow = this.add.rectangle(barX + 2, barY, barW - 4, 18, 0x26dfff, 0.16)
+        const barGlow = this.add.rectangle(barX + 2, barY, barW - 4, compact ? 13 : 18, 0x26dfff, 0.16)
             .setOrigin(0, 0.5)
             .setBlendMode(Phaser.BlendModes.ADD);
 
-        const grimeText = this.add.text(px + 18, py + 112, '除垢數量：0', {
-            fontSize: '15px',
+        const grimeText = this.add.text(px + sidePadding, py + (compact ? 87 : 112), '除垢數量：0', {
+            fontSize: compact ? '12px' : '15px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#fff4cc',
             stroke: '#00151d',
-            strokeThickness: 3
+            strokeThickness: compact ? 2 : 3
         }).setOrigin(0, 0.5);
 
-        const mouseText = this.add.text(px + 18, py + 135, '驅鼠數量：0', {
-            fontSize: '15px',
+        const mouseText = this.add.text(px + sidePadding, py + (compact ? 107 : 135), '驅鼠數量：0', {
+            fontSize: compact ? '12px' : '15px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#fff4cc',
             stroke: '#00151d',
-            strokeThickness: 3
+            strokeThickness: compact ? 2 : 3
         }).setOrigin(0, 0.5);
 
         container.add([panel, countdownText, cleanText, barBack, barGlow, barFill, grimeText, mouseText]);
@@ -19444,10 +19494,15 @@ if (!data.scoreHandled && data.attacker) {
         const state = this.getSoloCleaningRoomState();
         const cam = this.cameras.main;
         const rect = this.getSoloCleaningRoomSafeRect();
-        const bubbleW = Math.min(rect.w * (cam.width <= 768 ? 0.94 : 0.86), rect.w - 20);
-        const bubbleH = cam.width <= 420 ? 172 : 160;
+        const compact = cam.width <= 420;
+        const bubbleW = compact
+            ? Math.min(rect.w - 8, cam.width - 16)
+            : Math.min(rect.w * (cam.width <= 768 ? 0.94 : 0.86), rect.w - 20);
+        const bubbleH = compact ? 204 : 160;
         const bubbleX = rect.centerX;
-        const bubbleY = rect.y + Math.min(178, Math.max(126, rect.h * 0.22));
+        const bubbleY = compact
+            ? rect.y + Math.min(246, Math.max(228, rect.h * 0.32))
+            : rect.y + Math.min(178, Math.max(126, rect.h * 0.22));
 
         const container = this.add.container(0, 0)
             .setDepth(9820)
@@ -19490,22 +19545,23 @@ if (!data.scoreHandled && data.attacker) {
             });
         }
 
-        const portraitSpace = cam.width <= 420 ? 108 : 136;
-        const npcX = bubbleX - bubbleW / 2 + Math.min(84, bubbleW * 0.13);
+        const portraitSpace = compact ? 86 : 136;
+        const npcX = bubbleX - bubbleW / 2 + (compact ? 46 : Math.min(84, bubbleW * 0.13));
         const npcY = bubbleY;
+        const npcSize = compact ? 74 : 92;
         let npc = null;
         if (this.textures.exists('solo-cleaning-room-npc-onion1')) {
             npc = this.add.image(npcX, npcY, 'solo-cleaning-room-npc-onion1')
-                .setDisplaySize(92, 92);
+                .setDisplaySize(npcSize, npcSize);
         } else {
             npc = this.add.text(npcX, npcY, '🧅', {
-                fontSize: '58px',
+                fontSize: compact ? '48px' : '58px',
                 fontFamily: 'Arial, sans-serif'
             }).setOrigin(0.5);
         }
 
-        const nameText = this.add.text(npcX, bubbleY + 58, '洋蔥精靈', {
-            fontSize: '13px',
+        const nameText = this.add.text(npcX, bubbleY + (compact ? 52 : 58), '洋蔥精靈', {
+            fontSize: compact ? '12px' : '13px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             color: '#005766',
@@ -19513,14 +19569,19 @@ if (!data.scoreHandled && data.attacker) {
             strokeThickness: 3
         }).setOrigin(0.5);
 
-        const lineText = this.add.text(bubbleX - bubbleW / 2 + portraitSpace, bubbleY - 40, '', {
-            fontSize: cam.width <= 420 ? '16px' : '19px',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold',
-            color: '#003b45',
-            lineSpacing: 8,
-            wordWrap: { width: bubbleW - portraitSpace - 28 }
-        }).setOrigin(0, 0);
+        const lineText = this.add.text(
+            bubbleX - bubbleW / 2 + portraitSpace,
+            bubbleY - (compact ? 62 : 40),
+            '',
+            {
+                fontSize: compact ? '17px' : '19px',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold',
+                color: '#003b45',
+                lineSpacing: compact ? 9 : 8,
+                wordWrap: { width: bubbleW - portraitSpace - (compact ? 18 : 28) }
+            }
+        ).setOrigin(0, 0);
 
         container.add([bg, ...sodaBubbles, npc, nameText, lineText]);
         state.introContainer = container;
@@ -19544,27 +19605,39 @@ if (!data.scoreHandled && data.attacker) {
         const typeLine = (text) => {
             stopTyping();
             lineText.setText('');
+
+            const glyphs = typeof Intl !== 'undefined' && Intl.Segmenter
+                ? Array.from(new Intl.Segmenter('zh-Hant', { granularity: 'grapheme' }).segment(text), item => item.segment)
+                : Array.from(text);
             let idx = 0;
+
             state.introTypingTimer = this.time.addEvent({
                 delay: 38,
                 loop: true,
                 callback: () => {
                     idx += 1;
-                    lineText.setText(text.slice(0, idx));
-                    if (idx >= text.length) stopTyping();
+                    lineText.setText(glyphs.slice(0, idx).join(''));
+                    if (idx >= glyphs.length) stopTyping();
                 }
             });
             state.timers.push(state.introTypingTimer);
         };
 
-        typeLine('鼠偷米米們造反啦，是時候用水球清理他們囉！');
+        const introLine1 = compact
+            ? '鼠偷米米們造反啦，\n是時候用水球清理他們囉！'
+            : '鼠偷米米們造反啦，是時候用水球清理他們囉！';
+        const introLine2 = compact
+            ? '地上的污泥也清一清\n小心他們的頭目！\n相信你沒問題的！👍🏻'
+            : '地上的污泥也清一清，小心他們的頭目！相信你沒問題的！👍🏻';
+
+        typeLine(introLine1);
 
         const switchTimer = this.time.delayedCall(5000, () => {
             if (!state.active || !state.introContainer || !state.introContainer.active) return;
             stopTyping();
             if (npc && npc.setTexture && this.textures.exists('solo-cleaning-room-npc-onion2')) {
                 npc.setTexture('solo-cleaning-room-npc-onion2');
-                npc.setDisplaySize(92, 92);
+                npc.setDisplaySize(npcSize, npcSize);
             }
 
             this.tweens.add({
@@ -19576,8 +19649,7 @@ if (!data.scoreHandled && data.attacker) {
                 ease: 'Sine.easeInOut'
             });
 
-            typeLine('地上的污泥也清一清，小心他們的頭目！相信你沒問題的！👍🏻');
-        });
+            typeLine(introLine2);        });
         state.timers.push(switchTimer);
 
         const glitchTimer = this.time.delayedCall(10000, () => {
