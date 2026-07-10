@@ -18903,15 +18903,7 @@ if (!data.scoreHandled && data.attacker) {
             strokeThickness: 5
         }).setOrigin(0.5);
 
-        const hint = this.add.text(rect.centerX, rect.y + rect.h - 26, '開場演出中，正式操作由下一包接上', {
-            fontSize: cam.width <= 420 ? '12px' : '14px',
-            fontFamily: 'Arial, sans-serif',
-            color: '#fff4cc',
-            stroke: '#3b1f0d',
-            strokeThickness: 4
-        }).setOrigin(0.5);
-
-        container.add([dim, glowTop, glowBottom, glowLeft, glowRight, frame, titleBg, title, hint]);
+        container.add([dim, glowTop, glowBottom, glowLeft, glowRight, frame, titleBg, title]);
         state.layerContainer = container;
         state.objects.push(container);
         return container;
@@ -20281,10 +20273,10 @@ if (!data.scoreHandled && data.attacker) {
         const grimeCount = Math.max(0, Math.floor(Number(state.grimeCount || 0)));
         const deodorizeCount = Math.max(0, Math.floor(Number(state.deodorizeCount || 0)));
         const cleanliness = Math.max(0, Math.min(100, Number(state.cleanliness || 0)));
-        const baseScore = Math.max(0, mouseCount * 32 + grimeCount * 24 + Math.min(deodorizeCount, 10) * 6 + cleanliness * 1.6);
-        const multiplier = cleanliness >= 90 ? 1.05 : (cleanliness >= 70 ? 0.92 : (cleanliness >= 45 ? 0.72 : 0.5));
+        const baseScore = Math.max(0, mouseCount * 10 + grimeCount * 8 + Math.min(deodorizeCount, 8) * 3 + cleanliness * 0.7);
+        const multiplier = cleanliness >= 90 ? 1.05 : (cleanliness >= 80 ? 0.95 : (cleanliness >= 65 ? 0.88 : (cleanliness >= 45 ? 0.7 : 0.5)));
         const failed = !!state.soloFailed;
-        const reward = Math.max(0, Math.min(1500, Math.floor(failed ? baseScore * multiplier * 0.35 : baseScore * multiplier)));
+        const reward = Math.max(0, Math.min(850, Math.floor(failed ? baseScore * multiplier * 0.35 : baseScore * multiplier)));
 
         return {
             mouseCount,
@@ -20296,7 +20288,7 @@ if (!data.scoreHandled && data.attacker) {
             failed
         };
     }
-
+  
     checkSoloCleaningCleanlinessFail() {
         const state = this.getSoloCleaningRoomState();
         if (!state.active || state.shellEnding) return false;
@@ -20317,8 +20309,8 @@ if (!data.scoreHandled && data.attacker) {
         const data = this.getSoloCleaningResultData();
         state.soloResultData = data;
 
-        const panelW = Math.min(520, cam.width - 34);
-        const panelH = 390;
+        const panelW = Math.min(500, cam.width - 34);
+        const panelH = 370;
         const x = cam.width / 2;
         const targetY = cam.height / 2;
         const startY = -panelH;
@@ -20332,7 +20324,7 @@ if (!data.scoreHandled && data.attacker) {
         bg.lineStyle(2, 0xff8bd4, 0.64);
         bg.strokeRoundedRect(-panelW / 2 + 9, -panelH / 2 + 9, panelW - 18, panelH - 18, 15);
 
-        const title = this.add.text(0, -panelH / 2 + 44, '大掃除表現', {
+        const title = this.add.text(0, -panelH / 2 + 42, '大掃除表現', {
             fontSize: '28px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
@@ -20351,7 +20343,7 @@ if (!data.scoreHandled && data.attacker) {
             `獲得馬德幣：${data.reward}`
         ];
 
-        const body = this.add.text(-panelW / 2 + 54, -panelH / 2 + 94, lines.join('\n'), {
+        const body = this.add.text(-panelW / 2 + 50, -panelH / 2 + 90, lines.join('\n'), {
             fontSize: '20px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
@@ -20361,19 +20353,19 @@ if (!data.scoreHandled && data.attacker) {
             lineSpacing: 10
         }).setOrigin(0, 0);
 
-        const failText = this.add.text(0, panelH / 2 - 96, data.failed ? '潔淨度歸零，獎勵已套用折減' : '清理完成，準備領取獎勵！', {
+        const failText = this.add.text(0, panelH / 2 - 92, data.failed ? '潔淨度歸零，獎勵已套用折減' : '', {
             fontSize: '14px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
-            color: data.failed ? '#ffb7b7' : '#a7ffbd',
+            color: '#ffb7b7',
             stroke: '#000000',
             strokeThickness: 3
         }).setOrigin(0.5);
 
-        const btnBg = this.add.rectangle(0, panelH / 2 - 48, panelW - 96, 52, 0x1ed760, 0.92)
+        const btnBg = this.add.rectangle(0, panelH / 2 - 46, panelW - 96, 50, 0x1ed760, 0.92)
             .setStrokeStyle(3, 0xffffff, 0.86)
             .setInteractive({ useHandCursor: true });
-        const btnText = this.add.text(0, panelH / 2 - 48, '領取獎勵並返回', {
+        const btnText = this.add.text(0, panelH / 2 - 46, '領取獎勵並返回', {
             fontSize: '20px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
@@ -20381,9 +20373,9 @@ if (!data.scoreHandled && data.attacker) {
             stroke: '#ffffff',
             strokeThickness: 3
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-        const btnHit = this.add.rectangle(0, panelH / 2 - 48, panelW - 72, 62, 0xffffff, 0.001)
+        const btnHit = this.add.rectangle(0, panelH / 2 - 46, panelW - 72, 60, 0xffffff, 0.001)
             .setInteractive({ useHandCursor: true });
-        const errorText = this.add.text(0, panelH / 2 - 14, '', {
+        const errorText = this.add.text(0, panelH / 2 - 12, '', {
             fontSize: '13px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
@@ -20418,7 +20410,7 @@ if (!data.scoreHandled && data.attacker) {
         };
 
         const data = state.soloResultData || this.getSoloCleaningResultData();
-        const reward = Math.max(0, Math.min(1500, Math.floor(Number(data.reward || 0))));
+        const reward = Math.max(0, Math.min(850, Math.floor(Number(data.reward || 0))));
         const uid = window.GameLogic && window.GameLogic.currentUser && window.GameLogic.currentUser.uid ? window.GameLogic.currentUser.uid : null;
 
         if (!uid || !window.GameLogic || !window.GameLogic.db) {
