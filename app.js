@@ -18954,11 +18954,12 @@ if (!data.scoreHandled && data.attacker) {
         const remaining = Math.max(0, Math.ceil((state.remainingMs || 0) / 1000));
         const min = String(Math.floor(remaining / 60)).padStart(2, '0');
         const sec = String(remaining % 60).padStart(2, '0');
-        const cleanliness = Math.max(0, Math.min(100, Math.round(Number(state.cleanliness || 0))));
-        const fillW = Math.max(0.01, (state.cleanlinessBarMaxWidth || 1) * cleanliness / 100);
+        const cleanlinessRaw = Math.max(0, Math.min(100, Number(state.cleanliness || 0)));
+        const cleanlinessText = cleanlinessRaw >= 99.95 ? '100.0' : cleanlinessRaw.toFixed(1);
+        const fillW = Math.max(0.01, (state.cleanlinessBarMaxWidth || 1) * cleanlinessRaw / 100);
 
         if (state.countdownText && state.countdownText.setText) state.countdownText.setText(`${min}:${sec}`);
-        if (state.cleanlinessText && state.cleanlinessText.setText) state.cleanlinessText.setText(`洋蔥潔淨度 ${cleanliness}%`);
+        if (state.cleanlinessText && state.cleanlinessText.setText) state.cleanlinessText.setText(`洋蔥潔淨度 ${cleanlinessText}%`);
         if (state.cleanlinessBarFill) state.cleanlinessBarFill.displayWidth = fillW;
         if (state.cleanlinessBarGlow) state.cleanlinessBarGlow.displayWidth = fillW;
         if (state.grimeText && state.grimeText.setText) state.grimeText.setText(`除垢數量：${Math.max(0, Math.floor(Number(state.grimeCount || 0)))}`);
@@ -19332,14 +19333,39 @@ if (!data.scoreHandled && data.attacker) {
         this.fireSoloCleaningWaterBall();
     }
 
+    getSoloCleaningAutoLockTarget(maxDistance = 320) {
+        const state = this.getSoloCleaningRoomState();
+        const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
+        if (!state.active || !state.gameplayStarted || state.shellEnding || !player || !player.active) return null;
+
+        const range = Math.max(120, Number(maxDistance || 320));
+        let nearest = null;
+        let nearestDist = range + 1;
+
+        (state.soloMimis || []).forEach(mimi => {
+            const sprite = mimi && mimi.sprite ? mimi.sprite : null;
+            if (!sprite || !sprite.active || Number(mimi.hp || 0) <= 0) return;
+
+            const dist = Phaser.Math.Distance.Between(player.x, player.y, sprite.x, sprite.y);
+            if (dist <= range && dist < nearestDist) {
+                nearest = mimi;
+                nearestDist = dist;
+            }
+        });
+
+        return nearest;
+    }
+
     fireSoloCleaningWaterBall() {
         const state = this.getSoloCleaningRoomState();
         const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
         if (!state.active || state.inputLocked || !player || !player.active) return;
 
         const facing = state.soloPlayerFacing || { x: 0, y: 1 };
-        let dx = Number(facing.x || 0);
-        let dy = Number(facing.y || 0);
+        const lockTarget = this.getSoloCleaningAutoLockTarget ? this.getSoloCleaningAutoLockTarget(320) : null;
+        const lockSprite = lockTarget && lockTarget.sprite && lockTarget.sprite.active ? lockTarget.sprite : null;
+        let dx = lockSprite ? (lockSprite.x - player.x) : Number(facing.x || 0);
+        let dy = lockSprite ? (lockSprite.y - player.y) : Number(facing.y || 0);
         const len = Math.sqrt(dx * dx + dy * dy) || 1;
         dx /= len;
         dy /= len;
@@ -19711,10 +19737,8 @@ if (!data.scoreHandled && data.attacker) {
 
     updateSoloCleaningRoomMimiUi() {
         const state = this.getSoloCleaningRoomState();
-        const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
         const mimis = state.soloMimis || [];
-        let nearest = null;
-        let nearestDist = 999999;
+        const nearest = this.getSoloCleaningAutoLockTarget ? this.getSoloCleaningAutoLockTarget(320) : null;
 
         mimis.forEach(mimi => {
             const sprite = mimi && mimi.sprite ? mimi.sprite : null;
@@ -19722,19 +19746,8 @@ if (!data.scoreHandled && data.attacker) {
             if (!mimi.hpText || !mimi.targetIcon) this.createSoloCleaningMimiUi(mimi);
 
             if (mimi.hpText && mimi.hpText.active) mimi.hpText.setPosition(sprite.x, sprite.y - 58).setVisible(true);
-            if (mimi.targetIcon && mimi.targetIcon.active) mimi.targetIcon.setPosition(sprite.x, sprite.y - 84).setVisible(false);
-
-            if (!player || !player.active) return;
-            const dist = Phaser.Math.Distance.Between(player.x, player.y, sprite.x, sprite.y);
-            if (dist < nearestDist && dist <= 260) {
-                nearest = mimi;
-                nearestDist = dist;
-            }
+            if (mimi.targetIcon && mimi.targetIcon.active) mimi.targetIcon.setPosition(sprite.x, sprite.y - 84).setVisible(mimi === nearest);
         });
-
-        if (nearest && nearest.targetIcon && nearest.targetIcon.active) {
-            nearest.targetIcon.setVisible(true);
-        }
     }
 
     spawnSoloCleaningDirtImpactFx(x, y) {
@@ -19909,6 +19922,25 @@ if (!data.scoreHandled && data.attacker) {
                 continue;
             }
 
+            const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
+            if (mimi.state === 'move' && player && player.active) {
+                const awayX = sprite.x - player.x;
+                const awayY = sprite.y - player.y;
+                const awayDist = Math.sqrt(awayX * awayX + awayY * awayY) || 1;
+                const avoidRadius = 128;
+                if (awayDist < avoidRadius) {
+                    const pushRate = (avoidRadius - awayDist) / avoidRadius;
+                    mimi.vx += (awayX / awayDist) * pushRate * 46;
+                    mimi.vy += (awayY / awayDist) * pushRate * 46;
+                    const baseSpeed = Math.max(70, Math.min(132, Number(mimi.speed || 100)));
+                    const vLen = Math.sqrt(mimi.vx * mimi.vx + mimi.vy * mimi.vy) || 1;
+                    if (vLen > baseSpeed * 1.18) {
+                        mimi.vx = mimi.vx / vLen * baseSpeed * 1.18;
+                        mimi.vy = mimi.vy / vLen * baseSpeed * 1.18;
+                    }
+                }
+            }
+
             sprite.x += mimi.vx * dt;
             sprite.y += mimi.vy * dt;
 
@@ -19992,26 +20024,78 @@ if (!data.scoreHandled && data.attacker) {
     createSoloCleaningRoomGrime(x, y) {
         const state = this.getSoloCleaningRoomState();
         const container = this.add.container(x, y).setDepth(9607);
-        const shadow = this.add.ellipse(0, 10, 104, 36, 0x000000, 0.32);
-        const parts = [
-            this.add.ellipse(0, 0, 92, 38, 0x111111, 0.92),
-            this.add.ellipse(-25, -4, 42, 28, 0x2a2119, 0.84),
-            this.add.ellipse(22, 1, 46, 30, 0x1a231b, 0.82),
-            this.add.ellipse(3, -10, 54, 24, 0x303030, 0.68),
-            this.add.circle(-38, 3, 14, 0x0b0b0b, 0.86),
-            this.add.circle(38, -2, 12, 0x3b2a18, 0.74)
-        ];
-        const shine = this.add.ellipse(-16, -9, 26, 7, 0x6b6b60, 0.26).setBlendMode(Phaser.BlendModes.ADD);
-        const smokeA = this.add.circle(-28, -24, 9, 0x646464, 0.22).setBlendMode(Phaser.BlendModes.ADD);
-        const smokeB = this.add.circle(24, -20, 7, 0x7b6b5a, 0.18).setBlendMode(Phaser.BlendModes.ADD);
+        const shadow = this.add.ellipse(0, 12, 118, 40, 0x000000, 0.34);
+        const blob = this.add.graphics();
+        const innerBlob = this.add.graphics();
+        const bubbleColors = [0x0b0b0b, 0x20160f, 0x1a231b, 0x34342f, 0x4b3a22];
+        const points = [];
+        const steps = 22;
 
-        parts.forEach(part => part.setStrokeStyle(2, 0x050505, 0.28));
-        container.add([shadow, ...parts, shine, smokeA, smokeB]);
-        container.__grimeParts = parts;
+        for (let i = 0; i < steps; i++) {
+            const a = Math.PI * 2 * i / steps;
+            const wobble = 0.78 + Phaser.Math.FloatBetween(-0.18, 0.28) + Math.sin(a * 3.1) * 0.08 + Math.cos(a * 5.7) * 0.07;
+            points.push({
+                x: Math.cos(a) * 58 * wobble,
+                y: Math.sin(a) * 27 * wobble + Math.sin(a * 2.2) * 4
+            });
+        }
 
-        this.tweens.add({ targets: parts, scaleX: 1.08, scaleY: 0.92, yoyo: true, repeat: -1, duration: 740, ease: 'Sine.easeInOut' });
+        const drawBlob = (graphics, scale, color, alpha, strokeAlpha) => {
+            graphics.clear();
+            graphics.fillStyle(color, alpha);
+            graphics.lineStyle(3, 0x030303, strokeAlpha);
+            graphics.beginPath();
+            points.forEach((pt, idx) => {
+                const px = pt.x * scale;
+                const py = pt.y * scale;
+                if (idx === 0) graphics.moveTo(px, py);
+                else graphics.lineTo(px, py);
+            });
+            graphics.closePath();
+            graphics.fillPath();
+            graphics.strokePath();
+        };
+
+        drawBlob(blob, 1, 0x111111, 0.94, 0.46);
+        drawBlob(innerBlob, 0.72, 0x2b241b, 0.52, 0.12);
+
+        const stains = [];
+        for (let i = 0; i < 9; i++) {
+            const stain = this.add.ellipse(
+                Phaser.Math.Between(-42, 42),
+                Phaser.Math.Between(-17, 14),
+                Phaser.Math.Between(12, 34),
+                Phaser.Math.Between(6, 18),
+                Phaser.Utils.Array.GetRandom(bubbleColors),
+                Phaser.Math.FloatBetween(0.28, 0.72)
+            ).setAngle(Phaser.Math.Between(-24, 24));
+            stain.setStrokeStyle(1, 0x050505, 0.16);
+            stains.push(stain);
+        }
+
+        const shine = this.add.ellipse(-18, -11, 28, 7, 0x7c7c68, 0.24).setBlendMode(Phaser.BlendModes.ADD);
+        const smokeA = this.add.circle(-31, -27, 9, 0x646464, 0.22).setBlendMode(Phaser.BlendModes.ADD);
+        const smokeB = this.add.circle(28, -22, 7, 0x7b6b5a, 0.18).setBlendMode(Phaser.BlendModes.ADD);
+        const edgeBubbles = [];
+        for (let i = 0; i < 7; i++) {
+            const a = Math.PI * 2 * i / 7 + Phaser.Math.FloatBetween(-0.24, 0.24);
+            edgeBubbles.push(this.add.circle(
+                Math.cos(a) * Phaser.Math.Between(42, 60),
+                Math.sin(a) * Phaser.Math.Between(16, 28),
+                Phaser.Math.Between(3, 7),
+                Phaser.Utils.Array.GetRandom(bubbleColors),
+                Phaser.Math.FloatBetween(0.34, 0.68)
+            ));
+        }
+
+        container.add([shadow, blob, innerBlob, ...stains, ...edgeBubbles, shine, smokeA, smokeB]);
+        container.__grimeParts = [blob, innerBlob, ...stains, ...edgeBubbles];
+
+        this.tweens.add({ targets: [blob, innerBlob], scaleX: 1.08, scaleY: 0.9, yoyo: true, repeat: -1, duration: 820, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: stains, scaleX: 1.12, scaleY: 0.86, angle: '+=5', yoyo: true, repeat: -1, duration: 920, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: edgeBubbles, y: '+=4', alpha: 0.38, yoyo: true, repeat: -1, duration: 760, ease: 'Sine.easeInOut' });
         this.tweens.add({ targets: [smokeA, smokeB], y: '-=16', alpha: 0.04, yoyo: true, repeat: -1, duration: 1200, ease: 'Sine.easeInOut' });
-        this.tweens.add({ targets: container, angle: 2.4, yoyo: true, repeat: -1, duration: 980, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: container, angle: 2.8, yoyo: true, repeat: -1, duration: 980, ease: 'Sine.easeInOut' });
 
         const grime = { container, x, y, hp: 3, maxHp: 3 };
         state.soloGrimes.push(grime);
@@ -20190,7 +20274,7 @@ if (!data.scoreHandled && data.attacker) {
         const basinY = state.soloWashbasin ? state.soloWashbasin.y : 0;
         this.spawnSoloCleaningBubbleFx(basinX, basinY);
 
-        const nextCleanliness = Math.min(100, Math.max(0, Number(state.cleanliness || 0) + 1));
+        const nextCleanliness = Math.min(100, Math.max(0, Number(state.cleanliness || 0) + 2.5));
         if (nextCleanliness !== state.cleanliness) {
             state.cleanliness = nextCleanliness;
             this.updateSoloCleaningRoomUi();
