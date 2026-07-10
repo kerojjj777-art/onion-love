@@ -13887,6 +13887,11 @@ class BootScene extends Phaser.Scene {
         this.load.image('solo-rocket-space-rock', 'solo-rocket-space-rock.png');
         this.load.audio('solo-cleaning-room-bgm', 'solo-cleaning-room-bgm.mp3');
         this.load.audio('solo-cleaning-room-whistle', 'solo-cleaning-room-whistle.mp3');
+        this.load.audio('solo-cleaning-room-boss', 'solo-cleaning-room-boss.mp3');
+        this.load.audio('solo-cleaning-room-wipe', 'solo-cleaning-room-wipe.mp3');
+        this.load.audio('solo-cleaning-room-pureclean', 'solo-cleaning-room-pureclean.mp3');
+        this.load.audio('solo-cleaning-room-warning', 'solo-cleaning-room-warning.mp3');
+        this.load.audio('solo-cleaning-room-cleanthepoop', 'solo-cleaning-room-cleanthepoop.mp3');
         this.load.audio('solo-rocket-cruise-bgm', 'solo-rocket-cruise-bgm.mp3');
         this.load.audio('solo-rocket-landing', 'solo-rocket-landing.mp3');
         this.load.audio('solo-rocket-typing', 'solo-rocket-typing.mp3');
@@ -17806,6 +17811,7 @@ if (!data.scoreHandled && data.attacker) {
                 soloDirtyProjectiles: [],
                 soloFxObjects: [],
                 soloBossObjects: [],
+                soloBossSmokeProjectiles: [],
                 soloOutageObjects: [],
                 soloResultObjects: [],
                 soloBigMimi: null,
@@ -17859,6 +17865,7 @@ if (!data.scoreHandled && data.attacker) {
         if (!Array.isArray(this.soloCleaningRoom.soloDirtyProjectiles)) this.soloCleaningRoom.soloDirtyProjectiles = [];
         if (!Array.isArray(this.soloCleaningRoom.soloFxObjects)) this.soloCleaningRoom.soloFxObjects = [];
         if (!Array.isArray(this.soloCleaningRoom.soloBossObjects)) this.soloCleaningRoom.soloBossObjects = [];
+        if (!Array.isArray(this.soloCleaningRoom.soloBossSmokeProjectiles)) this.soloCleaningRoom.soloBossSmokeProjectiles = [];
         if (!Array.isArray(this.soloCleaningRoom.soloOutageObjects)) this.soloCleaningRoom.soloOutageObjects = [];
         if (!Array.isArray(this.soloCleaningRoom.soloResultObjects)) this.soloCleaningRoom.soloResultObjects = [];
         if (!Array.isArray(this.soloCleaningRoom.soloOutageGlows)) this.soloCleaningRoom.soloOutageGlows = [];
@@ -18775,6 +18782,7 @@ if (!data.scoreHandled && data.attacker) {
             state.soloDirtyProjectiles = [];
             state.soloFxObjects = [];
             state.soloBossObjects = [];
+            state.soloBossSmokeProjectiles = [];
             state.soloOutageObjects = [];
             state.soloResultObjects = [];
             state.soloBigMimi = null;
@@ -19818,10 +19826,12 @@ if (!data.scoreHandled && data.attacker) {
             eyeR,
             glow,
             smoke: [],
+            attackSmoke: [],
             state: 'drop',
             landedAt: 0,
             chaseUntil: 0,
             nextSmokeAt: 0,
+            nextAttackAt: 0,
             hitCooldownUntil: 0
         };
 
@@ -19829,6 +19839,7 @@ if (!data.scoreHandled && data.attacker) {
         state.soloBossObjects.push(sprite, eyeL, eyeR, glow);
         state.objects.push(sprite, eyeL, eyeR, glow);
 
+        this.playSoloCleaningRoomSfx('solo-cleaning-room-boss');
         try { window.playSFX(this, 'mimi-laugh'); } catch (_) {}
 
         this.tweens.add({
@@ -19850,8 +19861,9 @@ if (!data.scoreHandled && data.attacker) {
                 const timer = this.time.delayedCall(1000, () => {
                     if (!state.active || state.shellEnding || !sprite.active || state.soloBigMimi !== boss) return;
                     boss.state = 'chase';
-                    boss.chaseUntil = this.time.now + 8000;
+                    boss.chaseUntil = this.time.now + 6000;
                     boss.nextSmokeAt = 0;
+                    boss.nextAttackAt = this.time.now + 650;
                     if (this.anims && this.anims.exists('mimi-walk')) sprite.play('mimi-walk', true);
                 });
                 state.timers.push(timer);
@@ -19880,9 +19892,10 @@ if (!data.scoreHandled && data.attacker) {
                 boss.sprite.y + Phaser.Math.Between(6, 58),
                 Phaser.Math.Between(10, 22),
                 Phaser.Utils.Array.GetRandom([0x000000, 0x1a1010, 0x241414, 0x3a0000]),
-                Phaser.Math.FloatBetween(0.24, 0.46)
+                Phaser.Math.FloatBetween(0.18, 0.34)
             ).setDepth(9646).setBlendMode(Phaser.BlendModes.MULTIPLY);
 
+            smoke.__soloDecorativeSmoke = true;
             boss.smoke.push(smoke);
             state.soloBossObjects.push(smoke);
             state.objects.push(smoke);
@@ -19904,6 +19917,100 @@ if (!data.scoreHandled && data.attacker) {
         }
     }
 
+    spawnSoloCleaningBigMimiAttackSmoke(boss, player) {
+        const state = this.getSoloCleaningRoomState();
+        if (!boss || !boss.sprite || !boss.sprite.active || !player || !player.active) return;
+
+        const baseX = boss.sprite.x;
+        const baseY = boss.sprite.y + 12;
+        const dx = player.x - baseX;
+        const dy = player.y - baseY;
+        const baseAngle = Math.atan2(dy, dx);
+        const count = Phaser.Math.Between(5, 8);
+        const spread = Phaser.Math.DegToRad(46);
+
+        for (let i = 0; i < count; i++) {
+            const rate = count <= 1 ? 0.5 : i / (count - 1);
+            const angle = baseAngle - spread / 2 + spread * rate + Phaser.Math.FloatBetween(-0.09, 0.09);
+            const speed = Phaser.Math.Between(230, 300);
+            const radius = Phaser.Math.Between(8, 14);
+            const particle = this.add.circle(
+                baseX + Math.cos(angle) * 58,
+                baseY + Math.sin(angle) * 58,
+                radius,
+                Phaser.Utils.Array.GetRandom([0x020202, 0x100707, 0x1b0b0b, 0x2a0000]),
+                Phaser.Math.FloatBetween(0.62, 0.84)
+            ).setDepth(9652).setBlendMode(Phaser.BlendModes.MULTIPLY);
+
+            particle.__soloBossAttackSmoke = true;
+            particle.__vx = Math.cos(angle) * speed;
+            particle.__vy = Math.sin(angle) * speed;
+            particle.__bornAt = this.time.now;
+            particle.__lifeMs = Phaser.Math.Between(920, 1320);
+            particle.__radius = radius + 18;
+            boss.attackSmoke = boss.attackSmoke || [];
+            boss.attackSmoke.push(particle);
+            state.soloBossSmokeProjectiles = state.soloBossSmokeProjectiles || [];
+            state.soloBossSmokeProjectiles.push(particle);
+            state.soloBossObjects.push(particle);
+            state.objects.push(particle);
+
+            this.tweens.add({
+                targets: particle,
+                scaleX: Phaser.Math.FloatBetween(1.35, 1.85),
+                scaleY: Phaser.Math.FloatBetween(1.18, 1.62),
+                alpha: 0.08,
+                duration: particle.__lifeMs,
+                ease: 'Sine.easeOut',
+                onComplete: () => this.destroySoloCleaningBossAttackSmoke(particle)
+            });
+        }
+    }
+
+    destroySoloCleaningBossAttackSmoke(particle) {
+        const state = this.getSoloCleaningRoomState();
+        if (!particle) return;
+
+        const boss = state.soloBigMimi;
+        if (boss && Array.isArray(boss.attackSmoke)) boss.attackSmoke = boss.attackSmoke.filter(item => item !== particle);
+        state.soloBossSmokeProjectiles = (state.soloBossSmokeProjectiles || []).filter(item => item !== particle);
+        state.soloBossObjects = (state.soloBossObjects || []).filter(item => item !== particle);
+        try { if (particle.destroy) particle.destroy(); } catch (_) {}
+    }
+
+    updateSoloCleaningBigMimiAttackSmoke(delta, player) {
+        const state = this.getSoloCleaningRoomState();
+        const projectiles = state.soloBossSmokeProjectiles || [];
+        if (!projectiles.length || !player || !player.active) return;
+
+        const now = this.time.now;
+        const dt = Math.min(delta || 16, 50) / 1000;
+        for (let i = projectiles.length - 1; i >= 0; i--) {
+            const particle = projectiles[i];
+            if (!particle || !particle.active) {
+                projectiles.splice(i, 1);
+                continue;
+            }
+
+            particle.x += Number(particle.__vx || 0) * dt;
+            particle.y += Number(particle.__vy || 0) * dt;
+            if (now - Number(particle.__bornAt || now) > Number(particle.__lifeMs || 1000)) {
+                this.destroySoloCleaningBossAttackSmoke(particle);
+                continue;
+            }
+
+            const dist = Phaser.Math.Distance.Between(particle.x, particle.y, player.x, player.y);
+            if (dist <= Number(particle.__radius || 28) && now >= Number(state.soloBigMimiHitCooldownUntil || 0)) {
+                state.soloBigMimiHitCooldownUntil = now + 900;
+                state.cleanliness = Math.max(0, Math.min(100, Number(state.cleanliness || 0) - 10));
+                this.spawnSoloCleaningDirtImpactFx(player.x, player.y - 12);
+                this.updateSoloCleaningRoomUi();
+                this.destroySoloCleaningBossAttackSmoke(particle);
+                if (this.checkSoloCleaningCleanlinessFail()) return;
+            }
+        }
+    }
+
     updateSoloCleaningBigMimiBoss(delta) {
         const state = this.getSoloCleaningRoomState();
         if (!state.active || !state.gameplayStarted || state.shellEnding) return;
@@ -19919,6 +20026,7 @@ if (!data.scoreHandled && data.attacker) {
         const boss = state.soloBigMimi;
         const sprite = boss && boss.sprite ? boss.sprite : null;
         const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
+        if (player && player.active) this.updateSoloCleaningBigMimiAttackSmoke(delta, player);
         if (!boss || !sprite || !sprite.active || !player || !player.active) return;
 
         this.updateSoloCleaningBigMimiVisuals(boss);
@@ -19929,23 +20037,20 @@ if (!data.scoreHandled && data.attacker) {
         const dx = player.x - sprite.x;
         const dy = player.y - sprite.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const speed = 246;
+        const speed = 205;
         sprite.x += (dx / dist) * speed * dt;
         sprite.y += (dy / dist) * speed * dt;
         sprite.setFlipX(dx < 0);
         this.updateSoloCleaningBigMimiVisuals(boss);
 
         if (now >= Number(boss.nextSmokeAt || 0)) {
-            boss.nextSmokeAt = now + 140;
+            boss.nextSmokeAt = now + 230;
             this.spawnSoloCleaningBigMimiSmoke(boss);
         }
 
-        if (dist <= 104 && now >= Number(boss.hitCooldownUntil || 0)) {
-            boss.hitCooldownUntil = now + 900;
-            state.cleanliness = Math.max(0, Math.min(100, Number(state.cleanliness || 0) - 10));
-            this.spawnSoloCleaningDirtImpactFx(player.x, player.y - 12);
-            this.updateSoloCleaningRoomUi();
-            if (this.checkSoloCleaningCleanlinessFail()) return;
+        if (now >= Number(boss.nextAttackAt || 0)) {
+            boss.nextAttackAt = now + Phaser.Math.Between(900, 1200);
+            this.spawnSoloCleaningBigMimiAttackSmoke(boss, player);
         }
 
         if (now >= Number(boss.chaseUntil || 0)) {
@@ -19961,6 +20066,7 @@ if (!data.scoreHandled && data.attacker) {
         }
 
         boss.state = 'retire';
+        (boss.attackSmoke || []).forEach(particle => this.destroySoloCleaningBossAttackSmoke(particle));
         this.tweens.add({
             targets: [boss.sprite, boss.eyeL, boss.eyeR, boss.glow, ...(boss.smoke || [])].filter(Boolean),
             alpha: 0,
@@ -19975,22 +20081,28 @@ if (!data.scoreHandled && data.attacker) {
         const state = this.getSoloCleaningRoomState();
         const boss = state.soloBigMimi;
         if (boss) {
-            [boss.sprite, boss.eyeL, boss.eyeR, boss.glow, ...(boss.smoke || [])].forEach(obj => {
+            [boss.sprite, boss.eyeL, boss.eyeR, boss.glow, ...(boss.smoke || []), ...(boss.attackSmoke || [])].forEach(obj => {
                 try { if (obj && obj.destroy) obj.destroy(true); } catch (_) {}
             });
         }
+        (state.soloBossSmokeProjectiles || []).forEach(obj => {
+            try { if (obj && obj.destroy) obj.destroy(true); } catch (_) {}
+        });
         (state.soloBossObjects || []).forEach(obj => {
             try { if (obj && obj.destroy) obj.destroy(true); } catch (_) {}
         });
+        state.soloBossSmokeProjectiles = [];
         state.soloBossObjects = [];
         state.soloBigMimi = null;
     }
+
 
     triggerSoloCleaningPowerOutage() {
         const state = this.getSoloCleaningRoomState();
         if (!state.active || state.shellEnding || state.soloOutageActive || state.soloOutageWarningText) return;
 
         const cam = this.cameras.main;
+        this.playSoloCleaningRoomSfx('solo-cleaning-room-warning');
         const warning = this.add.text(cam.width / 2, cam.height / 2 - 92, '⚠ 停電警告', {
             fontSize: cam.width <= 420 ? '26px' : '36px',
             fontFamily: 'Arial, sans-serif',
@@ -20023,7 +20135,7 @@ if (!data.scoreHandled && data.attacker) {
         if (!state.active || state.shellEnding) return;
 
         const cam = this.cameras.main;
-        const overlay = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x050507, 0.68)
+        const overlay = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x020204, 0.82)
             .setDepth(9840)
             .setScrollFactor(0);
         state.soloOutageOverlay = overlay;
@@ -20043,27 +20155,27 @@ if (!data.scoreHandled && data.attacker) {
 
         const targets = [];
         const player = state.soloPlayerEntity && state.soloPlayerEntity.sprite ? state.soloPlayerEntity.sprite : null;
-        if (player && player.active) targets.push({ sprite: player, radius: 92, color: 0x8ffcff });
-        if (state.soloWashbasin && state.soloWashbasin.active) targets.push({ sprite: state.soloWashbasin, radius: 94, color: 0xa7ffbd });
+        if (player && player.active) targets.push({ sprite: player, radius: 112, color: 0x8ffcff, alpha: 0.36 });
+        if (state.soloWashbasin && state.soloWashbasin.active) targets.push({ sprite: state.soloWashbasin, radius: 104, color: 0xa7ffbd, alpha: 0.34 });
         (state.soloMimis || []).forEach(mimi => {
-            if (mimi && mimi.sprite && mimi.sprite.active) targets.push({ sprite: mimi.sprite, radius: 74, color: 0xffb14a });
+            if (mimi && mimi.sprite && mimi.sprite.active) targets.push({ sprite: mimi.sprite, radius: 86, color: 0xffc15a, alpha: 0.32 });
         });
         (state.soloGrimes || []).forEach(grime => {
-            if (grime && grime.container && grime.container.active) targets.push({ sprite: grime.container, radius: 64, color: 0x617044 });
+            if (grime && grime.container && grime.container.active) targets.push({ sprite: grime.container, radius: 58, color: 0x617044, alpha: 0.14 });
         });
         if (state.soloBigMimi && state.soloBigMimi.sprite && state.soloBigMimi.sprite.active) {
-            targets.push({ sprite: state.soloBigMimi.sprite, radius: 122, color: 0xff3333 });
+            targets.push({ sprite: state.soloBigMimi.sprite, radius: 146, color: 0xff3333, alpha: 0.42 });
         }
 
         targets.slice(0, 20).forEach(item => {
-            const glow = this.add.circle(item.sprite.x, item.sprite.y, item.radius, item.color, 0.22)
+            const glow = this.add.circle(item.sprite.x, item.sprite.y, item.radius, item.color, item.alpha || 0.28)
                 .setDepth(9842)
                 .setBlendMode(Phaser.BlendModes.ADD);
             glow.__soloOutageFollow = item.sprite;
             state.soloOutageGlows.push(glow);
             state.soloOutageObjects.push(glow);
             state.objects.push(glow);
-            this.tweens.add({ targets: glow, alpha: 0.36, scaleX: 1.08, scaleY: 1.08, yoyo: true, repeat: -1, duration: 520, ease: 'Sine.easeInOut' });
+            this.tweens.add({ targets: glow, alpha: Math.min(0.52, (item.alpha || 0.28) + 0.16), scaleX: 1.1, scaleY: 1.1, yoyo: true, repeat: -1, duration: 520, ease: 'Sine.easeInOut' });
         });
     }
 
@@ -20114,9 +20226,10 @@ if (!data.scoreHandled && data.attacker) {
         const grimeCount = Math.max(0, Math.floor(Number(state.grimeCount || 0)));
         const deodorizeCount = Math.max(0, Math.floor(Number(state.deodorizeCount || 0)));
         const cleanliness = Math.max(0, Math.min(100, Number(state.cleanliness || 0)));
-        const baseScore = Math.max(0, mouseCount * 70 + grimeCount * 55 + deodorizeCount * 25 + cleanliness * 4);
+        const baseScore = Math.max(0, mouseCount * 48 + grimeCount * 36 + Math.min(deodorizeCount, 18) * 10 + cleanliness * 2.5);
+        const multiplier = cleanliness >= 85 ? 1.12 : (cleanliness >= 65 ? 1 : (cleanliness >= 40 ? 0.82 : 0.62));
         const failed = !!state.soloFailed;
-        const reward = Math.max(0, Math.min(1500, Math.floor(failed ? baseScore * 0.55 : baseScore)));
+        const reward = Math.max(0, Math.min(1500, Math.floor(failed ? baseScore * multiplier * 0.45 : baseScore * multiplier)));
 
         return {
             mouseCount,
@@ -20734,7 +20847,7 @@ if (!data.scoreHandled && data.attacker) {
         const cloudC = this.add.ellipse(0, -30, 58, 26, 0x3b2a18, 0.48).setBlendMode(Phaser.BlendModes.ADD);
         const stinkA = this.add.text(-34, -68, '☁', { fontSize: '28px', color: '#2f2a1e' }).setOrigin(0.5);
         const stinkB = this.add.text(28, -72, '✦', { fontSize: '24px', color: '#314122' }).setOrigin(0.5);
-        const stinkC = this.add.text(0, -84, '臭', { fontSize: '18px', fontStyle: 'bold', color: '#4b3218', stroke: '#1b1208', strokeThickness: 3 }).setOrigin(0.5);
+        const stinkC = this.add.text(0, -84, '臭', { fontSize: '20px', fontStyle: 'bold', color: '#ffffff', stroke: '#000000', strokeThickness: 6 }).setOrigin(0.5);
         const speckA = this.add.circle(-28, -22, 7, 0x4a321a, 0.82);
         const speckB = this.add.circle(26, -26, 6, 0x1f2f1d, 0.76);
         const speckC = this.add.circle(4, -18, 5, 0x151515, 0.72);
@@ -20789,6 +20902,7 @@ if (!data.scoreHandled && data.attacker) {
         if (state.soloActionButtonBg) {
             this.tweens.add({ targets: state.soloActionButtonBg, scaleX: 0.9, scaleY: 0.9, yoyo: true, duration: 80 });
         }
+        this.playSoloCleaningRoomSfx('solo-cleaning-room-wipe');
 
         const basinX = state.soloWashbasin ? state.soloWashbasin.x : 0;
         const basinY = state.soloWashbasin ? state.soloWashbasin.y : 0;
@@ -20814,6 +20928,7 @@ if (!data.scoreHandled && data.attacker) {
             try { state.soloDirtyFx.destroy(true); } catch (_) {}
         }
         state.soloDirtyFx = null;
+        this.playSoloCleaningRoomSfx('solo-cleaning-room-pureclean');
         this.spawnSoloCleaningSuccessfulPurifyFx();
         this.updateSoloCleaningRoomUi();
     }
@@ -20955,6 +21070,7 @@ if (!data.scoreHandled && data.attacker) {
 
         state.soloGrimes = (state.soloGrimes || []).filter(item => item !== grime);
         state.grimeCount = Math.max(0, Math.floor(Number(state.grimeCount || 0))) + 1;
+        this.playSoloCleaningRoomSfx('solo-cleaning-room-cleanthepoop');
         this.spawnSoloCleaningPurifyFx(grime.x, grime.y);
         try { if (grime.container.destroy) grime.container.destroy(true); } catch (_) {}
         this.updateSoloCleaningRoomUi();
@@ -20984,6 +21100,9 @@ if (!data.scoreHandled && data.attacker) {
             (state.soloFxObjects || []).forEach(obj => {
                 try { if (obj && obj.destroy) obj.destroy(true); } catch (_) {}
             });
+            (state.soloBossSmokeProjectiles || []).forEach(obj => {
+                try { if (obj && obj.destroy) obj.destroy(true); } catch (_) {}
+            });
             this.clearSoloCleaningBigMimiBoss();
             this.clearSoloCleaningPowerOutage();
             (state.soloResultObjects || []).forEach(obj => {
@@ -21009,6 +21128,7 @@ if (!data.scoreHandled && data.attacker) {
         state.soloDirtyProjectiles = [];
         state.soloFxObjects = [];
         state.soloBossObjects = [];
+        state.soloBossSmokeProjectiles = [];
         state.soloOutageObjects = [];
         state.soloResultObjects = [];
         state.soloBigMimi = null;
@@ -21279,6 +21399,7 @@ if (!data.scoreHandled && data.attacker) {
         state.soloDirtyProjectiles = [];
         state.soloFxObjects = [];
         state.soloBossObjects = [];
+        state.soloBossSmokeProjectiles = [];
         state.soloOutageObjects = [];
         state.soloResultObjects = [];
         state.soloBigMimi = null;
