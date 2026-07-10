@@ -90,8 +90,7 @@ window.GameLogic = {
     cafePlayers: {}, onlinePlayers: {}, cafeFurniture: {}, doghouseFurniture: {}, doghouseHostUid: null, doghouseHostProfile: null, doghousePlayers: {}, isDoghouseVisitor: false, shrinePlayers: {}, shrineFurniture: {}, shrineEventData: null, unreadPMs: {}, friendRequests: {}, friendVisitRequests: {}, friends: {}, friendPairs: {}, activeFriendLoveBonus: null, placingFurnitureKey: null, 
     phaserGame: null, phaserLoaded: false, pendingScene: null,
     sceneSwitchInProgress: false, sceneSwitchTarget: null, sceneSwitchPromise: null,
-    sceneReadyToken: 0, sceneReadyScene: "", sceneReadyResolved: false,
-    sceneInputLocked: true, authState: "checking", db: db, storage: storage,
+    sceneInputLocked: false, authState: "checking", db: db, storage: storage,
     armedItemState: null, armedItemName: null, currentTargetUid: null, currentTargetSprite: null, currentTargetType: null, muteSFX: false, currentTrackIdx: 0, inventoryEditMode: false, rpsModalActive: false, moonBunBuffUntil: 0, moonBunSweepPressCount: 0, moonBunBuffEndNotified: false, moonBunBuffRemainingMs: 0, moonBunBuffLastSaveAt: 0,
     selectedServerRoom: initialServerRoom, currentServerRoom: initialServerRoom, serverRooms: SERVER_ROOMS,
     dailyMeowlime: { lastCheckinDate: "", totalCheckins: 0, checkinHistory: {} },
@@ -1111,8 +1110,13 @@ window.pickMeowlimeGrowthTarget = function(state, w, h, size, dpr) {
 window.renderMeowlimeGrowthFrame = function(ts) {
     const state = window.getMeowlimeGrowthState();
     const canvas = document.getElementById('meowlime-growth-canvas');
+    const modal = document.getElementById('meowlime-growth-modal');
 
     if (!state.running || !canvas) return;
+    if (!modal || modal.style.display === 'none') {
+        window.stopMeowlimeGrowthCanvas();
+        return;
+    }
 
     window.resizeMeowlimeGrowthCanvas(canvas);
 
@@ -2375,11 +2379,14 @@ window.submitMeowlimeCheckin = async function() {
 // 新增：空間傳送門點擊時的粒子噴發效果
 
 window.popPortalParticles = function(e) {
+    if (window.isMobileTouchViewport && window.isMobileTouchViewport()) return;
+
     const x = e && Number.isFinite(e.clientX) ? e.clientX : window.innerWidth / 2;
     const y = e && Number.isFinite(e.clientY) ? e.clientY : window.innerHeight / 2;
 
     for (let i = 0; i < 12; i++) {
         const p = document.createElement('div');
+        p.className = 'onion-transient-particle';
         p.style.cssText = `position:fixed; width:6px; height:6px; background:#fff; border-radius:50%; left:${x}px; top:${y}px; pointer-events:none; z-index:9999; transition: all 0.4s cubic-bezier(0.1, 0.8, 0.3, 1); transform: translate(-50%, -50%); box-shadow: 0 0 8px #fff, 0 0 15px #d8bfd8;`;
         document.body.appendChild(p);
 
@@ -2437,7 +2444,7 @@ function createSystemUI() {
             @media (max-width: 768px), (orientation: portrait) { body.login-bg-active::before { background-image: url('cover_phone_1080x1920.png'); } }
             body.login-bg-active #app-container { position: relative; z-index: 1; }
             #app-loading-screen { display:flex; position:fixed; inset:0; z-index:12000; align-items:center; justify-content:center; padding:24px; box-sizing:border-box; background:radial-gradient(circle at 50% 42%, rgba(84,54,25,0.56), rgba(12,8,5,0.96)); color:#fff8df; text-align:center; pointer-events:auto; }
-            #app-loading-screen[data-mode="scene"] { background:rgba(0,0,0,0.28); backdrop-filter:blur(1.5px); -webkit-backdrop-filter:blur(1.5px); }
+            #app-loading-screen[data-mode="scene"] { background:rgba(0,0,0,0.28); backdrop-filter:none; -webkit-backdrop-filter:none; }
             #app-loading-card { width:min(86vw, 360px); padding:20px 18px; border:2px solid rgba(232,199,120,0.92); border-radius:18px; background:rgba(35,22,12,0.92); box-shadow:0 0 22px rgba(197,160,89,0.48), 0 14px 34px rgba(0,0,0,0.56); }
             #app-loading-title { font-size:19px; font-weight:900; letter-spacing:1px; color:#fff4c4; text-shadow:0 0 10px rgba(255,210,105,0.72); }
             #app-loading-subtitle { margin-top:8px; font-size:13px; line-height:1.55; color:rgba(255,248,223,0.82); }
@@ -3526,6 +3533,37 @@ function createSystemUI() {
                 .meowlime-growth-info {
                     grid-template-columns: 1fr;
                     gap: 6px;
+                }
+            }
+
+            /* 手機 PWA 喵萊姆低負載保護：保留功能與排版，停用高耗能持續濾鏡與偽元素動畫。 */
+            @media (max-width: 768px), (orientation: portrait), (pointer: coarse) {
+                .meowlime-modal::before,
+                .meowlime-modal::after,
+                .meowlime-growth-modal::before,
+                .meowlime-growth-modal::after,
+                .meowlime-star-map-sky::before {
+                    display: none !important;
+                    animation: none !important;
+                }
+                .meowlime-fade-in,
+                .meowlime-fade-out,
+                .meowlime-growth-panel.meowlime-panel-fade-in,
+                .meowlime-star-map-core,
+                .meowlime-star-node,
+                .meowlime-star-node.today,
+                .meowlime-stamp,
+                .meowlime-stamp::before {
+                    animation: none !important;
+                    filter: none !important;
+                }
+                .meowlime-modal,
+                .meowlime-growth-modal,
+                #meowlime-signature-viewer-modal,
+                #meowlime-signature-viewer-img {
+                    backdrop-filter: none !important;
+                    -webkit-backdrop-filter: none !important;
+                    filter: none !important;
                 }
             }
 
@@ -13123,29 +13161,7 @@ window.setAppAuthState = function(state, message = '') {
     });
 };
 
-window.setSceneLoadingState = function(visible, sceneName = '') {
-    if (!visible) {
-        if (window.GameLogic && window.GameLogic.authState === 'ready') window.setAppLoadingState(false);
-        return;
-    }
-
-    const sceneLabels = {
-        doghouse: '我的狗窩',
-        cafe: '洋蔥大廳',
-        farm: '我的蔥田',
-        shrine: '神龕',
-        '7eonion': '7-EONION',
-        playroom: '遊戲室',
-        partyroom: '派對房間'
-    };
-
-    window.setAppLoadingState(true, {
-        mode: 'scene',
-        title: `正在前往${sceneLabels[sceneName] || '下一個場景'}`,
-        subtitle: '正在同步家具、玩家與場景狀態。'
-    });
-};
-
+// 場景切換不再使用全螢幕 DOM Loading；登入初始化仍由 setAppAuthState 管理。
 window.setAppAuthState('checking');
 if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 window.addEventListener('pointerdown', (e) => { 
@@ -13596,8 +13612,61 @@ function checkShrineVotingTrigger() {
 
 // 新增：全域 UI 大掃除函式，防止場景切換時的 DOM 殘留與 Memory Leak
 window.clearAllModals = function() {
-    // 1. 關閉所有共用 Modal 類別
-    document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+    // 先停止喵萊姆背景 Canvas 與其綁定在 window 上的 pointer / resize 監聽。
+    if (window.stopMeowlimeGrowthCanvas) {
+        try {
+            window.stopMeowlimeGrowthCanvas();
+        } catch (err) {
+            console.warn('[場景切換] 停止喵萊姆培育 Canvas 失敗，已略過：', err);
+        }
+    }
+
+    if (window.__meowlimeStarMapMessageTimer) {
+        clearTimeout(window.__meowlimeStarMapMessageTimer);
+        window.__meowlimeStarMapMessageTimer = null;
+    }
+
+    ['meowlime-growth-panel', 'meowlime-star-map-panel'].forEach(id => {
+        const panel = document.getElementById(id);
+        if (!panel) return;
+        if (panel.__meowlimePanelFadeTimer) {
+            clearTimeout(panel.__meowlimePanelFadeTimer);
+            panel.__meowlimePanelFadeTimer = null;
+        }
+        panel.classList.remove('meowlime-panel-fade-in');
+    });
+
+    const signatureViewerImg = document.getElementById('meowlime-signature-viewer-img');
+    if (signatureViewerImg) {
+        signatureViewerImg.onload = null;
+        signatureViewerImg.onerror = null;
+        signatureViewerImg.removeAttribute('src');
+        signatureViewerImg.alt = '';
+    }
+
+    const signatureViewerStatus = document.getElementById('meowlime-signature-viewer-status');
+    if (signatureViewerStatus) signatureViewerStatus.innerText = '';
+
+    const meowlimeStarField = document.getElementById('meowlime-star-field');
+    if (meowlimeStarField) meowlimeStarField.innerHTML = '';
+
+    const meowlimeSignatureWrap = document.getElementById('meowlime-signature-wrap');
+    if (meowlimeSignatureWrap) meowlimeSignatureWrap.classList.remove('meowlime-stamped');
+
+    document.querySelectorAll('.meowlime-reward-toast, .onion-transient-particle').forEach(el => {
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+    });
+
+    // 關閉所有共用 Modal；同步清掉喵萊姆淡入淡出計時器，避免隱藏後仍持有 DOM。
+    document.querySelectorAll('.modal').forEach(modal => {
+        if (modal.__meowlimeFadeTimer) {
+            clearTimeout(modal.__meowlimeFadeTimer);
+            modal.__meowlimeFadeTimer = null;
+        }
+        modal.classList.remove('meowlime-fade-in', 'meowlime-fade-out');
+        if (modal.dataset) modal.dataset.meowlimeClosing = '0';
+        modal.style.display = 'none';
+    });
 
     // Phaser overlay 不是 DOM modal，需要另外清理；任何清理失敗都不能中斷傳送門切場景。
     if (window.GameLogic.phaserGame) {
@@ -13616,11 +13685,10 @@ window.clearAllModals = function() {
             console.warn('[場景切換] 清理 Phaser overlay 失敗，已略過以避免傳送門黑屏：', err);
         }
     }
-    
-    // 2. 關閉特定獨立或脫離文件流的 UI
+
     const standaloneUIs = [
-        'spam-ui', 'party-red-flash', 'rps-modal', 'party-waiting-modal', 
-        'action-menu', 'quick-select-menu', 'prince-cat-menu', 'magic-menu-blocker', 
+        'spam-ui', 'party-red-flash', 'rps-modal', 'party-waiting-modal',
+        'action-menu', 'quick-select-menu', 'prince-cat-menu', 'magic-menu-blocker',
         'ingame-confirm', 'purchase-success-msg', 'fullscreen-viewer'
     ];
     standaloneUIs.forEach(id => {
@@ -13703,67 +13771,7 @@ window.prepareSceneFirstSnapshot = async function(sceneName, extraData = null) {
     return true;
 };
 
-window.beginSceneReadyGate = function(sceneName) {
-    const token = Number(window.GameLogic.sceneReadyToken || 0) + 1;
-    window.GameLogic.sceneReadyToken = token;
-    window.GameLogic.sceneReadyScene = sceneName;
-    window.GameLogic.sceneReadyResolved = false;
-    window.GameLogic.sceneInputLocked = true;
-
-    if (window.__onionSceneReadyGate && window.__onionSceneReadyGate.timeoutId) {
-        clearTimeout(window.__onionSceneReadyGate.timeoutId);
-    }
-
-    let resolveGate;
-    let rejectGate;
-    const promise = new Promise((resolve, reject) => {
-        resolveGate = resolve;
-        rejectGate = reject;
-    });
-
-    const timeoutId = setTimeout(() => {
-        if (!window.__onionSceneReadyGate || window.__onionSceneReadyGate.token !== token) return;
-        window.__onionSceneReadyGate = null;
-        rejectGate(new Error(`scene-ready-timeout:${sceneName}`));
-    }, 15000);
-
-    window.__onionSceneReadyGate = {
-        token,
-        sceneName,
-        promise,
-        resolve: resolveGate,
-        reject: rejectGate,
-        timeoutId
-    };
-
-    return window.__onionSceneReadyGate;
-};
-
-window.markSceneReady = function(sceneName) {
-    const gate = window.__onionSceneReadyGate;
-    if (!gate || gate.sceneName !== sceneName) return false;
-
-    clearTimeout(gate.timeoutId);
-    window.__onionSceneReadyGate = null;
-    window.GameLogic.sceneReadyResolved = true;
-    window.GameLogic.sceneInputLocked = false;
-    gate.resolve({ sceneName, token: gate.token });
-
-    if (window.GameLogic.currentUser && window.setAppAuthState) {
-        window.setAppAuthState('ready');
-    }
-    return true;
-};
-
-window.failSceneReadyGate = function(error) {
-    const gate = window.__onionSceneReadyGate;
-    if (!gate) return;
-
-    clearTimeout(gate.timeoutId);
-    window.__onionSceneReadyGate = null;
-    window.GameLogic.sceneInputLocked = false;
-    gate.reject(error instanceof Error ? error : new Error(String(error || 'scene-ready-failed')));
-};
+// 場景切換不再等待 postrender Ready Gate；新 MainScene 啟動後立即解除輸入鎖。
 
 async function switchScene(sceneName, extraData = null) {
     const targetScene = String(sceneName || '').trim();
@@ -13771,6 +13779,8 @@ async function switchScene(sceneName, extraData = null) {
     const logic = window.GameLogic;
 
     if (!targetScene || !logic || !logic.currentUser) return false;
+    if (targetScene === 'playroom' && !safeExtraData.roomId) return false;
+    if (targetScene === 'partyroom' && !safeExtraData.roomId) return false;
 
     const game = logic.phaserGame;
     const currentMainScene = game && game.scene ? game.scene.getScene('MainScene') : null;
@@ -13787,9 +13797,9 @@ async function switchScene(sceneName, extraData = null) {
         const currentHostUid = window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : logic.currentUser.uid;
         sameDestination = requestedHostUid === currentHostUid;
     } else if (sameDestination && targetScene === 'playroom') {
-        sameDestination = !!safeExtraData.roomId && safeExtraData.roomId === logic.currentRoomId;
+        sameDestination = safeExtraData.roomId === logic.currentRoomId;
     } else if (sameDestination && targetScene === 'partyroom') {
-        sameDestination = !!safeExtraData.roomId && window.PartyLogic && safeExtraData.roomId === window.PartyLogic.roomId;
+        sameDestination = !!(window.PartyLogic && safeExtraData.roomId === window.PartyLogic.roomId);
     }
 
     if (logic.sceneSwitchInProgress) {
@@ -13798,7 +13808,6 @@ async function switchScene(sceneName, extraData = null) {
 
     if (sameDestination && mainSceneActive) {
         logic.sceneInputLocked = false;
-        if (window.setAppAuthState) window.setAppAuthState('ready');
         return false;
     }
 
@@ -13807,12 +13816,9 @@ async function switchScene(sceneName, extraData = null) {
     logic.sceneInputLocked = true;
 
     const operation = (async () => {
-        let sceneReadyGate = null;
-        let switchSucceeded = false;
+        const previousScene = logic.currentScene;
 
         try {
-            if (window.setSceneLoadingState) window.setSceneLoadingState(true, targetScene);
-
             if (logic.phaserGame && !logic.muteSFX) {
                 const soundScene = logic.phaserGame.scene.getScene('MainScene');
                 if (soundScene) window.playSFX(soundScene, 'jump04');
@@ -13830,10 +13836,6 @@ async function switchScene(sceneName, extraData = null) {
                 }
             }
 
-            if (window.prepareSceneFirstSnapshot) {
-                await window.prepareSceneFirstSnapshot(targetScene, safeExtraData);
-            }
-
             if (targetScene !== 'doghouse') {
                 if (logic.myProfile && logic.myProfile.sleepStartTime > 0) {
                     logic.myProfile.sleepStartTime = 0;
@@ -13842,7 +13844,7 @@ async function switchScene(sceneName, extraData = null) {
                     logic.myProfile.sleepFurnitureDirection = '';
                     localStorage.removeItem('onion_sleepStartTime');
                     localStorage.removeItem('onion_sleepFurnitureId');
-                    await update(ref(logic.db, `users/${logic.currentUser.uid}`), {
+                    update(ref(logic.db, `users/${logic.currentUser.uid}`), {
                         sleepStartTime: 0,
                         sleepFurnitureId: '',
                         sleepFurnitureKey: '',
@@ -13858,7 +13860,6 @@ async function switchScene(sceneName, extraData = null) {
                 }
             }
 
-            const previousScene = logic.currentScene;
             const activeScene = logic.phaserGame && logic.phaserLoaded
                 ? logic.phaserGame.scene.getScene('MainScene')
                 : null;
@@ -13871,7 +13872,7 @@ async function switchScene(sceneName, extraData = null) {
                 const isFriendDoghouseVisit = targetScene === 'doghouse' && window.isVisitingFriendDoghouse && window.isVisitingFriendDoghouse();
 
                 if (targetScene !== 'playroom' && targetScene !== 'partyroom' && !isFriendDoghouseVisit) {
-                    await update(ref(db, `users/${logic.currentUser.uid}`), {
+                    update(ref(db, `users/${logic.currentUser.uid}`), {
                         lastScene: targetScene,
                         lastX: entranceX,
                         lastY: entranceY
@@ -13881,43 +13882,46 @@ async function switchScene(sceneName, extraData = null) {
                     logic.myProfile.lastY = entranceY;
                 }
 
-                await new Promise((resolve) => {
-                    try {
-                        const cam = activeScene.cameras.main;
-                        const topBlack = activeScene.add.rectangle(cam.width / 2, 0, cam.width, cam.height / 2, 0x000000).setOrigin(0.5, 0).setDepth(9999).setScrollFactor(0);
-                        const botBlack = activeScene.add.rectangle(cam.width / 2, cam.height, cam.width, cam.height / 2, 0x000000).setOrigin(0.5, 1).setDepth(9999).setScrollFactor(0);
-                        const whiteLine = activeScene.add.rectangle(cam.width / 2, cam.height / 2, cam.width, 4, 0xffffff).setDepth(10000).setScrollFactor(0).setAlpha(0);
-                        topBlack.scaleY = 0;
-                        botBlack.scaleY = 0;
+                const isMobileSceneSwitch = !!(window.isMobileTouchViewport && window.isMobileTouchViewport());
+                if (!isMobileSceneSwitch) {
+                    await new Promise((resolve) => {
+                        try {
+                            const cam = activeScene.cameras.main;
+                            const topBlack = activeScene.add.rectangle(cam.width / 2, 0, cam.width, cam.height / 2, 0x000000).setOrigin(0.5, 0).setDepth(9999).setScrollFactor(0);
+                            const botBlack = activeScene.add.rectangle(cam.width / 2, cam.height, cam.width, cam.height / 2, 0x000000).setOrigin(0.5, 1).setDepth(9999).setScrollFactor(0);
+                            const whiteLine = activeScene.add.rectangle(cam.width / 2, cam.height / 2, cam.width, 4, 0xffffff).setDepth(10000).setScrollFactor(0).setAlpha(0);
+                            topBlack.scaleY = 0;
+                            botBlack.scaleY = 0;
 
-                        activeScene.tweens.add({
-                            targets: [topBlack, botBlack],
-                            scaleY: 1,
-                            duration: 200,
-                            ease: 'Cubic.easeIn',
-                            onComplete: () => {
-                                whiteLine.setAlpha(1);
-                                activeScene.tweens.add({
-                                    targets: whiteLine,
-                                    scaleX: 0,
-                                    duration: 150,
-                                    ease: 'Power2',
-                                    onComplete: resolve
-                                });
-                            }
-                        });
-                    } catch (err) {
-                        console.warn('[場景切換] 關閉轉場建立失敗，改為直接切換：', err);
-                        resolve();
-                    }
-                });
+                            activeScene.tweens.add({
+                                targets: [topBlack, botBlack],
+                                scaleY: 1,
+                                duration: 200,
+                                ease: 'Cubic.easeIn',
+                                onComplete: () => {
+                                    whiteLine.setAlpha(1);
+                                    activeScene.tweens.add({
+                                        targets: whiteLine,
+                                        scaleX: 0,
+                                        duration: 150,
+                                        ease: 'Power2',
+                                        onComplete: resolve
+                                    });
+                                }
+                            });
+                        } catch (err) {
+                            console.warn('[場景切換] 關閉轉場建立失敗，改為直接切換：', err);
+                            resolve();
+                        }
+                    });
+                }
             }
 
             logic.currentScene = targetScene;
             logic.placingFurnitureKey = null;
 
             if (logic.currentUser && logic.db) {
-                await update(ref(logic.db, window.getServerRoomPath(`onlinePlayers/${logic.currentUser.uid}`)), {
+                update(ref(logic.db, window.getServerRoomPath(`onlinePlayers/${logic.currentUser.uid}`)), {
                     scene: targetScene,
                     doghouseHostUid: targetScene === 'doghouse' && window.getCurrentDoghouseHostUid ? window.getCurrentDoghouseHostUid() : '',
                     lastActive: window.getFirebaseServerNow ? window.getFirebaseServerNow() : Date.now(),
@@ -13929,6 +13933,21 @@ async function switchScene(sceneName, extraData = null) {
 
             if (window.stopOnionCanvasDirectionalInput) window.stopOnionCanvasDirectionalInput();
 
+            const activeGame = logic.phaserGame && logic.phaserLoaded ? logic.phaserGame : null;
+            const oldMain = activeGame && activeGame.scene ? activeGame.scene.getScene('MainScene') : null;
+
+            if (oldMain && oldMain.clearPrinceCatPetMiniGame) {
+                try {
+                    oldMain.clearPrinceCatPetMiniGame(false);
+                } catch (err) {
+                    console.warn('[場景切換] 王子麵摸摸 UI 預清理失敗，已略過：', err);
+                }
+            }
+
+            if (oldMain && oldMain.sys && oldMain.sys.isActive && oldMain.sys.isActive()) {
+                activeGame.scene.stop('MainScene');
+            }
+
             if (previousScene === 'cafe') {
                 leaveCafe();
             } else if (previousScene === 'shrine') {
@@ -13939,83 +13958,43 @@ async function switchScene(sceneName, extraData = null) {
                 window.leavePartyroom(true);
             }
 
+            if (window.isMobileTouchViewport && window.isMobileTouchViewport()) {
+                await new Promise(resolve => requestAnimationFrame(resolve));
+            }
+
             if (targetScene === 'cafe') {
                 joinCafe();
             } else if (targetScene === 'shrine') {
                 joinShrine();
             } else if (targetScene === 'playroom') {
-                if (!safeExtraData.roomId) throw new Error('playroom-room-id-missing');
                 joinPlayroom(safeExtraData.roomId);
             } else if (targetScene === 'partyroom') {
-                if (!safeExtraData.roomId) throw new Error('partyroom-room-id-missing');
                 window.joinPartyroom(safeExtraData.roomId);
             }
 
             window.updateOnlinePlayersUI();
 
-            if (logic.phaserGame && logic.phaserLoaded) {
-                const activeGame = logic.phaserGame;
-                const oldMain = activeGame.scene.getScene('MainScene');
-
-                if (oldMain && oldMain.clearPrinceCatPetMiniGame) {
-                    try {
-                        oldMain.clearPrinceCatPetMiniGame(false);
-                    } catch (err) {
-                        console.warn('[場景切換] 王子麵摸摸 UI 預清理失敗，已略過：', err);
-                    }
-                }
-
-                sceneReadyGate = window.beginSceneReadyGate(targetScene);
-
-                if (oldMain && oldMain.sys && oldMain.sys.isActive && oldMain.sys.isActive()) {
-                    activeGame.scene.stop('MainScene');
-                }
-
+            if (activeGame) {
                 activeGame.scene.start('MainScene');
                 activeGame.scene.bringToTop('UIScene');
-                await sceneReadyGate.promise;
             } else {
                 logic.pendingScene = targetScene;
             }
 
-            switchSucceeded = true;
-            return true;
-        } catch (err) {
-            if (sceneReadyGate && window.__onionSceneReadyGate) {
-                window.failSceneReadyGate(err);
-                try {
-                    await sceneReadyGate.promise;
-                } catch (_) {}
+            if (logic.authState !== 'ready' && window.setAppAuthState) {
+                window.setAppAuthState('ready');
             }
 
+            return true;
+        } catch (err) {
             console.error('[場景切換] 場景載入失敗：', err);
             const topBar = document.getElementById('top-notification-bar');
             if (topBar) topBar.innerText = '系統通知：場景載入失敗，請稍後再點一次傳送門。';
-
-            const fallbackMain = logic.phaserGame && logic.phaserGame.scene
-                ? logic.phaserGame.scene.getScene('MainScene')
-                : null;
-            const fallbackActive = !!(
-                fallbackMain &&
-                fallbackMain.sys &&
-                fallbackMain.sys.isActive &&
-                fallbackMain.sys.isActive()
-            );
-
-            if (fallbackActive && window.setAppAuthState) {
-                window.setAppAuthState('ready');
-            } else if (window.setAppAuthState) {
-                window.setAppAuthState('error', '場景資料載入失敗，請確認網路後重新開啟遊戲。');
-            }
             return false;
         } finally {
             logic.sceneSwitchInProgress = false;
             logic.sceneSwitchTarget = null;
             logic.sceneInputLocked = false;
-
-            if (switchSucceeded && window.setAppAuthState) {
-                window.setAppAuthState('ready');
-            }
         }
     })();
 
@@ -15749,13 +15728,6 @@ class MainScene extends Phaser.Scene {
         if (this.minimap) this.minimap.ignore([this.smartPromptBg, this.smartPromptText, this.waterPromptBg, this.waterPromptText, this.lockOnTarget]);
         this.initPrinceCatSync();
 
-        if (window.markSceneReady) {
-            this.game.events.once('postrender', () => {
-                if (!this.sys || !this.sys.isActive || !this.sys.isActive()) return;
-                window.markSceneReady(this.sceneName);
-            });
-        }
-
         this.cursors = this.input.keyboard.createCursorKeys(); this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE); this.shiftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT); this.altKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ALT); this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
         this.setupCanvasDirectionalInput();
         this.spaceKey.on('down', (e) => {
@@ -17215,6 +17187,10 @@ if (!data.scoreHandled && data.attacker) {
                 }
             }
             if (this.princeCatListener) { this.princeCatListener(); this.princeCatListener = null; }
+            if (this.princeCatInteractionHandler && window.selectPrinceCatInteraction === this.princeCatInteractionHandler) {
+                window.selectPrinceCatInteraction = null;
+            }
+            this.princeCatInteractionHandler = null;
             // 修正：徹底清除精靈與實體指標，防止 Phaser 重新啟動場景時讀取到已銷毀的舊物件導致 Crash
             this.mimiSprite = null;
             this.princeCatSprite = null;
@@ -29809,10 +29785,11 @@ entity.showOffRainbowTween = this.tweens.add({
 
         if (this.minimap) this.minimap.ignore([this.princeCatNameBg, this.princeCatNameText]);
 
-        window.selectPrinceCatInteraction = (type) => {
+        this.princeCatInteractionHandler = (type) => {
             if (type === 'pet') this.startPrinceCatPetting();
             if (type === 'feed') this.startPrinceCatFeeding();
         };
+        window.selectPrinceCatInteraction = this.princeCatInteractionHandler;
 
         if (initialData) this.updatePrinceCatVisual();
 
