@@ -2032,6 +2032,23 @@ window.AudioManager = {
     isLobbyPlaybackAllowed(sceneOrKey = null) {
         if (!window.GameLogic || !window.GameLogic.currentUser) return false;
 
+        // 第四階段 4-2：新副本 Session 期間阻止大廳 BGM 恢復。
+        const dungeonSession = window.GameLogic.dungeonSession;
+        if (
+            dungeonSession &&
+            (
+                dungeonSession.active ||
+                dungeonSession.loading ||
+                dungeonSession.entering ||
+                dungeonSession.settling ||
+                dungeonSession.exiting ||
+                dungeonSession.cleanupStarted ||
+                String(dungeonSession.phase || 'idle') !== 'idle'
+            )
+        ) {
+            return false;
+        }
+
         const sceneName = String(window.GameLogic.currentScene || '');
         if (sceneName === 'shrine' || sceneName === 'partyroom') return false;
         if (window.GameLogic.soloCleaningRoomActive || window.GameLogic.soloRocketCruiseActive) return false;
@@ -2861,6 +2878,1272 @@ window.GameLogic = {
     }
     // ====== 第四階段 4-1：Dungeon Session 靜態初始狀態結束 ======
 };
+
+// ====== 第四階段 4-2：DungeonSessionManager 進出場橋接＋失敗回滾 ======
+window.DungeonSessionManager = {
+    state: {
+        operationId: 0,
+        enterPromise: null,
+        cleanupPromise: null,
+        abortRequested: false,
+        activeSessionId: null,
+        startedSceneKey: null,
+        startedSceneSessionId: null,
+        ownedSleepingScenes: {
+            MainScene: false,
+            UIScene: false
+        },
+        lastFailure: null,
+        sceneWaitTimerId: null,
+        sceneWaitResolve: null
+    },
+
+    getGame() {
+        return window.GameLogic && window.GameLogic.phaserGame
+            ? window.GameLogic.phaserGame
+            : null;
+    },
+
+    getCatalogEntry(dungeonKey) {
+        return window.getDungeonCatalogEntry
+            ? window.getDungeonCatalogEntry(dungeonKey)
+            : null;
+    },
+
+    getSession() {
+        return window.GameLogic && window.GameLogic.dungeonSession
+            ? window.GameLogic.dungeonSession
+            : null;
+    },
+
+    createSessionId() {
+        try {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                return window.crypto.randomUUID();
+            }
+        } catch (_) {}
+
+        return `dungeon_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    },
+
+    getScene(sceneKey) {
+        const game = this.getGame();
+        const key = typeof sceneKey === 'string' ? sceneKey.trim() : '';
+        if (!game || !game.scene || !key) return null;
+
+        try {
+            return game.scene.getScene(key) || null;
+        } catch (_) {
+            return null;
+        }
+    },
+
+    getSceneState(sceneKey) {
+        const game = this.getGame();
+        const key = typeof sceneKey === 'string' ? sceneKey.trim() : '';
+        const state = {
+            sceneKey: key,
+            registered: false,
+            active: false,
+            sleeping: false,
+            paused: false,
+            stopped: false,
+            status: 'missing'
+        };
+
+        if (!game || !game.scene || !key) return state;
+
+        let scene = null;
+        try {
+            state.registered = !!(
+                game.scene.keys &&
+                Object.prototype.hasOwnProperty.call(game.scene.keys, key)
+            );
+            scene = game.scene.getScene(key) || null;
+            if (scene) state.registered = true;
+        } catch (_) {
+            scene = null;
+        }
+
+        if (!scene) return state;
+
+        try {
+            state.active = !!(scene.sys && scene.sys.isActive && scene.sys.isActive());
+            state.sleeping = !!(scene.sys && scene.sys.isSleeping && scene.sys.isSleeping());
+            state.paused = !!(scene.sys && scene.sys.isPaused && scene.sys.isPaused());
+        } catch (_) {
+            try {
+                state.active = !!(game.scene.isActive && game.scene.isActive(key));
+                state.sleeping = !!(game.scene.isSleeping && game.scene.isSleeping(key));
+                state.paused = !!(game.scene.isPaused && game.scene.isPaused(key));
+            } catch (_) {}
+        }
+
+        state.stopped = !!(
+            state.registered &&
+            !state.active &&
+            !state.sleeping &&
+            !state.paused
+        );
+
+        if (state.active) state.status = 'active';
+        else if (state.sleeping) state.status = 'sleeping';
+        else if (state.paused) state.status = 'paused';
+        else if (state.stopped) state.status = 'stopped';
+        else state.status = 'unknown';
+
+        return state;
+    },
+
+    getLegacyDungeonAudit(mainScene = null) {
+        const scene = mainScene || this.getScene('MainScene');
+        const cleaning = scene && scene.soloCleaningRoom
+            ? scene.soloCleaningRoom
+            : null;
+        let cleaningTextureCount = 0;
+        let rocketTextureCount = 0;
+        let rocketShopTextureCount = 0;
+
+        try {
+            if (window.getLoadedTextureCountForScope) {
+                cleaningTextureCount = window.getLoadedTextureCountForScope('solo-cleaning');
+                rocketTextureCount = window.getLoadedTextureCountForScope('solo-rocket-run');
+                rocketShopTextureCount = window.getLoadedTextureCountForScope('solo-rocket-shop');
+            }
+        } catch (_) {}
+
+        const cleaningActive = !!(
+            (window.GameLogic && window.GameLogic.soloCleaningRoomActive) ||
+            (
+                cleaning &&
+                (
+                    cleaning.active ||
+                    cleaning.paid ||
+                    cleaning.paymentPending ||
+                    cleaning.tutorialActive ||
+                    cleaning.tutorialStartPending ||
+                    cleaning.gameplayStarted ||
+                    cleaning.textureScopeLoading ||
+                    cleaning.textureScopeReady ||
+                    cleaning.textureScopeUnloadPending ||
+                    cleaning.layerContainer ||
+                    cleaning.uiContainer ||
+                    cleaning.introContainer ||
+                    cleaning.tutorialContainer
+                )
+            ) ||
+            (
+                scene &&
+                (
+                    scene.soloCleaningRoomPaymentConfirmContainer ||
+                    scene.soloCleaningRoomPaymentConfirmBlocker
+                )
+            ) ||
+            cleaningTextureCount > 0
+        );
+
+        const rocketActive = !!(
+            (window.GameLogic && window.GameLogic.soloRocketCruiseActive) ||
+            (
+                scene &&
+                (
+                    scene.soloRocketPaymentPending ||
+                    scene.soloRocketPaid ||
+                    scene.soloRocketTextureScopeLoading ||
+                    scene.soloRocketTextureScopeReady ||
+                    scene.soloRocketTextureScopeUnloadPending ||
+                    scene.soloRocketShopTextureScopeLoading ||
+                    scene.soloRocketShopTextureScopeReady ||
+                    scene.soloRocketShopTextureScopeUnloadPending ||
+                    scene.soloRocketShopOpenPending ||
+                    scene.soloRocketTutorialActive ||
+                    scene.soloRocketTutorialStartPending ||
+                    scene.soloRocketGameplayStarted ||
+                    scene.soloRocketIntroActive ||
+                    scene.soloRocketEndingActive ||
+                    scene.soloRocketCruiseActive ||
+                    scene.soloRocketCruiseFinished ||
+                    scene.soloRocketContainer ||
+                    scene.soloRocketUiContainer ||
+                    scene.soloRocketResultContainer ||
+                    scene.soloRocketRabbitShopContainer ||
+                    scene.soloRocketPaymentConfirmContainer ||
+                    scene.soloRocketPaymentConfirmBlocker ||
+                    (
+                        scene.soloRocketTextureScopeRequestId !== null &&
+                        scene.soloRocketTextureScopeRequestId !== undefined
+                    ) ||
+                    (
+                        scene.soloRocketShopTextureScopeRequestId !== null &&
+                        scene.soloRocketShopTextureScopeRequestId !== undefined
+                    )
+                )
+            ) ||
+            rocketTextureCount > 0 ||
+            rocketShopTextureCount > 0
+        );
+
+        return {
+            active: cleaningActive || rocketActive,
+            cleaningActive: cleaningActive,
+            rocketActive: rocketActive,
+            cleaningTextureCount: cleaningTextureCount,
+            rocketTextureCount: rocketTextureCount,
+            rocketShopTextureCount: rocketShopTextureCount
+        };
+    },
+
+    isSessionBusy() {
+        const session = this.getSession();
+        if (!session) return false;
+
+        return !!(
+            session.active ||
+            session.loading ||
+            session.entering ||
+            session.settling ||
+            session.exiting ||
+            session.cleanupStarted ||
+            [
+                'preparing',
+                'loading',
+                'entering',
+                'running',
+                'settling',
+                'exiting',
+                'aborting'
+            ].includes(String(session.phase || 'idle'))
+        );
+    },
+
+    isSessionCurrent(context = {}) {
+        const logic = window.GameLogic;
+        const session = this.getSession();
+        const user = logic && logic.currentUser ? logic.currentUser : null;
+
+        return !!(
+            logic &&
+            session &&
+            user &&
+            context.sessionId &&
+            context.userUid &&
+            Number(this.state.operationId || 0) === Number(context.operationId) &&
+            session.sessionId === context.sessionId &&
+            session.userUid === context.userUid &&
+            user.uid === context.userUid &&
+            this.state.abortRequested !== true
+        );
+    },
+
+    makeRuntimeError(reason) {
+        const err = new Error(String(reason || 'dungeon-operation-failed'));
+        err.code = String(reason || 'dungeon-operation-failed');
+        return err;
+    },
+
+    safeCheckpoint(operation, extra = {}, completed = false) {
+        try {
+            if (completed && window.completePwaRiskCheckpoint) {
+                window.completePwaRiskCheckpoint(operation, extra);
+            } else if (!completed && window.recordPwaRiskCheckpoint) {
+                window.recordPwaRiskCheckpoint(operation, extra);
+            }
+        } catch (_) {}
+    },
+
+    cancelSceneWait(reason = 'scene-wait-canceled') {
+        const resolveWait = this.state.sceneWaitResolve;
+
+        if (this.state.sceneWaitTimerId) {
+            clearTimeout(this.state.sceneWaitTimerId);
+        }
+
+        this.state.sceneWaitTimerId = null;
+        this.state.sceneWaitResolve = null;
+
+        if (typeof resolveWait === 'function') {
+            resolveWait({
+                ok: false,
+                reason: reason
+            });
+        }
+    },
+
+    waitForSceneActive(sceneKey, context = {}, timeoutMs = 2500) {
+        const timeout = Math.max(500, Math.min(5000, Number(timeoutMs || 2500)));
+        this.cancelSceneWait('scene-wait-replaced');
+
+        return new Promise(resolve => {
+            const startedAt = Date.now();
+            let settled = false;
+
+            const finish = result => {
+                if (settled) return;
+                settled = true;
+
+                if (this.state.sceneWaitTimerId) {
+                    clearTimeout(this.state.sceneWaitTimerId);
+                }
+
+                this.state.sceneWaitTimerId = null;
+                if (this.state.sceneWaitResolve === finish) {
+                    this.state.sceneWaitResolve = null;
+                }
+                resolve(result);
+            };
+
+            const check = () => {
+                this.state.sceneWaitTimerId = null;
+
+                if (!this.isSessionCurrent(context)) {
+                    finish({
+                        ok: false,
+                        reason: this.state.abortRequested
+                            ? 'dungeon-aborted'
+                            : 'stale-session'
+                    });
+                    return;
+                }
+
+                const sceneState = this.getSceneState(sceneKey);
+                if (sceneState.active) {
+                    finish({
+                        ok: true,
+                        reason: null,
+                        sceneState: sceneState
+                    });
+                    return;
+                }
+
+                if (Date.now() - startedAt >= timeout) {
+                    finish({
+                        ok: false,
+                        reason: 'scene-start-timeout',
+                        sceneState: sceneState
+                    });
+                    return;
+                }
+
+                this.state.sceneWaitTimerId = setTimeout(check, 40);
+            };
+
+            this.state.sceneWaitResolve = finish;
+            check();
+        });
+    },
+
+    runWithTimeout(task, timeoutMs = 2200, timeoutReason = 'operation-timeout') {
+        const timeout = Math.max(300, Math.min(5000, Number(timeoutMs || 2200)));
+
+        return new Promise(resolve => {
+            let settled = false;
+            let timerId = null;
+
+            const finish = result => {
+                if (settled) return;
+                settled = true;
+                if (timerId) clearTimeout(timerId);
+                timerId = null;
+                resolve(result);
+            };
+
+            timerId = setTimeout(() => {
+                finish({
+                    ok: false,
+                    timedOut: true,
+                    reason: timeoutReason
+                });
+            }, timeout);
+
+            Promise.resolve(task)
+                .then(value => finish({
+                    ok: true,
+                    timedOut: false,
+                    value: value
+                }))
+                .catch(error => finish({
+                    ok: false,
+                    timedOut: false,
+                    reason: 'operation-rejected',
+                    error: error
+                }));
+        });
+    },
+
+    resetSession(reason = null, cleanupCompleted = true) {
+        const session = this.getSession();
+        if (!session) return;
+
+        Object.assign(session, {
+            active: false,
+            dungeonKey: null,
+            sceneKey: null,
+            sessionId: null,
+            userUid: null,
+            sourceScene: null,
+            phase: 'idle',
+            loading: false,
+            entering: false,
+            settling: false,
+            exiting: false,
+            cleanupStarted: false,
+            cleanupCompleted: cleanupCompleted === true,
+            startedAt: 0,
+            endedAt: Date.now(),
+            exitReason: reason ? String(reason) : null
+        });
+    },
+
+    resetOwnership() {
+        this.state.activeSessionId = null;
+        this.state.startedSceneKey = null;
+        this.state.startedSceneSessionId = null;
+        this.state.ownedSleepingScenes.MainScene = false;
+        this.state.ownedSleepingScenes.UIScene = false;
+    },
+
+    validateEnter(dungeonKey) {
+        const key = typeof dungeonKey === 'string' ? dungeonKey.trim() : '';
+        if (!key) return { ok: false, reason: 'invalid-dungeon-key', dungeonKey: key };
+
+        const entry = this.getCatalogEntry(key);
+        if (!entry) return { ok: false, reason: 'unknown-dungeon', dungeonKey: key };
+        if (entry.enabled !== true) return { ok: false, reason: 'dungeon-disabled', dungeonKey: key };
+
+        const logic = window.GameLogic;
+        const user = logic && logic.currentUser ? logic.currentUser : null;
+        if (!user || !user.uid) return { ok: false, reason: 'no-user', dungeonKey: key };
+
+        const game = this.getGame();
+        if (!logic || !game || !game.scene || logic.phaserLoaded !== true) {
+            return { ok: false, reason: 'phaser-not-ready', dungeonKey: key };
+        }
+
+        if (logic.sceneSwitchInProgress || logic.sceneInputLocked) {
+            return { ok: false, reason: 'world-transition-busy', dungeonKey: key };
+        }
+
+        if (this.state.cleanupPromise || this.isSessionBusy()) {
+            return { ok: false, reason: 'dungeon-session-busy', dungeonKey: key };
+        }
+
+        const mainScene = this.getScene('MainScene');
+        const uiScene = this.getScene('UIScene');
+        if (!mainScene) return { ok: false, reason: 'main-scene-not-ready', dungeonKey: key };
+
+        const legacyAudit = this.getLegacyDungeonAudit(mainScene);
+        if (legacyAudit.active) {
+            return {
+                ok: false,
+                reason: 'legacy-dungeon-active',
+                dungeonKey: key,
+                legacyAudit: legacyAudit
+            };
+        }
+
+        if (
+            !window.AudioManager ||
+            !window.AudioManager.isLobbyPlaybackAllowed ||
+            !window.AudioManager.isLobbyPlaybackAllowed(mainScene)
+        ) {
+            return {
+                ok: false,
+                reason: 'unsupported-source-audio-state',
+                dungeonKey: key
+            };
+        }
+
+        if (!entry.textureScope || !TEXTURE_ASSET_SCOPES[entry.textureScope]) {
+            return { ok: false, reason: 'texture-scope-not-ready', dungeonKey: key };
+        }
+
+        if (!entry.audioScope || !BGM_SCOPE_KEYS[entry.audioScope]) {
+            return { ok: false, reason: 'audio-scope-not-ready', dungeonKey: key };
+        }
+
+        const dungeonState = this.getSceneState(entry.sceneKey);
+        if (!dungeonState.registered) {
+            return {
+                ok: false,
+                reason: 'dungeon-scene-not-registered',
+                dungeonKey: key
+            };
+        }
+
+        const mainState = this.getSceneState('MainScene');
+        if (
+            entry.sleepMainScene === true &&
+            (
+                !mainState.registered ||
+                !mainState.active ||
+                mainState.sleeping ||
+                mainState.paused
+            )
+        ) {
+            return {
+                ok: false,
+                reason: 'main-scene-not-ready',
+                dungeonKey: key,
+                mainSceneState: mainState
+            };
+        }
+
+        const uiState = this.getSceneState('UIScene');
+        if (
+            entry.sleepUiScene === true &&
+            (
+                !uiScene ||
+                !uiState.registered ||
+                !uiState.active ||
+                uiState.sleeping ||
+                uiState.paused
+            )
+        ) {
+            return {
+                ok: false,
+                reason: 'ui-scene-not-ready',
+                dungeonKey: key,
+                uiSceneState: uiState
+            };
+        }
+
+        if (dungeonState.active || dungeonState.sleeping || dungeonState.paused) {
+            return {
+                ok: false,
+                reason: 'dungeon-scene-already-running',
+                dungeonKey: key,
+                dungeonSceneState: dungeonState
+            };
+        }
+
+        return {
+            ok: true,
+            dungeonKey: key,
+            entry: entry,
+            game: game,
+            mainScene: mainScene,
+            uiScene: uiScene,
+            userUid: user.uid,
+            sourceScene: String(logic.currentScene || '')
+        };
+    },
+
+    sleepOwnedScene(sceneKey) {
+        const game = this.getGame();
+        const before = this.getSceneState(sceneKey);
+
+        if (
+            !game ||
+            !game.scene ||
+            !before.registered ||
+            !before.active ||
+            before.sleeping ||
+            before.paused
+        ) {
+            throw this.makeRuntimeError(
+                sceneKey === 'MainScene'
+                    ? 'main-scene-not-ready'
+                    : 'ui-scene-not-ready'
+            );
+        }
+
+        try {
+            game.scene.sleep(sceneKey);
+        } catch (_) {
+            throw this.makeRuntimeError('world-scene-sleep-failed');
+        }
+
+        if (!this.getSceneState(sceneKey).sleeping) {
+            throw this.makeRuntimeError('world-scene-sleep-failed');
+        }
+
+        this.state.ownedSleepingScenes[sceneKey] = true;
+    },
+
+    async stopStartedDungeonScene(sessionId, sceneKey, reason) {
+        if (
+            !sessionId ||
+            !sceneKey ||
+            this.state.startedSceneKey !== sceneKey ||
+            this.state.startedSceneSessionId !== sessionId
+        ) {
+            return { ok: true, stopped: false, skipped: true };
+        }
+
+        if (['BootScene', 'MainScene', 'UIScene'].includes(sceneKey)) {
+            console.warn(`[DungeonSessionManager] 拒絕停止受保護 Scene：${sceneKey}`);
+            return {
+                ok: false,
+                stopped: false,
+                reason: 'protected-scene-stop-blocked'
+            };
+        }
+
+        const game = this.getGame();
+        const before = this.getSceneState(sceneKey);
+        if (!game || !game.scene || !before.registered) {
+            return {
+                ok: false,
+                stopped: false,
+                reason: 'dungeon-scene-unavailable'
+            };
+        }
+
+        if (before.stopped) return { ok: true, stopped: true, alreadyStopped: true };
+
+        try {
+            game.scene.stop(sceneKey);
+        } catch (err) {
+            console.warn(`[DungeonSessionManager] 停止副本 Scene 失敗：${sceneKey}`, err);
+            return {
+                ok: false,
+                stopped: false,
+                reason: 'dungeon-scene-stop-failed'
+            };
+        }
+
+        const after = this.getSceneState(sceneKey);
+        const stopped = !!(
+            after.stopped ||
+            (!after.active && !after.sleeping && !after.paused)
+        );
+
+        if (stopped) {
+            this.safeCheckpoint('dungeon-scene-stopped', {
+                targetScene: sceneKey,
+                note: reason || ''
+            });
+        }
+
+        return {
+            ok: stopped,
+            stopped: stopped,
+            reason: stopped ? null : 'dungeon-scene-stop-incomplete'
+        };
+    },
+
+    restoreOwnedWorld() {
+        const game = this.getGame();
+        const restoredSceneKeys = [];
+        const failedSceneKeys = [];
+
+        ['MainScene', 'UIScene'].forEach(sceneKey => {
+            if (this.state.ownedSleepingScenes[sceneKey] !== true) return;
+
+            try {
+                if (game && game.scene && this.getSceneState(sceneKey).sleeping) {
+                    game.scene.wake(sceneKey);
+                }
+            } catch (err) {
+                console.warn(`[DungeonSessionManager] 喚醒世界 Scene 失敗：${sceneKey}`, err);
+            }
+
+            const after = this.getSceneState(sceneKey);
+            if (after.active && !after.sleeping && !after.paused) {
+                restoredSceneKeys[restoredSceneKeys.length] = sceneKey;
+            } else {
+                failedSceneKeys[failedSceneKeys.length] = sceneKey;
+            }
+
+            this.state.ownedSleepingScenes[sceneKey] = false;
+        });
+
+        try {
+            const uiState = this.getSceneState('UIScene');
+            if (
+                game &&
+                game.scene &&
+                uiState.active &&
+                game.scene.bringToTop
+            ) {
+                game.scene.bringToTop('UIScene');
+            }
+        } catch (err) {
+            console.warn('[DungeonSessionManager] UIScene bringToTop 失敗：', err);
+            if (!failedSceneKeys.includes('UIScene')) {
+                failedSceneKeys[failedSceneKeys.length] = 'UIScene';
+            }
+        }
+
+        const worldRestored = failedSceneKeys.length === 0;
+        if (worldRestored) {
+            this.safeCheckpoint('dungeon-world-restored', {
+                targetScene: 'MainScene'
+            });
+        }
+
+        return {
+            ok: worldRestored,
+            worldRestored: worldRestored,
+            restoredSceneKeys: restoredSceneKeys,
+            failedSceneKeys: failedSceneKeys
+        };
+    },
+
+    async restoreLobbyAudio(userUid, options = {}) {
+        if (options.restoreAudio === false) return false;
+
+        const logic = window.GameLogic;
+        const session = this.getSession();
+        const user = logic && logic.currentUser ? logic.currentUser : null;
+
+        if (
+            !logic ||
+            !session ||
+            !user ||
+            !userUid ||
+            user.uid !== userUid ||
+            session.active ||
+            session.phase !== 'idle' ||
+            logic.sceneSwitchInProgress ||
+            this.state.abortRequested
+        ) {
+            return false;
+        }
+
+        const mainScene = this.getScene('MainScene');
+        const mainState = this.getSceneState('MainScene');
+
+        if (
+            !mainScene ||
+            !mainState.active ||
+            mainState.sleeping ||
+            mainState.paused ||
+            !window.AudioManager ||
+            !window.AudioManager.isLobbyPlaybackAllowed ||
+            !window.AudioManager.isLobbyPlaybackAllowed(mainScene) ||
+            !window.ensureCurrentLobbyBgm
+        ) {
+            return false;
+        }
+
+        try {
+            const result = await window.ensureCurrentLobbyBgm({ scene: mainScene });
+            return !!(result && result.ok);
+        } catch (err) {
+            console.warn('[DungeonSessionManager] 返回世界後恢復大廳 BGM 失敗，已略過：', err);
+            return false;
+        }
+    },
+
+    _startCleanup(reason = 'dungeon-exit', options = {}) {
+        if (this.state.cleanupPromise) return this.state.cleanupPromise;
+
+        const session = this.getSession();
+        const ownsWorld = !!(
+            this.state.ownedSleepingScenes.MainScene ||
+            this.state.ownedSleepingScenes.UIScene
+        );
+        const alreadyIdle = !!(
+            session &&
+            session.phase === 'idle' &&
+            !session.active &&
+            !session.sessionId &&
+            !this.state.startedSceneKey &&
+            !ownsWorld &&
+            !this.state.enterPromise
+        );
+
+        if (alreadyIdle) {
+            this.state.abortRequested = false;
+            this.cancelSceneWait('already-idle');
+            return Promise.resolve({
+                ok: true,
+                alreadyIdle: true,
+                reason: String(reason || 'dungeon-exit')
+            });
+        }
+
+        const isAbort = options.abort === true;
+        const safeReason = String(reason || (isAbort ? 'dungeon-abort' : 'dungeon-exit'));
+        const sessionId = session && session.sessionId
+            ? session.sessionId
+            : this.state.startedSceneSessionId;
+        const userUid = session && session.userUid ? session.userUid : null;
+        const sceneKey = session && session.sceneKey
+            ? session.sceneKey
+            : this.state.startedSceneKey;
+
+        this.state.operationId = Number(this.state.operationId || 0) + 1;
+        this.state.abortRequested = isAbort;
+        this.cancelSceneWait(isAbort ? 'dungeon-aborted' : 'dungeon-exit-started');
+
+        if (window.GameLogic) window.GameLogic.sceneInputLocked = true;
+
+        if (session) {
+            Object.assign(session, {
+                phase: isAbort ? 'aborting' : 'exiting',
+                loading: false,
+                entering: false,
+                settling: false,
+                exiting: true,
+                cleanupStarted: true,
+                cleanupCompleted: false,
+                exitReason: safeReason
+            });
+        }
+
+        this.safeCheckpoint(
+            isAbort ? 'dungeon-abort' : 'dungeon-exit-start',
+            {
+                targetScene: sceneKey || '',
+                note: safeReason
+            }
+        );
+
+        let cleanupPromise = null;
+
+        cleanupPromise = (async () => {
+            await Promise.resolve();
+
+            let sceneCleanupTimedOut = false;
+            let sceneCleanupFailed = false;
+            let stopResult = { ok: true, stopped: false, skipped: true };
+            let worldResult = {
+                ok: true,
+                worldRestored: true,
+                restoredSceneKeys: [],
+                failedSceneKeys: []
+            };
+            let audioRestored = false;
+
+            try {
+                const dungeonScene = sceneKey ? this.getScene(sceneKey) : null;
+
+                if (
+                    dungeonScene &&
+                    sessionId &&
+                    this.state.startedSceneKey === sceneKey &&
+                    this.state.startedSceneSessionId === sessionId &&
+                    typeof dungeonScene.shutdownDungeonSession === 'function'
+                ) {
+                    const sceneCleanup = await this.runWithTimeout(
+                        dungeonScene.shutdownDungeonSession({
+                            reason: safeReason,
+                            sessionId: sessionId,
+                            userUid: userUid
+                        }),
+                        2200,
+                        'scene-cleanup-timeout'
+                    );
+
+                    sceneCleanupTimedOut = !!sceneCleanup.timedOut;
+                    sceneCleanupFailed = !sceneCleanup.ok;
+
+                    if (sceneCleanupTimedOut) {
+                        console.warn('[DungeonSessionManager] 副本 Scene 清理逾時，將繼續停止 Scene 與恢復世界。');
+                    } else if (sceneCleanupFailed) {
+                        console.warn('[DungeonSessionManager] 副本 Scene 清理失敗，將繼續停止 Scene 與恢復世界。');
+                    }
+                }
+
+                stopResult = await this.stopStartedDungeonScene(
+                    sessionId,
+                    sceneKey,
+                    safeReason
+                );
+
+                if (options.restoreWorld !== false) {
+                    worldResult = this.restoreOwnedWorld();
+                } else {
+                    this.state.ownedSleepingScenes.MainScene = false;
+                    this.state.ownedSleepingScenes.UIScene = false;
+                    worldResult = {
+                        ok: false,
+                        worldRestored: false,
+                        restoredSceneKeys: [],
+                        failedSceneKeys: ['restore-world-disabled']
+                    };
+                }
+
+                if (!worldResult.worldRestored) {
+                    console.warn('[DungeonSessionManager] 世界 Scene 未完整恢復：', worldResult);
+                }
+
+                this.resetSession(safeReason, true);
+                this.resetOwnership();
+
+                if (window.GameLogic) window.GameLogic.sceneInputLocked = false;
+                this.state.abortRequested = false;
+
+                audioRestored = await this.restoreLobbyAudio(userUid, {
+                    restoreAudio: options.restoreAudio !== false
+                });
+
+                this.safeCheckpoint('dungeon-exit-complete', {
+                    targetScene: sceneKey || '',
+                    note: safeReason
+                }, true);
+
+                return {
+                    ok: !!(stopResult.ok && worldResult.worldRestored),
+                    reason: safeReason,
+                    sessionId: sessionId || null,
+                    sceneStopped: !!stopResult.stopped,
+                    sceneCleanupTimedOut: sceneCleanupTimedOut,
+                    sceneCleanupFailed: sceneCleanupFailed,
+                    worldRestored: !!worldResult.worldRestored,
+                    worldRestoreFailed: !worldResult.worldRestored,
+                    failedWorldSceneKeys: worldResult.failedSceneKeys.slice(),
+                    audioRestored: audioRestored
+                };
+            } catch (err) {
+                console.warn('[DungeonSessionManager] 清理流程發生例外，執行最終保險重設：', err);
+
+                try {
+                    if (options.restoreWorld !== false) {
+                        worldResult = this.restoreOwnedWorld();
+                    }
+                } catch (_) {}
+
+                this.resetSession(safeReason, true);
+                this.resetOwnership();
+
+                if (window.GameLogic) window.GameLogic.sceneInputLocked = false;
+                this.state.abortRequested = false;
+                this.state.lastFailure = {
+                    time: Date.now(),
+                    reason: err && err.code ? String(err.code) : 'cleanup-exception',
+                    message: err && err.message ? String(err.message) : ''
+                };
+
+                return {
+                    ok: false,
+                    reason: safeReason,
+                    sessionId: sessionId || null,
+                    sceneStopped: false,
+                    worldRestored: !!worldResult.worldRestored,
+                    worldRestoreFailed: !worldResult.worldRestored,
+                    audioRestored: false,
+                    cleanupException: true
+                };
+            } finally {
+                this.cancelSceneWait('cleanup-complete');
+                if (window.GameLogic) window.GameLogic.sceneInputLocked = false;
+
+                this.state.enterPromise = null;
+                this.state.abortRequested = false;
+
+                if (this.state.cleanupPromise === cleanupPromise) {
+                    this.state.cleanupPromise = null;
+                }
+            }
+        })();
+
+        this.state.cleanupPromise = cleanupPromise;
+        return cleanupPromise;
+    },
+
+    enter(dungeonKey, options = {}) {
+        const key = typeof dungeonKey === 'string' ? dungeonKey.trim() : '';
+
+        if (this.state.enterPromise) {
+            const session = this.getSession();
+            if (session && session.dungeonKey === key) return this.state.enterPromise;
+
+            return Promise.resolve({
+                ok: false,
+                reason: 'dungeon-session-busy',
+                dungeonKey: key
+            });
+        }
+
+        if (this.state.cleanupPromise) {
+            return Promise.resolve({
+                ok: false,
+                reason: 'dungeon-cleanup-busy',
+                dungeonKey: key
+            });
+        }
+
+        const validation = this.validateEnter(dungeonKey);
+        if (!validation.ok) return Promise.resolve(validation);
+
+        const entry = validation.entry;
+        const operationId = Number(this.state.operationId || 0) + 1;
+        const sessionId = this.createSessionId();
+        const context = {
+            operationId: operationId,
+            sessionId: sessionId,
+            userUid: validation.userUid
+        };
+
+        this.state.operationId = operationId;
+        this.state.abortRequested = false;
+        this.state.activeSessionId = null;
+        this.state.startedSceneKey = null;
+        this.state.startedSceneSessionId = null;
+        this.state.ownedSleepingScenes.MainScene = false;
+        this.state.ownedSleepingScenes.UIScene = false;
+        this.state.lastFailure = null;
+
+        let enterPromise = null;
+
+        enterPromise = (async () => {
+            await Promise.resolve();
+
+            if (
+                Number(this.state.operationId || 0) !== operationId ||
+                this.state.abortRequested
+            ) {
+                return {
+                    ok: false,
+                    reason: 'dungeon-aborted',
+                    dungeonKey: validation.dungeonKey
+                };
+            }
+
+            const session = this.getSession();
+            if (!session) {
+                return {
+                    ok: false,
+                    reason: 'dungeon-session-unavailable',
+                    dungeonKey: validation.dungeonKey
+                };
+            }
+
+            Object.assign(session, {
+                active: false,
+                dungeonKey: entry.key,
+                sceneKey: entry.sceneKey,
+                sessionId: sessionId,
+                userUid: validation.userUid,
+                sourceScene: validation.sourceScene,
+                phase: 'preparing',
+                loading: false,
+                entering: true,
+                settling: false,
+                exiting: false,
+                cleanupStarted: false,
+                cleanupCompleted: false,
+                startedAt: Date.now(),
+                endedAt: 0,
+                exitReason: null
+            });
+
+            if (window.GameLogic) window.GameLogic.sceneInputLocked = true;
+
+            this.safeCheckpoint('dungeon-enter-start', {
+                targetScene: entry.sceneKey,
+                note: entry.key
+            });
+
+            try {
+                if (window.clearAllModals) window.clearAllModals();
+                if (window.stopOnionCanvasDirectionalInput) {
+                    window.stopOnionCanvasDirectionalInput();
+                }
+
+                if (window.AudioManager && window.AudioManager.resetLobbyRequestState) {
+                    window.AudioManager.resetLobbyRequestState();
+                }
+
+                if (window.AudioManager && window.AudioManager.stopMany) {
+                    window.AudioManager.stopMany(LOBBY_BGM_ORDER, {
+                        scene: validation.mainScene,
+                        removeSound: true
+                    });
+                }
+
+                if (!this.isSessionCurrent(context)) {
+                    throw this.makeRuntimeError('stale-session');
+                }
+
+                if (entry.sleepMainScene === true) this.sleepOwnedScene('MainScene');
+                if (entry.sleepUiScene === true) this.sleepOwnedScene('UIScene');
+
+                this.safeCheckpoint('dungeon-world-slept', {
+                    targetScene: entry.sceneKey,
+                    note: entry.key
+                });
+
+                if (!this.isSessionCurrent(context)) {
+                    throw this.makeRuntimeError('stale-session');
+                }
+
+                session.phase = 'entering';
+
+                try {
+                    validation.game.scene.start(entry.sceneKey, {
+                        dungeonKey: entry.key,
+                        sceneKey: entry.sceneKey,
+                        sessionId: sessionId,
+                        userUid: validation.userUid,
+                        sourceScene: validation.sourceScene,
+                        catalogVersion: Number(entry.version || 1)
+                    });
+                } catch (_) {
+                    throw this.makeRuntimeError('dungeon-scene-start-failed');
+                }
+
+                this.state.startedSceneKey = entry.sceneKey;
+                this.state.startedSceneSessionId = sessionId;
+
+                this.safeCheckpoint('dungeon-scene-started', {
+                    targetScene: entry.sceneKey,
+                    note: entry.key
+                });
+
+                const activeResult = await this.waitForSceneActive(
+                    entry.sceneKey,
+                    context,
+                    options.sceneStartTimeoutMs || 2500
+                );
+
+                if (!activeResult || !activeResult.ok) {
+                    throw this.makeRuntimeError(
+                        activeResult && activeResult.reason
+                            ? activeResult.reason
+                            : 'scene-start-timeout'
+                    );
+                }
+
+                if (!this.isSessionCurrent(context)) {
+                    throw this.makeRuntimeError('stale-session');
+                }
+
+                Object.assign(session, {
+                    active: true,
+                    phase: 'running',
+                    loading: false,
+                    entering: false,
+                    settling: false,
+                    exiting: false,
+                    cleanupStarted: false,
+                    cleanupCompleted: false
+                });
+
+                this.state.activeSessionId = sessionId;
+                if (window.GameLogic) window.GameLogic.sceneInputLocked = false;
+
+                this.safeCheckpoint('dungeon-enter-complete', {
+                    targetScene: entry.sceneKey,
+                    note: entry.key
+                }, true);
+
+                return {
+                    ok: true,
+                    dungeonKey: entry.key,
+                    sceneKey: entry.sceneKey,
+                    sessionId: sessionId,
+                    phase: 'running'
+                };
+            } catch (err) {
+                const failureReason = err && err.code
+                    ? String(err.code)
+                    : 'dungeon-enter-failed';
+
+                this.state.lastFailure = {
+                    time: Date.now(),
+                    reason: failureReason,
+                    message: err && err.message ? String(err.message) : ''
+                };
+
+                this.safeCheckpoint('dungeon-enter-failed', {
+                    targetScene: entry.sceneKey,
+                    note: failureReason
+                });
+
+                const rollback = await this._startCleanup(failureReason, {
+                    abort: true,
+                    restoreWorld: true,
+                    restoreAudio: options.restoreAudio !== false
+                });
+
+                return {
+                    ok: false,
+                    reason: failureReason,
+                    dungeonKey: entry.key,
+                    sessionId: sessionId,
+                    rolledBack: true,
+                    worldRestored: !!(rollback && rollback.worldRestored),
+                    audioRestored: !!(rollback && rollback.audioRestored)
+                };
+            } finally {
+                if (window.GameLogic) window.GameLogic.sceneInputLocked = false;
+                if (this.state.enterPromise === enterPromise) {
+                    this.state.enterPromise = null;
+                }
+            }
+        })();
+
+        this.state.enterPromise = enterPromise;
+        return enterPromise;
+    },
+
+    exit(reason = 'dungeon-exit', options = {}) {
+        if (this.state.cleanupPromise) return this.state.cleanupPromise;
+
+        return this._startCleanup(reason, {
+            abort: false,
+            restoreWorld: options.restoreWorld !== false,
+            restoreAudio: options.restoreAudio !== false
+        });
+    },
+
+    abort(reason = 'dungeon-abort', options = {}) {
+        if (this.state.cleanupPromise) return this.state.cleanupPromise;
+
+        this.state.abortRequested = true;
+
+        return this._startCleanup(reason, {
+            abort: true,
+            restoreWorld: options.restoreWorld !== false,
+            restoreAudio: options.restoreAudio !== false
+        });
+    },
+
+    audit() {
+        const session = window.getDungeonSessionSnapshot
+            ? window.getDungeonSessionSnapshot()
+            : {
+                active: false,
+                dungeonKey: null,
+                sceneKey: null,
+                sessionId: null,
+                phase: 'idle'
+            };
+        const mainScene = this.getScene('MainScene');
+        const dungeonSceneKey = session.sceneKey || this.state.startedSceneKey || '';
+        let lobbyPlaybackAllowed = false;
+
+        try {
+            lobbyPlaybackAllowed = !!(
+                window.AudioManager &&
+                window.AudioManager.isLobbyPlaybackAllowed &&
+                mainScene &&
+                window.AudioManager.isLobbyPlaybackAllowed(mainScene)
+            );
+        } catch (_) {}
+
+        return {
+            version: 1,
+            time: Date.now(),
+            operationId: Number(this.state.operationId || 0),
+            enterPending: !!this.state.enterPromise,
+            cleanupPending: !!this.state.cleanupPromise,
+            abortRequested: this.state.abortRequested === true,
+            activeSessionId: this.state.activeSessionId || null,
+            startedSceneKey: this.state.startedSceneKey || null,
+            startedSceneSessionId: this.state.startedSceneSessionId || null,
+            ownedSleepingScenes: {
+                MainScene: this.state.ownedSleepingScenes.MainScene === true,
+                UIScene: this.state.ownedSleepingScenes.UIScene === true
+            },
+            session: session,
+            mainSceneState: this.getSceneState('MainScene'),
+            uiSceneState: this.getSceneState('UIScene'),
+            dungeonSceneState: dungeonSceneKey
+                ? this.getSceneState(dungeonSceneKey)
+                : null,
+            lobbyPlaybackAllowed: lobbyPlaybackAllowed,
+            lastFailure: this.state.lastFailure
+                ? { ...this.state.lastFailure }
+                : null
+        };
+    }
+};
+// ====== 第四階段 4-2：DungeonSessionManager 進出場橋接＋失敗回滾結束 ======
 
 window.PWA_RISK_CHECKPOINT_KEY = 'onion_pwa_risk_checkpoint_v1';
 
@@ -17100,6 +18383,17 @@ onAuthStateChanged(auth, async (user) => {
         }
         listenToChat(); listenToMemories();
     } else {
+        // 第四階段 4-2：登出前中止新副本 Session，避免 Scene 睡眠與 Promise 殘留。
+        if (
+            window.DungeonSessionManager &&
+            window.DungeonSessionManager.abort
+        ) {
+            await window.DungeonSessionManager.abort('logout', {
+                restoreWorld: true,
+                restoreAudio: false
+            });
+        }
+
         const logoutGame = window.GameLogic && window.GameLogic.phaserGame
             ? window.GameLogic.phaserGame
             : null;
