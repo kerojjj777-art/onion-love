@@ -7959,6 +7959,18 @@ window.getManualPageDesc = function(page) {
     return page && page.description ? String(page.description) : '';
 };
 
+window.getManualPageImageSource = function(page) {
+    if (!page || typeof page !== 'object') return '';
+
+    const imageUrl = typeof page.imageUrl === 'string' ? page.imageUrl.trim() : '';
+    if (imageUrl && imageUrl !== 'undefined' && imageUrl !== 'null') return imageUrl;
+
+    const imgBase64 = typeof page.imgBase64 === 'string' ? page.imgBase64.trim() : '';
+    if (imgBase64 && imgBase64 !== 'undefined' && imgBase64 !== 'null') return imgBase64;
+
+    return '';
+};
+
 window.getManualCategoryName = function(categoryId) {
     if (!categoryId || categoryId === 'uncategorized') return '未分類';
     const item = window.manualCategories && window.manualCategories[categoryId] ? window.manualCategories[categoryId] : null;
@@ -8238,8 +8250,9 @@ window.renderManualThumbCards = function(pages, targetEl) {
         const idx = item.index !== undefined ? item.index : window.manualPages.indexOf(page);
         const title = window.getManualPageTitle(page, idx);
         const desc = window.getManualPageDesc(page);
+        const imageSource = window.getManualPageImageSource ? window.getManualPageImageSource(page) : '';
         return `<div class="manual-thumb-card" onclick="window.jumpToManualPage(${idx})">
-            <img src="${page.imgBase64 || ''}" alt="${window.escapeManualHtml(title)}">
+            <img src="${window.escapeManualHtml(imageSource)}" alt="${window.escapeManualHtml(title)}">
             <div class="manual-thumb-title">${window.escapeManualHtml(title)}</div>
             ${desc ? `<div class="manual-thumb-desc">${window.escapeManualHtml(desc)}</div>` : ''}
         </div>`;
@@ -8418,7 +8431,7 @@ window.renderManualPage = function() {
     const categoryName = window.getManualCategoryName(page.categoryId || 'uncategorized');
 
     if (imgEl) {
-        imgEl.src = page.imgBase64 || '';
+        imgEl.src = window.getManualPageImageSource ? window.getManualPageImageSource(page) : '';
         imgEl.alt = pageTitle;
     }
     if (indEl) indEl.innerText = `${window.currentManualIndex + 1} / ${total}`;
