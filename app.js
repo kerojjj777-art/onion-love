@@ -308,7 +308,9 @@ const BGM_SCOPE_KEYS = Object.freeze({
     ]),
     'solo-rocket-shop': Object.freeze([
         'solo-rocket-rabbit-shop-bgm'
-    ])
+    ]),
+    // 第四階段 4-4：Console-only Template Dungeon 使用靜音 Scope，不新增音檔。
+    'template-dungeon': Object.freeze([])
 });
 // ====== 第二階段 2-1：統一 BGM 靜態資料表結束 ======
 // ====== 第三階段 3-1：副本 Texture 靜態資源表＋唯讀診斷工具 ======
@@ -538,6 +540,17 @@ const TEXTURE_ASSET_SCOPES = Object.freeze({
             frameWidth: 75,
             frameHeight: 75
         })
+    ]),
+    // 第四階段 4-4：Template Dungeon 僅使用 Phaser 執行時 Generated Texture。
+    'template-dungeon': Object.freeze([
+        freezeTextureAssetEntry({
+            key: 'template-dungeon-runtime-pixel',
+            file: null,
+            type: 'generated',
+            scope: 'template-dungeon',
+            generatedWidth: 8,
+            generatedHeight: 8
+        })
     ])
 });
 
@@ -684,7 +697,7 @@ const DUNGEON_CATALOG = Object.freeze({
     'template-dungeon': freezeDungeonCatalogEntry({
         key: 'template-dungeon',
         sceneKey: 'TemplateDungeonScene',
-        enabled: false,
+        enabled: true,
         version: 1,
         textureScope: 'template-dungeon',
         audioScope: 'template-dungeon',
@@ -694,7 +707,7 @@ const DUNGEON_CATALOG = Object.freeze({
         allowFirebase: false,
         allowRewards: false,
         returnMode: 'resume-world',
-        description: '未來新副本模板（第四階段 4-1 僅登錄，不啟動）'
+        description: '第四階段 4-4 Console-only 架構測試副本，沒有公開入口'
     })
 });
 
@@ -918,7 +931,8 @@ window.TextureAssetManager = {
     unloadableScopes: Object.freeze({
         'solo-cleaning': true,
         'solo-rocket-run': true,
-        'solo-rocket-shop': true
+        'solo-rocket-shop': true,
+        'template-dungeon': true
     }),
 
     getGame() {
@@ -3232,6 +3246,160 @@ window.DungeonSessionManager = {
         });
     },
 
+    // 第四階段 4-4：Scene active 只代表 Phaser 已啟動，仍需等待 Base boot 完成。
+    waitForDungeonReady(sceneKey, context = {}, timeoutMs = 28000) {
+        const timeout = Math.max(1000, Math.min(30000, Number(timeoutMs || 28000)));
+        this.cancelSceneWait('dungeon-ready-wait-replaced');
+
+        return new Promise(resolve => {
+            const startedAt = Date.now();
+            let settled = false;
+
+            const finish = result => {
+                if (settled) return;
+                settled = true;
+
+                if (this.state.sceneWaitTimerId) {
+                    clearTimeout(this.state.sceneWaitTimerId);
+                }
+
+                this.state.sceneWaitTimerId = null;
+                if (this.state.sceneWaitResolve === finish) {
+                    this.state.sceneWaitResolve = null;
+                }
+                resolve(result);
+            };
+
+            const check = () => {
+                this.state.sceneWaitTimerId = null;
+
+                const dungeonScene = this.getScene(sceneKey);
+                let sceneAudit = null;
+                let bootFailure = null;
+
+                try {
+                    if (
+                        dungeonScene &&
+                        typeof dungeonScene.getDungeonSceneAudit === 'function'
+                    ) {
+                        sceneAudit = dungeonScene.getDungeonSceneAudit();
+                    }
+                } catch (_) {
+                    sceneAudit = null;
+                }
+
+                try {
+                    if (
+                        dungeonScene &&
+                        typeof dungeonScene.getDungeonBootFailure === 'function'
+                    ) {
+                        bootFailure = dungeonScene.getDungeonBootFailure();
+                    }
+                } catch (_) {
+                    bootFailure = null;
+                }
+
+                const auditSession = sceneAudit && sceneAudit.sessionData
+                    ? sceneAudit.sessionData
+                    : null;
+                const failureBelongsToCurrentSession = !!(
+                    bootFailure &&
+                    auditSession &&
+                    auditSession.sessionId === context.sessionId &&
+                    auditSession.userUid === context.userUid
+                );
+
+                if (failureBelongsToCurrentSession) {
+                    finish({
+                        ok: false,
+                        reason: bootFailure.reason || 'dungeon-boot-failed',
+                        bootFailure: bootFailure,
+                        sceneAudit: sceneAudit
+                    });
+                    return;
+                }
+
+                if (!this.isSessionCurrent(context)) {
+                    finish({
+                        ok: false,
+                        reason: this.state.abortRequested
+                            ? 'dungeon-aborted'
+                            : 'stale-session',
+                        sceneAudit: sceneAudit
+                    });
+                    return;
+                }
+
+                const sceneState = this.getSceneState(sceneKey);
+                if (
+                    !dungeonScene ||
+                    !sceneState.registered ||
+                    !sceneState.active ||
+                    sceneState.sleeping ||
+                    sceneState.paused
+                ) {
+                    finish({
+                        ok: false,
+                        reason: 'dungeon-scene-not-active',
+                        sceneState: sceneState,
+                        sceneAudit: sceneAudit
+                    });
+                    return;
+                }
+
+                if (typeof dungeonScene.isDungeonBootReady !== 'function') {
+                    finish({
+                        ok: false,
+                        reason: 'dungeon-ready-interface-missing',
+                        sceneState: sceneState,
+                        sceneAudit: sceneAudit
+                    });
+                    return;
+                }
+
+                let ready = false;
+
+                try {
+                    ready = dungeonScene.isDungeonBootReady() === true;
+                } catch (err) {
+                    finish({
+                        ok: false,
+                        reason: 'dungeon-ready-check-failed',
+                        sceneState: sceneState,
+                        sceneAudit: sceneAudit,
+                        error: err
+                    });
+                    return;
+                }
+
+                if (ready) {
+                    finish({
+                        ok: true,
+                        reason: null,
+                        sceneState: sceneState,
+                        sceneAudit: sceneAudit
+                    });
+                    return;
+                }
+
+                if (Date.now() - startedAt >= timeout) {
+                    finish({
+                        ok: false,
+                        reason: 'dungeon-ready-timeout',
+                        sceneState: sceneState,
+                        sceneAudit: sceneAudit
+                    });
+                    return;
+                }
+
+                this.state.sceneWaitTimerId = setTimeout(check, 40);
+            };
+
+            this.state.sceneWaitResolve = finish;
+            check();
+        });
+    },
+
     runWithTimeout(task, timeoutMs = 2200, timeoutReason = 'operation-timeout') {
         const timeout = Math.max(300, Math.min(5000, Number(timeoutMs || 2200)));
 
@@ -4002,6 +4170,24 @@ window.DungeonSessionManager = {
                     throw this.makeRuntimeError('stale-session');
                 }
 
+                const readyResult = await this.waitForDungeonReady(
+                    entry.sceneKey,
+                    context,
+                    options.sceneReadyTimeoutMs || 28000
+                );
+
+                if (!readyResult || !readyResult.ok) {
+                    throw this.makeRuntimeError(
+                        readyResult && readyResult.reason
+                            ? readyResult.reason
+                            : 'dungeon-ready-timeout'
+                    );
+                }
+
+                if (!this.isSessionCurrent(context)) {
+                    throw this.makeRuntimeError('stale-session');
+                }
+
                 Object.assign(session, {
                     active: true,
                     phase: 'running',
@@ -4105,7 +4291,11 @@ window.DungeonSessionManager = {
             };
         const mainScene = this.getScene('MainScene');
         const dungeonSceneKey = session.sceneKey || this.state.startedSceneKey || '';
+        const dungeonScene = dungeonSceneKey ? this.getScene(dungeonSceneKey) : null;
         let lobbyPlaybackAllowed = false;
+        let dungeonBootReady = false;
+        let dungeonSessionReady = false;
+        let dungeonBootFailure = null;
 
         try {
             lobbyPlaybackAllowed = !!(
@@ -4115,6 +4305,35 @@ window.DungeonSessionManager = {
                 window.AudioManager.isLobbyPlaybackAllowed(mainScene)
             );
         } catch (_) {}
+
+        try {
+            dungeonBootReady = !!(
+                dungeonScene &&
+                typeof dungeonScene.isDungeonBootReady === 'function' &&
+                dungeonScene.isDungeonBootReady()
+            );
+        } catch (_) {
+            dungeonBootReady = false;
+        }
+
+        try {
+            dungeonSessionReady = !!(
+                dungeonScene &&
+                typeof dungeonScene.isDungeonSessionReady === 'function' &&
+                dungeonScene.isDungeonSessionReady()
+            );
+        } catch (_) {
+            dungeonSessionReady = false;
+        }
+
+        try {
+            dungeonBootFailure = dungeonScene &&
+                typeof dungeonScene.getDungeonBootFailure === 'function'
+                ? dungeonScene.getDungeonBootFailure()
+                : null;
+        } catch (_) {
+            dungeonBootFailure = null;
+        }
 
         return {
             version: 1,
@@ -4135,6 +4354,11 @@ window.DungeonSessionManager = {
             uiSceneState: this.getSceneState('UIScene'),
             dungeonSceneState: dungeonSceneKey
                 ? this.getSceneState(dungeonSceneKey)
+                : null,
+            dungeonBootReady: dungeonBootReady,
+            dungeonSessionReady: dungeonSessionReady,
+            dungeonBootFailure: dungeonBootFailure
+                ? { ...dungeonBootFailure }
                 : null,
             lobbyPlaybackAllowed: lobbyPlaybackAllowed,
             lastFailure: this.state.lastFailure
@@ -20592,6 +20816,35 @@ class BaseDungeonScene extends Phaser.Scene {
         return true;
     }
 
+    // 第四階段 4-4：供 Manager 在 Session 切成 running 前等待 Scene boot 完成。
+    isDungeonBootReady() {
+        const runtime = this.dungeonRuntime;
+
+        if (
+            !runtime ||
+            !runtime.bootCompleted ||
+            !runtime.ready ||
+            runtime.bootFailure ||
+            runtime.shutdownStarted ||
+            runtime.shutdownCompleted
+        ) {
+            return false;
+        }
+
+        const session = window.GameLogic && window.GameLogic.dungeonSession
+            ? window.GameLogic.dungeonSession
+            : null;
+
+        if (!session || session.cleanupStarted) return false;
+
+        const validation = this.validateDungeonSessionContext({
+            requireActive: false,
+            allowedPhases: ['entering', 'running']
+        });
+
+        return !!(validation && validation.ok);
+    }
+  
     isDungeonSessionReady() {
         const runtime = this.dungeonRuntime;
         if (
@@ -21223,6 +21476,8 @@ class BaseDungeonScene extends Phaser.Scene {
             sessionData: sessionData,
             catalogEntry: catalogEntry,
             sessionCurrent: this.isDungeonSessionCurrent(),
+            bootReady: this.isDungeonBootReady(),
+            sessionReady: this.isDungeonSessionReady(),
             ownedTextureScope: runtime.ownedTextureScope || null,
             textureScopeRequestId: Number.isFinite(
                 Number(runtime.textureScopeRequestId)
@@ -21254,6 +21509,7 @@ class BaseDungeonScene extends Phaser.Scene {
             'update',
             'validateDungeonSessionContext',
             'isDungeonSessionCurrent',
+            'isDungeonBootReady',
             'isDungeonSessionReady',
             'getDungeonBootFailure',
             'getDungeonSceneAudit',
@@ -21299,6 +21555,605 @@ class BaseDungeonScene extends Phaser.Scene {
 
 window.BaseDungeonScene = BaseDungeonScene;
 // ====== 第四階段 4-3：BaseDungeonScene 標準生命週期＋單一清理接口結束 ======
+
+// ====== 第四階段 4-4：TemplateDungeonScene Console 測試副本 ======
+class TemplateDungeonScene extends BaseDungeonScene {
+    constructor() {
+        super('TemplateDungeonScene');
+        this.templateDungeonRoot = null;
+        this.templateDungeonExitButton = null;
+        this.templateDungeonExitLabel = null;
+        this.templateDungeonExitPending = false;
+        this.templateDungeonEscapeKey = null;
+        this.templateDungeonResizeHandler = null;
+    }
+
+    async onDungeonCreate(context) {
+        const catalogEntry = context && context.catalogEntry
+            ? context.catalogEntry
+            : null;
+        const sessionData = context && context.sessionData
+            ? context.sessionData
+            : null;
+        const textureManager = window.TextureAssetManager;
+        const scope = 'template-dungeon';
+        const textureKey = 'template-dungeon-runtime-pixel';
+
+        if (
+            !catalogEntry ||
+            catalogEntry.key !== scope ||
+            catalogEntry.sceneKey !== 'TemplateDungeonScene'
+        ) {
+            throw this.makeDungeonSceneError('template-catalog-mismatch');
+        }
+
+        if (
+            catalogEntry.allowFirebase !== false ||
+            catalogEntry.allowRewards !== false
+        ) {
+            throw this.makeDungeonSceneError(
+                'template-permission-contract-mismatch'
+            );
+        }
+
+        if (!sessionData || !sessionData.userUid || !sessionData.sessionId) {
+            throw this.makeDungeonSceneError(
+                'template-session-data-missing'
+            );
+        }
+
+        if (
+            !textureManager ||
+            typeof textureManager.beginScopeRequest !== 'function' ||
+            typeof textureManager.invalidateScopeRequest !== 'function' ||
+            typeof textureManager.isScopeRequestCurrent !== 'function' ||
+            typeof textureManager.loadScope !== 'function'
+        ) {
+            throw this.makeDungeonSceneError(
+                'template-texture-manager-unavailable'
+            );
+        }
+
+        const requestId = textureManager.beginScopeRequest(scope, {
+            userUid: sessionData.userUid
+        });
+
+        if (!Number.isFinite(Number(requestId)) || Number(requestId) <= 0) {
+            throw this.makeDungeonSceneError(
+                'template-texture-request-failed'
+            );
+        }
+
+        if (!this.claimTextureScope(scope, requestId)) {
+            textureManager.invalidateScopeRequest(scope, {
+                cancelLoads: true,
+                reason: 'template-texture-claim-failed'
+            });
+
+            throw this.makeDungeonSceneError(
+                'template-texture-claim-failed'
+            );
+        }
+
+        if (!this.textures || typeof this.textures.exists !== 'function') {
+            throw this.makeDungeonSceneError(
+                'template-texture-system-unavailable'
+            );
+        }
+
+        if (!this.textures.exists(textureKey)) {
+            let generator = null;
+
+            try {
+                generator = this.make.graphics({
+                    x: 0,
+                    y: 0,
+                    add: false
+                });
+
+                generator.fillStyle(0xffffff, 1);
+                generator.fillRect(0, 0, 8, 8);
+                generator.generateTexture(textureKey, 8, 8);
+            } catch (err) {
+                throw this.makeDungeonSceneError(
+                    'template-generated-texture-failed',
+                    err && err.message ? String(err.message) : ''
+                );
+            } finally {
+                try {
+                    if (
+                        generator &&
+                        typeof generator.destroy === 'function'
+                    ) {
+                        generator.destroy();
+                    }
+                } catch (_) {}
+            }
+        }
+
+        if (!this.textures.exists(textureKey)) {
+            throw this.makeDungeonSceneError(
+                'template-generated-texture-missing'
+            );
+        }
+
+        const textureResult = await textureManager.loadScope(scope, {
+            scene: this,
+            requestId: requestId,
+            userUid: sessionData.userUid
+        });
+
+        if (
+            !textureResult ||
+            textureResult.ok !== true ||
+            textureResult.stale === true ||
+            (
+                Array.isArray(textureResult.failedKeys) &&
+                textureResult.failedKeys.length > 0
+            ) ||
+            !textureManager.isScopeRequestCurrent(
+                scope,
+                requestId,
+                sessionData.userUid
+            )
+        ) {
+            throw this.makeDungeonSceneError(
+                textureResult && textureResult.reason
+                    ? textureResult.reason
+                    : 'template-texture-scope-load-failed'
+            );
+        }
+
+        this.createTemplateDungeonUi(sessionData, textureKey);
+    }
+
+    createTemplateDungeonUi(sessionData, textureKey) {
+        const root = this.add.container(0, 0);
+        const background = this.add
+            .rectangle(0, 0, 1, 1, 0x050814, 1)
+            .setOrigin(0, 0);
+        const glow = this.add
+            .image(0, 0, textureKey)
+            .setTint(0x58d8ff)
+            .setAlpha(0.16);
+        const panel = this.add
+            .rectangle(0, 0, 1, 1, 0x111a31, 0.96)
+            .setStrokeStyle(2, 0x64e4ff, 0.9);
+        const title = this.add.text(
+            0,
+            0,
+            'Template Dungeon',
+            {
+                fontFamily:
+                    '"Microsoft JhengHei", "PingFang TC", sans-serif',
+                fontStyle: 'bold',
+                color: '#dffaff',
+                align: 'center'
+            }
+        ).setOrigin(0.5);
+        const subtitle = this.add.text(
+            0,
+            0,
+            '第四階段 4-4 架構測試',
+            {
+                fontFamily:
+                    '"Microsoft JhengHei", "PingFang TC", sans-serif',
+                color: '#8eefff',
+                align: 'center'
+            }
+        ).setOrigin(0.5);
+        const status = this.add.text(
+            0,
+            0,
+            `Session：${String(sessionData.sessionId).slice(0, 12)}…\nFirebase：停用｜獎勵：停用｜Audio：靜音`,
+            {
+                fontFamily:
+                    '"Microsoft JhengHei", "PingFang TC", sans-serif',
+                color: '#b8c9df',
+                align: 'center',
+                lineSpacing: 8
+            }
+        ).setOrigin(0.5);
+        const buttonBackground = this.add
+            .rectangle(0, 0, 300, 64, 0x1d5268, 1)
+            .setStrokeStyle(2, 0xa8f4ff, 1)
+            .setInteractive({
+                useHandCursor: true
+            });
+        const buttonLabel = this.add.text(
+            0,
+            0,
+            '安全返回世界',
+            {
+                fontFamily:
+                    '"Microsoft JhengHei", "PingFang TC", sans-serif',
+                fontSize: '20px',
+                fontStyle: 'bold',
+                color: '#ffffff'
+            }
+        ).setOrigin(0.5);
+        const buttonContainer = this.add.container(0, 0, [
+            buttonBackground,
+            buttonLabel
+        ]);
+
+        root.add([
+            background,
+            glow,
+            panel,
+            title,
+            subtitle,
+            status,
+            buttonContainer
+        ]);
+
+        this.templateDungeonRoot = root;
+        this.templateDungeonExitButton = buttonBackground;
+        this.templateDungeonExitLabel = buttonLabel;
+        this.templateDungeonExitPending = false;
+
+        if (!this.registerDungeonCleanup('template-ui-root', () => {
+            try {
+                if (
+                    root &&
+                    root.active &&
+                    typeof root.destroy === 'function'
+                ) {
+                    root.destroy(true);
+                }
+            } catch (_) {}
+        })) {
+            root.destroy(true);
+
+            throw this.makeDungeonSceneError(
+                'template-ui-cleanup-register-failed'
+            );
+        }
+
+        const layout = gameSize => {
+            const width = Math.max(
+                320,
+                Number(gameSize && gameSize.width) ||
+                Number(this.scale && this.scale.width) ||
+                1280
+            );
+            const height = Math.max(
+                240,
+                Number(gameSize && gameSize.height) ||
+                Number(this.scale && this.scale.height) ||
+                720
+            );
+            const panelWidth = Math.max(
+                280,
+                Math.min(width - 32, 720)
+            );
+            const panelHeight = Math.max(
+                300,
+                Math.min(height - 32, 440)
+            );
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const titleSize = Math.max(
+                25,
+                Math.min(42, width * 0.055)
+            );
+            const bodySize = Math.max(
+                15,
+                Math.min(20, width * 0.03)
+            );
+            const buttonWidth = Math.max(
+                240,
+                Math.min(panelWidth - 44, 330)
+            );
+            const buttonHeight = Math.max(
+                58,
+                Math.min(72, height * 0.11)
+            );
+            const glowSize = Math.max(
+                80,
+                Math.min(132, panelWidth * 0.2)
+            );
+
+            background
+                .setPosition(0, 0)
+                .setDisplaySize(width, height);
+
+            glow
+                .setPosition(
+                    centerX,
+                    centerY - panelHeight * 0.28
+                )
+                .setDisplaySize(glowSize, glowSize);
+
+            panel
+                .setPosition(centerX, centerY)
+                .setDisplaySize(panelWidth, panelHeight);
+
+            title
+                .setPosition(
+                    centerX,
+                    centerY - panelHeight * 0.24
+                )
+                .setFontSize(titleSize);
+
+            subtitle
+                .setPosition(
+                    centerX,
+                    centerY - panelHeight * 0.08
+                )
+                .setFontSize(bodySize);
+
+            status
+                .setPosition(
+                    centerX,
+                    centerY + panelHeight * 0.08
+                )
+                .setFontSize(Math.max(14, bodySize - 1))
+                .setWordWrapWidth(panelWidth - 44, true);
+
+            buttonBackground.setDisplaySize(
+                buttonWidth,
+                buttonHeight
+            );
+
+            buttonContainer.setPosition(
+                centerX,
+                centerY + panelHeight * 0.31
+            );
+        };
+
+        this.templateDungeonResizeHandler = layout;
+
+        if (this.scale && typeof this.scale.on === 'function') {
+            this.scale.on('resize', layout);
+
+            if (!this.registerDungeonCleanup(
+                'template-resize-handler',
+                () => {
+                    try {
+                        if (
+                            this.scale &&
+                            typeof this.scale.off === 'function'
+                        ) {
+                            this.scale.off('resize', layout);
+                        }
+                    } catch (_) {}
+                }
+            )) {
+                this.scale.off('resize', layout);
+
+                throw this.makeDungeonSceneError(
+                    'template-resize-cleanup-register-failed'
+                );
+            }
+        }
+
+        const pointerHandler = () => {
+            void this.beginTemplateDungeonExit(
+                'template-dungeon-exit'
+            );
+        };
+
+        buttonBackground.on('pointerdown', pointerHandler);
+
+        if (!this.registerDungeonCleanup(
+            'template-exit-pointer',
+            () => {
+                try {
+                    buttonBackground.off(
+                        'pointerdown',
+                        pointerHandler
+                    );
+                    buttonBackground.disableInteractive();
+                } catch (_) {}
+            }
+        )) {
+            buttonBackground.off('pointerdown', pointerHandler);
+
+            throw this.makeDungeonSceneError(
+                'template-pointer-cleanup-register-failed'
+            );
+        }
+
+        if (this.input && this.input.keyboard) {
+            const escapeKey = this.input.keyboard.addKey(
+                Phaser.Input.Keyboard.KeyCodes.ESC
+            );
+            const escapeHandler = () => {
+                void this.beginTemplateDungeonExit(
+                    'template-dungeon-escape'
+                );
+            };
+
+            escapeKey.on('down', escapeHandler);
+            this.templateDungeonEscapeKey = escapeKey;
+
+            if (!this.registerDungeonCleanup(
+                'template-escape-key',
+                () => {
+                    try {
+                        escapeKey.off('down', escapeHandler);
+                        escapeKey.enabled = false;
+                    } catch (_) {}
+                }
+            )) {
+                escapeKey.off('down', escapeHandler);
+
+                throw this.makeDungeonSceneError(
+                    'template-key-cleanup-register-failed'
+                );
+            }
+        }
+
+        layout(
+            this.scale && this.scale.gameSize
+                ? this.scale.gameSize
+                : null
+        );
+    }
+
+    beginTemplateDungeonExit(
+        reason = 'template-dungeon-exit'
+    ) {
+        if (this.templateDungeonExitPending) {
+            return Promise.resolve({
+                ok: false,
+                reason: 'template-exit-already-pending'
+            });
+        }
+
+        this.templateDungeonExitPending = true;
+
+        try {
+            if (this.templateDungeonExitButton) {
+                this.templateDungeonExitButton.disableInteractive();
+            }
+
+            if (this.templateDungeonExitLabel) {
+                this.templateDungeonExitLabel.setText('返回中……');
+            }
+        } catch (_) {}
+
+        return this.requestDungeonExit(reason, {
+            restoreWorld: true,
+            restoreAudio: true
+        }).then(result => {
+            if (
+                result &&
+                result.ok === false &&
+                this.dungeonRuntime &&
+                !this.dungeonRuntime.shutdownStarted &&
+                this.isDungeonSessionReady()
+            ) {
+                this.templateDungeonExitPending = false;
+
+                try {
+                    if (this.templateDungeonExitButton) {
+                        this.templateDungeonExitButton.setInteractive({
+                            useHandCursor: true
+                        });
+                    }
+
+                    if (this.templateDungeonExitLabel) {
+                        this.templateDungeonExitLabel.setText(
+                            '安全返回世界'
+                        );
+                    }
+                } catch (_) {}
+            }
+
+            return result;
+        });
+    }
+
+    onDungeonUpdate(_time, _delta, _context) {}
+
+    async onDungeonShutdown(_context) {
+        this.templateDungeonExitPending = true;
+
+        try {
+            if (this.templateDungeonExitButton) {
+                this.templateDungeonExitButton.disableInteractive();
+            }
+
+            if (this.templateDungeonExitLabel) {
+                this.templateDungeonExitLabel.setText('返回中……');
+            }
+        } catch (_) {}
+
+        this.templateDungeonRoot = null;
+        this.templateDungeonExitButton = null;
+        this.templateDungeonExitLabel = null;
+        this.templateDungeonEscapeKey = null;
+        this.templateDungeonResizeHandler = null;
+    }
+
+    static auditFoundation() {
+        const requiredPrototypeMethods = [
+            'onDungeonCreate',
+            'onDungeonUpdate',
+            'onDungeonShutdown'
+        ];
+        const missingPrototypeMethods =
+            requiredPrototypeMethods.filter(
+                methodName => (
+                    typeof TemplateDungeonScene
+                        .prototype[methodName] !== 'function'
+                )
+            );
+        const game = window.GameLogic &&
+            window.GameLogic.phaserGame
+            ? window.GameLogic.phaserGame
+            : null;
+        const catalogEntry = window.getDungeonCatalogEntry
+            ? window.getDungeonCatalogEntry('template-dungeon')
+            : null;
+        const textureAssets =
+            TEXTURE_ASSET_SCOPES['template-dungeon'];
+        const audioScopeKnown =
+            Object.prototype.hasOwnProperty.call(
+                BGM_SCOPE_KEYS,
+                'template-dungeon'
+            );
+        const audioKeys = audioScopeKnown
+            ? BGM_SCOPE_KEYS['template-dungeon']
+            : null;
+        let registeredSceneKeys = [];
+
+        try {
+            registeredSceneKeys =
+                game &&
+                game.scene &&
+                game.scene.keys
+                    ? Object.keys(game.scene.keys)
+                    : [];
+        } catch (_) {
+            registeredSceneKeys = [];
+        }
+
+        const extendsBaseDungeonScene =
+            TemplateDungeonScene.prototype
+                instanceof BaseDungeonScene;
+
+        return {
+            version: 1,
+            time: Date.now(),
+            classReady:
+                extendsBaseDungeonScene &&
+                missingPrototypeMethods.length === 0,
+            extendsBaseDungeonScene:
+                extendsBaseDungeonScene,
+            registeredAsScene:
+                registeredSceneKeys.indexOf(
+                    'TemplateDungeonScene'
+                ) !== -1,
+            registeredSceneKeys: registeredSceneKeys,
+            catalogKnown: !!catalogEntry,
+            catalogEnabled: !!(
+                catalogEntry &&
+                catalogEntry.enabled === true
+            ),
+            textureScopeKnown:
+                Array.isArray(textureAssets),
+            audioScopeKnown: audioScopeKnown,
+            textureExpectedCount:
+                Array.isArray(textureAssets)
+                    ? textureAssets.length
+                    : 0,
+            audioExpectedCount:
+                Array.isArray(audioKeys)
+                    ? audioKeys.length
+                    : 0,
+            requiredPrototypeMethods:
+                requiredPrototypeMethods.slice(),
+            missingPrototypeMethods:
+                missingPrototypeMethods
+        };
+    }
+}
+
+window.TemplateDungeonScene = TemplateDungeonScene;
+// ====== 第四階段 4-4：TemplateDungeonScene Console 測試副本結束 ======
 
 class MainScene extends Phaser.Scene {
     constructor() { super('MainScene'); }
@@ -43506,7 +44361,7 @@ function initPhaser() {
         scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
         input: { activePointers: 3 },
         physics: { default: 'arcade', arcade: { debug: false } },
-        scene: [ BootScene, MainScene, UIScene ]
+        scene: [ BootScene, MainScene, UIScene, TemplateDungeonScene ]
     };
 
     window.GameLogic.phaserGame = new Phaser.Game(config);
