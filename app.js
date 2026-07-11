@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getDatabase, ref, set, onValue, push, remove, onDisconnect, update, get, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC266DIMj81hWMk83GEmqSbBl85VY3tTcE", authDomain: "onion-love.firebaseapp.com",
@@ -7095,7 +7095,7 @@ function createSystemUI() {
                     <button class="btn-secondary" onclick="window.renameManualCategory()">改名分類</button>
                 </div>
                 <hr style="border:1px dashed rgba(92,58,28,0.35); margin:12px 0;">
-                <input type="file" id="manual-file" accept="image/*" style="margin-bottom: 10px;"><br><button class="btn-primary" onclick="window.uploadManualPage()">上傳新頁面</button><button class="btn-danger" onclick="window.deleteManualPage()">刪除此頁</button><div style="margin-top: 10px;"><button class="btn-secondary" onclick="window.moveManualPage(-1)">前移頁面</button><button class="btn-secondary" onclick="window.moveManualPage(1)">後移頁面</button></div>
+                <input type="file" id="manual-file" accept="image/jpeg,image/png,image/webp" style="margin-bottom: 10px;"><br><button id="manual-upload-btn" class="btn-primary" onclick="window.uploadManualPage()">上傳新頁面</button><button class="btn-danger" onclick="window.deleteManualPage()">刪除此頁</button><div style="margin-top: 10px;"><button class="btn-secondary" onclick="window.moveManualPage(-1)">前移頁面</button><button class="btn-secondary" onclick="window.moveManualPage(1)">後移頁面</button></div>
             </div>
         </div>
         
@@ -7932,6 +7932,7 @@ window.selectedManualCategoryId = 'uncategorized';
 window.manualSearchKeyword = '';
 window.manualCategoryFilterActive = false;
 window.manualAdminPanelOpen = false;
+window.manualUploadPending = false;
 
 window.isManualAdmin = function() {
     const user = window.GameLogic && window.GameLogic.currentUser ? window.GameLogic.currentUser : null;
@@ -8491,11 +8492,221 @@ document.getElementById('manual-next-btn').addEventListener('click', () => {
     window.renderManualPage();
 });
 
-window.uploadManualPage = function() {
+window.setManualUploadPending = function(pending) {
+    window.manualUploadPending = !!pending;
+
+    const uploadBtn = document.getElementById('manual-upload-btn');
+    if (uploadBtn) {
+        uploadBtn.disabled = window.manualUploadPending;
+        uploadBtn.innerText = window.manualUploadPending ? '上傳中……' : '上傳新頁面';
+    }
+};
+
+window.createManualImageBlob = function(file) {
+    return new Promise(resolve => {
+        if (!file) {
+            resolve({ ok: false, reason: 'missing-file' });
+            return;
+        }
+
+        if (typeof FileReader !== 'function' || typeof Image !== 'function') {
+            resolve({ ok: false, reason: 'browser-api-unavailable' });
+            return;
+        }
+
+        const reader = new FileReader();
+
+        reader.onerror = () => resolve({ ok: false, reason: 'file-read-failed' });
+        reader.onabort = () => resolve({ ok: false, reason: 'file-read-aborted' });
+        reader.onload = e => {
+            const source = e && e.target && typeof e.target.result === 'string' ? e.target.result : '';
+            if (!source) {
+                resolve({ ok: false, reason: 'empty-file-data' });
+                return;
+            }
+
+            const img = new Image();
+
+            img.onerror = () => resolve({ ok: false, reason: 'image-load-failed' });
+            img.onload = () => {
+                try {
+                    const sourceWidth = Number(img.naturalWidth || img.width || 0);
+                    const sourceHeight = Number(img.naturalHeight || img.height || 0);
+
+                    if (
+                        !Number.isFinite(sourceWidth) ||
+                        !Number.isFinite(sourceHeight) ||
+                        sourceWidth <= 0 ||
+                        sourceHeight <= 0
+                    ) {
+                        resolve({ ok: false, reason: 'invalid-image-size' });
+                        return;
+                    }
+
+                    const widthRatio = sourceWidth > 1200 ? 1200 / sourceWidth : 1;
+                    const targetWidth = Math.max(1, Math.round(sourceWidth * widthRatio));
+                    const targetHeight = Math.max(1, Math.round(sourceHeight * widthRatio));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = targetWidth;
+                    canvas.height = targetHeight;
+
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx || typeof canvas.toBlob !== 'function') {
+                        resolve({ ok: false, reason: 'canvas-unavailable' });
+                        return;
+                    }
+
+                    ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+                    canvas.toBlob(blob => {
+                        canvas.width = 1;
+                        canvas.height = 1;
+
+                        if (!blob || blob.size <= 0) {
+                            resolve({ ok: false, reason: 'empty-blob' });
+                            return;
+                        }
+
+                        if (blob.size >= 5 * 1024 * 1024) {
+                            resolve({ ok: false, reason: 'blob-too-large' });
+                            return;
+                        }
+
+                        resolve({
+                            ok: true,
+                            blob,
+                            width: targetWidth,
+                            height: targetHeight,
+                            contentType: 'image/jpeg'
+                        });
+                    }, 'image/jpeg', 0.8);
+                } catch (err) {
+                    console.warn('[說明書] 圖片壓縮失敗：', err && err.message ? err.message : err);
+                    resolve({ ok: false, reason: 'image-process-failed' });
+                }
+            };
+
+            img.src = source;
+        };
+
+        try {
+            reader.readAsDataURL(file);
+        } catch (err) {
+            console.warn('[說明書] 圖片讀取啟動失敗：', err && err.message ? err.message : err);
+            resolve({ ok: false, reason: 'file-read-start-failed' });
+        }
+    });
+};
+
+window.deleteManualStorageImage = async function(imagePath) {
+    const safePath = typeof imagePath === 'string' ? imagePath.trim() : '';
+
+    if (!/^manuals\/[A-Za-z0-9_-]+\.jpg$/.test(safePath)) {
+        return { ok: false, reason: 'unsafe-path' };
+    }
+
+    const activeStorage = window.GameLogic && window.GameLogic.storage
+        ? window.GameLogic.storage
+        : (typeof storage !== 'undefined' ? storage : null);
+
+    if (!activeStorage || typeof storageRef !== 'function' || typeof deleteObject !== 'function') {
+        return { ok: false, reason: 'storage-sdk-unavailable' };
+    }
+
+    try {
+        await deleteObject(storageRef(activeStorage, safePath));
+        return { ok: true };
+    } catch (err) {
+        return {
+            ok: false,
+            reason: err && err.code ? err.code : 'delete-failed'
+        };
+    }
+};
+
+window.uploadManualImageToStorage = async function(blob, pageKey) {
+    const safePageKey = typeof pageKey === 'string' ? pageKey.trim() : '';
+
+    if (!blob || blob.size <= 0) {
+        return { ok: false, reason: 'missing-blob' };
+    }
+
+    if (!/^[A-Za-z0-9_-]+$/.test(safePageKey)) {
+        return { ok: false, reason: 'invalid-page-key' };
+    }
+
+    const activeStorage = window.GameLogic && window.GameLogic.storage
+        ? window.GameLogic.storage
+        : (typeof storage !== 'undefined' ? storage : null);
+
+    if (
+        !activeStorage ||
+        typeof storageRef !== 'function' ||
+        typeof uploadBytes !== 'function' ||
+        typeof getDownloadURL !== 'function'
+    ) {
+        return { ok: false, reason: 'storage-sdk-unavailable' };
+    }
+
+    const imagePath = `manuals/${safePageKey}.jpg`;
+    const imageRef = storageRef(activeStorage, imagePath);
+    let uploadCompleted = false;
+
+    try {
+        await uploadBytes(imageRef, blob, { contentType: 'image/jpeg' });
+        uploadCompleted = true;
+
+        const imageUrl = await getDownloadURL(imageRef);
+        if (!imageUrl) throw new Error('missing-download-url');
+
+        return {
+            ok: true,
+            imageUrl,
+            imagePath
+        };
+    } catch (err) {
+        if (uploadCompleted && window.deleteManualStorageImage) {
+            const cleanupResult = await window.deleteManualStorageImage(imagePath);
+            if (!cleanupResult || !cleanupResult.ok) {
+                console.warn('[說明書] 下載網址取得失敗後，Storage回滾未完成：', cleanupResult && cleanupResult.reason ? cleanupResult.reason : 'unknown');
+            }
+        }
+
+        return {
+            ok: false,
+            reason: err && err.code ? err.code : (err && err.message ? err.message : 'upload-failed')
+        };
+    }
+};
+
+window.uploadManualPage = async function() {
     if (!window.isManualAdmin()) return alert("你沒有說明書管理權限。");
+    if (window.manualUploadPending) return;
+
+    if (!window.GameLogic || !window.GameLogic.currentUser || !window.GameLogic.db) {
+        return alert("請先登入管理者帳號。");
+    }
+
     const fileInput = document.getElementById("manual-file");
-    const file = fileInput.files[0];
+    const file = fileInput && fileInput.files ? fileInput.files[0] : null;
     if (!file) return alert("請選擇圖片檔案！");
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const fileName = typeof file.name === 'string' ? file.name.toLowerCase() : '';
+    const hasAllowedExtension = /\.(jpe?g|png|webp)$/.test(fileName);
+    const fileType = typeof file.type === 'string' ? file.type.toLowerCase() : '';
+
+    if ((fileType && !allowedTypes.includes(fileType)) || (!fileType && !hasAllowedExtension)) {
+        return alert("只允許上傳JPEG、PNG或WebP圖片。");
+    }
+
+    if (!Number.isFinite(Number(file.size)) || Number(file.size) <= 0) {
+        return alert("圖片檔案無效，請重新選擇圖片。");
+    }
+
+    if (Number(file.size) > 10 * 1024 * 1024) {
+        return alert("圖片檔案過大，請選擇10MB以下的圖片。");
+    }
 
     const titleInput = document.getElementById('manual-title-input');
     const descInput = document.getElementById('manual-desc-input');
@@ -8503,31 +8714,77 @@ window.uploadManualPage = function() {
     const title = titleInput && titleInput.value.trim() ? titleInput.value.trim() : '';
     const description = descInput && descInput.value.trim() ? descInput.value.trim() : '';
     const categoryId = categorySelect && categorySelect.value ? categorySelect.value : 'uncategorized';
+    const pageRef = push(ref(window.GameLogic.db, 'manuals'));
+    const pageKey = pageRef && pageRef.key ? String(pageRef.key) : '';
 
-    const reader = new FileReader();
-    reader.onload = e => {
-        const img = new Image();
-        img.onload = () => {
-            const cvs = document.createElement('canvas');
-            let w = img.width, h = img.height;
-            if (w > 1200) { h *= 1200 / w; w = 1200; }
-            cvs.width = w;
-            cvs.height = h;
-            cvs.getContext('2d').drawImage(img, 0, 0, w, h);
-            push(ref(window.GameLogic.db, 'manuals'), {
-                imgBase64: cvs.toDataURL('image/jpeg', 0.8),
+    if (!pageKey) return alert("無法建立說明頁識別碼，請稍後再試。");
+
+    window.setManualUploadPending(true);
+    let uploadedImagePath = '';
+
+    try {
+        const blobResult = window.createManualImageBlob
+            ? await window.createManualImageBlob(file)
+            : { ok: false, reason: 'missing-blob-helper' };
+
+        if (!blobResult || !blobResult.ok || !blobResult.blob) {
+            console.warn('[說明書] 圖片處理未完成：', blobResult && blobResult.reason ? blobResult.reason : 'unknown');
+            alert("圖片處理失敗，請重新選擇圖片。");
+            return;
+        }
+
+        const uploadResult = window.uploadManualImageToStorage
+            ? await window.uploadManualImageToStorage(blobResult.blob, pageKey)
+            : { ok: false, reason: 'missing-storage-helper' };
+
+        if (!uploadResult || !uploadResult.ok || !uploadResult.imageUrl || !uploadResult.imagePath) {
+            console.warn('[說明書] Storage上傳未完成：', uploadResult && uploadResult.reason ? uploadResult.reason : 'unknown');
+            alert("圖片上傳失敗，請確認Firebase Storage權限。");
+            return;
+        }
+
+        uploadedImagePath = uploadResult.imagePath;
+
+        try {
+            await set(pageRef, {
+                imageUrl: uploadResult.imageUrl,
+                imagePath: uploadResult.imagePath,
                 timestamp: Date.now(),
                 title,
                 description,
                 categoryId
-            }).then(() => {
-                alert('上傳成功！');
-                fileInput.value = "";
             });
-        };
-        img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+        } catch (dbErr) {
+            const cleanupResult = window.deleteManualStorageImage
+                ? await window.deleteManualStorageImage(uploadedImagePath)
+                : { ok: false, reason: 'missing-cleanup-helper' };
+
+            if (!cleanupResult || !cleanupResult.ok) {
+                console.warn('[說明書] Database寫入失敗後，Storage回滾未完成：', cleanupResult && cleanupResult.reason ? cleanupResult.reason : 'unknown');
+            }
+
+            console.warn('[說明書] 說明頁資料建立失敗：', dbErr && dbErr.code ? dbErr.code : (dbErr && dbErr.message ? dbErr.message : dbErr));
+            alert("說明頁資料建立失敗，圖片已嘗試清理，請稍後再試。");
+            return;
+        }
+
+        alert('上傳成功！');
+        fileInput.value = "";
+        if (titleInput) titleInput.value = '';
+        if (descInput) descInput.value = '';
+    } catch (err) {
+        if (uploadedImagePath && window.deleteManualStorageImage) {
+            const cleanupResult = await window.deleteManualStorageImage(uploadedImagePath);
+            if (!cleanupResult || !cleanupResult.ok) {
+                console.warn('[說明書] 非預期錯誤後，Storage回滾未完成：', cleanupResult && cleanupResult.reason ? cleanupResult.reason : 'unknown');
+            }
+        }
+
+        console.warn('[說明書] 上傳流程失敗：', err && err.code ? err.code : (err && err.message ? err.message : err));
+        alert("圖片上傳失敗，請稍後再試。");
+    } finally {
+        window.setManualUploadPending(false);
+    }
 };
 
 window.updateManualPageMeta = function() {
@@ -8590,15 +8847,34 @@ window.renameManualCategory = function() {
     });
 };
 
-window.deleteManualPage = function() {
+window.deleteManualPage = async function() {
     if (!window.isManualAdmin()) return alert("你沒有說明書管理權限。");
     if (window.manualPages.length === 0) return;
-    if (confirm("確定要刪除當前顯示的說明書頁面嗎？")) {
-        let pageKey = window.manualPages[window.currentManualIndex].key;
-        remove(ref(window.GameLogic.db, `manuals/${pageKey}`)).then(() => {
-            alert('已刪除！');
-            window.currentManualIndex = 0;
-        });
+
+    const page = window.manualPages[window.currentManualIndex] || null;
+    if (!page || !page.key) return alert("目前沒有可刪除的說明頁。");
+    if (!confirm("確定要刪除當前顯示的說明書頁面嗎？")) return;
+
+    const pageKey = page.key;
+    const imagePath = typeof page.imagePath === 'string' ? page.imagePath.trim() : '';
+
+    try {
+        await remove(ref(window.GameLogic.db, `manuals/${pageKey}`));
+        window.currentManualIndex = 0;
+        alert('已刪除！');
+
+        if (imagePath) {
+            const cleanupResult = window.deleteManualStorageImage
+                ? await window.deleteManualStorageImage(imagePath)
+                : { ok: false, reason: 'missing-cleanup-helper' };
+
+            if (!cleanupResult || !cleanupResult.ok) {
+                console.warn('[說明書] 頁面已刪除，但Storage圖片清理未完成：', cleanupResult && cleanupResult.reason ? cleanupResult.reason : 'unknown');
+            }
+        }
+    } catch (err) {
+        console.warn('[說明書] 刪除頁面失敗：', err && err.code ? err.code : (err && err.message ? err.message : err));
+        alert("說明頁刪除失敗，請稍後再試。");
     }
 };
 
