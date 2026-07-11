@@ -686,7 +686,8 @@ window.TextureAssetManager = {
     },
 
     unloadableScopes: Object.freeze({
-        'solo-cleaning': true
+        'solo-cleaning': true,
+        'solo-rocket-run': true
     }),
 
     getGame() {
@@ -16888,6 +16889,50 @@ onAuthStateChanged(auth, async (user) => {
             });
         }
 
+        const logoutRocketTexturesLoaded = window.getLoadedTextureCountForScope
+            ? window.getLoadedTextureCountForScope('solo-rocket-run')
+            : 0;
+        const logoutRocketNeedsCleanup = !!(
+            logoutScene &&
+            (
+                logoutRocketTexturesLoaded > 0 ||
+                logoutScene.soloRocketPaymentPending ||
+                logoutScene.soloRocketPaid ||
+                logoutScene.soloRocketTextureScopeLoading ||
+                logoutScene.soloRocketTextureScopeReady ||
+                logoutScene.soloRocketTextureScopeUnloadPending ||
+                logoutScene.soloRocketTutorialActive ||
+                logoutScene.soloRocketGameplayStarted ||
+                logoutScene.soloRocketIntroActive ||
+                logoutScene.soloRocketEndingActive ||
+                logoutScene.soloRocketCruiseActive ||
+                logoutScene.soloRocketCruiseFinished ||
+                logoutScene.soloRocketContainer ||
+                logoutScene.soloRocketResultContainer ||
+                logoutScene.soloRocketRabbitShopContainer ||
+                logoutScene.soloRocketTextureScopeRequestId !== null
+            )
+        );
+
+        if (logoutRocketNeedsCleanup && logoutScene.clearSoloRocketCruise) {
+            try {
+                logoutScene.clearSoloRocketCruise(true);
+            } catch (err) {
+                console.warn('[登出] 火箭巡航清理失敗，改由 Texture 白名單保險卸載：', err);
+                if (window.TextureAssetManager && window.TextureAssetManager.unloadScope) {
+                    void window.TextureAssetManager.unloadScope('solo-rocket-run', {
+                        scene: logoutScene,
+                        reason: 'logout-fallback'
+                    });
+                }
+            }
+        } else if (window.TextureAssetManager && window.TextureAssetManager.unloadScope) {
+            void window.TextureAssetManager.unloadScope('solo-rocket-run', {
+                scene: logoutScene,
+                reason: 'logout'
+            });
+        }
+
         if (window.AudioManager) {
             const game = logoutGame;
             const scene = logoutScene;
@@ -17217,7 +17262,32 @@ window.clearAllModals = function() {
                 ms.clearPrinceCatPetMiniGame(false);
             }
 
-            if (ms && ms.clearSoloRocketCruise && (ms.soloRocketCruiseActive || ms.soloRocketContainer || ms.soloRocketResultContainer)) {
+            const rocketTexturesLoaded = window.getLoadedTextureCountForScope
+                ? window.getLoadedTextureCountForScope('solo-rocket-run')
+                : 0;
+            const rocketNeedsCleanup = !!(
+                ms &&
+                (
+                    rocketTexturesLoaded > 0 ||
+                    ms.soloRocketPaymentPending ||
+                    ms.soloRocketPaid ||
+                    ms.soloRocketTextureScopeLoading ||
+                    ms.soloRocketTextureScopeReady ||
+                    ms.soloRocketTextureScopeUnloadPending ||
+                    ms.soloRocketTutorialActive ||
+                    ms.soloRocketGameplayStarted ||
+                    ms.soloRocketIntroActive ||
+                    ms.soloRocketEndingActive ||
+                    ms.soloRocketCruiseActive ||
+                    ms.soloRocketCruiseFinished ||
+                    ms.soloRocketContainer ||
+                    ms.soloRocketResultContainer ||
+                    ms.soloRocketRabbitShopContainer ||
+                    ms.soloRocketTextureScopeRequestId !== null
+                )
+            );
+
+            if (ms && ms.clearSoloRocketCruise && rocketNeedsCleanup) {
                 ms.clearSoloRocketCruise(true);
             }
         } catch (err) {
@@ -17842,14 +17912,8 @@ class BootScene extends Phaser.Scene {
         this.load.audio('sleep-onion-bao-got-money', 'sleep-onion-bao-got-money.mp3');
         this.load.image('hall-screen-in-list', 'hall-screen-in-list.png');
         this.load.image('hall-screen', 'hall-screen.png'); // 改為靜態圖
-        // 獨樂雞與火箭巡航素材。大掃除三張專屬 Texture 改由 TextureAssetManager 按需載入。
+        // 獨樂雞維持預載；大掃除與火箭巡航遊玩區專屬 Texture 改由 TextureAssetManager 按需載入。
         this.load.image('solochicken', 'me_play_cock.png');
-        this.load.image('solo-rocket-bg', 'solo-rocket-bg.png');
-        this.load.image('rocket-onion-player', 'rocket-onion-player.png');
-        this.load.image('solo-rocket-moon-rabbit', 'solo-rocket-moon-rabbit.png');
-        this.load.image('solo-rocket-monster-chicken', 'solo-rocket-monster-chicken.png');
-        this.load.image('solo-rocket-heart-life-container', 'solo-rocket-heart-life-container.png');
-        this.load.image('solo-rocket-space-rock', 'solo-rocket-space-rock.png');
         // 第二階段 2-4：大掃除 BGM 改由 AudioManager 依 Scope 按需載入。
         this.load.audio('solo-cleaning-room-whistle', 'solo-cleaning-room-whistle.mp3');
         this.load.audio('solo-cleaning-room-boss', 'solo-cleaning-room-boss.mp3');
@@ -17864,7 +17928,6 @@ class BootScene extends Phaser.Scene {
         this.load.audio('solo-rocket-monster-chicken-die', 'solo-rocket-monster-chicken-die.mp3');
         this.load.audio('solo-rocket-bang', 'solo-rocket-bang.mp3');
         this.load.audio('solo-rocket-turn', 'solo-rocket-turn.mp3');
-        this.load.image('solo-rocket-monster-boss-chicken', 'solo-rocket-monster-boss-chicken.png');
         this.load.audio('solo-rocket-bang-on-boss', 'solo-rocket-bang-on-boss.mp3');
         this.load.audio('solo-rocket-monster-boss-chicken-die', 'solo-rocket-monster-boss-chicken-die.mp3');
         this.load.audio('solo-rocket-turn-cd-recharge', 'solo-rocket-turn-cd-recharge.mp3');
@@ -18750,6 +18813,12 @@ class MainScene extends Phaser.Scene {
         this.soloRocketCruiseActive = false;
         this.soloRocketCruiseFinished = false;
         this.soloRocketPaymentPending = false;
+        this.soloRocketTextureScopeRequestId = null;
+        this.soloRocketTextureScopeLoading = false;
+        this.soloRocketTextureScopeReady = false;
+        this.soloRocketTextureScopeUserUid = null;
+        this.soloRocketTextureScopeUnloadPending = false;
+        this.soloRocketPaid = false;
         this.soloRocketContainer = null;
         this.soloRocketUiContainer = null;
         this.soloRocketResultContainer = null;
@@ -20799,6 +20868,47 @@ if (!data.scoreHandled && data.attacker) {
                 }
             }
 
+            const shutdownRocketTexturesLoaded = window.getLoadedTextureCountForScope
+                ? window.getLoadedTextureCountForScope('solo-rocket-run')
+                : 0;
+            const shutdownRocketNeedsCleanup = !!(
+                shutdownRocketTexturesLoaded > 0 ||
+                this.soloRocketPaymentPending ||
+                this.soloRocketPaid ||
+                this.soloRocketTextureScopeLoading ||
+                this.soloRocketTextureScopeReady ||
+                this.soloRocketTextureScopeUnloadPending ||
+                this.soloRocketTutorialActive ||
+                this.soloRocketGameplayStarted ||
+                this.soloRocketIntroActive ||
+                this.soloRocketEndingActive ||
+                this.soloRocketCruiseActive ||
+                this.soloRocketCruiseFinished ||
+                this.soloRocketContainer ||
+                this.soloRocketResultContainer ||
+                this.soloRocketRabbitShopContainer ||
+                this.soloRocketTextureScopeRequestId !== null
+            );
+
+            if (shutdownRocketNeedsCleanup && this.clearSoloRocketCruise) {
+                try {
+                    this.clearSoloRocketCruise(true);
+                } catch (err) {
+                    console.warn('[火箭巡航] shutdown 清理失敗，改由 Texture 白名單保險卸載：', err);
+                    if (window.TextureAssetManager && window.TextureAssetManager.unloadScope) {
+                        void window.TextureAssetManager.unloadScope('solo-rocket-run', {
+                            scene: this,
+                            reason: 'main-scene-shutdown-fallback'
+                        });
+                    }
+                }
+            } else if (window.TextureAssetManager && window.TextureAssetManager.unloadScope) {
+                void window.TextureAssetManager.unloadScope('solo-rocket-run', {
+                    scene: this,
+                    reason: 'main-scene-shutdown'
+                });
+            }
+
             if (window.AudioManager && window.AudioManager.unloadScope) {
                 const cleanupScopes = [];
 
@@ -20943,9 +21053,45 @@ if (!data.scoreHandled && data.attacker) {
             try {
                 if (this.clearMoonBunBuffFx) this.clearMoonBunBuffFx(false);
                 if (this.clearMoonStaffBlessing) this.clearMoonStaffBlessing();
-                if (this.clearSoloRocketCruise) this.clearSoloRocketCruise(true);
+
+                const destroyRocketTexturesLoaded = window.getLoadedTextureCountForScope
+                    ? window.getLoadedTextureCountForScope('solo-rocket-run')
+                    : 0;
+                const destroyRocketNeedsCleanup = !!(
+                    destroyRocketTexturesLoaded > 0 ||
+                    this.soloRocketPaymentPending ||
+                    this.soloRocketPaid ||
+                    this.soloRocketTextureScopeLoading ||
+                    this.soloRocketTextureScopeReady ||
+                    this.soloRocketTextureScopeUnloadPending ||
+                    this.soloRocketTutorialActive ||
+                    this.soloRocketGameplayStarted ||
+                    this.soloRocketIntroActive ||
+                    this.soloRocketEndingActive ||
+                    this.soloRocketCruiseActive ||
+                    this.soloRocketCruiseFinished ||
+                    this.soloRocketContainer ||
+                    this.soloRocketResultContainer ||
+                    this.soloRocketRabbitShopContainer ||
+                    this.soloRocketTextureScopeRequestId !== null
+                );
+
+                if (destroyRocketNeedsCleanup && this.clearSoloRocketCruise) {
+                    this.clearSoloRocketCruise(true);
+                } else if (window.TextureAssetManager && window.TextureAssetManager.unloadScope) {
+                    void window.TextureAssetManager.unloadScope('solo-rocket-run', {
+                        scene: this,
+                        reason: 'main-scene-destroy'
+                    });
+                }
             } catch (err) {
-                console.warn('[火箭巡航] destroy 階段清理失敗，已略過：', err);
+                console.warn('[火箭巡航] destroy 階段清理失敗，改由 Texture 白名單保險卸載：', err);
+                if (window.TextureAssetManager && window.TextureAssetManager.unloadScope) {
+                    void window.TextureAssetManager.unloadScope('solo-rocket-run', {
+                        scene: this,
+                        reason: 'main-scene-destroy-fallback'
+                    });
+                }
             }
 
             try {
@@ -26339,8 +26485,339 @@ if (!data.scoreHandled && data.attacker) {
         }
     }
 
+    getSoloRocketRunTextureAudit() {
+        return window.getTextureScopeAudit
+            ? window.getTextureScopeAudit('solo-rocket-run')
+            : {
+                expectedCount: 7,
+                loadedCount: 0,
+                missingCount: 7
+            };
+    }
+
+    isSoloRocketTextureSceneUsable(userUid = null) {
+        if (!this.sys || !this.sys.isActive || !this.sys.isActive()) return false;
+        if (!window.GameLogic || !window.GameLogic.currentUser) return false;
+        if (window.GameLogic.sceneSwitchInProgress) return false;
+
+        const currentUid = window.GameLogic.currentUser.uid || null;
+        if (userUid && currentUid !== userUid) return false;
+
+        try {
+            const game = window.GameLogic.phaserGame;
+            const currentMainScene = game && game.scene
+                ? game.scene.getScene('MainScene')
+                : null;
+            if (currentMainScene !== this) return false;
+        } catch (_) {
+            return false;
+        }
+
+        return true;
+    }
+
+    isSoloRocketTextureRequestCurrent(requestId = null, userUid = null) {
+        const manager = window.TextureAssetManager;
+        const safeRequestId = requestId !== null && requestId !== undefined
+            ? Number(requestId)
+            : Number(this.soloRocketTextureScopeRequestId || 0);
+        const safeUid = userUid || this.soloRocketTextureScopeUserUid || null;
+
+        return !!(
+            manager &&
+            manager.isScopeRequestCurrent &&
+            this.isSoloRocketTextureSceneUsable(safeUid) &&
+            manager.isScopeRequestCurrent('solo-rocket-run', safeRequestId, safeUid)
+        );
+    }
+
+    async ensureSoloRocketRunTextures(options = {}) {
+        const manager = window.TextureAssetManager;
+        const userUid = options.userUid || (
+            window.GameLogic && window.GameLogic.currentUser
+                ? window.GameLogic.currentUser.uid
+                : null
+        );
+
+        if (!manager || !manager.beginScopeRequest || !manager.loadScope) {
+            return {
+                ok: false,
+                reason: 'texture-manager-unavailable',
+                requestId: null
+            };
+        }
+
+        if (!this.isSoloRocketTextureSceneUsable(userUid)) {
+            return {
+                ok: false,
+                reason: 'scene-or-user-invalid',
+                requestId: null
+            };
+        }
+
+        let requestId = options.requestId !== undefined && options.requestId !== null
+            ? Number(options.requestId)
+            : null;
+
+        if (requestId === null) {
+            const existingRequestId = this.soloRocketTextureScopeRequestId !== null
+                ? Number(this.soloRocketTextureScopeRequestId)
+                : null;
+
+            if (
+                existingRequestId !== null &&
+                manager.isScopeRequestCurrent('solo-rocket-run', existingRequestId, userUid)
+            ) {
+                requestId = existingRequestId;
+            } else {
+                requestId = manager.beginScopeRequest('solo-rocket-run', {
+                    userUid: userUid
+                });
+            }
+        }
+
+        if (
+            requestId === null ||
+            !manager.isScopeRequestCurrent('solo-rocket-run', requestId, userUid)
+        ) {
+            return {
+                ok: false,
+                reason: 'stale-scope',
+                requestId: requestId
+            };
+        }
+
+        if (
+            this.soloRocketTextureScopeLoading &&
+            Number(this.soloRocketTextureScopeRequestId || 0) === Number(requestId)
+        ) {
+            return {
+                ok: false,
+                reason: 'scope-load-in-progress',
+                requestId: requestId
+            };
+        }
+
+        this.soloRocketTextureScopeRequestId = requestId;
+        this.soloRocketTextureScopeUserUid = userUid;
+        this.soloRocketTextureScopeLoading = true;
+        this.soloRocketTextureScopeReady = false;
+        this.soloRocketTextureScopeUnloadPending = false;
+
+        if (window.recordPwaRiskCheckpoint) {
+            window.recordPwaRiskCheckpoint('solo-rocket-run-texture-load-start');
+        }
+
+        let loadResult = null;
+
+        try {
+            let audit = this.getSoloRocketRunTextureAudit();
+            const alreadyComplete = !!(
+                audit &&
+                audit.expectedCount === 7 &&
+                audit.loadedCount === 7 &&
+                audit.missingCount === 0
+            );
+
+            if (!alreadyComplete) {
+                loadResult = await manager.loadScope('solo-rocket-run', {
+                    scene: this,
+                    requestId: requestId,
+                    userUid: userUid
+                });
+            } else {
+                loadResult = {
+                    ok: true,
+                    requestId: requestId,
+                    alreadyLoaded: true
+                };
+            }
+
+            audit = this.getSoloRocketRunTextureAudit();
+            const current = this.isSoloRocketTextureRequestCurrent(requestId, userUid);
+            const complete = !!(
+                audit &&
+                audit.expectedCount === 7 &&
+                audit.loadedCount === 7 &&
+                audit.missingCount === 0
+            );
+            const ok = !!(loadResult && loadResult.ok && current && complete);
+
+            if (
+                Number(this.soloRocketTextureScopeRequestId || 0) === Number(requestId)
+            ) {
+                this.soloRocketTextureScopeReady = ok;
+            }
+
+            if (ok) {
+                if (window.completePwaRiskCheckpoint) {
+                    window.completePwaRiskCheckpoint('solo-rocket-run-texture-load-complete');
+                }
+
+                return {
+                    ok: true,
+                    reason: null,
+                    requestId: requestId,
+                    audit: audit,
+                    loadResult: loadResult
+                };
+            }
+
+            if (window.recordPwaRiskCheckpoint) {
+                window.recordPwaRiskCheckpoint('solo-rocket-run-texture-load-failed', {
+                    note: loadResult && loadResult.reason
+                        ? String(loadResult.reason)
+                        : (current ? 'texture-audit-incomplete' : 'stale-scope')
+                });
+            }
+
+            return {
+                ok: false,
+                reason: loadResult && loadResult.reason
+                    ? loadResult.reason
+                    : (current ? 'texture-audit-incomplete' : 'stale-scope'),
+                requestId: requestId,
+                audit: audit,
+                loadResult: loadResult
+            };
+        } catch (err) {
+            console.warn('[火箭巡航] 遊玩區 Texture 載入失敗：', err);
+
+            if (window.recordPwaRiskCheckpoint) {
+                window.recordPwaRiskCheckpoint('solo-rocket-run-texture-load-failed', {
+                    note: 'load-exception'
+                });
+            }
+
+            return {
+                ok: false,
+                reason: 'load-exception',
+                requestId: requestId,
+                error: err
+            };
+        } finally {
+            if (
+                Number(this.soloRocketTextureScopeRequestId || 0) === Number(requestId)
+            ) {
+                this.soloRocketTextureScopeLoading = false;
+            }
+        }
+    }
+
+    async releaseSoloRocketRunTextures(reason = 'solo-rocket-release', options = {}) {
+        const manager = window.TextureAssetManager;
+        const expectedRequestId = options.expectedRequestId !== undefined && options.expectedRequestId !== null
+            ? Number(options.expectedRequestId)
+            : (
+                this.soloRocketTextureScopeRequestId !== null
+                    ? Number(this.soloRocketTextureScopeRequestId)
+                    : null
+            );
+
+        if (!manager || !manager.unloadScope) {
+            this.soloRocketTextureScopeLoading = false;
+            this.soloRocketTextureScopeReady = false;
+            this.soloRocketTextureScopeUserUid = null;
+            this.soloRocketTextureScopeRequestId = null;
+            this.soloRocketTextureScopeUnloadPending = false;
+
+            return {
+                ok: false,
+                reason: 'texture-manager-unavailable',
+                stale: false
+            };
+        }
+
+        const managerRequestId = Number(
+            manager.state &&
+            manager.state.scopeRequestIds &&
+            manager.state.scopeRequestIds['solo-rocket-run']
+                ? manager.state.scopeRequestIds['solo-rocket-run']
+                : 0
+        );
+        const managerScopeActive = !!(
+            manager.state &&
+            manager.state.activeScopes &&
+            manager.state.activeScopes['solo-rocket-run'] === true
+        );
+
+        if (
+            expectedRequestId !== null &&
+            managerRequestId !== expectedRequestId &&
+            managerScopeActive
+        ) {
+            return {
+                ok: true,
+                reason: 'newer-scope-request-active',
+                stale: true,
+                removedKeys: []
+            };
+        }
+
+        let unloadRequestId = managerRequestId;
+
+        if (options.invalidate === false) {
+            unloadRequestId = options.unloadRequestId !== undefined && options.unloadRequestId !== null
+                ? Number(options.unloadRequestId)
+                : managerRequestId;
+        } else if (manager.invalidateScopeRequest) {
+            unloadRequestId = manager.invalidateScopeRequest('solo-rocket-run', {
+                cancelLoads: true,
+                reason: reason
+            });
+        }
+
+        const sceneOwnsRequest = (
+            expectedRequestId === null ||
+            this.soloRocketTextureScopeRequestId === null ||
+            Number(this.soloRocketTextureScopeRequestId) === Number(expectedRequestId)
+        );
+
+        if (sceneOwnsRequest) {
+            this.soloRocketTextureScopeLoading = false;
+            this.soloRocketTextureScopeReady = false;
+            this.soloRocketTextureScopeUserUid = null;
+            this.soloRocketTextureScopeRequestId = null;
+            this.soloRocketTextureScopeUnloadPending = true;
+        }
+
+        const unloadResult = await manager.unloadScope('solo-rocket-run', {
+            scene: this,
+            invalidate: false,
+            expectedRequestId: unloadRequestId,
+            reason: reason
+        });
+
+        if (
+            this.soloRocketTextureScopeRequestId === null &&
+            !(
+                manager.state &&
+                manager.state.activeScopes &&
+                manager.state.activeScopes['solo-rocket-run'] === true
+            )
+        ) {
+            this.soloRocketTextureScopeUnloadPending = false;
+        }
+
+        if (unloadResult && unloadResult.ok && !unloadResult.stale) {
+            if (window.completePwaRiskCheckpoint) {
+                window.completePwaRiskCheckpoint('solo-rocket-run-texture-unload-complete');
+            }
+        } else if (unloadResult && !unloadResult.stale) {
+            console.warn('[火箭巡航] 遊玩區 Texture 白名單卸載未完整完成：', unloadResult);
+        }
+
+        return unloadResult;
+    }
+
     confirmStartSoloRocketCruise() {
-        if (this.soloRocketCruiseActive || this.soloRocketCruiseFinished || this.soloRocketPaymentPending) return;
+        if (
+            this.soloRocketCruiseActive ||
+            this.soloRocketCruiseFinished ||
+            this.soloRocketPaymentPending ||
+            this.soloRocketTextureScopeLoading
+        ) return;
+
         // 防止 blocker 與按鈕事件同時觸發，造成 confirm / 扣款流程重複
         const now = Date.now();
         if (this.soloRocketConfirmLockUntil && now < this.soloRocketConfirmLockUntil) return;
@@ -26354,6 +26831,12 @@ if (!data.scoreHandled && data.attacker) {
                 title: '尚未登入',
                 body: '請先登入後再遊玩火箭巡航。'
             });
+            return;
+        }
+
+        if (this.soloRocketPaid) {
+            this.closeSoloChickenMenu();
+            void this.startSoloRocketCruise();
             return;
         }
 
@@ -26375,12 +26858,25 @@ if (!data.scoreHandled && data.attacker) {
     }
 
     async requestSoloRocketPayment(cost = 100) {
-        if (this.soloRocketPaymentPending) return;
+        if (
+            this.soloRocketPaymentPending ||
+            this.soloRocketTextureScopeLoading ||
+            this.soloRocketCruiseActive ||
+            this.soloRocketCruiseFinished
+        ) return;
+
+        if (this.soloRocketPaid) {
+            this.closeSoloChickenMenu();
+            await this.startSoloRocketCruise();
+            return;
+        }
+
         this.soloRocketPaymentPending = true;
 
         const uid = window.GameLogic.currentUser && window.GameLogic.currentUser.uid
             ? window.GameLogic.currentUser.uid
             : null;
+
         if (!uid) {
             this.soloRocketPaymentPending = false;
             this.openSoloRocketPaymentConfirm(cost, {
@@ -26391,48 +26887,155 @@ if (!data.scoreHandled && data.attacker) {
             return;
         }
 
+        const manager = window.TextureAssetManager;
+        const requestId = manager && manager.beginScopeRequest
+            ? manager.beginScopeRequest('solo-rocket-run', {
+                userUid: uid
+            })
+            : null;
+
+        this.soloRocketTextureScopeRequestId = requestId;
+        this.soloRocketTextureScopeUserUid = uid;
+        this.soloRocketTextureScopeLoading = false;
+        this.soloRocketTextureScopeReady = false;
+        this.soloRocketTextureScopeUnloadPending = false;
+        this.soloRocketPaid = false;
+
+        const mayShowNotice = () => {
+            return !!(
+                this.isSoloRocketTextureSceneUsable(uid) &&
+                !window.GameLogic.sceneSwitchInProgress
+            );
+        };
+
+        const failAndRelease = async (title, body, reason) => {
+            await this.releaseSoloRocketRunTextures(reason, {
+                expectedRequestId: requestId
+            });
+
+            if (mayShowNotice()) {
+                this.openSoloRocketPaymentConfirm(cost, {
+                    mode: 'notice',
+                    title: title,
+                    body: body
+                });
+            }
+        };
+
         try {
+            if (requestId === null) {
+                await failAndRelease(
+                    '素材載入失敗',
+                    '火箭巡航素材載入失敗，沒有扣除馬德幣，請稍後再試。',
+                    'solo-rocket-request-create-failed'
+                );
+                return;
+            }
+
+            const textureResult = await this.ensureSoloRocketRunTextures({
+                requestId: requestId,
+                userUid: uid
+            });
+
+            const textureAudit = this.getSoloRocketRunTextureAudit();
+            const textureReady = !!(
+                textureResult &&
+                textureResult.ok &&
+                textureAudit &&
+                textureAudit.expectedCount === 7 &&
+                textureAudit.loadedCount === 7 &&
+                textureAudit.missingCount === 0 &&
+                this.isSoloRocketTextureRequestCurrent(requestId, uid)
+            );
+
+            if (!textureReady) {
+                await failAndRelease(
+                    '素材載入失敗',
+                    '火箭巡航素材載入失敗，沒有扣除馬德幣，請稍後再試。',
+                    'solo-rocket-texture-load-failed'
+                );
+                return;
+            }
+
+            if (!this.isSoloRocketTextureRequestCurrent(requestId, uid)) {
+                await failAndRelease(
+                    '啟動已取消',
+                    '火箭巡航啟動程序已取消，沒有扣除馬德幣。',
+                    'solo-rocket-request-stale-before-coins'
+                );
+                return;
+            }
+
             const coinSnap = await get(ref(window.GameLogic.db, `users/${uid}/coins`));
+
+            if (!this.isSoloRocketTextureRequestCurrent(requestId, uid)) {
+                await failAndRelease(
+                    '啟動已取消',
+                    '火箭巡航啟動程序已取消，沒有扣除馬德幣。',
+                    'solo-rocket-request-stale-after-coins'
+                );
+                return;
+            }
+
             const latestCoinsRaw = coinSnap.val();
             const latestCoins = Number(latestCoinsRaw || 0);
 
             if (!Number.isFinite(latestCoins)) {
                 console.warn('[火箭巡航] coins 資料異常：', latestCoinsRaw);
-                this.openSoloRocketPaymentConfirm(cost, {
-                    mode: 'notice',
-                    title: '馬德幣資料異常',
-                    body: '目前無法確認你的馬德幣資料，請稍後再試。'
-                });
+                await failAndRelease(
+                    '馬德幣資料異常',
+                    '目前無法確認你的馬德幣資料，請稍後再試。',
+                    'solo-rocket-coins-invalid'
+                );
                 return;
             }
 
             if (latestCoins < cost) {
                 window.GameLogic.myProfile.coins = latestCoins;
                 this.syncSoloRocketCoinUi(latestCoins);
-                this.openSoloRocketPaymentConfirm(cost, {
-                    mode: 'notice',
-                    title: '馬德幣不足',
-                    body: `火箭巡航需要 ${cost} 馬德幣。\n你目前持有 ${latestCoins} 馬德幣。`
-                });
+
+                await failAndRelease(
+                    '馬德幣不足',
+                    `火箭巡航需要 ${cost} 馬德幣。\n你目前持有 ${latestCoins} 馬德幣。`,
+                    'solo-rocket-coins-insufficient'
+                );
+                return;
+            }
+
+            if (!this.isSoloRocketTextureRequestCurrent(requestId, uid)) {
+                await failAndRelease(
+                    '啟動已取消',
+                    '火箭巡航啟動程序已取消，沒有扣除馬德幣。',
+                    'solo-rocket-request-stale-before-update'
+                );
                 return;
             }
 
             const newCoins = latestCoins - cost;
-            await update(ref(window.GameLogic.db, `users/${uid}`), { coins: newCoins });
+            await update(ref(window.GameLogic.db, `users/${uid}`), {
+                coins: newCoins
+            });
 
             window.GameLogic.myProfile.coins = newCoins;
             this.syncSoloRocketCoinUi(newCoins);
-            console.log('[火箭巡航] 已支付 100 馬德幣，啟動副本。');
 
+            this.soloRocketPaid = true;
+            this.soloRocketTextureScopeReady = true;
+            this.soloRocketTextureScopeUserUid = uid;
+            this.soloRocketTextureScopeRequestId = requestId;
+            console.log('[火箭巡航] Texture 已就緒並支付 100 馬德幣，啟動副本。');
+
+            this.closeSoloRocketPaymentConfirm();
             this.closeSoloChickenMenu();
-            this.startSoloRocketCruise();
+            await this.startSoloRocketCruise();
         } catch (err) {
-            console.warn('[火箭巡航] 扣款失敗，已阻擋進入副本：', err);
-            this.openSoloRocketPaymentConfirm(cost, {
-                mode: 'notice',
-                title: '扣款失敗',
-                body: '扣款失敗，請稍後再試。'
-            });
+            console.warn('[火箭巡航] 素材載入、讀取或扣款失敗，已阻擋進入副本：', err);
+
+            await failAndRelease(
+                '扣款失敗',
+                '扣款失敗，請稍後再試。',
+                'solo-rocket-payment-exception'
+            );
         } finally {
             this.soloRocketPaymentPending = false;
         }
@@ -27007,8 +27610,60 @@ if (!data.scoreHandled && data.attacker) {
     }
 
   
-    startSoloRocketCruise() {
+    async startSoloRocketCruise() {
         if (this.soloRocketCruiseActive || !this.localPlayer || !this.localPlayer.sprite) return;
+        if (!this.soloRocketPaid) return;
+
+        const uid = this.soloRocketTextureScopeUserUid || (
+            window.GameLogic && window.GameLogic.currentUser
+                ? window.GameLogic.currentUser.uid
+                : null
+        );
+
+        if (!this.isSoloRocketTextureSceneUsable(uid)) {
+            await this.releaseSoloRocketRunTextures('solo-rocket-start-scene-invalid', {
+                expectedRequestId: this.soloRocketTextureScopeRequestId
+            });
+            return;
+        }
+
+        const textureResult = await this.ensureSoloRocketRunTextures({
+            requestId: this.isSoloRocketTextureRequestCurrent(
+                this.soloRocketTextureScopeRequestId,
+                uid
+            )
+                ? this.soloRocketTextureScopeRequestId
+                : null,
+            userUid: uid
+        });
+        const textureAudit = this.getSoloRocketRunTextureAudit();
+        const textureReady = !!(
+            textureResult &&
+            textureResult.ok &&
+            textureAudit &&
+            textureAudit.expectedCount === 7 &&
+            textureAudit.loadedCount === 7 &&
+            textureAudit.missingCount === 0 &&
+            this.isSoloRocketTextureRequestCurrent(textureResult.requestId, uid)
+        );
+
+        if (!textureReady) {
+            await this.releaseSoloRocketRunTextures('solo-rocket-start-texture-incomplete', {
+                expectedRequestId: textureResult && textureResult.requestId !== undefined
+                    ? textureResult.requestId
+                    : this.soloRocketTextureScopeRequestId
+            });
+
+            if (this.isSoloRocketTextureSceneUsable(uid)) {
+                alert('火箭巡航素材尚未準備完成，請重新點擊進入；本次不會重複扣除馬德幣。');
+            }
+            return;
+        }
+
+        this.soloRocketTextureScopeRequestId = textureResult.requestId;
+        this.soloRocketTextureScopeUserUid = uid;
+        this.soloRocketTextureScopeReady = true;
+        this.soloRocketTextureScopeUnloadPending = false;
 
         try {
             this.soloRocketCruiseActive = true;
@@ -27064,12 +27719,35 @@ if (!data.scoreHandled && data.attacker) {
             this.showSoloRocketTutorial();
         } catch (err) {
             console.warn('[火箭巡航] 啟動教學畫面失敗，已清理回大廳：', err);
-            alert('火箭巡航啟動失敗，已返回大廳。');
+            alert('火箭巡航啟動失敗，請重新確認馬德幣餘額後再試。');
             this.clearSoloRocketCruise(false);
         }
     }
 
     showSoloRocketTutorial() {
+        const textureAudit = this.getSoloRocketRunTextureAudit();
+        const uid = this.soloRocketTextureScopeUserUid || (
+            window.GameLogic && window.GameLogic.currentUser
+                ? window.GameLogic.currentUser.uid
+                : null
+        );
+        const textureReady = !!(
+            this.soloRocketPaid &&
+            this.soloRocketTextureScopeReady &&
+            this.isSoloRocketTextureRequestCurrent(
+                this.soloRocketTextureScopeRequestId,
+                uid
+            ) &&
+            textureAudit &&
+            textureAudit.expectedCount === 7 &&
+            textureAudit.loadedCount === 7 &&
+            textureAudit.missingCount === 0
+        );
+
+        if (!textureReady) {
+            throw new Error('solo-rocket-tutorial-textures-not-ready');
+        }
+
         this.clearSoloRocketTutorial();
 
         const cam = this.cameras.main;
@@ -27347,8 +28025,72 @@ if (!data.scoreHandled && data.attacker) {
         this.soloRocketTutorialContainer = null;
     }
 
-    startSoloRocketGameplay() {
-        if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished || this.soloRocketGameplayStarted) return;
+    async startSoloRocketGameplay() {
+        if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished || this.soloRocketGameplayStarted) {
+            this.soloRocketTutorialStartPending = false;
+            return;
+        }
+
+        if (this.soloRocketTextureScopeLoading) return;
+
+        const uid = this.soloRocketTextureScopeUserUid || (
+            window.GameLogic && window.GameLogic.currentUser
+                ? window.GameLogic.currentUser.uid
+                : null
+        );
+
+        if (!this.soloRocketPaid || !this.isSoloRocketTextureSceneUsable(uid)) {
+            this.soloRocketTutorialStartPending = false;
+            return;
+        }
+
+        const currentRequestId = this.isSoloRocketTextureRequestCurrent(
+            this.soloRocketTextureScopeRequestId,
+            uid
+        )
+            ? this.soloRocketTextureScopeRequestId
+            : null;
+        const textureResult = await this.ensureSoloRocketRunTextures({
+            requestId: currentRequestId,
+            userUid: uid
+        });
+        const textureAudit = this.getSoloRocketRunTextureAudit();
+        const textureReady = !!(
+            textureResult &&
+            textureResult.ok &&
+            this.soloRocketCruiseActive &&
+            !this.soloRocketCruiseFinished &&
+            !this.soloRocketGameplayStarted &&
+            this.isSoloRocketTextureRequestCurrent(textureResult.requestId, uid) &&
+            textureAudit &&
+            textureAudit.expectedCount === 7 &&
+            textureAudit.loadedCount === 7 &&
+            textureAudit.missingCount === 0
+        );
+
+        if (!textureReady) {
+            await this.releaseSoloRocketRunTextures('solo-rocket-gameplay-texture-incomplete', {
+                expectedRequestId: textureResult && textureResult.requestId !== undefined
+                    ? textureResult.requestId
+                    : this.soloRocketTextureScopeRequestId
+            });
+
+            this.soloRocketTutorialStartPending = false;
+
+            if (
+                this.soloRocketCruiseActive &&
+                !this.soloRocketCruiseFinished &&
+                this.isSoloRocketTextureSceneUsable(uid)
+            ) {
+                alert('火箭巡航素材重新載入失敗，尚未開始倒數；請再按一次「開始遊戲」。');
+            }
+            return;
+        }
+
+        this.soloRocketTextureScopeRequestId = textureResult.requestId;
+        this.soloRocketTextureScopeUserUid = uid;
+        this.soloRocketTextureScopeReady = true;
+        this.soloRocketTextureScopeUnloadPending = false;
 
         this.clearSoloRocketTutorial();
         this.applySoloRocketDifficultyForRun(this.soloRocketDifficultyKey || 'normal');
@@ -30455,6 +31197,29 @@ if (!data.scoreHandled && data.attacker) {
     }
   
     createSoloRocketCruiseLayer() {
+        const textureAudit = this.getSoloRocketRunTextureAudit();
+        const uid = this.soloRocketTextureScopeUserUid || (
+            window.GameLogic && window.GameLogic.currentUser
+                ? window.GameLogic.currentUser.uid
+                : null
+        );
+        const textureReady = !!(
+            this.soloRocketPaid &&
+            this.soloRocketTextureScopeReady &&
+            this.isSoloRocketTextureRequestCurrent(
+                this.soloRocketTextureScopeRequestId,
+                uid
+            ) &&
+            textureAudit &&
+            textureAudit.expectedCount === 7 &&
+            textureAudit.loadedCount === 7 &&
+            textureAudit.missingCount === 0
+        );
+
+        if (!textureReady) {
+            throw new Error('solo-rocket-layer-textures-not-ready');
+        }
+
         const cam = this.cameras.main;
         const rect = this.getSoloRocketSafeRect();
         this.soloRocketSafeRect = rect;
@@ -33576,6 +34341,82 @@ if (!data.scoreHandled && data.attacker) {
     }
 
     clearSoloRocketCruise(skipMusicResume = false) {
+        const textureManager = window.TextureAssetManager;
+        const rocketTextureLoadedCount = window.getLoadedTextureCountForScope
+            ? window.getLoadedTextureCountForScope('solo-rocket-run')
+            : 0;
+        const managerRocketScopeActive = !!(
+            textureManager &&
+            textureManager.state &&
+            textureManager.state.activeScopes &&
+            textureManager.state.activeScopes['solo-rocket-run'] === true
+        );
+        const managerRocketLoading = !!(
+            textureManager &&
+            textureManager.state &&
+            textureManager.state.loadingByKey &&
+            (TEXTURE_SCOPE_KEYS['solo-rocket-run'] || []).some(
+                key => !!textureManager.state.loadingByKey[key]
+            )
+        );
+        const rocketTextureNeedsCleanup = !!(
+            rocketTextureLoadedCount > 0 ||
+            managerRocketScopeActive ||
+            managerRocketLoading ||
+            this.soloRocketPaymentPending ||
+            this.soloRocketPaid ||
+            this.soloRocketTextureScopeLoading ||
+            this.soloRocketTextureScopeReady ||
+            this.soloRocketTextureScopeUnloadPending ||
+            this.soloRocketTextureScopeRequestId !== null ||
+            this.soloRocketCruiseActive ||
+            this.soloRocketCruiseFinished ||
+            this.soloRocketContainer ||
+            this.soloRocketResultContainer ||
+            this.soloRocketRabbitShopContainer
+        );
+        let rocketTextureUnloadRequestId = null;
+
+        if (
+            rocketTextureNeedsCleanup &&
+            textureManager &&
+            textureManager.invalidateScopeRequest
+        ) {
+            const currentManagerRequestId = Number(
+                textureManager.state &&
+                textureManager.state.scopeRequestIds &&
+                textureManager.state.scopeRequestIds['solo-rocket-run']
+                    ? textureManager.state.scopeRequestIds['solo-rocket-run']
+                    : 0
+            );
+
+            if (
+                this.soloRocketTextureScopeUnloadPending &&
+                !managerRocketScopeActive
+            ) {
+                rocketTextureUnloadRequestId = currentManagerRequestId;
+            } else {
+                rocketTextureUnloadRequestId = textureManager.invalidateScopeRequest(
+                    'solo-rocket-run',
+                    {
+                        cancelLoads: true,
+                        reason: 'solo-rocket-clear'
+                    }
+                );
+            }
+
+            this.soloRocketTextureScopeUnloadPending = true;
+        }
+
+        this.soloRocketPaymentPending = false;
+        this.soloRocketPaid = false;
+        this.soloRocketTextureScopeLoading = false;
+        this.soloRocketTextureScopeReady = false;
+        this.soloRocketTextureScopeUserUid = null;
+        this.soloRocketTextureScopeRequestId = null;
+        this.soloRocketInputLocked = true;
+        this.closeSoloRocketPaymentConfirm();
+
         try {
             if (this.soloRocketTimer) this.soloRocketTimer.remove(false);
         } catch (_) {}
@@ -33737,8 +34578,52 @@ if (!data.scoreHandled && data.attacker) {
 
         this.restoreSoloRocketLobbyUi();
         if (!skipMusicResume) this.resumeLobbyBgmAfterSoloRocket();
+
+        if (
+            rocketTextureNeedsCleanup &&
+            textureManager &&
+            textureManager.unloadScope &&
+            rocketTextureUnloadRequestId !== null
+        ) {
+            const unloadPromise = textureManager.unloadScope('solo-rocket-run', {
+                scene: this,
+                invalidate: false,
+                expectedRequestId: rocketTextureUnloadRequestId,
+                reason: 'solo-rocket-clear'
+            });
+
+            void unloadPromise.then(result => {
+                const newerScopeActive = !!(
+                    textureManager.state &&
+                    textureManager.state.activeScopes &&
+                    textureManager.state.activeScopes['solo-rocket-run'] === true
+                );
+
+                if (
+                    this.soloRocketTextureScopeRequestId === null &&
+                    !newerScopeActive
+                ) {
+                    this.soloRocketTextureScopeUnloadPending = false;
+                }
+
+                if (result && result.ok && !result.stale) {
+                    if (window.completePwaRiskCheckpoint) {
+                        window.completePwaRiskCheckpoint('solo-rocket-run-texture-unload-complete');
+                    }
+                } else if (result && !result.stale) {
+                    console.warn('[火箭巡航] 遊玩區 Texture 白名單卸載未完整完成：', result);
+                }
+            }).catch(err => {
+                if (this.soloRocketTextureScopeRequestId === null) {
+                    this.soloRocketTextureScopeUnloadPending = false;
+                }
+                console.warn('[火箭巡航] 遊玩區 Texture 白名單卸載失敗，已略過：', err);
+            });
+        } else {
+            this.soloRocketTextureScopeUnloadPending = false;
+        }
     }
-  
+
     getCurrentPlayerPathForAction() {
         if (!window.GameLogic.currentUser) return null;
         const uid = window.GameLogic.currentUser.uid;
