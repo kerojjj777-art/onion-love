@@ -311,6 +311,458 @@ const BGM_SCOPE_KEYS = Object.freeze({
     ])
 });
 // ====== 第二階段 2-1：統一 BGM 靜態資料表結束 ======
+// ====== 第二階段 2-2：Phaser BGM AudioManager 相容層 ======
+window.AudioManager = {
+    state: {
+        currentByScope: {},
+        lastPlayedKey: null,
+        warnedKeys: {}
+    },
+
+    getGame() {
+        return window.GameLogic && window.GameLogic.phaserGame
+            ? window.GameLogic.phaserGame
+            : null;
+    },
+
+    getScene(sceneOrKey = null) {
+        if (sceneOrKey && typeof sceneOrKey === 'object' && sceneOrKey.sound) {
+            return sceneOrKey;
+        }
+
+        const game = this.getGame();
+        if (!game || !game.scene) return null;
+
+        if (typeof sceneOrKey === 'string') {
+            try {
+                return game.scene.getScene(sceneOrKey) || null;
+            } catch (_) {
+                return null;
+            }
+        }
+
+        try {
+            const mainScene = game.scene.getScene('MainScene');
+            if (mainScene && mainScene.sound) return mainScene;
+        } catch (_) {}
+
+        try {
+            const activeScenes = game.scene.getScenes ? (game.scene.getScenes(true) || []) : [];
+            for (let i = 0; i < activeScenes.length; i++) {
+                if (activeScenes[i] && activeScenes[i].sound) return activeScenes[i];
+            }
+        } catch (_) {}
+
+        return null;
+    },
+
+    getSoundManager(sceneOrKey = null) {
+        const scene = this.getScene(sceneOrKey);
+        if (scene && scene.sound) return scene.sound;
+
+        const game = this.getGame();
+        return game && game.sound ? game.sound : null;
+    },
+
+    getCatalogEntry(key) {
+        const safeKey = typeof key === 'string' ? key : '';
+        return safeKey && BGM_CATALOG[safeKey] ? BGM_CATALOG[safeKey] : null;
+    },
+
+    getBgmVolume() {
+        const control = document.getElementById('bgm-volume');
+        const rawValue = control ? Number(control.value) / 100 : 0.5;
+        return Number.isFinite(rawValue)
+            ? Math.max(0, Math.min(1, rawValue))
+            : 0.5;
+    },
+
+    warnOnce(code, message) {
+        const safeCode = String(code || 'unknown');
+        if (this.state.warnedKeys[safeCode]) return;
+        this.state.warnedKeys[safeCode] = true;
+        console.warn(message);
+    },
+
+    isLoaded(key, sceneOrKey = null) {
+        const entry = this.getCatalogEntry(key);
+        if (!entry) return false;
+
+        const scene = this.getScene(sceneOrKey);
+        const game = this.getGame();
+        const audioCache = scene && scene.cache && scene.cache.audio
+            ? scene.cache.audio
+            : (game && game.cache ? game.cache.audio : null);
+
+        try {
+            return !!(
+                audioCache &&
+                audioCache.exists &&
+                audioCache.exists(entry.key)
+            );
+        } catch (_) {
+            return false;
+        }
+    },
+
+    getAllSounds(key, options = {}) {
+        const entry = this.getCatalogEntry(key);
+        if (!entry) return [];
+
+        const soundManager = this.getSoundManager(options.scene || null);
+        if (!soundManager || typeof soundManager.getAll !== 'function') return [];
+
+        try {
+            const sounds = soundManager.getAll(entry.key);
+            return Array.isArray(sounds) ? sounds.filter(Boolean) : [];
+        } catch (_) {
+            return [];
+        }
+    },
+
+    getSound(key, options = {}) {
+        const sounds = this.getAllSounds(key, options);
+        const playing = sounds.find(sound => sound && sound.isPlaying);
+        if (playing) return playing;
+
+        const paused = sounds.find(sound => sound && sound.isPaused);
+        if (paused) return paused;
+        if (sounds.length > 0) return sounds[0];
+
+        const entry = this.getCatalogEntry(key);
+        const soundManager = this.getSoundManager(options.scene || null);
+        if (!entry || !soundManager || typeof soundManager.get !== 'function') return null;
+
+        try {
+            return soundManager.get(entry.key) || null;
+        } catch (_) {
+            return null;
+        }
+    },
+
+    applySoundSettings(sound, entry, options = {}) {
+        if (!sound || !entry) return;
+
+        const loop = options.loop !== undefined ? !!options.loop : !!entry.loop;
+        const rawVolume = options.volume !== undefined ? Number(options.volume) : this.getBgmVolume();
+        const volume = Number.isFinite(rawVolume)
+            ? Math.max(0, Math.min(1, rawVolume))
+            : this.getBgmVolume();
+        const rawRate = options.rate !== undefined ? Number(options.rate) : 1;
+        const rate = Number.isFinite(rawRate) && rawRate > 0 ? rawRate : 1;
+
+        try {
+            if (typeof sound.setLoop === 'function') sound.setLoop(loop);
+            else sound.loop = loop;
+        } catch (_) {}
+
+        try {
+            if (typeof sound.setVolume === 'function') sound.setVolume(volume);
+            else sound.volume = volume;
+        } catch (_) {}
+
+        try {
+            if (typeof sound.setRate === 'function') sound.setRate(rate);
+            else sound.rate = rate;
+        } catch (_) {}
+    },
+
+    bindComplete(sound, callback) {
+        if (!sound || typeof callback !== 'function' || typeof sound.once !== 'function') return;
+        sound.once('complete', callback);
+    },
+
+    play(key, options = {}) {
+        const entry = this.getCatalogEntry(key);
+        if (!entry) {
+            this.warnOnce(`unknown:${key}`, `[AudioManager] 未登錄的BGM Key，已略過：${key}`);
+            return null;
+        }
+
+        if (!this.isLoaded(entry.key, options.scene || null)) {
+            this.warnOnce(`not-loaded:${entry.key}`, `[AudioManager] BGM尚未載入，已略過：${entry.key}`);
+            return null;
+        }
+
+        const soundManager = this.getSoundManager(options.scene || null);
+        if (!soundManager || typeof soundManager.add !== 'function') return null;
+
+        if (options.replace === true) {
+            this.stop(entry.key, {
+                scene: options.scene || null,
+                removeSound: true
+            });
+        }
+
+        let sounds = this.getAllSounds(entry.key, options);
+        let sound = sounds.find(item => item && item.isPlaying) || null;
+
+        if (sound && options.restart !== true) {
+            this.applySoundSettings(sound, entry, options);
+            this.bindComplete(sound, options.onComplete);
+            this.state.currentByScope[entry.scope] = entry.key;
+            this.state.lastPlayedKey = entry.key;
+            return sound;
+        }
+
+        if (!sound) {
+            sound = sounds.find(item => item && !item.isPlaying) || null;
+        }
+
+        try {
+            if (!sound) {
+                const loop = options.loop !== undefined ? !!options.loop : !!entry.loop;
+                const rawVolume = options.volume !== undefined
+                    ? Number(options.volume)
+                    : this.getBgmVolume();
+                const volume = Number.isFinite(rawVolume)
+                    ? Math.max(0, Math.min(1, rawVolume))
+                    : this.getBgmVolume();
+                const rawRate = options.rate !== undefined ? Number(options.rate) : 1;
+                const rate = Number.isFinite(rawRate) && rawRate > 0 ? rawRate : 1;
+
+                sound = soundManager.add(entry.key, {
+                    loop: loop,
+                    volume: volume,
+                    rate: rate
+                });
+            } else {
+                if (options.restart === true && sound.isPlaying && typeof sound.stop === 'function') {
+                    sound.stop();
+                }
+                this.applySoundSettings(sound, entry, options);
+            }
+
+            this.bindComplete(sound, options.onComplete);
+
+            if (sound.isPaused && options.restart !== true && typeof sound.resume === 'function') {
+                sound.resume();
+            } else if (!sound.isPlaying && typeof sound.play === 'function') {
+                sound.play();
+            }
+
+            this.state.currentByScope[entry.scope] = entry.key;
+            this.state.lastPlayedKey = entry.key;
+            return sound;
+        } catch (err) {
+            console.warn(`[AudioManager] BGM播放失敗：${entry.key}`, err);
+            return null;
+        }
+    },
+
+    stop(key, options = {}) {
+        const entry = this.getCatalogEntry(key);
+        if (!entry) return 0;
+
+        const soundManager = this.getSoundManager(options.scene || null);
+        if (!soundManager) return 0;
+
+        const sounds = this.getAllSounds(entry.key, options);
+        let stoppedCount = 0;
+
+        sounds.forEach(sound => {
+            if (!sound) return;
+            try {
+                if (typeof sound.stop === 'function') sound.stop();
+                stoppedCount += 1;
+            } catch (_) {}
+        });
+
+        if (options.removeSound === true) {
+            try {
+                if (typeof soundManager.removeByKey === 'function') {
+                    soundManager.removeByKey(entry.key);
+                } else {
+                    sounds.forEach(sound => {
+                        try {
+                            if (sound && typeof sound.destroy === 'function') sound.destroy();
+                        } catch (_) {}
+                    });
+                }
+            } catch (_) {}
+        }
+
+        if (this.state.currentByScope[entry.scope] === entry.key) {
+            delete this.state.currentByScope[entry.scope];
+        }
+
+        if (this.state.lastPlayedKey === entry.key) {
+            this.state.lastPlayedKey = null;
+        }
+
+        return stoppedCount;
+    },
+
+    stopMany(keys, options = {}) {
+        const uniqueKeys = Array.from(new Set(Array.isArray(keys) ? keys : []));
+        let stoppedCount = 0;
+
+        uniqueKeys.forEach(key => {
+            stoppedCount += this.stop(key, options);
+        });
+
+        return stoppedCount;
+    },
+
+    switch(nextKey, options = {}) {
+        const entry = this.getCatalogEntry(nextKey);
+        if (!entry) {
+            this.warnOnce(`unknown:${nextKey}`, `[AudioManager] 未登錄的BGM Key，已略過切換：${nextKey}`);
+            return null;
+        }
+
+        if (!this.isLoaded(entry.key, options.scene || null)) {
+            this.warnOnce(`not-loaded:${entry.key}`, `[AudioManager] 目標BGM尚未載入，保留目前音樂：${entry.key}`);
+            return null;
+        }
+
+        let stopKeys = Array.isArray(options.stopKeys)
+            ? options.stopKeys.slice()
+            : [];
+
+        const stopScopes = Array.isArray(options.stopScope)
+            ? options.stopScope
+            : (options.stopScope ? [options.stopScope] : []);
+
+        stopScopes.forEach(scope => {
+            const scopeKeys = BGM_SCOPE_KEYS[scope];
+            if (Array.isArray(scopeKeys)) stopKeys.push(...scopeKeys);
+        });
+
+        this.stopMany(stopKeys, {
+            scene: options.scene || null,
+            removeSound: options.removeStoppedSounds === true
+        });
+
+        return this.play(entry.key, {
+            scene: options.scene || null,
+            loop: options.loop,
+            volume: options.volume,
+            rate: options.rate,
+            restart: options.restart === true,
+            replace: options.replace === true,
+            onComplete: options.onComplete
+        });
+    },
+
+    setVolume(key, volume, options = {}) {
+        const rawVolume = Number(volume);
+        const safeVolume = Number.isFinite(rawVolume)
+            ? Math.max(0, Math.min(1, rawVolume))
+            : 0;
+        const sounds = this.getAllSounds(key, options);
+
+        sounds.forEach(sound => {
+            try {
+                if (sound && typeof sound.setVolume === 'function') {
+                    sound.setVolume(safeVolume);
+                }
+            } catch (_) {}
+        });
+
+        return sounds.length;
+    },
+
+    setRate(key, rate, options = {}) {
+        const rawRate = Number(rate);
+        const safeRate = Number.isFinite(rawRate) && rawRate > 0
+            ? rawRate
+            : 1;
+        const sounds = this.getAllSounds(key, options);
+
+        sounds.forEach(sound => {
+            try {
+                if (sound && typeof sound.setRate === 'function') {
+                    sound.setRate(safeRate);
+                }
+            } catch (_) {}
+        });
+
+        return sounds.length;
+    },
+
+    async load(key, options = {}) {
+        const entry = this.getCatalogEntry(key);
+        if (!entry) {
+            return {
+                ok: false,
+                reason: 'unknown-key',
+                key: key
+            };
+        }
+
+        if (this.isLoaded(entry.key, options.scene || null)) {
+            return {
+                ok: true,
+                alreadyLoaded: true,
+                key: entry.key
+            };
+        }
+
+        return {
+            ok: false,
+            reason: 'not-loaded',
+            key: entry.key
+        };
+    },
+
+    async unload(key, options = {}) {
+        const entry = this.getCatalogEntry(key);
+        if (!entry) {
+            return {
+                ok: false,
+                reason: 'unknown-key',
+                key: key
+            };
+        }
+
+        this.stop(entry.key, {
+            scene: options.scene || null,
+            removeSound: true
+        });
+
+        if (options.removeCache !== true) {
+            return {
+                ok: true,
+                cacheRemoved: false,
+                key: entry.key
+            };
+        }
+
+        const game = this.getGame();
+
+        try {
+            if (
+                game &&
+                game.cache &&
+                game.cache.audio &&
+                typeof game.cache.audio.remove === 'function'
+            ) {
+                game.cache.audio.remove(entry.key);
+
+                return {
+                    ok: true,
+                    cacheRemoved: true,
+                    key: entry.key
+                };
+            }
+        } catch (err) {
+            return {
+                ok: false,
+                reason: 'cache-remove-failed',
+                key: entry.key,
+                error: err
+            };
+        }
+
+        return {
+            ok: false,
+            reason: 'audio-cache-unavailable',
+            key: entry.key
+        };
+    }
+};
+// ====== 第二階段 2-2：Phaser BGM AudioManager 相容層結束 ======
 window.GameLogic = {
     currentUser: null, currentScene: "doghouse",
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0, inventoryOrder: [], princeBond: 0, princePetCountToday: 0, princeLastPetDate: "", princeRewardsClaimed: {}, princeFeedCountToday: 0, princeLastFeedDate: "" },
@@ -874,13 +1326,18 @@ window.endFullscreenPan = function(e) {
 window.updateBGMVolume = function(val) {
     let volText = document.getElementById('bgm-vol-text');
     if(volText) volText.innerText = val + '%';
-    if (window.GameLogic.phaserGame) {
-        let playlist = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire', 'shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success', 'solo-cleaning-room-bgm', 'solo-rocket-cruise-bgm', 'solo-rocket-rabbit-shop-bgm'];
-        playlist.forEach(k => {
-            let sndList = window.GameLogic.phaserGame.sound.getAll(k);
-            sndList.forEach(snd => snd.setVolume(val / 100));
-        });
-    }
+
+    const rawVolume = Number(val) / 100;
+    const volume = Number.isFinite(rawVolume)
+        ? Math.max(0, Math.min(1, rawVolume))
+        : 0.5;
+
+    Object.keys(BGM_CATALOG).forEach(key => {
+        const entry = BGM_CATALOG[key];
+        if (entry && entry.volumeGroup === 'bgm') {
+            window.AudioManager.setVolume(key, volume);
+        }
+    });
 };
 
 window.updateSFXVolume = function(val) {
@@ -982,16 +1439,26 @@ window.playMeowlimeSFX = function(key, options = {}) {
 };
 
 window.changeTrack = function(dir) {
-    let playlist = [{ key: 'bgm', title: 'Sweet-Onion', cover: 'Sweet-Onion.png' }, { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' }, { key: 'bgm-inside', title: 'Inside-of-Onion', cover: 'Inside-of-Onion.png' }, { key: 'bgm-kyo', title: '귀엽다!귀엽다!Onion!', cover: 'kyo-kyo-onion.png' }, { key: 'bgm-world', title: '世界他會自己轉動', cover: "OMusic-World'll-roll.png" }, { key: 'bgm-lazy', title: 'Onion Lazy Cat', cover: 'OMusic-Onion-Lazy-Cat.png' }, { key: 'bgm-way', title: '洋蔥滾動自己路', cover: 'OMusic-Onion-go-my-way.png' }, { key: 'bgm-corazon', title: 'Onion acre Corazón', cover: 'OMusic-Onion-acre-Corazon.png' }, { key: 'bgm-fire', title: '烈艷洋蔥', cover: 'OMusic-Onion-Got-Fire.png' }];
-    window.GameLogic.currentTrackIdx = ((window.GameLogic.currentTrackIdx || 0) + dir + playlist.length) % playlist.length;
-    let track = playlist[window.GameLogic.currentTrackIdx];
-    document.getElementById('music-cover').src = track.cover; document.getElementById('music-title').innerText = track.title;
+    const playlistLength = LOBBY_BGM_ORDER.length;
+    window.GameLogic.currentTrackIdx = ((window.GameLogic.currentTrackIdx || 0) + dir + playlistLength) % playlistLength;
+
+    const trackKey = LOBBY_BGM_ORDER[window.GameLogic.currentTrackIdx] || LOBBY_BGM_ORDER[0];
+    const track = BGM_CATALOG[trackKey];
+    const coverEl = document.getElementById('music-cover');
+    const titleEl = document.getElementById('music-title');
+
+    if (coverEl && track) coverEl.src = track.cover;
+    if (titleEl && track) titleEl.innerText = track.title;
     if (window.GameLogic.currentUser) update(ref(window.GameLogic.db, `users/${window.GameLogic.currentUser.uid}`), { currentTrackIdx: window.GameLogic.currentTrackIdx });
+
     // 修正5：只要在神龕場景內，就強制阻斷切換音樂的功能
-    if (window.GameLogic.phaserGame && window.GameLogic.currentScene !== 'shrine') {
-        let vol = document.getElementById('bgm-volume') ? document.getElementById('bgm-volume').value / 100 : 0.5;
-        ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire'].forEach(k => window.GameLogic.phaserGame.sound.removeByKey(k));
-        window.GameLogic.phaserGame.sound.add(track.key, { loop: true, volume: vol }).play();
+    if (window.GameLogic.phaserGame && window.GameLogic.currentScene !== 'shrine' && track) {
+        window.AudioManager.switch(track.key, {
+            stopKeys: LOBBY_BGM_ORDER,
+            removeStoppedSounds: true,
+            loop: true,
+            volume: window.AudioManager.getBgmVolume()
+        });
     }
 };
 window.prevTrack = () => window.changeTrack(-1); window.nextTrack = () => window.changeTrack(1);
@@ -9463,10 +9930,14 @@ window.startShrineRitual = function() {
     if (window.GameLogic.phaserGame) {
         let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
         if (ms) {
-            ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire'].forEach(k => ms.sound.stopByKey(k));
-            const shrineSound = ms.sound.get('shrine-wierd-people-sound');
+            window.AudioManager.stopMany(BGM_SCOPE_KEYS.lobby, { scene: ms });
+            const shrineSound = window.AudioManager.getSound('shrine-wierd-people-sound', { scene: ms });
             if (!shrineSound || !shrineSound.isPlaying) {
-                ms.sound.play('shrine-wierd-people-sound', { loop: true });
+                window.AudioManager.play('shrine-wierd-people-sound', {
+                    scene: ms,
+                    loop: true,
+                    volume: window.AudioManager.getBgmVolume()
+                });
             }
         }
     }
@@ -14302,10 +14773,10 @@ onAuthStateChanged(auth, async (user) => {
             }
 
             window.GameLogic.currentTrackIdx = window.GameLogic.myProfile.currentTrackIdx || 0;
-            let playlist = [ { key: 'bgm', title: 'Sweet-Onion', cover: 'Sweet-Onion.png' }, { key: 'bgm-heart', title: '洋蔥心', cover: 'Onion-Heart.png' }, { key: 'bgm-inside', title: 'Inside-of-Onion', cover: 'Inside-of-Onion.png' }, { key: 'bgm-kyo', title: '귀엽다!귀엽다!Onion!', cover: 'kyo-kyo-onion.png' }, { key: 'bgm-world', title: '世界他會自己轉動', cover: "OMusic-World'll-roll.png" }, { key: 'bgm-lazy', title: 'Onion Lazy Cat', cover: 'OMusic-Onion-Lazy-Cat.png' }, { key: 'bgm-way', title: '洋蔥滾動自己路', cover: 'OMusic-Onion-go-my-way.png' }, { key: 'bgm-corazon', title: 'Onion acre Corazón', cover: 'OMusic-Onion-acre-Corazon.png' }, { key: 'bgm-fire', title: '烈艷洋蔥', cover: 'OMusic-Onion-Got-Fire.png' } ];
-            let track = playlist[window.GameLogic.currentTrackIdx];
+            const savedTrackKey = LOBBY_BGM_ORDER[window.GameLogic.currentTrackIdx] || LOBBY_BGM_ORDER[0];
+            const track = BGM_CATALOG[savedTrackKey];
             let coverEl = document.getElementById('music-cover'), titleEl = document.getElementById('music-title');
-            if (coverEl) coverEl.src = track.cover; if (titleEl) titleEl.innerText = track.title;
+            if (coverEl && track) coverEl.src = track.cover; if (titleEl && track) titleEl.innerText = track.title;
         } else { set(ref(db, `users/${user.uid}`), window.GameLogic.myProfile); }
 
         setTimeout(() => {
@@ -16345,51 +16816,64 @@ class MainScene extends Phaser.Scene {
         window.GameLogic.soloRocketCruiseActive = false;
         
         // 修正：徹底重構音樂切換邏輯，神龕擁有絕對獨立的背景音樂，不再與儀式狀態綁定
-        let allBgms = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire'];
-        let shrineBgms = ['shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'];
-        
-        let volControl = document.getElementById('bgm-volume');
-        let vol = volControl ? volControl.value / 100 : 0.5;
+        const allBgms = BGM_SCOPE_KEYS.lobby;
+        const shrineBgms = BGM_SCOPE_KEYS.shrine;
+        const vol = window.AudioManager.getBgmVolume();
         this.currentRitualState = null;
 
         if (this.sceneName === 'shrine') {
-            allBgms.forEach(k => { if (this.sound.getAll(k)) this.sound.getAll(k).forEach(s => s.stop()); this.sound.removeByKey(k); });
-            if (this.sound.getAll('bgm-party')) this.sound.getAll('bgm-party').forEach(s => s.stop());
-            
+            window.AudioManager.stopMany(allBgms, { scene: this, removeSound: true });
+            window.AudioManager.stopMany(BGM_SCOPE_KEYS.partyroom, { scene: this });
+
             let evData = window.GameLogic.shrineEventData;
             let evState = evData ? evData.state : 'none';
             if (evState !== 'voting' && evState !== 'countdown' && evState !== 'purifying' && evState !== 'success') {
-                shrineBgms.forEach(k => { if (k !== 'shrine-wierd-people-sound' && this.sound.getAll(k)) { this.sound.getAll(k).forEach(s => s.stop()); this.sound.removeByKey(k); } });
-                let sSnd = this.sound.get('shrine-wierd-people-sound');
-                if (!sSnd || !sSnd.isPlaying) {
-                    this.sound.removeByKey('shrine-wierd-people-sound');
-                    this.sound.add('shrine-wierd-people-sound', { loop: true, volume: vol }).play();
+                window.AudioManager.stopMany(
+                    shrineBgms.filter(key => key !== 'shrine-wierd-people-sound'),
+                    { scene: this, removeSound: true }
+                );
+
+                const shrineSound = window.AudioManager.getSound('shrine-wierd-people-sound', { scene: this });
+                if (!shrineSound || !shrineSound.isPlaying) {
+                    window.AudioManager.play('shrine-wierd-people-sound', {
+                        scene: this,
+                        loop: true,
+                        volume: vol,
+                        replace: true
+                    });
                 }
             }
         } else if (this.sceneName === 'partyroom') {
-            allBgms.forEach(k => { if (this.sound.getAll(k)) this.sound.getAll(k).forEach(s => s.stop()); this.sound.removeByKey(k); });
-            shrineBgms.forEach(k => { if (this.sound.getAll(k)) this.sound.getAll(k).forEach(s => s.stop()); this.sound.removeByKey(k); });
-            
-            let currentSnd = this.sound.get('bgm-party');
-            if (!currentSnd || !currentSnd.isPlaying) {
-                this.sound.removeByKey('bgm-party');
-                this.sound.add('bgm-party', { loop: true, volume: vol }).play();
+            window.AudioManager.stopMany(allBgms, { scene: this, removeSound: true });
+            window.AudioManager.stopMany(shrineBgms, { scene: this, removeSound: true });
+
+            const currentSound = window.AudioManager.getSound('bgm-party', { scene: this });
+            if (!currentSound || !currentSound.isPlaying) {
+                window.AudioManager.play('bgm-party', {
+                    scene: this,
+                    loop: true,
+                    volume: vol,
+                    replace: true
+                });
             }
         } else {
-            shrineBgms.forEach(k => { if (this.sound.getAll(k)) this.sound.getAll(k).forEach(s => s.stop()); this.sound.removeByKey(k); });
-            if (this.sound.getAll('bgm-party')) this.sound.getAll('bgm-party').forEach(s => s.stop());
+            window.AudioManager.stopMany(shrineBgms, { scene: this, removeSound: true });
+            window.AudioManager.stopMany(BGM_SCOPE_KEYS.partyroom, { scene: this });
 
-            let currentTrackKey = allBgms[window.GameLogic.currentTrackIdx] || 'bgm';
-            allBgms.forEach(k => { if (k !== currentTrackKey && this.sound.getAll(k)) { this.sound.getAll(k).forEach(s => s.stop()); this.sound.removeByKey(k); } });
-            
-            let currentSnd = this.sound.get(currentTrackKey);
-            if (!currentSnd || !currentSnd.isPlaying) {
-                this.sound.removeByKey(currentTrackKey);
-                if (this.cache.audio.exists(currentTrackKey)) {
-                    this.sound.add(currentTrackKey, { loop: true, volume: vol }).play();
-                } else {
-                    console.warn("[系統保護] 音樂檔 " + currentTrackKey + " 尚未載入或遺失，已跳過播放以防止遊戲崩潰。");
-                }
+            const currentTrackKey = allBgms[window.GameLogic.currentTrackIdx] || allBgms[0];
+            window.AudioManager.stopMany(
+                allBgms.filter(key => key !== currentTrackKey),
+                { scene: this, removeSound: true }
+            );
+
+            const currentSound = window.AudioManager.getSound(currentTrackKey, { scene: this });
+            if (!currentSound || !currentSound.isPlaying) {
+                window.AudioManager.play(currentTrackKey, {
+                    scene: this,
+                    loop: true,
+                    volume: vol,
+                    replace: true
+                });
             }
         }
         
@@ -20288,10 +20772,11 @@ if (!data.scoreHandled && data.attacker) {
             return;
         }
 
-        const bgms = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire', 'bgm-party', 'shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'];
-        bgms.forEach(key => {
-            try { this.sound.getAll(key).forEach(snd => snd.stop()); } catch (_) {}
-        });
+        window.AudioManager.stopMany([
+            ...BGM_SCOPE_KEYS.lobby,
+            ...BGM_SCOPE_KEYS.partyroom,
+            ...BGM_SCOPE_KEYS.shrine
+        ], { scene: this });
     }
 
     resumeLobbyBgmAfterSoloCleaningRoom() {
@@ -20302,24 +20787,28 @@ if (!data.scoreHandled && data.attacker) {
 
         if (this.sceneName === 'shrine' || this.sceneName === 'partyroom') return;
 
-        const bgms = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire'];
-        const trackKey = bgms[window.GameLogic.currentTrackIdx || 0] || 'bgm';
+        const trackKey = LOBBY_BGM_ORDER[window.GameLogic.currentTrackIdx || 0] || LOBBY_BGM_ORDER[0];
         const volControl = document.getElementById('bgm-volume');
         const vol = volControl ? Number(volControl.value || 100) / 100 : 0.8;
 
         try {
-            bgms.forEach(key => {
-                if (key !== trackKey) this.sound.getAll(key).forEach(snd => snd.stop());
-            });
+            window.AudioManager.stopMany(
+                LOBBY_BGM_ORDER.filter(key => key !== trackKey),
+                { scene: this }
+            );
 
-            if (!this.cache.audio.exists(trackKey)) return;
+            if (!window.AudioManager.isLoaded(trackKey, this)) return;
 
-            let current = this.sound.get(trackKey);
+            const current = window.AudioManager.getSound(trackKey, { scene: this });
             if (!current || !current.isPlaying) {
-                this.sound.removeByKey(trackKey);
-                this.sound.add(trackKey, { loop: true, volume: vol }).play();
+                window.AudioManager.play(trackKey, {
+                    scene: this,
+                    loop: true,
+                    volume: vol,
+                    replace: true
+                });
             } else {
-                current.setVolume(vol);
+                window.AudioManager.setVolume(trackKey, vol, { scene: this });
             }
         } catch (err) {
             console.warn('[大掃除] 恢復大廳音樂失敗，已略過：', err);
@@ -20330,20 +20819,19 @@ if (!data.scoreHandled && data.attacker) {
         const state = this.getSoloCleaningRoomState();
 
         try {
-            this.sound.getAll('solo-cleaning-room-bgm').forEach(snd => {
-                snd.stop();
-                if (snd.destroy) snd.destroy();
-            });
-
-            if (!this.cache.audio.exists('solo-cleaning-room-bgm')) {
+            if (!window.AudioManager.isLoaded('solo-cleaning-room-bgm', this)) {
                 console.warn('[大掃除] 找不到 solo-cleaning-room-bgm.mp3，已略過音樂播放。');
                 return;
             }
 
             const volControl = document.getElementById('bgm-volume');
             const vol = volControl ? Number(volControl.value || 100) / 100 : 0.8;
-            state.bgm = this.sound.add('solo-cleaning-room-bgm', { loop: false, volume: vol });
-            state.bgm.play();
+            state.bgm = window.AudioManager.play('solo-cleaning-room-bgm', {
+                scene: this,
+                loop: false,
+                volume: vol,
+                replace: true
+            });
         } catch (err) {
             console.warn('[大掃除] BGM 播放失敗，倒數仍會繼續：', err);
         }
@@ -20353,14 +20841,9 @@ if (!data.scoreHandled && data.attacker) {
         const state = this.getSoloCleaningRoomState();
 
         try {
-            if (state.bgm) {
-                state.bgm.stop();
-                if (state.bgm.destroy) state.bgm.destroy();
-            }
-
-            this.sound.getAll('solo-cleaning-room-bgm').forEach(snd => {
-                snd.stop();
-                if (snd.destroy) snd.destroy();
+            window.AudioManager.stop('solo-cleaning-room-bgm', {
+                scene: this,
+                removeSound: true
             });
         } catch (err) {
             console.warn('[大掃除] 停止 BGM 失敗，已略過：', err);
@@ -23706,28 +24189,28 @@ if (!data.scoreHandled && data.attacker) {
     }
 
     stopLobbyBgmForSoloRocket() {
-        const bgms = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire', 'bgm-party', 'shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'];
-        bgms.forEach(key => {
-            try { this.sound.getAll(key).forEach(snd => snd.stop()); } catch (_) {}
-        });
+        window.AudioManager.stopMany([
+            ...BGM_SCOPE_KEYS.lobby,
+            ...BGM_SCOPE_KEYS.partyroom,
+            ...BGM_SCOPE_KEYS.shrine
+        ], { scene: this });
     }
 
     playSoloRocketBgm() {
         try {
-            this.sound.getAll('solo-rocket-cruise-bgm').forEach(snd => {
-                snd.stop();
-                if (snd.destroy) snd.destroy();
-            });
-
-            if (!this.cache.audio.exists('solo-rocket-cruise-bgm')) {
+            if (!window.AudioManager.isLoaded('solo-rocket-cruise-bgm', this)) {
                 console.warn('[火箭巡航] 找不到 solo-rocket-cruise-bgm.mp3，已略過音樂播放。');
                 return;
             }
 
             const volControl = document.getElementById('bgm-volume');
             const vol = volControl ? Number(volControl.value || 100) / 100 : 0.8;
-            this.soloRocketBgm = this.sound.add('solo-rocket-cruise-bgm', { loop: false, volume: vol });
-            this.soloRocketBgm.play();
+            this.soloRocketBgm = window.AudioManager.play('solo-rocket-cruise-bgm', {
+                scene: this,
+                loop: false,
+                volume: vol,
+                replace: true
+            });
         } catch (err) {
             console.warn('[火箭巡航] BGM 播放失敗，timer 仍會繼續：', err);
         }
@@ -23735,13 +24218,9 @@ if (!data.scoreHandled && data.attacker) {
 
     stopSoloRocketBgm() {
         try {
-            if (this.soloRocketBgm) {
-                this.soloRocketBgm.stop();
-                if (this.soloRocketBgm.destroy) this.soloRocketBgm.destroy();
-            }
-            this.sound.getAll('solo-rocket-cruise-bgm').forEach(snd => {
-                snd.stop();
-                if (snd.destroy) snd.destroy();
+            window.AudioManager.stop('solo-rocket-cruise-bgm', {
+                scene: this,
+                removeSound: true
             });
         } catch (err) {
             console.warn('[火箭巡航] 停止 BGM 失敗，已略過：', err);
@@ -23775,27 +24254,31 @@ if (!data.scoreHandled && data.attacker) {
     resumeLobbyBgmAfterSoloRocket() {
         if (this.sceneName === 'shrine' || this.sceneName === 'partyroom') return;
 
-        const bgms = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire'];
-        const trackKey = bgms[window.GameLogic.currentTrackIdx || 0] || 'bgm';
+        const trackKey = LOBBY_BGM_ORDER[window.GameLogic.currentTrackIdx || 0] || LOBBY_BGM_ORDER[0];
         const volControl = document.getElementById('bgm-volume');
         const vol = volControl ? Number(volControl.value || 100) / 100 : 0.8;
 
         try {
-            bgms.forEach(key => {
-                if (key !== trackKey) this.sound.getAll(key).forEach(snd => snd.stop());
-            });
+            window.AudioManager.stopMany(
+                LOBBY_BGM_ORDER.filter(key => key !== trackKey),
+                { scene: this }
+            );
 
-            if (!this.cache.audio.exists(trackKey)) {
+            if (!window.AudioManager.isLoaded(trackKey, this)) {
                 console.warn('[火箭巡航] 返回大廳時找不到原本蔥Music：', trackKey);
                 return;
             }
 
-            let current = this.sound.get(trackKey);
+            const current = window.AudioManager.getSound(trackKey, { scene: this });
             if (!current || !current.isPlaying) {
-                this.sound.removeByKey(trackKey);
-                this.sound.add(trackKey, { loop: true, volume: vol }).play();
+                window.AudioManager.play(trackKey, {
+                    scene: this,
+                    loop: true,
+                    volume: vol,
+                    replace: true
+                });
             } else {
-                current.setVolume(vol);
+                window.AudioManager.setVolume(trackKey, vol, { scene: this });
             }
         } catch (err) {
             console.warn('[火箭巡航] 恢復大廳音樂失敗，已略過：', err);
@@ -28904,19 +29387,14 @@ if (!data.scoreHandled && data.attacker) {
                         return;
                     }
 
-                    this.sound.getAll('solo-rocket-rabbit-shop-bgm').forEach(function(snd) {
-                        try {
-                            snd.stop();
-                            if (snd.destroy) snd.destroy();
-                        } catch (_) {}
-                    });
-
-                    this.soloRocketRabbitShopBgm = this.sound.add('solo-rocket-rabbit-shop-bgm', {
+                    this.soloRocketRabbitShopBgm = window.AudioManager.play('solo-rocket-rabbit-shop-bgm', {
+                        scene: this,
                         loop: true,
-                        volume: vol
+                        volume: vol,
+                        replace: true
                     });
 
-                    this.soloRocketRabbitShopBgm.play();
+                    if (!this.soloRocketRabbitShopBgm) return;
 
                     if (this.time && this.time.delayedCall) {
                         this.time.delayedCall(280, function() {
@@ -28970,37 +29448,10 @@ if (!data.scoreHandled && data.attacker) {
 
     stopSoloRocketRabbitShopBgm() {
         try {
-            if (this.soloRocketRabbitShopBgm) {
-                try { this.soloRocketRabbitShopBgm.stop(); } catch (_) {}
-                try {
-                    if (this.soloRocketRabbitShopBgm.destroy) {
-                        this.soloRocketRabbitShopBgm.destroy();
-                    }
-                } catch (_) {}
-            }
-
-            if (this.sound) {
-                try {
-                    this.sound.getAll('solo-rocket-rabbit-shop-bgm').forEach(function(snd) {
-                        try { snd.stop(); } catch (_) {}
-                        try {
-                            if (snd.destroy) snd.destroy();
-                        } catch (_) {}
-                    });
-                } catch (_) {}
-
-                try {
-                    if (this.sound.stopByKey) {
-                        this.sound.stopByKey('solo-rocket-rabbit-shop-bgm');
-                    }
-                } catch (_) {}
-
-                try {
-                    if (this.sound.removeByKey) {
-                        this.sound.removeByKey('solo-rocket-rabbit-shop-bgm');
-                    }
-                } catch (_) {}
-            }
+            window.AudioManager.stop('solo-rocket-rabbit-shop-bgm', {
+                scene: this,
+                removeSound: true
+            });
         } catch (err) {
             console.warn('[玉兔伴手禮店] 停止 BGM 失敗，已略過：', err);
         }
@@ -34080,22 +34531,48 @@ if (activeBubbleMsg) {
         // 修正5：正確利用原生陣列清除音樂，根除音樂被帶出神龕的 Bug
         if (evState !== this.currentRitualState) {
             this.currentRitualState = evState;
-            let trackKeys = ['bgm', 'bgm-heart', 'bgm-inside', 'bgm-kyo', 'bgm-world', 'bgm-lazy', 'bgm-way', 'bgm-corazon', 'bgm-fire', 'shrine-wierd-people-sound', 'shrine-selection', 'shrine-purify-fight', 'shrine-purify-success-win', 'shrine-purify-success'];
-            trackKeys.forEach(k => {
-                if (this.sound.getAll(k)) { this.sound.getAll(k).forEach(s => s.stop()); }
-            });
-            
-            let volControl = document.getElementById('bgm-volume'); let vol = volControl ? volControl.value / 100 : 0.5;
+            window.AudioManager.stopMany([
+                ...BGM_SCOPE_KEYS.lobby,
+                ...BGM_SCOPE_KEYS.shrine
+            ], { scene: this });
+
+            const vol = window.AudioManager.getBgmVolume();
 
             if (evState === 'voting' || evState === 'countdown') {
-                this.sound.play('shrine-selection', {loop: true, volume: vol});
+                window.AudioManager.play('shrine-selection', {
+                    scene: this,
+                    loop: true,
+                    volume: vol
+                });
             } else if (evState === 'purifying') {
-                this.sound.play('shrine-purify-fight', {loop: true, volume: vol});
+                window.AudioManager.play('shrine-purify-fight', {
+                    scene: this,
+                    loop: true,
+                    volume: vol
+                });
             } else if (evState === 'success') {
-                let winSnd = this.sound.add('shrine-purify-success-win', {volume: vol}); winSnd.play();
-                winSnd.once('complete', () => { if (this.currentRitualState === 'success') { this.sound.play('shrine-purify-success', {loop: true, volume: vol}); } });
+                window.AudioManager.play('shrine-purify-success-win', {
+                    scene: this,
+                    loop: false,
+                    volume: vol,
+                    replace: true,
+                    onComplete: () => {
+                        if (this.sceneName !== 'shrine' || this.currentRitualState !== 'success') return;
+
+                        window.AudioManager.play('shrine-purify-success', {
+                            scene: this,
+                            loop: true,
+                            volume: window.AudioManager.getBgmVolume(),
+                            replace: true
+                        });
+                    }
+                });
             } else {
-                this.sound.play('shrine-wierd-people-sound', {loop: true, volume: vol});
+                window.AudioManager.play('shrine-wierd-people-sound', {
+                    scene: this,
+                    loop: true,
+                    volume: vol
+                });
             }
         }
 
@@ -38271,10 +38748,8 @@ window.processPartyEventLogic = function(scene) {
 
         if (remain <= 20) {
             window.PartyLogic.speedBoost = true;
-            let bgm = scene.sound.get('bgm-party');
-            if(bgm) bgm.setRate(1.5);
+            window.AudioManager.setRate('bgm-party', 1.5, { scene: scene });
             let rFlash = document.getElementById('party-red-flash');
-            if (rFlash) { rFlash.style.opacity = (Math.floor(Date.now() / 250) % 2 === 0) ? 0.3 : 0; }
         }
         
         if (remainMs <= 0 && isCoordinator) {
@@ -38283,8 +38758,7 @@ window.processPartyEventLogic = function(scene) {
         }
     } else if (state === 'finished') {
         window.PartyLogic.speedBoost = false;
-        let bgm = scene.sound.get('bgm-party');
-        if(bgm) bgm.setRate(1);
+        window.AudioManager.setRate('bgm-party', 1, { scene: scene });
         let rFlash = document.getElementById('party-red-flash');
         if (rFlash) { rFlash.style.display = 'none'; }
         
