@@ -28025,13 +28025,11 @@ if (!data.scoreHandled && data.attacker) {
         this.soloRocketTutorialContainer = null;
     }
 
-    async startSoloRocketGameplay() {
+    startSoloRocketGameplay() {
         if (!this.soloRocketCruiseActive || this.soloRocketCruiseFinished || this.soloRocketGameplayStarted) {
             this.soloRocketTutorialStartPending = false;
             return;
         }
-
-        if (this.soloRocketTextureScopeLoading) return;
 
         const uid = this.soloRocketTextureScopeUserUid || (
             window.GameLogic && window.GameLogic.currentUser
@@ -28044,52 +28042,65 @@ if (!data.scoreHandled && data.attacker) {
             return;
         }
 
-        const currentRequestId = this.isSoloRocketTextureRequestCurrent(
-            this.soloRocketTextureScopeRequestId,
-            uid
-        )
-            ? this.soloRocketTextureScopeRequestId
-            : null;
-        const textureResult = await this.ensureSoloRocketRunTextures({
-            requestId: currentRequestId,
-            userUid: uid
-        });
+        const manager = window.TextureAssetManager;
         const textureAudit = this.getSoloRocketRunTextureAudit();
-        const textureReady = !!(
-            textureResult &&
-            textureResult.ok &&
-            this.soloRocketCruiseActive &&
-            !this.soloRocketCruiseFinished &&
-            !this.soloRocketGameplayStarted &&
-            this.isSoloRocketTextureRequestCurrent(textureResult.requestId, uid) &&
+        const textureFilesComplete = !!(
             textureAudit &&
             textureAudit.expectedCount === 7 &&
             textureAudit.loadedCount === 7 &&
             textureAudit.missingCount === 0
         );
+        let requestCurrent = this.isSoloRocketTextureRequestCurrent(
+            this.soloRocketTextureScopeRequestId,
+            uid
+        );
+
+        // 教學畫面與火箭 GameObject 已經建立後，不可再次進入 Loader 或直接卸載 Texture。
+        // 若七張正式 Texture 仍完整，但 Scope 狀態曾被舊清理作業失效，建立更新的 requestId 重新認領。
+        if (
+            textureFilesComplete &&
+            !requestCurrent &&
+            manager &&
+            manager.beginScopeRequest
+        ) {
+            const adoptedRequestId = manager.beginScopeRequest('solo-rocket-run', {
+                userUid: uid
+            });
+
+            if (adoptedRequestId !== null) {
+                this.soloRocketTextureScopeRequestId = adoptedRequestId;
+                this.soloRocketTextureScopeUserUid = uid;
+                this.soloRocketTextureScopeLoading = false;
+                this.soloRocketTextureScopeReady = true;
+                this.soloRocketTextureScopeUnloadPending = false;
+                requestCurrent = this.isSoloRocketTextureRequestCurrent(
+                    adoptedRequestId,
+                    uid
+                );
+            }
+        }
+
+        const textureReady = !!(
+            textureFilesComplete &&
+            requestCurrent
+        );
 
         if (!textureReady) {
-            await this.releaseSoloRocketRunTextures('solo-rocket-gameplay-texture-incomplete', {
-                expectedRequestId: textureResult && textureResult.requestId !== undefined
-                    ? textureResult.requestId
-                    : this.soloRocketTextureScopeRequestId
+            console.warn('[火箭巡航] 開始遊戲前 Texture 狀態異常，先完整銷毀副本物件再卸載：', {
+                requestId: this.soloRocketTextureScopeRequestId,
+                requestCurrent: requestCurrent,
+                audit: textureAudit
             });
 
             this.soloRocketTutorialStartPending = false;
-
-            if (
-                this.soloRocketCruiseActive &&
-                !this.soloRocketCruiseFinished &&
-                this.isSoloRocketTextureSceneUsable(uid)
-            ) {
-                alert('火箭巡航素材重新載入失敗，尚未開始倒數；請再按一次「開始遊戲」。');
-            }
+            this.clearSoloRocketCruise(false);
+            alert('火箭巡航素材狀態異常，已安全返回大廳，請重新從獨樂雞進入。');
             return;
         }
 
-        this.soloRocketTextureScopeRequestId = textureResult.requestId;
-        this.soloRocketTextureScopeUserUid = uid;
+        this.soloRocketTextureScopeLoading = false;
         this.soloRocketTextureScopeReady = true;
+        this.soloRocketTextureScopeUserUid = uid;
         this.soloRocketTextureScopeUnloadPending = false;
 
         this.clearSoloRocketTutorial();
