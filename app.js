@@ -83,7 +83,234 @@ window.syncLoginRoomSelect = function(roomId = null) {
 
 const initialServerRoom = window.getRememberedServerRoom();
 // ====== 入口房間設定結束 ======
+// ====== 第二階段 2-1：統一 BGM 靜態資料表（本包不接管實際載入／播放行為） ======
+const BGM_CATALOG = Object.freeze({
+    bgm: Object.freeze({
+        key: 'bgm',
+        file: 'Sweet-Onion.mp3',
+        scope: 'lobby',
+        loop: true,
+        volumeGroup: 'bgm',
+        role: 'lobby-playlist',
+        title: 'Sweet-Onion',
+        cover: 'Sweet-Onion.png',
+        order: 0
+    }),
+    'bgm-heart': Object.freeze({
+        key: 'bgm-heart',
+        file: 'Onion-Heart.mp3',
+        scope: 'lobby',
+        loop: true,
+        volumeGroup: 'bgm',
+        role: 'lobby-playlist',
+        title: '洋蔥心',
+        cover: 'Onion-Heart.png',
+        order: 1
+    }),
+    'bgm-inside': Object.freeze({
+        key: 'bgm-inside',
+        file: 'Inside-of-Onion.mp3',
+        scope: 'lobby',
+        loop: true,
+        volumeGroup: 'bgm',
+        role: 'lobby-playlist',
+        title: 'Inside-of-Onion',
+        cover: 'Inside-of-Onion.png',
+        order: 2
+    }),
+    'bgm-kyo': Object.freeze({
+        key: 'bgm-kyo',
+        file: 'kyo-kyo-onion.mp3',
+        scope: 'lobby',
+        loop: true,
+        volumeGroup: 'bgm',
+        role: 'lobby-playlist',
+        title: '귀엽다!귀엽다!Onion!',
+        cover: 'kyo-kyo-onion.png',
+        order: 3
+    }),
+    'bgm-world': Object.freeze({
+        key: 'bgm-world',
+        file: "OMusic-World'll-roll.mp3",
+        scope: 'lobby',
+        loop: true,
+        volumeGroup: 'bgm',
+        role: 'lobby-playlist',
+        title: '世界他會自己轉動',
+        cover: "OMusic-World'll-roll.png",
+        order: 4
+    }),
+    'bgm-lazy': Object.freeze({
+        key: 'bgm-lazy',
+        file: 'OMusic-Onion-Lazy-Cat.mp3',
+        scope: 'lobby',
+        loop: true,
+        volumeGroup: 'bgm',
+        role: 'lobby-playlist',
+        title: 'Onion Lazy Cat',
+        cover: 'OMusic-Onion-Lazy-Cat.png',
+        order: 5
+    }),
+    'bgm-way': Object.freeze({
+        key: 'bgm-way',
+        file: 'OMusic-Onion-go-my-way.mp3',
+        scope: 'lobby',
+        loop: true,
+        volumeGroup: 'bgm',
+        role: 'lobby-playlist',
+        title: '洋蔥滾動自己路',
+        cover: 'OMusic-Onion-go-my-way.png',
+        order: 6
+    }),
+    'bgm-corazon': Object.freeze({
+        key: 'bgm-corazon',
+        file: 'OMusic-Onion-acre-Corazon.mp3',
+        scope: 'lobby',
+        loop: true,
+        volumeGroup: 'bgm',
+        role: 'lobby-playlist',
+        title: 'Onion acre Corazón',
+        cover: 'OMusic-Onion-acre-Corazon.png',
+        order: 7
+    }),
+    'bgm-fire': Object.freeze({
+        key: 'bgm-fire',
+        file: 'OMusic-Onion-Got-Fire.mp3',
+        scope: 'lobby',
+        loop: true,
+        volumeGroup: 'bgm',
+        role: 'lobby-playlist',
+        title: '烈艷洋蔥',
+        cover: 'OMusic-Onion-Got-Fire.png',
+        order: 8
+    }),
+    'bgm-party': Object.freeze({
+        key: 'bgm-party',
+        file: 'partyroom-under-water-reef-valley-bgm.mp3',
+        scope: 'partyroom',
+        loop: true,
+        volumeGroup: 'bgm',
+        role: 'scene-bgm',
+        title: null,
+        cover: null
+    }),
+    'shrine-wierd-people-sound': Object.freeze({
+        key: 'shrine-wierd-people-sound',
+        file: 'shrine-wierd-people-sound.mp3',
+        scope: 'shrine',
+        loop: true,
+        volumeGroup: 'bgm',
+        role: 'scene-bgm',
+        title: null,
+        cover: null
+    }),
+    'shrine-selection': Object.freeze({
+        key: 'shrine-selection',
+        file: 'shrine-selection.mp3',
+        scope: 'shrine',
+        loop: true,
+        volumeGroup: 'bgm',
+        role: 'scene-bgm',
+        title: null,
+        cover: null
+    }),
+    'shrine-purify-fight': Object.freeze({
+        key: 'shrine-purify-fight',
+        file: 'shrine-purify-fight.mp3',
+        scope: 'shrine',
+        loop: true,
+        volumeGroup: 'bgm',
+        role: 'scene-bgm',
+        title: null,
+        cover: null
+    }),
+    'shrine-purify-success-win': Object.freeze({
+        key: 'shrine-purify-success-win',
+        file: 'shrine-purify-success-win.mp3',
+        scope: 'shrine',
+        loop: false,
+        volumeGroup: 'bgm',
+        role: 'stinger',
+        title: null,
+        cover: null
+    }),
+    'shrine-purify-success': Object.freeze({
+        key: 'shrine-purify-success',
+        file: 'shrine-purify-success.mp3',
+        scope: 'shrine',
+        loop: true,
+        volumeGroup: 'bgm',
+        role: 'scene-bgm',
+        title: null,
+        cover: null
+    }),
+    'solo-cleaning-room-bgm': Object.freeze({
+        key: 'solo-cleaning-room-bgm',
+        file: 'solo-cleaning-room-bgm.mp3',
+        scope: 'solo-cleaning',
+        loop: false,
+        volumeGroup: 'bgm',
+        role: 'scene-bgm',
+        title: null,
+        cover: null
+    }),
+    'solo-rocket-cruise-bgm': Object.freeze({
+        key: 'solo-rocket-cruise-bgm',
+        file: 'solo-rocket-cruise-bgm.mp3',
+        scope: 'solo-rocket',
+        loop: false,
+        volumeGroup: 'bgm',
+        role: 'scene-bgm',
+        title: null,
+        cover: null
+    }),
+    'solo-rocket-rabbit-shop-bgm': Object.freeze({
+        key: 'solo-rocket-rabbit-shop-bgm',
+        file: 'solo-rocket-rabbit-shop-bgm.mp3',
+        scope: 'solo-rocket-shop',
+        loop: true,
+        volumeGroup: 'bgm',
+        role: 'scene-bgm',
+        title: null,
+        cover: null
+    })
+});
 
+const LOBBY_BGM_ORDER = Object.freeze([
+    'bgm',
+    'bgm-heart',
+    'bgm-inside',
+    'bgm-kyo',
+    'bgm-world',
+    'bgm-lazy',
+    'bgm-way',
+    'bgm-corazon',
+    'bgm-fire'
+]);
+
+const BGM_SCOPE_KEYS = Object.freeze({
+    lobby: LOBBY_BGM_ORDER,
+    partyroom: Object.freeze([
+        'bgm-party'
+    ]),
+    shrine: Object.freeze([
+        'shrine-wierd-people-sound',
+        'shrine-selection',
+        'shrine-purify-fight',
+        'shrine-purify-success-win',
+        'shrine-purify-success'
+    ]),
+    'solo-cleaning': Object.freeze([
+        'solo-cleaning-room-bgm'
+    ]),
+    'solo-rocket': Object.freeze([
+        'solo-rocket-cruise-bgm'
+    ]),
+    'solo-rocket-shop': Object.freeze([
+        'solo-rocket-rabbit-shop-bgm'
+    ])
+});
+// ====== 第二階段 2-1：統一 BGM 靜態資料表結束 ======
 window.GameLogic = {
     currentUser: null, currentScene: "doghouse",
     myProfile: { name: "初心者", color: "#c5a059", birth: "未知", food: "洋蔥", motto: "期待發芽", bubbleMsg: "", bubbleTime: 0, level: 1, exp: 0, coins: 0, sweeps: 0, lastX: 640, lastY: 360, lastScene: "doghouse", currentTrackIdx: 0, inventoryOrder: [], princeBond: 0, princePetCountToday: 0, princeLastPetDate: "", princeRewardsClaimed: {}, princeFeedCountToday: 0, princeLastFeedDate: "" },
