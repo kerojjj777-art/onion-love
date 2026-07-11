@@ -687,7 +687,8 @@ window.TextureAssetManager = {
 
     unloadableScopes: Object.freeze({
         'solo-cleaning': true,
-        'solo-rocket-run': true
+        'solo-rocket-run': true,
+        'solo-rocket-shop': true
     }),
 
     getGame() {
@@ -16892,15 +16893,24 @@ onAuthStateChanged(auth, async (user) => {
         const logoutRocketTexturesLoaded = window.getLoadedTextureCountForScope
             ? window.getLoadedTextureCountForScope('solo-rocket-run')
             : 0;
+        const logoutShopTexturesLoaded = window.getLoadedTextureCountForScope
+            ? window.getLoadedTextureCountForScope('solo-rocket-shop')
+            : 0;
         const logoutRocketNeedsCleanup = !!(
             logoutScene &&
             (
                 logoutRocketTexturesLoaded > 0 ||
+                logoutShopTexturesLoaded > 0 ||
+                (logoutScene.hasSoloRocketShopTextureActivity && logoutScene.hasSoloRocketShopTextureActivity()) ||
                 logoutScene.soloRocketPaymentPending ||
                 logoutScene.soloRocketPaid ||
                 logoutScene.soloRocketTextureScopeLoading ||
                 logoutScene.soloRocketTextureScopeReady ||
                 logoutScene.soloRocketTextureScopeUnloadPending ||
+                logoutScene.soloRocketShopTextureScopeLoading ||
+                logoutScene.soloRocketShopTextureScopeReady ||
+                logoutScene.soloRocketShopTextureScopeUnloadPending ||
+                logoutScene.soloRocketShopOpenPending ||
                 logoutScene.soloRocketTutorialActive ||
                 logoutScene.soloRocketGameplayStarted ||
                 logoutScene.soloRocketIntroActive ||
@@ -16910,7 +16920,8 @@ onAuthStateChanged(auth, async (user) => {
                 logoutScene.soloRocketContainer ||
                 logoutScene.soloRocketResultContainer ||
                 logoutScene.soloRocketRabbitShopContainer ||
-                logoutScene.soloRocketTextureScopeRequestId !== null
+                logoutScene.soloRocketTextureScopeRequestId !== null ||
+                logoutScene.soloRocketShopTextureScopeRequestId !== null
             )
         );
 
@@ -16919,17 +16930,25 @@ onAuthStateChanged(auth, async (user) => {
                 logoutScene.clearSoloRocketCruise(true);
             } catch (err) {
                 console.warn('[登出] 火箭巡航清理失敗，改由 Texture 白名單保險卸載：', err);
+                try {
+                    if (logoutScene.clearSoloRocketRabbitShopUi) logoutScene.clearSoloRocketRabbitShopUi();
+                    if (logoutScene.removeSoloRocketRabbitShopkeeperAnimation) logoutScene.removeSoloRocketRabbitShopkeeperAnimation();
+                } catch (_) {}
                 if (window.TextureAssetManager && window.TextureAssetManager.unloadScope) {
-                    void window.TextureAssetManager.unloadScope('solo-rocket-run', {
-                        scene: logoutScene,
-                        reason: 'logout-fallback'
+                    ['solo-rocket-run', 'solo-rocket-shop'].forEach(scope => {
+                        void window.TextureAssetManager.unloadScope(scope, {
+                            scene: logoutScene,
+                            reason: 'logout-fallback'
+                        });
                     });
                 }
             }
         } else if (window.TextureAssetManager && window.TextureAssetManager.unloadScope) {
-            void window.TextureAssetManager.unloadScope('solo-rocket-run', {
-                scene: logoutScene,
-                reason: 'logout'
+            ['solo-rocket-run', 'solo-rocket-shop'].forEach(scope => {
+                void window.TextureAssetManager.unloadScope(scope, {
+                    scene: logoutScene,
+                    reason: 'logout'
+                });
             });
         }
 
@@ -17265,15 +17284,24 @@ window.clearAllModals = function() {
             const rocketTexturesLoaded = window.getLoadedTextureCountForScope
                 ? window.getLoadedTextureCountForScope('solo-rocket-run')
                 : 0;
+            const shopTexturesLoaded = window.getLoadedTextureCountForScope
+                ? window.getLoadedTextureCountForScope('solo-rocket-shop')
+                : 0;
             const rocketNeedsCleanup = !!(
                 ms &&
                 (
                     rocketTexturesLoaded > 0 ||
+                    shopTexturesLoaded > 0 ||
+                    (ms.hasSoloRocketShopTextureActivity && ms.hasSoloRocketShopTextureActivity()) ||
                     ms.soloRocketPaymentPending ||
                     ms.soloRocketPaid ||
                     ms.soloRocketTextureScopeLoading ||
                     ms.soloRocketTextureScopeReady ||
                     ms.soloRocketTextureScopeUnloadPending ||
+                    ms.soloRocketShopTextureScopeLoading ||
+                    ms.soloRocketShopTextureScopeReady ||
+                    ms.soloRocketShopTextureScopeUnloadPending ||
+                    ms.soloRocketShopOpenPending ||
                     ms.soloRocketTutorialActive ||
                     ms.soloRocketGameplayStarted ||
                     ms.soloRocketIntroActive ||
@@ -17283,7 +17311,8 @@ window.clearAllModals = function() {
                     ms.soloRocketContainer ||
                     ms.soloRocketResultContainer ||
                     ms.soloRocketRabbitShopContainer ||
-                    ms.soloRocketTextureScopeRequestId !== null
+                    ms.soloRocketTextureScopeRequestId !== null ||
+                    ms.soloRocketShopTextureScopeRequestId !== null
                 )
             );
 
@@ -17934,12 +17963,8 @@ class BootScene extends Phaser.Scene {
         this.load.audio('solo-rocket-big-attack', 'solo-rocket-big-attack.mp3');
         this.load.audio('solo-rocket-result-counting', 'solo-rocket-result-counting.mp3');
         this.load.audio('solo-rocket-result-tada', 'solo-rocket-result-tada.mp3');
-        // 補丁 6-1：玉兔伴手禮店 placeholder 素材。缺檔時商店會使用 Phaser fallback，不讓副本黑頻。
-        this.load.image('solo-rocket-rabbit-shop-bg', 'solo-rocket-rabbit-shop-bg.png');
-        this.load.image('solo-rocket-rabbit-shopkeeper', 'solo-rocket-rabbit-shopkeeper.png');
-        this.load.spritesheet('solo-rocket-rabbit-shopkeeper-sheet', 'solo-rocket-rabbit-shopkeeper-sheet.png', { frameWidth: 300, frameHeight: 300 });
-        this.load.image('solo-rocket-item-moon-shard', 'solo-rocket-item-moon-shard.png');
-        this.load.image('solo-rocket-item-moon-staff', 'solo-rocket-item-moon-staff.png');
+        // 第三階段 3-4：玉兔伴手禮店五張專屬 Texture 改由 TextureAssetManager 按需載入。
+        // 月光饅頭與月光法杖舞兔為跨場景共用素材，維持 Boot 預載並禁止隨商店卸載。
         this.load.image('solo-rocket-item-moon-bun', 'solo-rocket-item-moon-bun.png');
         // 第二階段 2-4：玉兔商店 BGM 改由 AudioManager 依 Scope 按需載入。
         this.load.audio('solo-rocket-rabbit-shop-finish', 'solo-rocket-rabbit-shop-finish.mp3');
@@ -18016,27 +18041,8 @@ class BootScene extends Phaser.Scene {
         this.anims.create({ key: 'prince-cat-eating', frames: this.anims.generateFrameNumbers('prince-cat-eating-sheet', { start: 0, end: 5 }), frameRate: 6, repeat: -1 });
         this.anims.create({ key: 'prince-cat-yummy', frames: this.anims.generateFrameNumbers('prince-cat-yummy-sheet', { start: 0, end: 5 }), frameRate: 5, repeat: -1 });
 
-        try {
-            const shopkeeperSheetKey = 'solo-rocket-rabbit-shopkeeper-sheet';
-            const shopkeeperAnimKey = 'solo-rocket-rabbit-shopkeeper-idle';
-
-            if (this.textures.exists(shopkeeperSheetKey) && !this.anims.exists(shopkeeperAnimKey)) {
-                const tex = this.textures.get(shopkeeperSheetKey);
-                const frameKeys = Object.keys((tex && tex.frames) || {}).filter(k => k !== '__BASE');
-                const frameEnd = Math.max(0, frameKeys.length - 1);
-
-                if (frameEnd >= 1) {
-                    this.anims.create({
-                        key: shopkeeperAnimKey,
-                        frames: this.anims.generateFrameNumbers(shopkeeperSheetKey, { start: 0, end: frameEnd }),
-                        duration: 3000,
-                        repeat: -1
-                    });
-                }
-            }
-        } catch (err) {
-            console.warn('[玉兔伴手禮店] 建立店員 spritesheet 動畫失敗，改用靜態 fallback：', err);
-        }
+        // 第三階段 3-4：店員 spritesheet 改為商店 Texture 載入完成後才建立動畫。
+     
      
      // 王子麵第二版餵食補丁緊急修正：
         // BootScene 不呼叫 MainScene method，改用 inline 防呆建立開罐動畫，避免啟動黑屏。
@@ -18818,12 +18824,22 @@ class MainScene extends Phaser.Scene {
         this.soloRocketTextureScopeReady = false;
         this.soloRocketTextureScopeUserUid = null;
         this.soloRocketTextureScopeUnloadPending = false;
+        this.soloRocketShopTextureScopeRequestId = null;
+        this.soloRocketShopTextureScopeLoading = false;
+        this.soloRocketShopTextureScopeReady = false;
+        this.soloRocketShopTextureScopeUserUid = null;
+        this.soloRocketShopTextureScopeUnloadPending = false;
+        this.soloRocketShopTextureLoadPromise = null;
+        this.soloRocketShopOpenPending = false;
         this.soloRocketPaid = false;
         this.soloRocketContainer = null;
         this.soloRocketUiContainer = null;
         this.soloRocketResultContainer = null;
         this.soloRocketResultRevealTimers = [];
         this.soloRocketResultShopReady = false;
+        this.soloRocketResultShopButtonBg = null;
+        this.soloRocketResultShopButtonText = null;
+        this.soloRocketResultShopButtonHit = null;
         this.soloRocketPlayer = null;
         this.soloRocketBg = null;
         this.soloRocketStars = [];
@@ -20871,13 +20887,22 @@ if (!data.scoreHandled && data.attacker) {
             const shutdownRocketTexturesLoaded = window.getLoadedTextureCountForScope
                 ? window.getLoadedTextureCountForScope('solo-rocket-run')
                 : 0;
+            const shutdownShopTexturesLoaded = window.getLoadedTextureCountForScope
+                ? window.getLoadedTextureCountForScope('solo-rocket-shop')
+                : 0;
             const shutdownRocketNeedsCleanup = !!(
                 shutdownRocketTexturesLoaded > 0 ||
+                shutdownShopTexturesLoaded > 0 ||
+                (this.hasSoloRocketShopTextureActivity && this.hasSoloRocketShopTextureActivity()) ||
                 this.soloRocketPaymentPending ||
                 this.soloRocketPaid ||
                 this.soloRocketTextureScopeLoading ||
                 this.soloRocketTextureScopeReady ||
                 this.soloRocketTextureScopeUnloadPending ||
+                this.soloRocketShopTextureScopeLoading ||
+                this.soloRocketShopTextureScopeReady ||
+                this.soloRocketShopTextureScopeUnloadPending ||
+                this.soloRocketShopOpenPending ||
                 this.soloRocketTutorialActive ||
                 this.soloRocketGameplayStarted ||
                 this.soloRocketIntroActive ||
@@ -20887,7 +20912,8 @@ if (!data.scoreHandled && data.attacker) {
                 this.soloRocketContainer ||
                 this.soloRocketResultContainer ||
                 this.soloRocketRabbitShopContainer ||
-                this.soloRocketTextureScopeRequestId !== null
+                this.soloRocketTextureScopeRequestId !== null ||
+                this.soloRocketShopTextureScopeRequestId !== null
             );
 
             if (shutdownRocketNeedsCleanup && this.clearSoloRocketCruise) {
@@ -20895,17 +20921,25 @@ if (!data.scoreHandled && data.attacker) {
                     this.clearSoloRocketCruise(true);
                 } catch (err) {
                     console.warn('[火箭巡航] shutdown 清理失敗，改由 Texture 白名單保險卸載：', err);
+                    try {
+                        if (this.clearSoloRocketRabbitShopUi) this.clearSoloRocketRabbitShopUi();
+                        if (this.removeSoloRocketRabbitShopkeeperAnimation) this.removeSoloRocketRabbitShopkeeperAnimation();
+                    } catch (_) {}
                     if (window.TextureAssetManager && window.TextureAssetManager.unloadScope) {
-                        void window.TextureAssetManager.unloadScope('solo-rocket-run', {
-                            scene: this,
-                            reason: 'main-scene-shutdown-fallback'
+                        ['solo-rocket-run', 'solo-rocket-shop'].forEach(scope => {
+                            void window.TextureAssetManager.unloadScope(scope, {
+                                scene: this,
+                                reason: 'main-scene-shutdown-fallback'
+                            });
                         });
                     }
                 }
             } else if (window.TextureAssetManager && window.TextureAssetManager.unloadScope) {
-                void window.TextureAssetManager.unloadScope('solo-rocket-run', {
-                    scene: this,
-                    reason: 'main-scene-shutdown'
+                ['solo-rocket-run', 'solo-rocket-shop'].forEach(scope => {
+                    void window.TextureAssetManager.unloadScope(scope, {
+                        scene: this,
+                        reason: 'main-scene-shutdown'
+                    });
                 });
             }
 
@@ -21057,13 +21091,22 @@ if (!data.scoreHandled && data.attacker) {
                 const destroyRocketTexturesLoaded = window.getLoadedTextureCountForScope
                     ? window.getLoadedTextureCountForScope('solo-rocket-run')
                     : 0;
+                const destroyShopTexturesLoaded = window.getLoadedTextureCountForScope
+                    ? window.getLoadedTextureCountForScope('solo-rocket-shop')
+                    : 0;
                 const destroyRocketNeedsCleanup = !!(
                     destroyRocketTexturesLoaded > 0 ||
+                    destroyShopTexturesLoaded > 0 ||
+                    (this.hasSoloRocketShopTextureActivity && this.hasSoloRocketShopTextureActivity()) ||
                     this.soloRocketPaymentPending ||
                     this.soloRocketPaid ||
                     this.soloRocketTextureScopeLoading ||
                     this.soloRocketTextureScopeReady ||
                     this.soloRocketTextureScopeUnloadPending ||
+                    this.soloRocketShopTextureScopeLoading ||
+                    this.soloRocketShopTextureScopeReady ||
+                    this.soloRocketShopTextureScopeUnloadPending ||
+                    this.soloRocketShopOpenPending ||
                     this.soloRocketTutorialActive ||
                     this.soloRocketGameplayStarted ||
                     this.soloRocketIntroActive ||
@@ -21073,23 +21116,32 @@ if (!data.scoreHandled && data.attacker) {
                     this.soloRocketContainer ||
                     this.soloRocketResultContainer ||
                     this.soloRocketRabbitShopContainer ||
-                    this.soloRocketTextureScopeRequestId !== null
+                    this.soloRocketTextureScopeRequestId !== null ||
+                    this.soloRocketShopTextureScopeRequestId !== null
                 );
 
                 if (destroyRocketNeedsCleanup && this.clearSoloRocketCruise) {
                     this.clearSoloRocketCruise(true);
                 } else if (window.TextureAssetManager && window.TextureAssetManager.unloadScope) {
-                    void window.TextureAssetManager.unloadScope('solo-rocket-run', {
-                        scene: this,
-                        reason: 'main-scene-destroy'
+                    ['solo-rocket-run', 'solo-rocket-shop'].forEach(scope => {
+                        void window.TextureAssetManager.unloadScope(scope, {
+                            scene: this,
+                            reason: 'main-scene-destroy'
+                        });
                     });
                 }
             } catch (err) {
                 console.warn('[火箭巡航] destroy 階段清理失敗，改由 Texture 白名單保險卸載：', err);
+                try {
+                    if (this.clearSoloRocketRabbitShopUi) this.clearSoloRocketRabbitShopUi();
+                    if (this.removeSoloRocketRabbitShopkeeperAnimation) this.removeSoloRocketRabbitShopkeeperAnimation();
+                } catch (_) {}
                 if (window.TextureAssetManager && window.TextureAssetManager.unloadScope) {
-                    void window.TextureAssetManager.unloadScope('solo-rocket-run', {
-                        scene: this,
-                        reason: 'main-scene-destroy-fallback'
+                    ['solo-rocket-run', 'solo-rocket-shop'].forEach(scope => {
+                        void window.TextureAssetManager.unloadScope(scope, {
+                            scene: this,
+                            reason: 'main-scene-destroy-fallback'
+                        });
                     });
                 }
             }
@@ -29011,6 +29063,13 @@ if (!data.scoreHandled && data.attacker) {
         this.soloRocketRabbitShopContainer = null;
         this.soloRocketRabbitShopBudgetText = null;
         this.soloRocketRabbitShopMessage = null;
+        this.soloRocketShopTextureScopeRequestId = null;
+        this.soloRocketShopTextureScopeLoading = false;
+        this.soloRocketShopTextureScopeReady = false;
+        this.soloRocketShopTextureScopeUserUid = null;
+        this.soloRocketShopTextureScopeUnloadPending = false;
+        this.soloRocketShopTextureLoadPromise = null;
+        this.soloRocketShopOpenPending = false;
         this.soloRocketRabbitShopBgm = null;
         this.soloRocketBgmScopeRequestId = null;
         this.soloRocketRabbitShopBgmScopeRequestId = null;
@@ -32407,6 +32466,9 @@ if (!data.scoreHandled && data.attacker) {
 
         this.soloRocketResultClickCatcher = null;
         this.soloRocketResultContainer = null;
+        this.soloRocketResultShopButtonBg = null;
+        this.soloRocketResultShopButtonText = null;
+        this.soloRocketResultShopButtonHit = null;
     }
 
     calculateSoloRocketMoonSummary() {
@@ -32586,6 +32648,9 @@ if (!data.scoreHandled && data.attacker) {
         }).setOrigin(0.5).setAlpha(0);
 
         const btnHit = this.add.zone(shopBtnHit.x, shopBtnHit.y, shopBtnHit.w, shopBtnHit.h);
+        this.soloRocketResultShopButtonBg = btnBg;
+        this.soloRocketResultShopButtonText = btnText;
+        this.soloRocketResultShopButtonHit = btnHit;
 
         const enableShopButton = () => {
             if (!btnBg || !btnText || !btnHit || !btnBg.active || !btnText.active || !btnHit.active) return;
@@ -32743,7 +32808,523 @@ if (!data.scoreHandled && data.attacker) {
         };
     }
 
-    openSoloRocketRabbitShop() {
+    getSoloRocketShopTextureAudit() {
+        if (window.getTextureScopeAudit) {
+            return window.getTextureScopeAudit('solo-rocket-shop', {
+                textureManager: this.textures || null
+            });
+        }
+
+        const expectedKeys = (TEXTURE_SCOPE_KEYS['solo-rocket-shop'] || []).slice();
+
+        return {
+            scope: 'solo-rocket-shop',
+            knownScope: expectedKeys.length > 0,
+            textureManagerReady: !!this.textures,
+            expectedCount: expectedKeys.length,
+            loadedCount: 0,
+            missingCount: expectedKeys.length,
+            expectedKeys: expectedKeys,
+            loadedKeys: [],
+            missingKeys: expectedKeys.slice()
+        };
+    }
+
+    hasSoloRocketShopTextureActivity() {
+        const manager = window.TextureAssetManager;
+        const audit = this.getSoloRocketShopTextureAudit();
+        const managerScopeActive = !!(
+            manager &&
+            manager.state &&
+            manager.state.activeScopes &&
+            manager.state.activeScopes['solo-rocket-shop'] === true
+        );
+        const managerLoading = !!(
+            manager &&
+            manager.state &&
+            manager.state.loadingByKey &&
+            (TEXTURE_SCOPE_KEYS['solo-rocket-shop'] || []).some(
+                key => !!manager.state.loadingByKey[key]
+            )
+        );
+
+        return !!(
+            audit.loadedCount > 0 ||
+            managerScopeActive ||
+            managerLoading ||
+            this.soloRocketShopTextureScopeRequestId !== null ||
+            this.soloRocketShopTextureScopeLoading ||
+            this.soloRocketShopTextureScopeReady ||
+            this.soloRocketShopTextureScopeUnloadPending ||
+            this.soloRocketShopOpenPending ||
+            this.soloRocketRabbitShopContainer
+        );
+    }
+
+    isSoloRocketShopTextureSceneUsable(userUid = null) {
+        const currentUser = window.GameLogic && window.GameLogic.currentUser
+            ? window.GameLogic.currentUser
+            : null;
+
+        if (!currentUser || !currentUser.uid) return false;
+        if (userUid && currentUser.uid !== userUid) return false;
+        if (window.GameLogic && window.GameLogic.sceneSwitchInProgress) return false;
+        if (!this.sys || !this.sys.isActive || !this.sys.isActive()) return false;
+
+        return true;
+    }
+
+    ensureSoloRocketRabbitShopkeeperAnimation() {
+        const sheetKey = 'solo-rocket-rabbit-shopkeeper-sheet';
+        const animKey = 'solo-rocket-rabbit-shopkeeper-idle';
+
+        try {
+            if (!this.sys || !this.sys.isActive || !this.sys.isActive()) return false;
+
+            const textureReady = !!(
+                this.textures &&
+                this.textures.exists &&
+                this.textures.exists(sheetKey)
+            );
+
+            if (!textureReady) {
+                if (
+                    this.anims &&
+                    this.anims.exists &&
+                    this.anims.exists(animKey) &&
+                    !this.soloRocketRabbitShopContainer
+                ) {
+                    this.anims.remove(animKey);
+                }
+                return false;
+            }
+
+            if (this.anims && this.anims.exists && this.anims.exists(animKey)) {
+                const existing = this.anims.get ? this.anims.get(animKey) : null;
+                if (existing && Array.isArray(existing.frames) && existing.frames.length >= 2) {
+                    return true;
+                }
+
+                if (this.anims.remove) this.anims.remove(animKey);
+            }
+
+            const texture = this.textures.get(sheetKey);
+            const frameKeys = Object.keys((texture && texture.frames) || {})
+                .filter(key => key !== '__BASE');
+            const frameEnd = frameKeys.length - 1;
+
+            if (frameEnd < 1) return false;
+
+            this.anims.create({
+                key: animKey,
+                frames: this.anims.generateFrameNumbers(sheetKey, {
+                    start: 0,
+                    end: frameEnd
+                }),
+                duration: 3000,
+                repeat: -1
+            });
+
+            return !!(this.anims.exists && this.anims.exists(animKey));
+        } catch (err) {
+            console.warn('[玉兔伴手禮店] 建立店員 spritesheet 動畫失敗，改用靜態 fallback：', err);
+            return false;
+        }
+    }
+
+    removeSoloRocketRabbitShopkeeperAnimation() {
+        const animKey = 'solo-rocket-rabbit-shopkeeper-idle';
+
+        if (
+            this.soloRocketRabbitShopContainer ||
+            (this.soloRocketRabbitShopKeeperObj && this.soloRocketRabbitShopKeeperObj.active)
+        ) {
+            console.warn('[玉兔伴手禮店] 商店物件仍存在，已延後移除店員動畫。');
+            return false;
+        }
+
+        try {
+            if (this.anims && this.anims.exists && this.anims.exists(animKey)) {
+                this.anims.remove(animKey);
+            }
+            return true;
+        } catch (err) {
+            console.warn('[玉兔伴手禮店] 定向移除店員動畫失敗，已略過：', err);
+            return false;
+        }
+    }
+
+    ensureSoloRocketShopTextures() {
+        if (this.soloRocketShopTextureLoadPromise) {
+            return this.soloRocketShopTextureLoadPromise;
+        }
+
+        const manager = window.TextureAssetManager;
+        const scope = 'solo-rocket-shop';
+        const userUid = window.GameLogic && window.GameLogic.currentUser
+            ? window.GameLogic.currentUser.uid
+            : null;
+
+        if (!this.isSoloRocketShopTextureSceneUsable(userUid)) {
+            return Promise.resolve({
+                ok: false,
+                usable: false,
+                stale: true,
+                reason: 'scene-or-user-unavailable',
+                requestId: null,
+                audit: this.getSoloRocketShopTextureAudit()
+            });
+        }
+
+        if (!manager || !manager.loadScope || !manager.beginScopeRequest) {
+            console.warn('[玉兔伴手禮店] TextureAssetManager 不可用，改用既有 Phaser fallback 開啟商店。');
+            return Promise.resolve({
+                ok: false,
+                usable: true,
+                stale: false,
+                fallback: true,
+                reason: 'texture-manager-unavailable',
+                requestId: null,
+                audit: this.getSoloRocketShopTextureAudit()
+            });
+        }
+
+        let requestId = this.soloRocketShopTextureScopeRequestId;
+        let requestCurrent = requestId !== null && manager.isScopeRequestCurrent
+            ? manager.isScopeRequestCurrent(scope, requestId, userUid)
+            : false;
+        const initialAudit = this.getSoloRocketShopTextureAudit();
+
+        if (
+            initialAudit.expectedCount > 0 &&
+            initialAudit.loadedCount === initialAudit.expectedCount &&
+            initialAudit.missingCount === 0 &&
+            requestCurrent
+        ) {
+            this.soloRocketShopTextureScopeLoading = false;
+            this.soloRocketShopTextureScopeReady = true;
+            this.soloRocketShopTextureScopeUserUid = userUid;
+            this.soloRocketShopTextureScopeUnloadPending = false;
+            this.ensureSoloRocketRabbitShopkeeperAnimation();
+
+            return Promise.resolve({
+                ok: true,
+                usable: true,
+                stale: false,
+                requestId: requestId,
+                audit: initialAudit,
+                failedKeys: []
+            });
+        }
+
+        if (!requestCurrent) {
+            requestId = manager.beginScopeRequest(scope, {
+                userUid: userUid
+            });
+        }
+
+        if (requestId === null) {
+            return Promise.resolve({
+                ok: false,
+                usable: true,
+                stale: false,
+                fallback: true,
+                reason: 'scope-request-unavailable',
+                requestId: null,
+                audit: initialAudit
+            });
+        }
+
+        this.soloRocketShopTextureScopeRequestId = requestId;
+        this.soloRocketShopTextureScopeLoading = true;
+        this.soloRocketShopTextureScopeReady = false;
+        this.soloRocketShopTextureScopeUserUid = userUid;
+        this.soloRocketShopTextureScopeUnloadPending = false;
+
+        const loadPromise = (async () => {
+            let loadResult = null;
+
+            try {
+                loadResult = await manager.loadScope(scope, {
+                    scene: this,
+                    requestId: requestId,
+                    userUid: userUid
+                });
+            } catch (err) {
+                console.warn('[玉兔伴手禮店] 商店 Texture 載入程序發生例外，將改用 fallback：', err);
+                loadResult = {
+                    ok: false,
+                    stale: false,
+                    reason: 'scope-load-exception',
+                    failedKeys: []
+                };
+            }
+
+            const audit = this.getSoloRocketShopTextureAudit();
+            const stillCurrent = !!(
+                manager.isScopeRequestCurrent &&
+                manager.isScopeRequestCurrent(scope, requestId, userUid)
+            );
+            const requestStillOwned = Number(this.soloRocketShopTextureScopeRequestId) === Number(requestId);
+            const usable = !!(
+                stillCurrent &&
+                requestStillOwned &&
+                this.soloRocketShopOpenPending &&
+                this.isSoloRocketShopTextureSceneUsable(userUid)
+            );
+
+            if (!usable) {
+                if (requestStillOwned) {
+                    this.soloRocketShopTextureScopeLoading = false;
+                    this.soloRocketShopTextureScopeReady = false;
+                }
+
+                return {
+                    ok: false,
+                    usable: false,
+                    stale: true,
+                    reason: loadResult && loadResult.reason ? loadResult.reason : 'stale-shop-request',
+                    requestId: requestId,
+                    audit: audit,
+                    failedKeys: audit.missingKeys ? audit.missingKeys.slice() : []
+                };
+            }
+
+            this.soloRocketShopTextureScopeLoading = false;
+            this.soloRocketShopTextureScopeReady = true;
+            this.soloRocketShopTextureScopeUserUid = userUid;
+            this.soloRocketShopTextureScopeUnloadPending = false;
+            this.ensureSoloRocketRabbitShopkeeperAnimation();
+
+            const failedKeys = audit.missingKeys ? audit.missingKeys.slice() : [];
+            if (failedKeys.length > 0) {
+                console.warn('[玉兔伴手禮店] 部分 Texture 載入失敗，商店將使用 fallback：', failedKeys);
+            }
+
+            return {
+                ok: failedKeys.length === 0 && !!(loadResult && loadResult.ok),
+                usable: true,
+                stale: false,
+                fallback: failedKeys.length > 0,
+                reason: failedKeys.length > 0
+                    ? 'scope-load-incomplete'
+                    : (loadResult && loadResult.reason ? loadResult.reason : null),
+                requestId: requestId,
+                audit: audit,
+                failedKeys: failedKeys
+            };
+        })();
+
+        this.soloRocketShopTextureLoadPromise = loadPromise;
+
+        void loadPromise.finally(() => {
+            if (this.soloRocketShopTextureLoadPromise === loadPromise) {
+                this.soloRocketShopTextureLoadPromise = null;
+            }
+        });
+
+        return loadPromise;
+    }
+
+    releaseSoloRocketShopTextures(reason = 'solo-rocket-shop-release', options = {}) {
+        const manager = window.TextureAssetManager;
+        const scope = 'solo-rocket-shop';
+
+        this.soloRocketShopOpenPending = false;
+        this.soloRocketShopTextureScopeLoading = false;
+        this.soloRocketShopTextureScopeReady = false;
+        this.soloRocketShopTextureScopeUserUid = null;
+        this.soloRocketShopTextureLoadPromise = null;
+
+        if (options.uiAlreadyCleared !== true && this.clearSoloRocketRabbitShopUi) {
+            this.clearSoloRocketRabbitShopUi();
+        }
+
+        if (
+            this.soloRocketRabbitShopContainer ||
+            (this.soloRocketRabbitShopKeeperObj && this.soloRocketRabbitShopKeeperObj.active)
+        ) {
+            return Promise.resolve({
+                ok: false,
+                stale: false,
+                reason: 'shop-ui-still-active',
+                scope: scope,
+                removedKeys: [],
+                failedKeys: []
+            });
+        }
+
+        this.removeSoloRocketRabbitShopkeeperAnimation();
+
+        if (!manager || !manager.unloadScope) {
+            this.soloRocketShopTextureScopeRequestId = null;
+            this.soloRocketShopTextureScopeUnloadPending = false;
+            return Promise.resolve({
+                ok: false,
+                stale: false,
+                reason: 'texture-manager-unavailable',
+                scope: scope,
+                removedKeys: [],
+                failedKeys: []
+            });
+        }
+
+        const audit = this.getSoloRocketShopTextureAudit();
+        const managerScopeActive = !!(
+            manager.state &&
+            manager.state.activeScopes &&
+            manager.state.activeScopes[scope] === true
+        );
+        const managerLoading = !!(
+            manager.state &&
+            manager.state.loadingByKey &&
+            (TEXTURE_SCOPE_KEYS[scope] || []).some(key => !!manager.state.loadingByKey[key])
+        );
+        const needsCleanup = !!(
+            audit.loadedCount > 0 ||
+            managerScopeActive ||
+            managerLoading ||
+            this.soloRocketShopTextureScopeRequestId !== null ||
+            this.soloRocketShopTextureScopeUnloadPending
+        );
+
+        let expectedRequestId = options.expectedRequestId !== undefined && options.expectedRequestId !== null
+            ? Number(options.expectedRequestId)
+            : null;
+
+        if (expectedRequestId === null && needsCleanup && manager.invalidateScopeRequest) {
+            const currentManagerRequestId = Number(
+                manager.state &&
+                manager.state.scopeRequestIds &&
+                manager.state.scopeRequestIds[scope]
+                    ? manager.state.scopeRequestIds[scope]
+                    : 0
+            );
+
+            if (this.soloRocketShopTextureScopeUnloadPending && !managerScopeActive) {
+                expectedRequestId = currentManagerRequestId;
+            } else {
+                expectedRequestId = manager.invalidateScopeRequest(scope, {
+                    cancelLoads: true,
+                    reason: reason
+                });
+            }
+        }
+
+        this.soloRocketShopTextureScopeRequestId = null;
+
+        if (!needsCleanup || expectedRequestId === null) {
+            this.soloRocketShopTextureScopeUnloadPending = false;
+            return Promise.resolve({
+                ok: true,
+                stale: false,
+                reason: null,
+                scope: scope,
+                removedKeys: [],
+                failedKeys: []
+            });
+        }
+
+        this.soloRocketShopTextureScopeUnloadPending = true;
+
+        const unloadPromise = manager.unloadScope(scope, {
+            scene: this,
+            invalidate: false,
+            expectedRequestId: expectedRequestId,
+            reason: reason
+        });
+
+        return unloadPromise.then(result => {
+            const newerScopeActive = !!(
+                manager.state &&
+                manager.state.activeScopes &&
+                manager.state.activeScopes[scope] === true
+            );
+
+            if (
+                this.soloRocketShopTextureScopeRequestId === null &&
+                !newerScopeActive
+            ) {
+                this.soloRocketShopTextureScopeUnloadPending = false;
+            }
+
+            if (result && result.ok && !result.stale) {
+                if (window.completePwaRiskCheckpoint) {
+                    window.completePwaRiskCheckpoint('solo-rocket-shop-texture-unload-complete');
+                }
+            } else if (result && !result.stale) {
+                console.warn('[玉兔伴手禮店] Texture 白名單卸載未完整完成：', result);
+            }
+
+            return result;
+        }).catch(err => {
+            if (this.soloRocketShopTextureScopeRequestId === null) {
+                this.soloRocketShopTextureScopeUnloadPending = false;
+            }
+            console.warn('[玉兔伴手禮店] Texture 白名單卸載失敗，已略過：', err);
+            return {
+                ok: false,
+                stale: false,
+                reason: 'texture-unload-failed',
+                scope: scope,
+                removedKeys: [],
+                failedKeys: [],
+                error: err
+            };
+        });
+    }
+  
+    async openSoloRocketRabbitShop() {
+        if (
+            this.soloRocketShopOpenPending ||
+            this.soloRocketRabbitShopContainer ||
+            this.soloRocketMoonShopFinalizing ||
+            this.soloRocketMoonShopFinalized
+        ) {
+            return false;
+        }
+
+        const userUid = window.GameLogic && window.GameLogic.currentUser
+            ? window.GameLogic.currentUser.uid
+            : null;
+
+        if (!this.isSoloRocketShopTextureSceneUsable(userUid)) return false;
+
+        this.soloRocketShopOpenPending = true;
+        this.soloRocketResultShopReady = false;
+
+        [
+            this.soloRocketResultShopButtonBg,
+            this.soloRocketResultShopButtonText,
+            this.soloRocketResultShopButtonHit
+        ].forEach(obj => {
+            try {
+                if (obj && obj.disableInteractive) obj.disableInteractive();
+            } catch (_) {}
+        });
+
+        if (this.soloRocketResultShopButtonText && this.soloRocketResultShopButtonText.active) {
+            this.soloRocketResultShopButtonText.setText('伴手禮店載入中……');
+        }
+
+        const textureResult = await this.ensureSoloRocketShopTextures();
+        const requestStillUsable = !!(
+            this.soloRocketShopOpenPending &&
+            textureResult &&
+            textureResult.usable &&
+            this.isSoloRocketShopTextureSceneUsable(userUid)
+        );
+
+        if (!requestStillUsable) {
+            await this.releaseSoloRocketShopTextures('solo-rocket-shop-open-stale', {
+                uiAlreadyCleared: true,
+                expectedRequestId: textureResult && textureResult.requestId !== undefined
+                    ? textureResult.requestId
+                    : null
+            });
+            return false;
+        }
+
         this.destroySoloRocketResultOverlay();
 
         // 每次重新進入玉兔伴手禮店時，恢復預設歡迎氣泡。
@@ -32751,6 +33332,7 @@ if (!data.scoreHandled && data.attacker) {
         this.soloRocketSelectedMoonShopItemName = null;
 
         this.renderSoloRocketRabbitShop();
+        this.soloRocketShopOpenPending = false;
 
         if (this.playSoloRocketRabbitShopBgm) {
             this.playSoloRocketRabbitShopBgm();
@@ -32763,6 +33345,8 @@ if (!data.scoreHandled && data.attacker) {
                 }
             }, [], this);
         }
+
+        return true;
     }
 
     playSoloRocketRabbitShopBgm() {
@@ -34356,17 +34940,34 @@ if (!data.scoreHandled && data.attacker) {
         const rocketTextureLoadedCount = window.getLoadedTextureCountForScope
             ? window.getLoadedTextureCountForScope('solo-rocket-run')
             : 0;
+        const shopTextureLoadedCount = window.getLoadedTextureCountForScope
+            ? window.getLoadedTextureCountForScope('solo-rocket-shop')
+            : 0;
         const managerRocketScopeActive = !!(
             textureManager &&
             textureManager.state &&
             textureManager.state.activeScopes &&
             textureManager.state.activeScopes['solo-rocket-run'] === true
         );
+        const managerShopScopeActive = !!(
+            textureManager &&
+            textureManager.state &&
+            textureManager.state.activeScopes &&
+            textureManager.state.activeScopes['solo-rocket-shop'] === true
+        );
         const managerRocketLoading = !!(
             textureManager &&
             textureManager.state &&
             textureManager.state.loadingByKey &&
             (TEXTURE_SCOPE_KEYS['solo-rocket-run'] || []).some(
+                key => !!textureManager.state.loadingByKey[key]
+            )
+        );
+        const managerShopLoading = !!(
+            textureManager &&
+            textureManager.state &&
+            textureManager.state.loadingByKey &&
+            (TEXTURE_SCOPE_KEYS['solo-rocket-shop'] || []).some(
                 key => !!textureManager.state.loadingByKey[key]
             )
         );
@@ -34386,7 +34987,19 @@ if (!data.scoreHandled && data.attacker) {
             this.soloRocketResultContainer ||
             this.soloRocketRabbitShopContainer
         );
+        const shopTextureNeedsCleanup = !!(
+            shopTextureLoadedCount > 0 ||
+            managerShopScopeActive ||
+            managerShopLoading ||
+            this.soloRocketShopTextureScopeLoading ||
+            this.soloRocketShopTextureScopeReady ||
+            this.soloRocketShopTextureScopeUnloadPending ||
+            this.soloRocketShopTextureScopeRequestId !== null ||
+            this.soloRocketShopOpenPending ||
+            this.soloRocketRabbitShopContainer
+        );
         let rocketTextureUnloadRequestId = null;
+        let shopTextureUnloadRequestId = null;
 
         if (
             rocketTextureNeedsCleanup &&
@@ -34419,12 +35032,49 @@ if (!data.scoreHandled && data.attacker) {
             this.soloRocketTextureScopeUnloadPending = true;
         }
 
+        if (
+            shopTextureNeedsCleanup &&
+            textureManager &&
+            textureManager.invalidateScopeRequest
+        ) {
+            const currentShopManagerRequestId = Number(
+                textureManager.state &&
+                textureManager.state.scopeRequestIds &&
+                textureManager.state.scopeRequestIds['solo-rocket-shop']
+                    ? textureManager.state.scopeRequestIds['solo-rocket-shop']
+                    : 0
+            );
+
+            if (
+                this.soloRocketShopTextureScopeUnloadPending &&
+                !managerShopScopeActive
+            ) {
+                shopTextureUnloadRequestId = currentShopManagerRequestId;
+            } else {
+                shopTextureUnloadRequestId = textureManager.invalidateScopeRequest(
+                    'solo-rocket-shop',
+                    {
+                        cancelLoads: true,
+                        reason: 'solo-rocket-clear'
+                    }
+                );
+            }
+
+            this.soloRocketShopTextureScopeUnloadPending = true;
+        }
+
         this.soloRocketPaymentPending = false;
         this.soloRocketPaid = false;
         this.soloRocketTextureScopeLoading = false;
         this.soloRocketTextureScopeReady = false;
         this.soloRocketTextureScopeUserUid = null;
         this.soloRocketTextureScopeRequestId = null;
+        this.soloRocketShopOpenPending = false;
+        this.soloRocketShopTextureScopeLoading = false;
+        this.soloRocketShopTextureScopeReady = false;
+        this.soloRocketShopTextureScopeUserUid = null;
+        this.soloRocketShopTextureScopeRequestId = null;
+        this.soloRocketShopTextureLoadPromise = null;
         this.soloRocketInputLocked = true;
         this.closeSoloRocketPaymentConfirm();
 
@@ -34447,6 +35097,7 @@ if (!data.scoreHandled && data.attacker) {
         if (this.destroySoloRocketDynamicJoystick) this.destroySoloRocketDynamicJoystick(true);
         if (this.stopSoloRocketRabbitShopBgm) this.stopSoloRocketRabbitShopBgm();
         if (this.clearSoloRocketRabbitShopUi) this.clearSoloRocketRabbitShopUi();
+        if (this.removeSoloRocketRabbitShopkeeperAnimation) this.removeSoloRocketRabbitShopkeeperAnimation();
 
         this.clearSoloRocketTutorial();
         this.clearSoloRocketIntroFx();
@@ -34497,6 +35148,9 @@ if (!data.scoreHandled && data.attacker) {
         this.soloRocketResultClickCatcher = null;
         this.soloRocketResultRevealTimers = [];
         this.soloRocketResultShopReady = false;
+        this.soloRocketResultShopButtonBg = null;
+        this.soloRocketResultShopButtonText = null;
+        this.soloRocketResultShopButtonHit = null;
         this.soloRocketRabbitShopContainer = null;
         this.soloRocketRabbitShopBudgetText = null;
         this.soloRocketRabbitShopMessage = null;
@@ -34631,7 +35285,21 @@ if (!data.scoreHandled && data.attacker) {
                 console.warn('[火箭巡航] 遊玩區 Texture 白名單卸載失敗，已略過：', err);
             });
         } else {
+        } else {
             this.soloRocketTextureScopeUnloadPending = false;
+        }
+
+        if (
+            shopTextureNeedsCleanup &&
+            shopTextureUnloadRequestId !== null &&
+            this.releaseSoloRocketShopTextures
+        ) {
+            void this.releaseSoloRocketShopTextures('solo-rocket-clear', {
+                uiAlreadyCleared: true,
+                expectedRequestId: shopTextureUnloadRequestId
+            });
+        } else {
+            this.soloRocketShopTextureScopeUnloadPending = false;
         }
     }
 
