@@ -675,6 +675,236 @@ window.auditTextureAssetScopes = function() {
     return report;
 };
 // ====== 第三階段 3-1：副本 Texture 靜態資源表＋唯讀診斷工具結束 ======
+// ====== 第四階段 4-1：新副本靜態登錄表＋唯讀診斷工具 ======
+const freezeDungeonCatalogEntry = function(entry) {
+    return Object.freeze(entry);
+};
+
+const DUNGEON_CATALOG = Object.freeze({
+    'template-dungeon': freezeDungeonCatalogEntry({
+        key: 'template-dungeon',
+        sceneKey: 'TemplateDungeonScene',
+        enabled: false,
+        version: 1,
+        textureScope: 'template-dungeon',
+        audioScope: 'template-dungeon',
+        hideWorldUi: true,
+        sleepMainScene: true,
+        sleepUiScene: true,
+        allowFirebase: false,
+        allowRewards: false,
+        returnMode: 'resume-world',
+        description: '未來新副本模板（第四階段 4-1 僅登錄，不啟動）'
+    })
+});
+
+window.DUNGEON_CATALOG = DUNGEON_CATALOG;
+
+window.getDungeonCatalogEntry = function(dungeonKey) {
+    const safeKey = typeof dungeonKey === 'string'
+        ? dungeonKey.trim()
+        : '';
+    const entry = safeKey && DUNGEON_CATALOG[safeKey]
+        ? DUNGEON_CATALOG[safeKey]
+        : null;
+
+    return entry ? Object.freeze({ ...entry }) : null;
+};
+
+window.getDungeonCatalogAudit = function() {
+    const requiredFields = [
+        'key',
+        'sceneKey',
+        'enabled',
+        'version',
+        'textureScope',
+        'audioScope',
+        'hideWorldUi',
+        'sleepMainScene',
+        'sleepUiScene',
+        'allowFirebase',
+        'allowRewards',
+        'returnMode',
+        'description'
+    ];
+    const catalogKeys = Object.keys(DUNGEON_CATALOG);
+    const dungeonKeyCounts = {};
+    const sceneKeyCounts = {};
+    const game = window.GameLogic && window.GameLogic.phaserGame
+        ? window.GameLogic.phaserGame
+        : null;
+    const sceneManager = game && game.scene ? game.scene : null;
+    let registeredSceneKeys = [];
+
+    try {
+        registeredSceneKeys = sceneManager && sceneManager.keys && typeof sceneManager.keys === 'object'
+            ? Object.keys(sceneManager.keys)
+            : [];
+    } catch (_) {
+        registeredSceneKeys = [];
+    }
+
+    const entries = catalogKeys.map(catalogKey => {
+        const entry = DUNGEON_CATALOG[catalogKey] || {};
+        const key = typeof entry.key === 'string' ? entry.key.trim() : '';
+        const sceneKey = typeof entry.sceneKey === 'string' ? entry.sceneKey.trim() : '';
+        const textureScope = typeof entry.textureScope === 'string' ? entry.textureScope.trim() : '';
+        const audioScope = typeof entry.audioScope === 'string' ? entry.audioScope.trim() : '';
+        const missingFields = requiredFields.filter(field => {
+            if (!Object.prototype.hasOwnProperty.call(entry, field)) return true;
+            if (typeof entry[field] === 'string') return entry[field].trim() === '';
+            return entry[field] === undefined || entry[field] === null;
+        });
+        const warnings = [];
+
+        if (key) dungeonKeyCounts[key] = Number(dungeonKeyCounts[key] || 0) + 1;
+        if (sceneKey) sceneKeyCounts[sceneKey] = Number(sceneKeyCounts[sceneKey] || 0) + 1;
+
+        if (key && key !== catalogKey) {
+            warnings[warnings.length] = `登錄索引與 entry.key 不一致：${catalogKey} / ${key}`;
+        }
+
+        if (textureScope && !TEXTURE_ASSET_SCOPES[textureScope]) {
+            warnings[warnings.length] = `Texture Scope 尚未登錄：${textureScope}`;
+        }
+
+        if (audioScope && !BGM_SCOPE_KEYS[audioScope]) {
+            warnings[warnings.length] = `Audio Scope 尚未登錄：${audioScope}`;
+        }
+
+        if (sceneKey && registeredSceneKeys.indexOf(sceneKey) === -1) {
+            warnings[warnings.length] = `Scene 尚未加入 Phaser 設定：${sceneKey}`;
+        }
+
+        if (typeof entry.enabled !== 'boolean') {
+            warnings[warnings.length] = 'enabled 應為 boolean';
+        }
+
+        if (!Number.isFinite(Number(entry.version)) || Number(entry.version) <= 0) {
+            warnings[warnings.length] = 'version 應為大於 0 的數字';
+        }
+
+        return {
+            catalogKey: catalogKey,
+            key: key,
+            sceneKey: sceneKey,
+            enabled: entry.enabled === true,
+            valid: missingFields.length === 0,
+            missingFields: missingFields,
+            warnings: warnings
+        };
+    });
+
+    const duplicateDungeonKeys = Object.keys(dungeonKeyCounts)
+        .filter(key => dungeonKeyCounts[key] > 1);
+    const duplicateSceneKeys = Object.keys(sceneKeyCounts)
+        .filter(key => sceneKeyCounts[key] > 1);
+    const enabledCount = entries.filter(entry => entry.enabled).length;
+    const validCount = entries.filter(entry => entry.valid).length;
+
+    return {
+        totalCount: entries.length,
+        enabledCount: enabledCount,
+        disabledCount: entries.length - enabledCount,
+        validCount: validCount,
+        invalidCount: entries.length - validCount,
+        duplicateDungeonKeys: duplicateDungeonKeys,
+        duplicateSceneKeys: duplicateSceneKeys,
+        entries: entries
+    };
+};
+
+window.getDungeonSessionSnapshot = function() {
+    const session = window.GameLogic && window.GameLogic.dungeonSession
+        ? window.GameLogic.dungeonSession
+        : {};
+
+    return {
+        active: session.active === true,
+        dungeonKey: typeof session.dungeonKey === 'string' ? session.dungeonKey : null,
+        sceneKey: typeof session.sceneKey === 'string' ? session.sceneKey : null,
+        sessionId: typeof session.sessionId === 'string' ? session.sessionId : null,
+        userUid: typeof session.userUid === 'string' ? session.userUid : null,
+        sourceScene: typeof session.sourceScene === 'string' ? session.sourceScene : null,
+        phase: typeof session.phase === 'string' && session.phase ? session.phase : 'idle',
+        loading: session.loading === true,
+        entering: session.entering === true,
+        settling: session.settling === true,
+        exiting: session.exiting === true,
+        cleanupStarted: session.cleanupStarted === true,
+        cleanupCompleted: session.cleanupCompleted === true,
+        startedAt: Number.isFinite(Number(session.startedAt)) ? Number(session.startedAt) : 0,
+        endedAt: Number.isFinite(Number(session.endedAt)) ? Number(session.endedAt) : 0,
+        exitReason: typeof session.exitReason === 'string' ? session.exitReason : null
+    };
+};
+
+window.auditDungeonFoundation = function() {
+    const game = window.GameLogic && window.GameLogic.phaserGame
+        ? window.GameLogic.phaserGame
+        : null;
+    const sceneManager = game && game.scene ? game.scene : null;
+    const catalogAudit = window.getDungeonCatalogAudit
+        ? window.getDungeonCatalogAudit()
+        : { entries: [] };
+    const session = window.getDungeonSessionSnapshot
+        ? window.getDungeonSessionSnapshot()
+        : { active: false, dungeonKey: null, sceneKey: null, phase: 'idle' };
+    let registeredSceneKeys = [];
+    let mainSceneExists = false;
+    let uiSceneExists = false;
+
+    try {
+        registeredSceneKeys = sceneManager && sceneManager.keys && typeof sceneManager.keys === 'object'
+            ? Object.keys(sceneManager.keys)
+            : [];
+        mainSceneExists = registeredSceneKeys.indexOf('MainScene') !== -1;
+        uiSceneExists = registeredSceneKeys.indexOf('UIScene') !== -1;
+    } catch (_) {
+        registeredSceneKeys = [];
+    }
+
+    const unknownTextureScopes = [];
+    const unknownAudioScopes = [];
+
+    Object.keys(DUNGEON_CATALOG).forEach(catalogKey => {
+        const entry = DUNGEON_CATALOG[catalogKey] || {};
+        const textureScope = typeof entry.textureScope === 'string' ? entry.textureScope.trim() : '';
+        const audioScope = typeof entry.audioScope === 'string' ? entry.audioScope.trim() : '';
+
+        if (textureScope && !TEXTURE_ASSET_SCOPES[textureScope]) {
+            unknownTextureScopes[unknownTextureScopes.length] = textureScope;
+        }
+
+        if (audioScope && !BGM_SCOPE_KEYS[audioScope]) {
+            unknownAudioScopes[unknownAudioScopes.length] = audioScope;
+        }
+    });
+
+    const sessionEntry = session.dungeonKey && DUNGEON_CATALOG[session.dungeonKey]
+        ? DUNGEON_CATALOG[session.dungeonKey]
+        : null;
+    const report = {
+        version: 1,
+        time: Date.now(),
+        catalogAudit: catalogAudit,
+        session: session,
+        phaserGameReady: !!game,
+        mainSceneExists: mainSceneExists,
+        uiSceneExists: uiSceneExists,
+        registeredSceneKeys: registeredSceneKeys,
+        unknownTextureScopes: Array.from(new Set(unknownTextureScopes)),
+        unknownAudioScopes: Array.from(new Set(unknownAudioScopes)),
+        sessionDungeonKnown: session.dungeonKey ? !!sessionEntry : null,
+        sessionSceneKnown: session.sceneKey
+            ? registeredSceneKeys.indexOf(session.sceneKey) !== -1
+            : null
+    };
+
+    console.info('[Dungeon 診斷] 第四階段 4-1 基礎盤點：', report);
+    return report;
+};
+// ====== 第四階段 4-1：新副本靜態登錄表＋唯讀診斷工具結束 ======
 // ====== 第三階段 3-2：Texture 按需載入與白名單卸載相容層 ======
 window.TextureAssetManager = {
     state: {
@@ -2609,7 +2839,27 @@ window.GameLogic = {
     selectedServerRoom: initialServerRoom, currentServerRoom: initialServerRoom, serverRooms: SERVER_ROOMS,
     dailyMeowlime: { lastCheckinDate: "", totalCheckins: 0, checkinHistory: {} },
     meowlimeDailyLoaded: false, meowlimeDailyRefreshing: false, meowlimeDailyDate: "", meowlimeCanCheckinToday: false,
-    authGuardSigningOut: false
+    authGuardSigningOut: false,
+    // ====== 第四階段 4-1：Dungeon Session 靜態初始狀態 ======
+    dungeonSession: {
+        active: false,
+        dungeonKey: null,
+        sceneKey: null,
+        sessionId: null,
+        userUid: null,
+        sourceScene: null,
+        phase: 'idle',
+        loading: false,
+        entering: false,
+        settling: false,
+        exiting: false,
+        cleanupStarted: false,
+        cleanupCompleted: false,
+        startedAt: 0,
+        endedAt: 0,
+        exitReason: null
+    }
+    // ====== 第四階段 4-1：Dungeon Session 靜態初始狀態結束 ======
 };
 
 window.PWA_RISK_CHECKPOINT_KEY = 'onion_pwa_risk_checkpoint_v1';
@@ -2675,6 +2925,9 @@ window.getPwaRiskSnapshot = function(operation, extra = {}) {
 
     const growthState = window.__meowlimeGrowthState || null;
     const growthModal = document.getElementById('meowlime-growth-modal');
+    const dungeonSession = window.GameLogic && window.GameLogic.dungeonSession
+        ? window.GameLogic.dungeonSession
+        : null;
     const safeExtra = {};
 
     ['status', 'targetScene', 'batchIndex', 'queueRemaining', 'note'].forEach((key) => {
@@ -2707,6 +2960,13 @@ window.getPwaRiskSnapshot = function(operation, extra = {}) {
         meowlimeRafRunning: !!(growthState && growthState.running && growthState.rafId),
         meowlimeGrowthVisible: !!(growthModal && growthModal.style.display !== 'none'),
         sceneSwitchInProgress: !!(window.GameLogic && window.GameLogic.sceneSwitchInProgress),
+        dungeonSessionActive: !!(dungeonSession && dungeonSession.active),
+        dungeonSessionKey: dungeonSession && dungeonSession.dungeonKey
+            ? String(dungeonSession.dungeonKey)
+            : '',
+        dungeonSessionPhase: dungeonSession && dungeonSession.phase
+            ? String(dungeonSession.phase)
+            : 'idle',
         ...safeExtra
     };
 };
