@@ -13618,7 +13618,7 @@ onAuthStateChanged(auth, async (user) => {
         if (window.startFriendVisitLoveNoticesListener) window.startFriendVisitLoveNoticesListener();
         if (window.refreshMyFriendsCache) window.refreshMyFriendsCache();
         if (manualsUnsubscribe) { manualsUnsubscribe(); manualsUnsubscribe = null; }
-        manualsUnsubscribe = onValue(ref(db, 'manuals'), snap => { const data = snap.val(); window.manualPages = []; if (data) { Object.keys(data).forEach(key => { const item = data[key] || {}; if (!item.imgBase64) return; window.manualPages.push({ key: key, imgBase64: item.imgBase64, timestamp: item.timestamp || 0, title: item.title || '', description: item.description || '', categoryId: item.categoryId || 'uncategorized' }); }); window.manualPages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); } window.renderManualPage(); });
+        manualsUnsubscribe = onValue(ref(db, 'manuals'), snap => { const data = snap.val(); window.manualPages = []; if (data) { Object.keys(data).forEach(key => { const item = data[key] || {}; window.manualPages.push({ key: key, ...item, timestamp: item.timestamp || 0, title: item.title || '', description: item.description || '', categoryId: item.categoryId || 'uncategorized' }); }); window.manualPages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); } window.renderManualPage(); });
         if (manualCategoriesUnsubscribe) { manualCategoriesUnsubscribe(); manualCategoriesUnsubscribe = null; }
         manualCategoriesUnsubscribe = onValue(ref(db, 'manualCategories'), snap => { window.manualCategories = snap.val() || {}; window.renderManualPage(); });
         if (cafeFurnitureUnsubscribe) { cafeFurnitureUnsubscribe(); cafeFurnitureUnsubscribe = null; }
