@@ -35285,7 +35285,6 @@ if (!data.scoreHandled && data.attacker) {
                 console.warn('[火箭巡航] 遊玩區 Texture 白名單卸載失敗，已略過：', err);
             });
         } else {
-        } else {
             this.soloRocketTextureScopeUnloadPending = false;
         }
 
