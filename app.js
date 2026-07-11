@@ -719,6 +719,15 @@ window.AudioManager = {
         return true;
     },
 
+    resetLobbyRequestState() {
+        const currentRequestId = Number(this.state.lobbySwitchRequestId || 0);
+        this.state.lobbySwitchRequestId = currentRequestId + 1;
+        this.state.pendingLobbyTrackIdx = null;
+        this.state.lobbyTargetKey = null;
+        this.state.lobbyRequestUserUid = null;
+        return this.state.lobbySwitchRequestId;
+    },
+
     getScopeKeys(scope) {
         const safeScope = typeof scope === 'string' ? scope : '';
         const keys = safeScope && BGM_SCOPE_KEYS[safeScope]
