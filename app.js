@@ -321,7 +321,10 @@ window.AudioManager = {
         lobbySwitchRequestId: 0,
         pendingLobbyTrackIdx: null,
         lobbyTargetKey: null,
-        lobbyRequestUserUid: null
+        lobbyRequestUserUid: null,
+        scopeRequestIds: {},
+        activeScopes: {},
+        scopeUserUids: {}
     },
 
     getGame() {
@@ -716,13 +719,318 @@ window.AudioManager = {
         return true;
     },
 
-    resetLobbyRequestState() {
-        const currentRequestId = Number(this.state.lobbySwitchRequestId || 0);
-        this.state.lobbySwitchRequestId = currentRequestId + 1;
-        this.state.pendingLobbyTrackIdx = null;
-        this.state.lobbyTargetKey = null;
-        this.state.lobbyRequestUserUid = null;
-        return this.state.lobbySwitchRequestId;
+    getScopeKeys(scope) {
+        const safeScope = typeof scope === 'string' ? scope : '';
+        const keys = safeScope && BGM_SCOPE_KEYS[safeScope]
+            ? BGM_SCOPE_KEYS[safeScope]
+            : null;
+
+        return Array.isArray(keys) ? keys.slice() : [];
+    },
+
+    beginScopeRequest(scope, options = {}) {
+        const safeScope = typeof scope === 'string' ? scope : '';
+        if (!safeScope || !BGM_SCOPE_KEYS[safeScope]) return null;
+
+        const currentId = Number(this.state.scopeRequestIds[safeScope] || 0);
+        const nextId = currentId + 1;
+        const currentUid = window.GameLogic && window.GameLogic.currentUser
+            ? window.GameLogic.currentUser.uid
+            : null;
+
+        this.state.scopeRequestIds[safeScope] = nextId;
+        this.state.activeScopes[safeScope] = true;
+        this.state.scopeUserUids[safeScope] = options.userUid || currentUid || null;
+
+        return nextId;
+    },
+
+    invalidateScopeRequest(scope) {
+        const safeScope = typeof scope === 'string' ? scope : '';
+        if (!safeScope || !BGM_SCOPE_KEYS[safeScope]) return null;
+
+        const currentId = Number(this.state.scopeRequestIds[safeScope] || 0);
+        const nextId = currentId + 1;
+
+        this.state.scopeRequestIds[safeScope] = nextId;
+        this.state.activeScopes[safeScope] = false;
+        this.state.scopeUserUids[safeScope] = null;
+
+        return nextId;
+    },
+
+    isScopeRequestCurrent(scope, requestId, userUid = null) {
+        const safeScope = typeof scope === 'string' ? scope : '';
+        if (!safeScope || !BGM_SCOPE_KEYS[safeScope]) return false;
+        if (this.state.activeScopes[safeScope] !== true) return false;
+        if (Number(this.state.scopeRequestIds[safeScope] || 0) !== Number(requestId)) return false;
+
+        const expectedUid = this.state.scopeUserUids[safeScope] || null;
+        const currentUid = window.GameLogic && window.GameLogic.currentUser
+            ? window.GameLogic.currentUser.uid
+            : null;
+
+        if (expectedUid && currentUid !== expectedUid) return false;
+        if (userUid && currentUid !== userUid) return false;
+
+        return true;
+    },
+
+    async loadScope(scope, options = {}) {
+        const safeScope = typeof scope === 'string' ? scope : '';
+        const keys = this.getScopeKeys(safeScope);
+
+        if (!safeScope || keys.length === 0) {
+            return {
+                ok: false,
+                reason: 'unknown-scope',
+                scope: safeScope,
+                results: []
+            };
+        }
+
+        const currentUid = window.GameLogic && window.GameLogic.currentUser
+            ? window.GameLogic.currentUser.uid
+            : null;
+        const userUid = options.userUid || this.state.scopeUserUids[safeScope] || currentUid || null;
+        const hasProvidedRequestId = options.requestId !== undefined && options.requestId !== null;
+        const requestId = hasProvidedRequestId
+            ? Number(options.requestId)
+            : this.beginScopeRequest(safeScope, { userUid: userUid });
+
+        if (
+            hasProvidedRequestId &&
+            !this.isScopeRequestCurrent(safeScope, requestId, userUid)
+        ) {
+            return {
+                ok: false,
+                current: false,
+                stale: true,
+                reason: 'stale-scope',
+                scope: safeScope,
+                requestId: requestId,
+                results: []
+            };
+        }
+
+        const settled = await Promise.allSettled(
+            keys.map(key => this.load(key, {
+                scene: options.scene || null
+            }))
+        );
+
+        const results = settled.map((item, index) => {
+            if (item.status === 'fulfilled') {
+                return Object.assign({
+                    key: keys[index]
+                }, item.value || {});
+            }
+
+            return {
+                ok: false,
+                key: keys[index],
+                reason: 'load-rejected',
+                error: item.reason
+            };
+        });
+
+        const current = this.isScopeRequestCurrent(safeScope, requestId, userUid);
+
+        if (!current && this.state.activeScopes[safeScope] !== true) {
+            for (let i = 0; i < keys.length; i++) {
+                if (this.state.activeScopes[safeScope] === true) break;
+                if (!this.isLoaded(keys[i], options.scene || null)) continue;
+
+                await this.unload(keys[i], {
+                    scene: options.scene || null,
+                    removeCache: true
+                });
+            }
+        }
+
+        return {
+            ok: current && results.every(result => result && result.ok),
+            current: current,
+            stale: !current,
+            scope: safeScope,
+            requestId: requestId,
+            results: results
+        };
+    },
+
+    async ensureScopeBgm(scope, key, options = {}) {
+        const safeScope = typeof scope === 'string' ? scope : '';
+        const keys = this.getScopeKeys(safeScope);
+        const entry = this.getCatalogEntry(key);
+
+        if (!entry || keys.indexOf(entry.key) === -1) {
+            return {
+                ok: false,
+                reason: 'scope-key-mismatch',
+                scope: safeScope,
+                key: key
+            };
+        }
+
+        const currentUid = window.GameLogic && window.GameLogic.currentUser
+            ? window.GameLogic.currentUser.uid
+            : null;
+        const userUid = options.userUid || this.state.scopeUserUids[safeScope] || currentUid || null;
+        let requestId = options.requestId;
+
+        if (requestId === undefined || requestId === null) {
+            requestId = this.state.activeScopes[safeScope] === true
+                ? Number(this.state.scopeRequestIds[safeScope] || 0)
+                : this.beginScopeRequest(safeScope, {
+                    userUid: userUid
+                });
+        } else if (!this.isScopeRequestCurrent(safeScope, requestId, userUid)) {
+            return {
+                ok: false,
+                stale: true,
+                reason: 'stale-scope',
+                scope: safeScope,
+                key: entry.key,
+                requestId: requestId
+            };
+        }
+
+        const loadResult = await this.load(entry.key, {
+            scene: options.scene || null
+        });
+
+        let valid = this.isScopeRequestCurrent(safeScope, requestId, userUid);
+
+        if (valid && typeof options.isValid === 'function') {
+            try {
+                valid = options.isValid() !== false;
+            } catch (_) {
+                valid = false;
+            }
+        }
+
+        if (!loadResult || !loadResult.ok || !valid) {
+            if (!valid && this.state.activeScopes[safeScope] !== true && this.isLoaded(entry.key, options.scene || null)) {
+                await this.unload(entry.key, {
+                    scene: options.scene || null,
+                    removeCache: true
+                });
+            }
+
+            return {
+                ok: false,
+                stale: !valid,
+                reason: loadResult && loadResult.reason ? loadResult.reason : (!valid ? 'stale-scope' : 'load-failed'),
+                scope: safeScope,
+                key: entry.key,
+                requestId: requestId
+            };
+        }
+
+        if (Array.isArray(options.stopKeys)) {
+            this.stopMany(options.stopKeys, {
+                scene: options.scene || null,
+                removeSound: options.removeStoppedSounds === true
+            });
+        }
+
+        const stopScopes = Array.isArray(options.stopScopes)
+            ? options.stopScopes
+            : [];
+
+        stopScopes.forEach(stopScope => {
+            const stopScopeKeys = this.getScopeKeys(stopScope);
+            this.stopMany(stopScopeKeys, {
+                scene: options.scene || null,
+                removeSound: options.removeStoppedSounds === true
+            });
+        });
+
+        const sound = this.play(entry.key, {
+            scene: options.scene || null,
+            loop: options.loop,
+            volume: options.volume,
+            rate: options.rate,
+            restart: options.restart === true,
+            replace: options.replace === true,
+            onComplete: options.onComplete
+        });
+
+        return {
+            ok: !!sound,
+            reason: sound ? null : 'play-failed',
+            scope: safeScope,
+            key: entry.key,
+            requestId: requestId,
+            sound: sound || null
+        };
+    },
+
+    async unloadScope(scope, options = {}) {
+        const safeScope = typeof scope === 'string' ? scope : '';
+        const keys = this.getScopeKeys(safeScope);
+
+        if (!safeScope || keys.length === 0) {
+            return {
+                ok: false,
+                reason: 'unknown-scope',
+                scope: safeScope,
+                removedKeys: []
+            };
+        }
+
+        const invalidationId = options.invalidate === false
+            ? Number(this.state.scopeRequestIds[safeScope] || 0)
+            : this.invalidateScopeRequest(safeScope);
+
+        this.stopMany(keys, {
+            scene: options.scene || null,
+            removeSound: true
+        });
+
+        const pendingLoads = keys
+            .map(key => this.state.loadingByKey[key])
+            .filter(Boolean);
+
+        if (pendingLoads.length > 0) {
+            await Promise.allSettled(pendingLoads);
+        }
+
+        if (
+            this.state.activeScopes[safeScope] === true ||
+            Number(this.state.scopeRequestIds[safeScope] || 0) !== Number(invalidationId)
+        ) {
+            return {
+                ok: true,
+                stale: true,
+                scope: safeScope,
+                removedKeys: []
+            };
+        }
+
+        const removedKeys = [];
+
+        for (let i = 0; i < keys.length; i++) {
+            if (this.state.activeScopes[safeScope] === true) break;
+
+            const key = keys[i];
+            if (!this.isLoaded(key, options.scene || null)) continue;
+
+            const result = await this.unload(key, {
+                scene: options.scene || null,
+                removeCache: true
+            });
+
+            if (result && result.ok && result.cacheRemoved) {
+                removedKeys.push(key);
+            }
+        }
+
+        return {
+            ok: true,
+            scope: safeScope,
+            removedKeys: removedKeys
+        };
     },
 
     load(key, options = {}) {
@@ -741,14 +1049,6 @@ window.AudioManager = {
             return Promise.resolve({
                 ok: true,
                 alreadyLoaded: true,
-                key: entry.key
-            });
-        }
-
-        if (entry.scope !== 'lobby') {
-            return Promise.resolve({
-                ok: false,
-                reason: 'dynamic-load-disabled',
                 key: entry.key
             });
         }
@@ -10435,19 +10735,26 @@ window.isShrineRitualActive = function(eventData = null) {
 
 window.startShrineRitual = function() {
     window.forceAudioNormal();
-    if (window.GameLogic.phaserGame) {
-        let ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
-        if (ms) {
-            window.AudioManager.stopMany(BGM_SCOPE_KEYS.lobby, { scene: ms });
-            const shrineSound = window.AudioManager.getSound('shrine-wierd-people-sound', { scene: ms });
-            if (!shrineSound || !shrineSound.isPlaying) {
-                window.AudioManager.play('shrine-wierd-people-sound', {
-                    scene: ms,
-                    loop: true,
-                    volume: window.AudioManager.getBgmVolume()
-                });
-            }
-        }
+
+    if (!window.GameLogic.phaserGame || !window.AudioManager) return;
+
+    const ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
+    if (!ms) return;
+
+    window.AudioManager.resetLobbyRequestState();
+    window.AudioManager.stopMany(BGM_SCOPE_KEYS.lobby, {
+        scene: ms,
+        removeSound: true
+    });
+
+    if (
+        ms.sceneName === 'shrine' &&
+        window.GameLogic.currentScene === 'shrine' &&
+        ms.requestShrineStateBgm
+    ) {
+        const eventData = window.GameLogic.shrineEventData;
+        const eventState = eventData ? eventData.state : 'none';
+        void ms.requestShrineStateBgm(eventState);
     }
 };
 
@@ -15401,8 +15708,25 @@ onAuthStateChanged(auth, async (user) => {
         }
         listenToChat(); listenToMemories();
     } else {
-        if (window.AudioManager && window.AudioManager.resetLobbyRequestState) {
-            window.AudioManager.resetLobbyRequestState();
+        if (window.AudioManager) {
+            const game = window.GameLogic && window.GameLogic.phaserGame
+                ? window.GameLogic.phaserGame
+                : null;
+            const scene = game && game.scene
+                ? game.scene.getScene('MainScene')
+                : null;
+
+            ['partyroom', 'shrine', 'solo-cleaning', 'solo-rocket', 'solo-rocket-shop'].forEach(scope => {
+                if (window.AudioManager.unloadScope) {
+                    void window.AudioManager.unloadScope(scope, {
+                        scene: scene
+                    });
+                }
+            });
+
+            if (window.AudioManager.resetLobbyRequestState) {
+                window.AudioManager.resetLobbyRequestState();
+            }
         }
         window.GameLogic.currentUser = null;
         window.GameLogic.onlinePlayers = {};
@@ -15584,6 +15908,19 @@ function leaveShrine() {
     if (shrineUnsubscribe) { shrineUnsubscribe(); shrineUnsubscribe = null; } 
     if (shrineEventUnsubscribe) { shrineEventUnsubscribe(); shrineEventUnsubscribe = null; } 
 
+    if (window.AudioManager && window.AudioManager.unloadScope) {
+        const game = window.GameLogic && window.GameLogic.phaserGame
+            ? window.GameLogic.phaserGame
+            : null;
+        const scene = game && game.scene
+            ? game.scene.getScene('MainScene')
+            : null;
+
+        void window.AudioManager.unloadScope('shrine', {
+            scene: scene
+        });
+    }
+
     document.getElementById('voting-modal').style.display = 'none';
     document.getElementById('spam-ui').style.display = 'none';
 }
@@ -15670,6 +16007,15 @@ window.clearAllModals = function() {
         try {
             const ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
             if (ms && ms.closeSoloChickenMenu) ms.closeSoloChickenMenu();
+
+            if (
+                ms &&
+                ms.clearSoloCleaningRoom &&
+                ms.soloCleaningRoom &&
+                ms.soloCleaningRoom.active
+            ) {
+                ms.clearSoloCleaningRoom(true);
+            }
 
             if (ms && ms.clearPrinceCatPetMiniGame && (ms.princeCatPetGameActive || (ms.princeCatPetUiObjects && ms.princeCatPetUiObjects.length > 0))) {
                 ms.clearPrinceCatPetMiniGame(false);
@@ -16197,12 +16543,7 @@ class BootScene extends Phaser.Scene {
         this.load.audio('mimi-walk', 'mimi-walk.mp3');
         this.load.audio('tools-onion-party-trumpet', 'tools-onion-party-trumpet.mp3');
       
-        // 神龕專用音樂
-        this.load.audio('shrine-wierd-people-sound', 'shrine-wierd-people-sound.mp3');
-        this.load.audio('shrine-selection', 'shrine-selection.mp3');
-        this.load.audio('shrine-purify-fight', 'shrine-purify-fight.mp3');
-        this.load.audio('shrine-purify-success-win', 'shrine-purify-success-win.mp3');
-        this.load.audio('shrine-purify-success', 'shrine-purify-success.mp3');
+        // 第二階段 2-4：神龕 5 首 BGM 改由 AudioManager 依 Scope 按需載入。
         // 領獎與勳章資源
         this.load.image('gift-box-stay', 'gift-box-stay.png');
         this.load.image('gift-box-open', 'gift-box-open.png');
@@ -16275,7 +16616,7 @@ class BootScene extends Phaser.Scene {
         this.load.image('party-stone', 'partyroom-under-water-reef-valley-stone.png');
         this.load.image('party-shot-number', 'partyroom-under-water-reef-valley-got-shot-number.png');
         this.load.image('party-attack-number', 'partyroom-under-water-reef-valley-attack-number.png');
-        this.load.audio('bgm-party', 'partyroom-under-water-reef-valley-bgm.mp3');
+        // 第二階段 2-4：派對房 BGM 改由 AudioManager 依 Scope 按需載入。
         this.load.audio('party-start', 'partyroom-start-ready-go.mp3');
         this.load.audio('party-finish', 'partyroom-finish.mp3');
         this.load.image('bgPlayroom', 'playroom-bg.jpg');
@@ -16316,14 +16657,14 @@ class BootScene extends Phaser.Scene {
         this.load.image('solo-rocket-monster-chicken', 'solo-rocket-monster-chicken.png');
         this.load.image('solo-rocket-heart-life-container', 'solo-rocket-heart-life-container.png');
         this.load.image('solo-rocket-space-rock', 'solo-rocket-space-rock.png');
-        this.load.audio('solo-cleaning-room-bgm', 'solo-cleaning-room-bgm.mp3');
+        // 第二階段 2-4：大掃除 BGM 改由 AudioManager 依 Scope 按需載入。
         this.load.audio('solo-cleaning-room-whistle', 'solo-cleaning-room-whistle.mp3');
         this.load.audio('solo-cleaning-room-boss', 'solo-cleaning-room-boss.mp3');
         this.load.audio('solo-cleaning-room-wipe', 'solo-cleaning-room-wipe.mp3');
         this.load.audio('solo-cleaning-room-pureclean', 'solo-cleaning-room-pureclean.mp3');
         this.load.audio('solo-cleaning-room-warning', 'solo-cleaning-room-warning.mp3');
         this.load.audio('solo-cleaning-room-cleanthepoop', 'solo-cleaning-room-cleanthepoop.mp3');
-        this.load.audio('solo-rocket-cruise-bgm', 'solo-rocket-cruise-bgm.mp3');
+        // 第二階段 2-4：火箭巡航 BGM 改由 AudioManager 依 Scope 按需載入。
         this.load.audio('solo-rocket-landing', 'solo-rocket-landing.mp3');
         this.load.audio('solo-rocket-typing', 'solo-rocket-typing.mp3');
         this.load.audio('solo-rocket-radio_beep', 'solo-rocket-radio_beep.mp3');
@@ -16344,7 +16685,7 @@ class BootScene extends Phaser.Scene {
         this.load.image('solo-rocket-item-moon-shard', 'solo-rocket-item-moon-shard.png');
         this.load.image('solo-rocket-item-moon-staff', 'solo-rocket-item-moon-staff.png');
         this.load.image('solo-rocket-item-moon-bun', 'solo-rocket-item-moon-bun.png');
-        this.load.audio('solo-rocket-rabbit-shop-bgm', 'solo-rocket-rabbit-shop-bgm.mp3');
+        // 第二階段 2-4：玉兔商店 BGM 改由 AudioManager 依 Scope 按需載入。
         this.load.audio('solo-rocket-rabbit-shop-finish', 'solo-rocket-rabbit-shop-finish.mp3');
         this.load.audio('solo-rocket-rabbit-shop-buy', 'solo-rocket-rabbit-shop-buy.mp3');
         // 補丁 6-2：月球商品使用效果音效。若檔案不存在，播放前會檢查 cache，不讓遊戲黑頻。
@@ -17344,52 +17685,108 @@ class MainScene extends Phaser.Scene {
 
         window.GameLogic.soloRocketCruiseActive = false;
         
-        // 修正：徹底重構音樂切換邏輯，神龕擁有絕對獨立的背景音樂，不再與儀式狀態綁定
+        // 第二階段 2-4：特殊場景 BGM 改由 AudioManager 依 Scope 按需載入。
         const allBgms = BGM_SCOPE_KEYS.lobby;
         const shrineBgms = BGM_SCOPE_KEYS.shrine;
-        const vol = window.AudioManager.getBgmVolume();
+        const specialBgmScopes = ['partyroom', 'shrine', 'solo-cleaning', 'solo-rocket', 'solo-rocket-shop'];
         this.currentRitualState = null;
+        this.shrineBgmStateRequestId = 0;
+        this.shrineBgmScopeRequestId = null;
+        this.partyBgmScopeRequestId = null;
 
         if (this.sceneName === 'shrine') {
             window.AudioManager.resetLobbyRequestState();
             window.AudioManager.stopMany(allBgms, { scene: this, removeSound: true });
-            window.AudioManager.stopMany(BGM_SCOPE_KEYS.partyroom, { scene: this });
+            window.AudioManager.stopMany(BGM_SCOPE_KEYS.partyroom, { scene: this, removeSound: true });
 
-            let evData = window.GameLogic.shrineEventData;
-            let evState = evData ? evData.state : 'none';
-            if (evState !== 'voting' && evState !== 'countdown' && evState !== 'purifying' && evState !== 'success') {
-                window.AudioManager.stopMany(
-                    shrineBgms.filter(key => key !== 'shrine-wierd-people-sound'),
-                    { scene: this, removeSound: true }
-                );
+            const userUid = window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : null;
+            const requestId = window.AudioManager.beginScopeRequest('shrine', {
+                userUid: userUid
+            });
+            this.shrineBgmScopeRequestId = requestId;
 
-                const shrineSound = window.AudioManager.getSound('shrine-wierd-people-sound', { scene: this });
-                if (!shrineSound || !shrineSound.isPlaying) {
-                    window.AudioManager.play('shrine-wierd-people-sound', {
-                        scene: this,
-                        loop: true,
-                        volume: vol,
-                        replace: true
+            const evData = window.GameLogic.shrineEventData;
+            const evState = evData ? evData.state : 'none';
+
+            void window.AudioManager.loadScope('shrine', {
+                scene: this,
+                requestId: requestId,
+                userUid: userUid
+            }).then(() => {
+                if (
+                    !window.AudioManager.isScopeRequestCurrent('shrine', requestId, userUid) ||
+                    this.sceneName !== 'shrine' ||
+                    window.GameLogic.currentScene !== 'shrine' ||
+                    !this.sys ||
+                    !this.sys.isActive ||
+                    !this.sys.isActive()
+                ) {
+                    return;
+                }
+
+                const latestEventData = window.GameLogic.shrineEventData;
+                const latestState = latestEventData ? latestEventData.state : evState;
+                if (this.requestShrineStateBgm) {
+                    void this.requestShrineStateBgm(latestState, {
+                        scopeRequestId: requestId
                     });
                 }
-            }
+            });
         } else if (this.sceneName === 'partyroom') {
             window.AudioManager.resetLobbyRequestState();
             window.AudioManager.stopMany(allBgms, { scene: this, removeSound: true });
             window.AudioManager.stopMany(shrineBgms, { scene: this, removeSound: true });
 
-            const currentSound = window.AudioManager.getSound('bgm-party', { scene: this });
-            if (!currentSound || !currentSound.isPlaying) {
+            const userUid = window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : null;
+            const roomId = window.PartyLogic ? window.PartyLogic.roomId : null;
+            const requestId = window.AudioManager.beginScopeRequest('partyroom', {
+                userUid: userUid
+            });
+            this.partyBgmScopeRequestId = requestId;
+
+            void window.AudioManager.loadScope('partyroom', {
+                scene: this,
+                requestId: requestId,
+                userUid: userUid
+            }).then(() => {
+                if (
+                    !window.AudioManager.isScopeRequestCurrent('partyroom', requestId, userUid) ||
+                    this.sceneName !== 'partyroom' ||
+                    window.GameLogic.currentScene !== 'partyroom' ||
+                    !window.PartyLogic ||
+                    window.PartyLogic.roomId !== roomId ||
+                    !this.sys ||
+                    !this.sys.isActive ||
+                    !this.sys.isActive() ||
+                    !window.AudioManager.isLoaded('bgm-party', this)
+                ) {
+                    return;
+                }
+
+                let rate = window.PartyLogic.speedBoost ? 1.5 : 1;
+                const partyData = window.PartyLogic.gameData || {};
+                if (
+                    partyData.state === 'gaming' &&
+                    window.getPartyRemainingMs &&
+                    window.getPartyRemainingMs(partyData) <= 20000
+                ) {
+                    rate = 1.5;
+                }
+
                 window.AudioManager.play('bgm-party', {
                     scene: this,
                     loop: true,
-                    volume: vol,
+                    volume: window.AudioManager.getBgmVolume(),
+                    rate: rate,
                     replace: true
                 });
-            }
+            });
         } else {
-            window.AudioManager.stopMany(shrineBgms, { scene: this, removeSound: true });
-            window.AudioManager.stopMany(BGM_SCOPE_KEYS.partyroom, { scene: this });
+            specialBgmScopes.forEach(scope => {
+                void window.AudioManager.unloadScope(scope, {
+                    scene: this
+                });
+            });
 
             if (window.ensureCurrentLobbyBgm) {
                 void window.ensureCurrentLobbyBgm({
@@ -19173,6 +19570,34 @@ if (!data.scoreHandled && data.attacker) {
         document.addEventListener('visibilitychange', this.handleVisibilityMimiWalk);
 
         this.events.once('shutdown', () => {
+            if (window.AudioManager && window.AudioManager.unloadScope) {
+                const cleanupScopes = [];
+
+                if (this.sceneName === 'partyroom') cleanupScopes.push('partyroom');
+                if (this.sceneName === 'shrine') cleanupScopes.push('shrine');
+
+                const cleaningState = this.soloCleaningRoom || null;
+                if (cleaningState && cleaningState.active) cleanupScopes.push('solo-cleaning');
+
+                if (
+                    this.soloRocketCruiseActive ||
+                    this.soloRocketContainer ||
+                    this.soloRocketResultContainer
+                ) {
+                    cleanupScopes.push('solo-rocket');
+                }
+
+                if (this.soloRocketRabbitShopContainer) {
+                    cleanupScopes.push('solo-rocket-shop');
+                }
+
+                Array.from(new Set(cleanupScopes)).forEach(scope => {
+                    void window.AudioManager.unloadScope(scope, {
+                        scene: this
+                    });
+                });
+            }
+
             if (this.cancelCafeFurnitureBuildQueue) this.cancelCafeFurnitureBuildQueue();
             if (this.clearMoonBunBuffFx) this.clearMoonBunBuffFx(false);
             if (this.clearMoonStaffBlessing) this.clearMoonStaffBlessing();
@@ -21289,15 +21714,13 @@ if (!data.scoreHandled && data.attacker) {
     }
   
     stopLobbyBgmForSoloCleaningRoom() {
-        if (this.stopLobbyBgmForSoloRocket) {
-            this.stopLobbyBgmForSoloRocket();
-            return;
-        }
-
+        window.AudioManager.resetLobbyRequestState();
         window.AudioManager.stopMany([
             ...BGM_SCOPE_KEYS.lobby,
             ...BGM_SCOPE_KEYS.partyroom,
-            ...BGM_SCOPE_KEYS.shrine
+            ...BGM_SCOPE_KEYS.shrine,
+            ...BGM_SCOPE_KEYS['solo-rocket'],
+            ...BGM_SCOPE_KEYS['solo-rocket-shop']
         ], { scene: this });
     }
 
@@ -21339,39 +21762,61 @@ if (!data.scoreHandled && data.attacker) {
 
     playSoloCleaningRoomBgm() {
         const state = this.getSoloCleaningRoomState();
+        const manager = window.AudioManager;
+        if (!manager) return;
 
-        try {
-            if (!window.AudioManager.isLoaded('solo-cleaning-room-bgm', this)) {
-                console.warn('[大掃除] 找不到 solo-cleaning-room-bgm.mp3，已略過音樂播放。');
+        const userUid = window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : null;
+        const requestId = manager.beginScopeRequest('solo-cleaning', {
+            userUid: userUid
+        });
+        state.bgmScopeRequestId = requestId;
+
+        const volControl = document.getElementById('bgm-volume');
+        const vol = volControl ? Number(volControl.value || 100) / 100 : 0.8;
+
+        void manager.ensureScopeBgm('solo-cleaning', 'solo-cleaning-room-bgm', {
+            scene: this,
+            requestId: requestId,
+            userUid: userUid,
+            loop: false,
+            volume: vol,
+            replace: true,
+            isValid: () => !!(
+                state.active &&
+                window.GameLogic.soloCleaningRoomActive &&
+                this.sys &&
+                this.sys.isActive &&
+                this.sys.isActive()
+            )
+        }).then(result => {
+            if (!result || !result.ok) {
+                if (!result || !result.stale) {
+                    console.warn('[大掃除] BGM 載入或播放失敗，倒數仍會繼續。');
+                }
                 return;
             }
 
-            const volControl = document.getElementById('bgm-volume');
-            const vol = volControl ? Number(volControl.value || 100) / 100 : 0.8;
-            state.bgm = window.AudioManager.play('solo-cleaning-room-bgm', {
-                scene: this,
-                loop: false,
-                volume: vol,
-                replace: true
-            });
-        } catch (err) {
-            console.warn('[大掃除] BGM 播放失敗，倒數仍會繼續：', err);
-        }
+            state.bgm = result.sound || null;
+        }).catch(err => {
+            console.warn('[大掃除] BGM 載入或播放失敗，倒數仍會繼續：', err);
+        });
     }
 
     stopSoloCleaningRoomBgm() {
         const state = this.getSoloCleaningRoomState();
 
         try {
-            window.AudioManager.stop('solo-cleaning-room-bgm', {
-                scene: this,
-                removeSound: true
-            });
+            if (window.AudioManager && window.AudioManager.unloadScope) {
+                void window.AudioManager.unloadScope('solo-cleaning', {
+                    scene: this
+                });
+            }
         } catch (err) {
-            console.warn('[大掃除] 停止 BGM 失敗，已略過：', err);
+            console.warn('[大掃除] 停止並卸載 BGM 失敗，已略過：', err);
         }
 
         state.bgm = null;
+        state.bgmScopeRequestId = null;
     }
 
     playSoloCleaningRoomSfx(key) {
@@ -24715,40 +25160,67 @@ if (!data.scoreHandled && data.attacker) {
         window.AudioManager.stopMany([
             ...BGM_SCOPE_KEYS.lobby,
             ...BGM_SCOPE_KEYS.partyroom,
-            ...BGM_SCOPE_KEYS.shrine
+            ...BGM_SCOPE_KEYS.shrine,
+            ...BGM_SCOPE_KEYS['solo-cleaning']
         ], { scene: this });
     }
 
     playSoloRocketBgm() {
-        try {
-            if (!window.AudioManager.isLoaded('solo-rocket-cruise-bgm', this)) {
-                console.warn('[火箭巡航] 找不到 solo-rocket-cruise-bgm.mp3，已略過音樂播放。');
+        const manager = window.AudioManager;
+        if (!manager) return;
+
+        const userUid = window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : null;
+        const requestId = manager.beginScopeRequest('solo-rocket', {
+            userUid: userUid
+        });
+        this.soloRocketBgmScopeRequestId = requestId;
+
+        const volControl = document.getElementById('bgm-volume');
+        const vol = volControl ? Number(volControl.value || 100) / 100 : 0.8;
+
+        void manager.ensureScopeBgm('solo-rocket', 'solo-rocket-cruise-bgm', {
+            scene: this,
+            requestId: requestId,
+            userUid: userUid,
+            loop: false,
+            volume: vol,
+            replace: true,
+            isValid: () => !!(
+                this.soloRocketCruiseActive &&
+                !this.soloRocketCruiseFinished &&
+                !this.soloRocketRabbitShopContainer &&
+                window.GameLogic.soloRocketCruiseActive &&
+                this.sys &&
+                this.sys.isActive &&
+                this.sys.isActive()
+            )
+        }).then(result => {
+            if (!result || !result.ok) {
+                if (!result || !result.stale) {
+                    console.warn('[火箭巡航] BGM 載入或播放失敗，timer 仍會繼續。');
+                }
                 return;
             }
 
-            const volControl = document.getElementById('bgm-volume');
-            const vol = volControl ? Number(volControl.value || 100) / 100 : 0.8;
-            this.soloRocketBgm = window.AudioManager.play('solo-rocket-cruise-bgm', {
-                scene: this,
-                loop: false,
-                volume: vol,
-                replace: true
-            });
-        } catch (err) {
-            console.warn('[火箭巡航] BGM 播放失敗，timer 仍會繼續：', err);
-        }
+            this.soloRocketBgm = result.sound || null;
+        }).catch(err => {
+            console.warn('[火箭巡航] BGM 載入或播放失敗，timer 仍會繼續：', err);
+        });
     }
 
     stopSoloRocketBgm() {
         try {
-            window.AudioManager.stop('solo-rocket-cruise-bgm', {
-                scene: this,
-                removeSound: true
-            });
+            if (window.AudioManager && window.AudioManager.unloadScope) {
+                void window.AudioManager.unloadScope('solo-rocket', {
+                    scene: this
+                });
+            }
         } catch (err) {
-            console.warn('[火箭巡航] 停止 BGM 失敗，已略過：', err);
+            console.warn('[火箭巡航] 停止並卸載 BGM 失敗，已略過：', err);
         }
+
         this.soloRocketBgm = null;
+        this.soloRocketBgmScopeRequestId = null;
     }
 
     playSoloRocketIntroSfx(key) {
@@ -26130,6 +26602,11 @@ if (!data.scoreHandled && data.attacker) {
         this.soloRocketRabbitShopBudgetText = null;
         this.soloRocketRabbitShopMessage = null;
         this.soloRocketRabbitShopBgm = null;
+        this.soloRocketBgmScopeRequestId = null;
+        this.soloRocketRabbitShopBgmScopeRequestId = null;
+        this.soloRocketRabbitShopPlayPromise = null;
+        this.soloRocketRabbitShopUnlockHandlerBound = false;
+        this.soloRocketRabbitShopUnlockHandler = null;
         this.__soloRocketStage6Pause1Applied = false;
         this.__soloRocketStage6Pause1Released = false;
     }
@@ -29835,7 +30312,6 @@ if (!data.scoreHandled && data.attacker) {
 
     openSoloRocketRabbitShop() {
         this.destroySoloRocketResultOverlay();
-        this.stopSoloRocketBgm();
 
         // 每次重新進入玉兔伴手禮店時，恢復預設歡迎氣泡。
         this.soloRocketRabbitShopBubblesHidden = false;
@@ -29857,106 +30333,172 @@ if (!data.scoreHandled && data.attacker) {
     }
 
     playSoloRocketRabbitShopBgm() {
-        try {
-            if (!this.cache.audio.exists('solo-rocket-rabbit-shop-bgm')) {
-                console.warn('[玉兔伴手禮店] 找不到 solo-rocket-rabbit-shop-bgm.mp3，請確認檔案已上傳且檔名大小寫完全一致。');
-                if (this.soloRocketRabbitShopMessage) {
-                    this.soloRocketRabbitShopMessage.setText('玉兔：我找不到商店音樂檔，請確認 solo-rocket-rabbit-shop-bgm.mp3 有上傳。');
-                }
-                return;
-            }
+        if (this.soloRocketRabbitShopPlayPromise) {
+            return this.soloRocketRabbitShopPlayPromise;
+        }
 
-            this.stopSoloRocketBgm();
+        const manager = window.AudioManager;
+        if (!manager) return Promise.resolve(false);
+
+        const userUid = window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : null;
+        const scope = 'solo-rocket-shop';
+        const requestId = manager.state.activeScopes[scope] === true
+            ? Number(manager.state.scopeRequestIds[scope] || 0)
+            : manager.beginScopeRequest(scope, {
+                userUid: userUid
+            });
+
+        this.soloRocketRabbitShopBgmScopeRequestId = requestId;
+
+        const playPromise = (async () => {
+            const loadResult = await manager.load('solo-rocket-rabbit-shop-bgm', {
+                scene: this
+            });
+
+            const valid = !!(
+                loadResult &&
+                loadResult.ok &&
+                manager.isScopeRequestCurrent(scope, requestId, userUid) &&
+                this.soloRocketRabbitShopContainer &&
+                this.sys &&
+                this.sys.isActive &&
+                this.sys.isActive()
+            );
+
+            if (!valid) {
+                if (
+                    this.soloRocketRabbitShopContainer &&
+                    manager.isScopeRequestCurrent(scope, requestId, userUid) &&
+                    (!loadResult || !loadResult.ok)
+                ) {
+                    this.stopSoloRocketBgm();
+
+                    if (this.soloRocketRabbitShopMessage) {
+                        this.soloRocketRabbitShopMessage.setText('玉兔：商店音樂暫時載入失敗，購物仍可繼續。');
+                    }
+
+                    manager.warnOnce(
+                        'solo-rocket-shop-load-failed',
+                        '[玉兔伴手禮店] 商店BGM載入失敗，商店流程仍會繼續。'
+                    );
+                }
+
+                return false;
+            }
 
             if (this.stopLobbyBgmForSoloRocket) {
                 this.stopLobbyBgmForSoloRocket();
             }
 
-            const volControl = document.getElementById('bgm-volume');
-            let vol = volControl ? Number(volControl.value || 100) / 100 : 0.8;
-            if (!Number.isFinite(vol)) vol = 0.8;
-            vol = Phaser.Math.Clamp(vol, 0.05, 1);
+            this.stopSoloRocketBgm();
 
-            const playNow = function() {
-                try {
-                    if (!this.soloRocketRabbitShopContainer) return;
+            const volume = manager.getBgmVolume();
 
-                    const current = this.soloRocketRabbitShopBgm;
-                    if (current && current.isPlaying) {
-                        current.setVolume(vol);
-                        return;
-                    }
-
-                    this.soloRocketRabbitShopBgm = window.AudioManager.play('solo-rocket-rabbit-shop-bgm', {
-                        scene: this,
-                        loop: true,
-                        volume: vol,
-                        replace: true
-                    });
-
-                    if (!this.soloRocketRabbitShopBgm) return;
-
-                    if (this.time && this.time.delayedCall) {
-                        this.time.delayedCall(280, function() {
-                            if (
-                                this.soloRocketRabbitShopContainer &&
-                                this.soloRocketRabbitShopBgm &&
-                                !this.soloRocketRabbitShopBgm.isPlaying
-                            ) {
-                                try {
-                                    this.soloRocketRabbitShopBgm.play();
-                                } catch (err) {
-                                    console.warn('[玉兔伴手禮店] BGM 第二次播放仍失敗：', err);
-                                }
-                            }
-                        }, [], this);
-                    }
-                } catch (err) {
-                    console.warn('[玉兔伴手禮店] BGM 實際播放失敗，已略過：', err);
+            const playNow = () => {
+                if (
+                    !manager.isScopeRequestCurrent(scope, requestId, userUid) ||
+                    !this.soloRocketRabbitShopContainer ||
+                    !this.sys ||
+                    !this.sys.isActive ||
+                    !this.sys.isActive()
+                ) {
+                    return null;
                 }
+
+                const current = manager.getSound('solo-rocket-rabbit-shop-bgm', {
+                    scene: this
+                });
+
+                if (current && current.isPlaying) {
+                    manager.setVolume('solo-rocket-rabbit-shop-bgm', volume, {
+                        scene: this
+                    });
+                    this.soloRocketRabbitShopBgm = current;
+                    return current;
+                }
+
+                const sound = manager.play('solo-rocket-rabbit-shop-bgm', {
+                    scene: this,
+                    loop: true,
+                    volume: volume
+                });
+
+                if (sound) this.soloRocketRabbitShopBgm = sound;
+                return sound;
             };
 
-            if (this.sound && this.sound.context && this.sound.context.state === 'suspended' && this.sound.context.resume) {
-                this.sound.context.resume().then(function() {
-                    playNow.call(this);
-                }.bind(this)).catch(function(err) {
-                    console.warn('[玉兔伴手禮店] 音訊環境喚醒失敗，改為直接嘗試播放：', err);
-                    playNow.call(this);
-                }.bind(this));
-                playNow.call(this);
-                return;
+            if (
+                this.sound &&
+                this.sound.context &&
+                this.sound.context.state === 'suspended' &&
+                this.sound.context.resume
+            ) {
+                this.sound.context.resume()
+                    .then(() => {
+                        playNow();
+                    })
+                    .catch(err => {
+                        console.warn('[玉兔伴手禮店] 音訊環境喚醒失敗，改為等待玩家操作：', err);
+                    });
             }
 
             if (this.sound && this.sound.locked) {
-                this.sound.once('unlocked', function() {
-                    playNow.call(this);
-                }, this);
+                if (!this.soloRocketRabbitShopUnlockHandlerBound) {
+                    this.soloRocketRabbitShopUnlockHandlerBound = true;
+                    this.soloRocketRabbitShopUnlockHandler = () => {
+                        this.soloRocketRabbitShopUnlockHandlerBound = false;
+                        this.soloRocketRabbitShopUnlockHandler = null;
+                        playNow();
+                    };
+                    this.sound.once('unlocked', this.soloRocketRabbitShopUnlockHandler, this);
+                }
 
                 if (this.sound.unlock) {
                     try { this.sound.unlock(); } catch (_) {}
                 }
-
-                playNow.call(this);
-                return;
             }
 
-            playNow.call(this);
-        } catch (err) {
-            console.warn('[玉兔伴手禮店] BGM 播放失敗，已略過：', err);
-        }
+            return !!playNow();
+        })();
+
+        this.soloRocketRabbitShopPlayPromise = playPromise;
+
+        playPromise.finally(() => {
+            if (this.soloRocketRabbitShopPlayPromise === playPromise) {
+                this.soloRocketRabbitShopPlayPromise = null;
+            }
+        });
+
+        return playPromise;
     }
 
     stopSoloRocketRabbitShopBgm() {
         try {
-            window.AudioManager.stop('solo-rocket-rabbit-shop-bgm', {
-                scene: this,
-                removeSound: true
-            });
+            if (
+                this.sound &&
+                this.soloRocketRabbitShopUnlockHandler &&
+                this.sound.off
+            ) {
+                this.sound.off('unlocked', this.soloRocketRabbitShopUnlockHandler, this);
+            }
+        } catch (_) {}
+
+        this.soloRocketRabbitShopUnlockHandlerBound = false;
+        this.soloRocketRabbitShopUnlockHandler = null;
+
+        try {
+            if (window.AudioManager && window.AudioManager.unloadScope) {
+                void window.AudioManager.unloadScope('solo-rocket-shop', {
+                    scene: this
+                });
+            }
         } catch (err) {
-            console.warn('[玉兔伴手禮店] 停止 BGM 失敗，已略過：', err);
+            console.warn('[玉兔伴手禮店] 停止並卸載 BGM 失敗，已略過：', err);
         }
 
         this.soloRocketRabbitShopBgm = null;
+        this.soloRocketRabbitShopBgmScopeRequestId = null;
+        this.soloRocketRabbitShopPlayPromise = null;
     }
 
     startSoloRocketRabbitShopMeteors() {
@@ -35024,55 +35566,154 @@ if (activeBubbleMsg) {
         this.refreshMobileCameraFollowTarget(forceReset);
     }
 
+    async requestShrineStateBgm(eventState = null, options = {}) {
+        if (
+            this.sceneName !== 'shrine' ||
+            window.GameLogic.currentScene !== 'shrine' ||
+            !window.AudioManager
+        ) {
+            return false;
+        }
+
+        const manager = window.AudioManager;
+        const userUid = window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : null;
+        let scopeRequestId = options.scopeRequestId !== undefined && options.scopeRequestId !== null
+            ? Number(options.scopeRequestId)
+            : Number(this.shrineBgmScopeRequestId || 0);
+
+        if (
+            !scopeRequestId ||
+            !manager.isScopeRequestCurrent('shrine', scopeRequestId, userUid)
+        ) {
+            scopeRequestId = manager.beginScopeRequest('shrine', {
+                userUid: userUid
+            });
+            this.shrineBgmScopeRequestId = scopeRequestId;
+        }
+
+        const stateRequestId = Number(this.shrineBgmStateRequestId || 0) + 1;
+        this.shrineBgmStateRequestId = stateRequestId;
+
+        const targetState = eventState || 'none';
+        await manager.loadScope('shrine', {
+            scene: this,
+            requestId: scopeRequestId,
+            userUid: userUid
+        });
+
+        const latestEventData = window.GameLogic.shrineEventData;
+        const latestState = latestEventData ? latestEventData.state : 'none';
+        const sceneIsActive = !!(
+            this.sys &&
+            this.sys.isActive &&
+            this.sys.isActive()
+        );
+
+        if (
+            !manager.isScopeRequestCurrent('shrine', scopeRequestId, userUid) ||
+            this.shrineBgmStateRequestId !== stateRequestId ||
+            this.sceneName !== 'shrine' ||
+            window.GameLogic.currentScene !== 'shrine' ||
+            !sceneIsActive ||
+            latestState !== targetState
+        ) {
+            return false;
+        }
+
+        let targetKey = 'shrine-wierd-people-sound';
+        if (targetState === 'voting' || targetState === 'countdown') {
+            targetKey = 'shrine-selection';
+        } else if (targetState === 'purifying') {
+            targetKey = 'shrine-purify-fight';
+        } else if (targetState === 'success') {
+            targetKey = 'shrine-purify-success-win';
+        }
+
+        if (!manager.isLoaded(targetKey, this)) {
+            manager.warnOnce(
+                `shrine-state-load:${targetKey}`,
+                `[神龕] 對應BGM載入失敗，神龕流程仍會繼續：${targetKey}`
+            );
+            return false;
+        }
+
+        manager.stopMany([
+            ...BGM_SCOPE_KEYS.lobby,
+            ...BGM_SCOPE_KEYS.shrine
+        ], {
+            scene: this,
+            removeSound: true
+        });
+
+        const volume = manager.getBgmVolume();
+
+        if (targetState === 'success') {
+            const successSound = manager.play('shrine-purify-success-win', {
+                scene: this,
+                loop: false,
+                volume: volume,
+                replace: true,
+                onComplete: () => {
+                    const currentEventData = window.GameLogic.shrineEventData;
+                    const currentEventState = currentEventData ? currentEventData.state : 'none';
+                    const stillActive = !!(
+                        this.sys &&
+                        this.sys.isActive &&
+                        this.sys.isActive()
+                    );
+
+                    if (
+                        !manager.isScopeRequestCurrent('shrine', scopeRequestId, userUid) ||
+                        this.shrineBgmStateRequestId !== stateRequestId ||
+                        this.sceneName !== 'shrine' ||
+                        window.GameLogic.currentScene !== 'shrine' ||
+                        !stillActive ||
+                        this.currentRitualState !== 'success' ||
+                        currentEventState !== 'success' ||
+                        !manager.isLoaded('shrine-purify-success', this)
+                    ) {
+                        return;
+                    }
+
+                    manager.stopMany(
+                        BGM_SCOPE_KEYS.shrine.filter(key => key !== 'shrine-purify-success'),
+                        {
+                            scene: this,
+                            removeSound: true
+                        }
+                    );
+
+                    manager.play('shrine-purify-success', {
+                        scene: this,
+                        loop: true,
+                        volume: manager.getBgmVolume(),
+                        replace: true
+                    });
+                }
+            });
+
+            return !!successSound;
+        }
+
+        const sound = manager.play(targetKey, {
+            scene: this,
+            loop: true,
+            volume: volume,
+            replace: true
+        });
+
+        return !!sound;
+    }
+
     processShrineEventLogic(time) {
         if (this.sceneName !== 'shrine') return;
         let eventData = window.GameLogic.shrineEventData; let evState = eventData ? eventData.state : 'none';
 
-        // 修正5：正確利用原生陣列清除音樂，根除音樂被帶出神龕的 Bug
+        // 第二階段 2-4：只有神龕狀態真正改變時才請求對應 BGM，Loader Promise 由 AudioManager 共用。
         if (evState !== this.currentRitualState) {
             this.currentRitualState = evState;
-            window.AudioManager.stopMany([
-                ...BGM_SCOPE_KEYS.lobby,
-                ...BGM_SCOPE_KEYS.shrine
-            ], { scene: this });
-
-            const vol = window.AudioManager.getBgmVolume();
-
-            if (evState === 'voting' || evState === 'countdown') {
-                window.AudioManager.play('shrine-selection', {
-                    scene: this,
-                    loop: true,
-                    volume: vol
-                });
-            } else if (evState === 'purifying') {
-                window.AudioManager.play('shrine-purify-fight', {
-                    scene: this,
-                    loop: true,
-                    volume: vol
-                });
-            } else if (evState === 'success') {
-                window.AudioManager.play('shrine-purify-success-win', {
-                    scene: this,
-                    loop: false,
-                    volume: vol,
-                    replace: true,
-                    onComplete: () => {
-                        if (this.sceneName !== 'shrine' || this.currentRitualState !== 'success') return;
-
-                        window.AudioManager.play('shrine-purify-success', {
-                            scene: this,
-                            loop: true,
-                            volume: window.AudioManager.getBgmVolume(),
-                            replace: true
-                        });
-                    }
-                });
-            } else {
-                window.AudioManager.play('shrine-wierd-people-sound', {
-                    scene: this,
-                    loop: true,
-                    volume: vol
-                });
+            if (this.requestShrineStateBgm) {
+                void this.requestShrineStateBgm(evState);
             }
         }
 
@@ -38975,6 +39616,19 @@ window.joinPartyroom = function(roomId) {
 
 window.leavePartyroom = function(skipSceneSwitch = false) {
     if (partyUnsubscribe) { partyUnsubscribe(); partyUnsubscribe = null; }
+
+    if (window.AudioManager && window.AudioManager.unloadScope) {
+        const game = window.GameLogic && window.GameLogic.phaserGame
+            ? window.GameLogic.phaserGame
+            : null;
+        const scene = game && game.scene
+            ? game.scene.getScene('MainScene')
+            : null;
+
+        void window.AudioManager.unloadScope('partyroom', {
+            scene: scene
+        });
+    }
 
     const leavingRoomId = window.PartyLogic.roomId;
     const leavingUid = window.GameLogic.currentUser ? window.GameLogic.currentUser.uid : null;
