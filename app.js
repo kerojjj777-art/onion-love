@@ -311,6 +311,370 @@ const BGM_SCOPE_KEYS = Object.freeze({
     ])
 });
 // ====== 第二階段 2-1：統一 BGM 靜態資料表結束 ======
+// ====== 第三階段 3-1：副本 Texture 靜態資源表＋唯讀診斷工具 ======
+const freezeTextureAssetEntry = function(asset) {
+    return Object.freeze(asset);
+};
+
+const TEXTURE_ASSET_SCOPES = Object.freeze({
+    'solo-cleaning': Object.freeze([
+        freezeTextureAssetEntry({
+            key: 'solo-cleaning-room-npc-onion1',
+            file: 'solo-cleaning-room-npc-onion1.png',
+            type: 'image',
+            scope: 'solo-cleaning'
+        }),
+        freezeTextureAssetEntry({
+            key: 'solo-cleaning-room-npc-onion2',
+            file: 'solo-cleaning-room-npc-onion2.png',
+            type: 'image',
+            scope: 'solo-cleaning'
+        }),
+        freezeTextureAssetEntry({
+            key: 'solo-cleaning-room-washbasin',
+            file: 'solo-cleaning-room-washbasin.png',
+            type: 'image',
+            scope: 'solo-cleaning'
+        })
+    ]),
+    'solo-rocket-run': Object.freeze([
+        freezeTextureAssetEntry({
+            key: 'solo-rocket-bg',
+            file: 'solo-rocket-bg.png',
+            type: 'image',
+            scope: 'solo-rocket-run'
+        }),
+        freezeTextureAssetEntry({
+            key: 'rocket-onion-player',
+            file: 'rocket-onion-player.png',
+            type: 'image',
+            scope: 'solo-rocket-run'
+        }),
+        freezeTextureAssetEntry({
+            key: 'solo-rocket-moon-rabbit',
+            file: 'solo-rocket-moon-rabbit.png',
+            type: 'image',
+            scope: 'solo-rocket-run'
+        }),
+        freezeTextureAssetEntry({
+            key: 'solo-rocket-monster-chicken',
+            file: 'solo-rocket-monster-chicken.png',
+            type: 'image',
+            scope: 'solo-rocket-run'
+        }),
+        freezeTextureAssetEntry({
+            key: 'solo-rocket-heart-life-container',
+            file: 'solo-rocket-heart-life-container.png',
+            type: 'image',
+            scope: 'solo-rocket-run'
+        }),
+        freezeTextureAssetEntry({
+            key: 'solo-rocket-space-rock',
+            file: 'solo-rocket-space-rock.png',
+            type: 'image',
+            scope: 'solo-rocket-run'
+        }),
+        freezeTextureAssetEntry({
+            key: 'solo-rocket-monster-boss-chicken',
+            file: 'solo-rocket-monster-boss-chicken.png',
+            type: 'image',
+            scope: 'solo-rocket-run'
+        })
+    ]),
+    'solo-rocket-shop': Object.freeze([
+        freezeTextureAssetEntry({
+            key: 'solo-rocket-rabbit-shop-bg',
+            file: 'solo-rocket-rabbit-shop-bg.png',
+            type: 'image',
+            scope: 'solo-rocket-shop'
+        }),
+        freezeTextureAssetEntry({
+            key: 'solo-rocket-rabbit-shopkeeper',
+            file: 'solo-rocket-rabbit-shopkeeper.png',
+            type: 'image',
+            scope: 'solo-rocket-shop'
+        }),
+        freezeTextureAssetEntry({
+            key: 'solo-rocket-rabbit-shopkeeper-sheet',
+            file: 'solo-rocket-rabbit-shopkeeper-sheet.png',
+            type: 'spritesheet',
+            scope: 'solo-rocket-shop',
+            frameWidth: 300,
+            frameHeight: 300
+        }),
+        freezeTextureAssetEntry({
+            key: 'solo-rocket-item-moon-shard',
+            file: 'solo-rocket-item-moon-shard.png',
+            type: 'image',
+            scope: 'solo-rocket-shop'
+        }),
+        freezeTextureAssetEntry({
+            key: 'solo-rocket-item-moon-staff',
+            file: 'solo-rocket-item-moon-staff.png',
+            type: 'image',
+            scope: 'solo-rocket-shop'
+        })
+    ]),
+    'protected-shared': Object.freeze([
+        freezeTextureAssetEntry({
+            key: 'solochicken',
+            file: 'me_play_cock.png',
+            type: 'image',
+            scope: 'protected-shared'
+        }),
+        freezeTextureAssetEntry({
+            key: 'solo-rocket-item-moon-bun',
+            file: 'solo-rocket-item-moon-bun.png',
+            type: 'image',
+            scope: 'protected-shared'
+        }),
+        freezeTextureAssetEntry({
+            key: 'moon-staff-dance-rabbit',
+            file: 'solo-rocket-item-moon-staff-dance-rabbits.png',
+            type: 'spritesheet',
+            scope: 'protected-shared',
+            frameWidth: 80,
+            frameHeight: 80
+        }),
+        freezeTextureAssetEntry({
+            key: 'particle_flare',
+            file: null,
+            type: 'generated',
+            scope: 'protected-shared',
+            generatedWidth: 8,
+            generatedHeight: 8
+        }),
+        freezeTextureAssetEntry({
+            key: 'fw-particle',
+            file: null,
+            type: 'generated',
+            scope: 'protected-shared',
+            generatedWidth: 8,
+            generatedHeight: 8
+        }),
+        freezeTextureAssetEntry({
+            key: 'onion',
+            file: 'onion-sprite.png',
+            type: 'image',
+            scope: 'protected-shared'
+        }),
+        freezeTextureAssetEntry({
+            key: 'onion-down',
+            file: 'onion-down.png',
+            type: 'spritesheet',
+            scope: 'protected-shared',
+            frameWidth: 75,
+            frameHeight: 75
+        }),
+        freezeTextureAssetEntry({
+            key: 'onion-up',
+            file: 'onion-up.png',
+            type: 'spritesheet',
+            scope: 'protected-shared',
+            frameWidth: 75,
+            frameHeight: 75
+        }),
+        freezeTextureAssetEntry({
+            key: 'onion-walk',
+            file: 'onion-right.png',
+            type: 'spritesheet',
+            scope: 'protected-shared',
+            frameWidth: 75,
+            frameHeight: 75
+        }),
+        freezeTextureAssetEntry({
+            key: 'onion-idle',
+            file: 'onion-idle.png',
+            type: 'spritesheet',
+            scope: 'protected-shared',
+            frameWidth: 75,
+            frameHeight: 75
+        }),
+        freezeTextureAssetEntry({
+            key: 'onion-throw',
+            file: 'onion-throw.png',
+            type: 'spritesheet',
+            scope: 'protected-shared',
+            frameWidth: 75,
+            frameHeight: 75
+        }),
+        freezeTextureAssetEntry({
+            key: 'water-ball-blast',
+            file: 'water-ball-blast.png',
+            type: 'spritesheet',
+            scope: 'protected-shared',
+            frameWidth: 50,
+            frameHeight: 50
+        }),
+        freezeTextureAssetEntry({
+            key: 'mimi-thief-walk',
+            file: 'mimi-thief-walk.png',
+            type: 'spritesheet',
+            scope: 'protected-shared',
+            frameWidth: 75,
+            frameHeight: 75
+        }),
+        freezeTextureAssetEntry({
+            key: 'mimi-thief-stealing',
+            file: 'mimi-thief-stealing.png',
+            type: 'spritesheet',
+            scope: 'protected-shared',
+            frameWidth: 75,
+            frameHeight: 75
+        }),
+        freezeTextureAssetEntry({
+            key: 'mimi-laugh',
+            file: 'mimi-laugh.png',
+            type: 'spritesheet',
+            scope: 'protected-shared',
+            frameWidth: 75,
+            frameHeight: 75
+        }),
+        freezeTextureAssetEntry({
+            key: 'mimi-thief-get-down',
+            file: 'mimi-thief-get-down.png',
+            type: 'spritesheet',
+            scope: 'protected-shared',
+            frameWidth: 75,
+            frameHeight: 75
+        })
+    ])
+});
+
+const TEXTURE_SCOPE_KEYS = Object.freeze(
+    Object.keys(TEXTURE_ASSET_SCOPES).reduce((scopeMap, scope) => {
+        scopeMap[scope] = Object.freeze(
+            TEXTURE_ASSET_SCOPES[scope].map(asset => asset.key)
+        );
+        return scopeMap;
+    }, {})
+);
+
+window.TEXTURE_ASSET_SCOPES = TEXTURE_ASSET_SCOPES;
+window.TEXTURE_SCOPE_KEYS = TEXTURE_SCOPE_KEYS;
+
+window.getPhaserTextureManager = function() {
+    const game = window.GameLogic && window.GameLogic.phaserGame
+        ? window.GameLogic.phaserGame
+        : null;
+
+    return game && game.textures ? game.textures : null;
+};
+
+window.isTextureAssetLoaded = function(key, textureManager = null) {
+    const safeKey = typeof key === 'string' ? key : '';
+    const manager = textureManager || (
+        window.getPhaserTextureManager
+            ? window.getPhaserTextureManager()
+            : null
+    );
+
+    if (!safeKey || !manager || typeof manager.exists !== 'function') return false;
+
+    try {
+        return manager.exists(safeKey);
+    } catch (_) {
+        return false;
+    }
+};
+
+window.getTextureScopeAudit = function(scope, options = {}) {
+    const safeScope = typeof scope === 'string' ? scope : '';
+    const assets = safeScope && TEXTURE_ASSET_SCOPES[safeScope]
+        ? TEXTURE_ASSET_SCOPES[safeScope]
+        : [];
+    const textureManager = options.textureManager || (
+        window.getPhaserTextureManager
+            ? window.getPhaserTextureManager()
+            : null
+    );
+    const textureManagerReady = !!(
+        textureManager &&
+        typeof textureManager.exists === 'function'
+    );
+    const expectedKeys = assets.map(asset => asset.key);
+    const loadedKeys = [];
+    const missingKeys = [];
+
+    expectedKeys.forEach(key => {
+        if (window.isTextureAssetLoaded && window.isTextureAssetLoaded(key, textureManager)) {
+            loadedKeys.push(key);
+        } else {
+            missingKeys.push(key);
+        }
+    });
+
+    return {
+        scope: safeScope,
+        knownScope: !!TEXTURE_ASSET_SCOPES[safeScope],
+        textureManagerReady: textureManagerReady,
+        expectedCount: expectedKeys.length,
+        loadedCount: loadedKeys.length,
+        missingCount: missingKeys.length,
+        expectedKeys: expectedKeys,
+        loadedKeys: loadedKeys,
+        missingKeys: missingKeys
+    };
+};
+
+window.getLoadedTextureCountForScope = function(scope, options = {}) {
+    const audit = window.getTextureScopeAudit
+        ? window.getTextureScopeAudit(scope, options)
+        : null;
+
+    return audit && Number.isFinite(audit.loadedCount)
+        ? audit.loadedCount
+        : 0;
+};
+
+window.auditTextureAssetScopes = function() {
+    const textureManager = window.getPhaserTextureManager
+        ? window.getPhaserTextureManager()
+        : null;
+    const textureManagerReady = !!(
+        textureManager &&
+        typeof textureManager.exists === 'function'
+    );
+    let textureTotalCount = 0;
+
+    try {
+        textureTotalCount = textureManagerReady && typeof textureManager.getTextureKeys === 'function'
+            ? textureManager.getTextureKeys().length
+            : 0;
+    } catch (_) {
+        textureTotalCount = 0;
+    }
+
+    const scopes = {};
+
+    Object.keys(TEXTURE_ASSET_SCOPES).forEach(scope => {
+        scopes[scope] = window.getTextureScopeAudit(scope, {
+            textureManager: textureManager
+        });
+    });
+
+    const protectedAudit = scopes['protected-shared'];
+    const report = {
+        version: 1,
+        time: Date.now(),
+        textureManagerReady: textureManagerReady,
+        textureTotalCount: textureTotalCount,
+        scopes: scopes,
+        protectedSharedHealthy: textureManagerReady
+            ? !!(protectedAudit && protectedAudit.missingCount === 0)
+            : null,
+        protectedSharedMissingCount: protectedAudit
+            ? protectedAudit.missingCount
+            : 0,
+        protectedSharedMissingKeys: protectedAudit
+            ? protectedAudit.missingKeys.slice()
+            : []
+    };
+
+    console.info('[Texture 診斷] 副本資源 Scope 盤點：', report);
+    return report;
+};
+// ====== 第三階段 3-1：副本 Texture 靜態資源表＋唯讀診斷工具結束 ======
 // ====== 第二階段 2-2：Phaser BGM AudioManager 相容層 ======
 window.AudioManager = {
     state: {
@@ -1521,6 +1885,9 @@ window.getPwaRiskSnapshot = function(operation, extra = {}) {
     let activeSceneCount = 0;
     let textureCount = 0;
     let soundCount = 0;
+    let soloCleaningTextureLoadedCount = 0;
+    let soloRocketRunTextureLoadedCount = 0;
+    let soloRocketShopTextureLoadedCount = 0;
 
     try {
         mainScene = game && game.scene ? game.scene.getScene('MainScene') : null;
@@ -1542,6 +1909,25 @@ window.getPwaRiskSnapshot = function(operation, extra = {}) {
             : 0;
     } catch (_) {
         textureCount = 0;
+    }
+
+    try {
+        if (window.getLoadedTextureCountForScope) {
+            const textureManager = game && game.textures ? game.textures : null;
+            soloCleaningTextureLoadedCount = window.getLoadedTextureCountForScope('solo-cleaning', {
+                textureManager: textureManager
+            });
+            soloRocketRunTextureLoadedCount = window.getLoadedTextureCountForScope('solo-rocket-run', {
+                textureManager: textureManager
+            });
+            soloRocketShopTextureLoadedCount = window.getLoadedTextureCountForScope('solo-rocket-shop', {
+                textureManager: textureManager
+            });
+        }
+    } catch (_) {
+        soloCleaningTextureLoadedCount = 0;
+        soloRocketRunTextureLoadedCount = 0;
+        soloRocketShopTextureLoadedCount = 0;
     }
 
     try {
@@ -1579,6 +1965,9 @@ window.getPwaRiskSnapshot = function(operation, extra = {}) {
             : 0,
         activeSceneCount: activeSceneCount,
         textureCount: textureCount,
+        soloCleaningTextureLoadedCount: soloCleaningTextureLoadedCount,
+        soloRocketRunTextureLoadedCount: soloRocketRunTextureLoadedCount,
+        soloRocketShopTextureLoadedCount: soloRocketShopTextureLoadedCount,
         soundCount: soundCount,
         meowlimeRafRunning: !!(growthState && growthState.running && growthState.rafId),
         meowlimeGrowthVisible: !!(growthModal && growthModal.style.display !== 'none'),
@@ -1586,7 +1975,6 @@ window.getPwaRiskSnapshot = function(operation, extra = {}) {
         ...safeExtra
     };
 };
-
 window.recordPwaRiskCheckpoint = function(operation, extra = {}) {
     try {
         const snapshot = window.getPwaRiskSnapshot(operation, extra);
