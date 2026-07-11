@@ -20266,6 +20266,1040 @@ this.btnB.on('pointerout', () => {
         this.time.delayedCall(1000, () => emitter.destroy());
     }
 }
+
+// ====== 第四階段 4-3：BaseDungeonScene 標準生命週期＋單一清理接口 ======
+class BaseDungeonScene extends Phaser.Scene {
+    constructor(sceneConfig) {
+        super(sceneConfig);
+        this.dungeonRuntime = this.createDungeonRuntime();
+    }
+
+    createDungeonRuntime(sessionData = null) {
+        return {
+            version: 1,
+            initialized: false,
+            bootStarted: false,
+            bootCompleted: false,
+            ready: false,
+            bootFailure: null,
+            fatalErrorReported: false,
+            shutdownStarted: false,
+            shutdownCompleted: false,
+            shutdownPromise: null,
+            shutdownCallbackDepth: 0,
+            lifecycleBound: false,
+            shutdownEventHandler: null,
+            destroyEventHandler: null,
+            sessionData: sessionData,
+            catalogEntry: null,
+            ownedTextureScope: null,
+            textureScopeRequestId: null,
+            ownedAudioScope: null,
+            audioScopeRequestId: null,
+            cleanupTasks: new Map()
+        };
+    }
+
+    init(data = {}) {
+        const previousRuntime = this.dungeonRuntime;
+        if (previousRuntime && previousRuntime.cleanupTasks instanceof Map) {
+            previousRuntime.cleanupTasks.clear();
+        }
+
+        const rawVersion = Number(data && data.catalogVersion);
+        const sessionData = Object.freeze({
+            dungeonKey: typeof data.dungeonKey === 'string' ? data.dungeonKey.trim() : '',
+            sceneKey: typeof data.sceneKey === 'string' ? data.sceneKey.trim() : '',
+            sessionId: typeof data.sessionId === 'string' ? data.sessionId.trim() : '',
+            userUid: typeof data.userUid === 'string' ? data.userUid.trim() : '',
+            sourceScene: typeof data.sourceScene === 'string' ? data.sourceScene.trim() : '',
+            catalogVersion: Number.isFinite(rawVersion) && rawVersion > 0
+                ? rawVersion
+                : 0
+        });
+
+        this.dungeonRuntime = this.createDungeonRuntime(sessionData);
+        this.dungeonRuntime.initialized = true;
+        this.safeDungeonCheckpoint('dungeon-base-init', {
+            targetScene: sessionData.sceneKey,
+            note: sessionData.dungeonKey
+        });
+    }
+
+    create() {
+        if (!this.bindDungeonLifecycle()) {
+            void this.failDungeonBoot('dungeon-lifecycle-unavailable');
+            return;
+        }
+
+        void this.bootDungeonScene();
+    }
+
+    async bootDungeonScene() {
+        const runtime = this.dungeonRuntime;
+        if (!runtime || runtime.bootStarted || runtime.shutdownStarted) return;
+
+        runtime.bootStarted = true;
+        this.safeDungeonCheckpoint('dungeon-base-boot-start', {
+            targetScene: this.getDungeonSceneKey(),
+            note: runtime.sessionData ? runtime.sessionData.dungeonKey : ''
+        });
+
+        try {
+            const validation = this.validateDungeonSessionContext({
+                allowedPhases: ['preparing', 'loading', 'entering', 'running'],
+                requireActive: false
+            });
+
+            if (!validation.ok) {
+                throw this.makeDungeonSceneError(validation.reason);
+            }
+
+            runtime.catalogEntry = validation.catalogEntry;
+            const context = this.createDungeonHookContext();
+
+            await Promise.resolve(this.onDungeonCreate(context));
+
+            if (this.dungeonRuntime !== runtime || runtime.shutdownStarted) return;
+
+            const afterCreateValidation = this.validateDungeonSessionContext({
+                allowedPhases: ['preparing', 'loading', 'entering', 'running'],
+                requireActive: false
+            });
+
+            if (!afterCreateValidation.ok) {
+                throw this.makeDungeonSceneError(afterCreateValidation.reason);
+            }
+
+            runtime.bootCompleted = true;
+            runtime.ready = true;
+
+            this.safeDungeonCheckpoint('dungeon-base-ready', {
+                targetScene: this.getDungeonSceneKey(),
+                note: runtime.sessionData ? runtime.sessionData.dungeonKey : ''
+            }, true);
+        } catch (err) {
+            await this.failDungeonBoot(
+                err && err.code ? String(err.code) : 'dungeon-base-boot-failed',
+                err
+            );
+        }
+    }
+
+    update(time, delta) {
+        if (!this.isDungeonSessionReady()) return;
+
+        try {
+            this.onDungeonUpdate(
+                time,
+                delta,
+                this.createDungeonHookContext()
+            );
+        } catch (err) {
+            const runtime = this.dungeonRuntime;
+            if (!runtime || runtime.fatalErrorReported) return;
+
+            runtime.fatalErrorReported = true;
+            runtime.ready = false;
+            console.warn('[BaseDungeonScene] 副本 update 發生例外，將交由 Manager 中止：', err);
+
+            void this.requestDungeonAbort('dungeon-update-error', {
+                restoreWorld: true,
+                restoreAudio: true
+            }).catch(abortErr => {
+                console.warn('[BaseDungeonScene] update 例外後中止副本失敗，已略過重複處理：', abortErr);
+            });
+        }
+    }
+
+    getDungeonSceneKey() {
+        try {
+            return this.sys && this.sys.settings && this.sys.settings.key
+                ? String(this.sys.settings.key)
+                : '';
+        } catch (_) {
+            return '';
+        }
+    }
+
+    makeDungeonSceneError(reason, message = '') {
+        const safeReason = String(reason || 'dungeon-scene-error');
+        const err = new Error(message || safeReason);
+        err.code = safeReason;
+        return err;
+    }
+
+    safeDungeonCheckpoint(operation, extra = {}, completed = false) {
+        try {
+            if (completed && window.completePwaRiskCheckpoint) {
+                window.completePwaRiskCheckpoint(operation, extra);
+            } else if (!completed && window.recordPwaRiskCheckpoint) {
+                window.recordPwaRiskCheckpoint(operation, extra);
+            }
+        } catch (_) {}
+    }
+
+    createDungeonHookContext(extra = {}) {
+        const runtime = this.dungeonRuntime || {};
+        const sessionData = runtime.sessionData
+            ? Object.freeze({ ...runtime.sessionData })
+            : null;
+        const catalogEntry = runtime.catalogEntry
+            ? Object.freeze({ ...runtime.catalogEntry })
+            : null;
+
+        return Object.freeze({
+            scene: this,
+            sceneKey: this.getDungeonSceneKey(),
+            sessionData: sessionData,
+            catalogEntry: catalogEntry,
+            ...extra
+        });
+    }
+
+    validateDungeonSessionContext(options = {}) {
+        const runtime = this.dungeonRuntime;
+        const sessionData = runtime && runtime.sessionData
+            ? runtime.sessionData
+            : null;
+        const sceneKey = this.getDungeonSceneKey();
+        const manager = window.DungeonSessionManager;
+        const logic = window.GameLogic;
+        const user = logic && logic.currentUser ? logic.currentUser : null;
+        const session = logic && logic.dungeonSession
+            ? logic.dungeonSession
+            : null;
+
+        if (!runtime || !runtime.initialized || !sessionData) {
+            return { ok: false, reason: 'dungeon-runtime-not-initialized' };
+        }
+
+        if (
+            !sessionData.dungeonKey ||
+            !sessionData.sceneKey ||
+            !sessionData.sessionId ||
+            !sessionData.userUid
+        ) {
+            return { ok: false, reason: 'invalid-dungeon-session-data' };
+        }
+
+        if (!sceneKey || sessionData.sceneKey !== sceneKey) {
+            return { ok: false, reason: 'dungeon-scene-key-mismatch' };
+        }
+
+        if (!manager || typeof manager.abort !== 'function' || typeof manager.exit !== 'function') {
+            return { ok: false, reason: 'dungeon-manager-unavailable' };
+        }
+
+        if (!window.getDungeonCatalogEntry) {
+            return { ok: false, reason: 'dungeon-catalog-unavailable' };
+        }
+
+        const entry = window.getDungeonCatalogEntry(sessionData.dungeonKey);
+        if (!entry) return { ok: false, reason: 'unknown-dungeon' };
+        if (entry.enabled !== true) return { ok: false, reason: 'dungeon-disabled' };
+        if (entry.sceneKey !== sceneKey || entry.sceneKey !== sessionData.sceneKey) {
+            return { ok: false, reason: 'dungeon-catalog-scene-mismatch' };
+        }
+
+        if (
+            sessionData.catalogVersion > 0 &&
+            Number(entry.version || 0) !== Number(sessionData.catalogVersion)
+        ) {
+            return { ok: false, reason: 'dungeon-catalog-version-mismatch' };
+        }
+
+        if (!user || !user.uid || user.uid !== sessionData.userUid) {
+            return { ok: false, reason: 'dungeon-user-mismatch' };
+        }
+
+        if (!session) return { ok: false, reason: 'dungeon-session-unavailable' };
+        if (
+            session.dungeonKey !== sessionData.dungeonKey ||
+            session.sceneKey !== sessionData.sceneKey ||
+            session.sessionId !== sessionData.sessionId ||
+            session.userUid !== sessionData.userUid
+        ) {
+            return { ok: false, reason: 'dungeon-session-mismatch' };
+        }
+
+        if (options.requireActive === true && session.active !== true) {
+            return { ok: false, reason: 'dungeon-session-not-active' };
+        }
+
+        if (Array.isArray(options.allowedPhases)) {
+            const phase = String(session.phase || 'idle');
+            if (options.allowedPhases.indexOf(phase) === -1) {
+                return { ok: false, reason: 'dungeon-session-phase-invalid' };
+            }
+        }
+
+        return {
+            ok: true,
+            reason: null,
+            catalogEntry: Object.freeze({ ...entry }),
+            session: Object.freeze({
+                active: session.active === true,
+                dungeonKey: session.dungeonKey,
+                sceneKey: session.sceneKey,
+                sessionId: session.sessionId,
+                userUid: session.userUid,
+                phase: String(session.phase || 'idle'),
+                cleanupStarted: session.cleanupStarted === true
+            })
+        };
+    }
+
+    isDungeonSessionCurrent(options = {}) {
+        const runtime = this.dungeonRuntime;
+        const sessionData = runtime && runtime.sessionData
+            ? runtime.sessionData
+            : null;
+        const logic = window.GameLogic;
+        const user = logic && logic.currentUser ? logic.currentUser : null;
+        const session = logic && logic.dungeonSession
+            ? logic.dungeonSession
+            : null;
+
+        if (
+            !runtime ||
+            !sessionData ||
+            !window.DungeonSessionManager ||
+            !user ||
+            !session
+        ) {
+            return false;
+        }
+
+        if (
+            user.uid !== sessionData.userUid ||
+            session.dungeonKey !== sessionData.dungeonKey ||
+            session.sceneKey !== sessionData.sceneKey ||
+            session.sessionId !== sessionData.sessionId ||
+            session.userUid !== sessionData.userUid ||
+            this.getDungeonSceneKey() !== sessionData.sceneKey
+        ) {
+            return false;
+        }
+
+        if (options.requireActive === true && session.active !== true) return false;
+
+        if (Array.isArray(options.allowedPhases)) {
+            const phase = String(session.phase || 'idle');
+            if (options.allowedPhases.indexOf(phase) === -1) return false;
+        }
+
+        return true;
+    }
+
+    isDungeonSessionReady() {
+        const runtime = this.dungeonRuntime;
+        if (
+            !runtime ||
+            !runtime.bootCompleted ||
+            !runtime.ready ||
+            runtime.bootFailure ||
+            runtime.shutdownStarted ||
+            runtime.shutdownCompleted
+        ) {
+            return false;
+        }
+
+        const session = window.GameLogic && window.GameLogic.dungeonSession
+            ? window.GameLogic.dungeonSession
+            : null;
+
+        if (!session || session.cleanupStarted) return false;
+
+        return this.isDungeonSessionCurrent({
+            requireActive: true,
+            allowedPhases: ['running']
+        });
+    }
+
+    getDungeonBootFailure() {
+        const failure = this.dungeonRuntime && this.dungeonRuntime.bootFailure
+            ? this.dungeonRuntime.bootFailure
+            : null;
+
+        return failure ? { ...failure } : null;
+    }
+
+    async failDungeonBoot(reason = 'dungeon-base-boot-failed', error = null) {
+        const runtime = this.dungeonRuntime;
+        if (!runtime) {
+            return {
+                ok: false,
+                reason: 'dungeon-runtime-unavailable'
+            };
+        }
+
+        if (runtime.fatalErrorReported) {
+            return {
+                ok: false,
+                reason: runtime.bootFailure
+                    ? runtime.bootFailure.reason
+                    : String(reason || 'dungeon-base-boot-failed'),
+                alreadyReported: true
+            };
+        }
+
+        const safeReason = String(reason || 'dungeon-base-boot-failed');
+        runtime.fatalErrorReported = true;
+        runtime.ready = false;
+        runtime.bootCompleted = false;
+        runtime.bootFailure = Object.freeze({
+            reason: safeReason,
+            time: Date.now(),
+            message: error && error.message ? String(error.message) : ''
+        });
+
+        console.warn(`[BaseDungeonScene] 副本 boot 失敗：${safeReason}`, error || '');
+        this.safeDungeonCheckpoint('dungeon-base-boot-failed', {
+            targetScene: this.getDungeonSceneKey(),
+            note: safeReason
+        });
+
+        try {
+            return await this.requestDungeonAbort(safeReason, {
+                restoreWorld: true,
+                restoreAudio: true
+            });
+        } catch (abortError) {
+            console.warn('[BaseDungeonScene] boot 失敗後呼叫 Manager.abort 失敗：', abortError);
+            return {
+                ok: false,
+                reason: safeReason,
+                abortFailed: true
+            };
+        }
+    }
+
+    requestDungeonExit(reason = 'dungeon-scene-exit', options = {}) {
+        const manager = window.DungeonSessionManager;
+        if (!manager || typeof manager.exit !== 'function') {
+            return Promise.resolve({
+                ok: false,
+                reason: 'dungeon-manager-unavailable'
+            });
+        }
+
+        try {
+            return Promise.resolve(manager.exit(reason, options))
+                .catch(err => {
+                    console.warn('[BaseDungeonScene] 委派副本 exit 失敗：', err);
+                    return {
+                        ok: false,
+                        reason: 'dungeon-exit-delegation-failed'
+                    };
+                });
+        } catch (err) {
+            console.warn('[BaseDungeonScene] 委派副本 exit 失敗：', err);
+            return Promise.resolve({
+                ok: false,
+                reason: 'dungeon-exit-delegation-failed'
+            });
+        }
+    }
+
+    requestDungeonAbort(reason = 'dungeon-scene-abort', options = {}) {
+        const manager = window.DungeonSessionManager;
+        if (!manager || typeof manager.abort !== 'function') {
+            return Promise.resolve({
+                ok: false,
+                reason: 'dungeon-manager-unavailable'
+            });
+        }
+
+        try {
+            return Promise.resolve(manager.abort(reason, options))
+                .catch(err => {
+                    console.warn('[BaseDungeonScene] 委派副本 abort 失敗：', err);
+                    return {
+                        ok: false,
+                        reason: 'dungeon-abort-delegation-failed'
+                    };
+                });
+        } catch (err) {
+            console.warn('[BaseDungeonScene] 委派副本 abort 失敗：', err);
+            return Promise.resolve({
+                ok: false,
+                reason: 'dungeon-abort-delegation-failed'
+            });
+        }
+    }
+
+    registerDungeonCleanup(key, callback) {
+        const runtime = this.dungeonRuntime;
+        const safeKey = typeof key === 'string' ? key.trim() : '';
+
+        if (
+            !runtime ||
+            runtime.shutdownStarted ||
+            runtime.shutdownCompleted ||
+            !(runtime.cleanupTasks instanceof Map)
+        ) {
+            return false;
+        }
+
+        if (!safeKey || typeof callback !== 'function') return false;
+        if (!runtime.cleanupTasks.has(safeKey) && runtime.cleanupTasks.size >= 100) {
+            console.warn('[BaseDungeonScene] cleanup task 已達 100 個上限，拒絕新增：', safeKey);
+            return false;
+        }
+
+        runtime.cleanupTasks.set(safeKey, callback);
+        return true;
+    }
+
+    unregisterDungeonCleanup(key) {
+        const runtime = this.dungeonRuntime;
+        const safeKey = typeof key === 'string' ? key.trim() : '';
+        if (!runtime || !safeKey || !(runtime.cleanupTasks instanceof Map)) return false;
+        return runtime.cleanupTasks.delete(safeKey);
+    }
+
+    claimTextureScope(scope, requestId) {
+        const runtime = this.dungeonRuntime;
+        const safeScope = typeof scope === 'string' ? scope.trim() : '';
+        const safeRequestId = Number(requestId);
+        const blockedScopes = new Set([
+            'lobby',
+            'protected-shared',
+            'partyroom',
+            'shrine',
+            'solo-cleaning',
+            'solo-rocket',
+            'solo-rocket-run',
+            'solo-rocket-shop'
+        ]);
+
+        if (
+            !runtime ||
+            !runtime.catalogEntry ||
+            runtime.shutdownStarted ||
+            !safeScope ||
+            blockedScopes.has(safeScope) ||
+            runtime.catalogEntry.textureScope !== safeScope ||
+            !Number.isFinite(safeRequestId) ||
+            safeRequestId <= 0 ||
+            !this.isDungeonSessionCurrent({
+                allowedPhases: ['preparing', 'loading', 'entering', 'running']
+            }) ||
+            !window.TextureAssetManager ||
+            typeof window.TextureAssetManager.isScopeRequestCurrent !== 'function' ||
+            !window.TextureAssetManager.isScopeRequestCurrent(
+                safeScope,
+                safeRequestId,
+                runtime.sessionData.userUid
+            )
+        ) {
+            return false;
+        }
+
+        runtime.ownedTextureScope = safeScope;
+        runtime.textureScopeRequestId = safeRequestId;
+        return true;
+    }
+
+    claimAudioScope(scope, requestId) {
+        const runtime = this.dungeonRuntime;
+        const safeScope = typeof scope === 'string' ? scope.trim() : '';
+        const safeRequestId = Number(requestId);
+        const blockedScopes = new Set([
+            'lobby',
+            'protected-shared',
+            'partyroom',
+            'shrine',
+            'solo-cleaning',
+            'solo-rocket',
+            'solo-rocket-run',
+            'solo-rocket-shop'
+        ]);
+
+        if (
+            !runtime ||
+            !runtime.catalogEntry ||
+            runtime.shutdownStarted ||
+            !safeScope ||
+            blockedScopes.has(safeScope) ||
+            runtime.catalogEntry.audioScope !== safeScope ||
+            !Number.isFinite(safeRequestId) ||
+            safeRequestId <= 0 ||
+            !this.isDungeonSessionCurrent({
+                allowedPhases: ['preparing', 'loading', 'entering', 'running']
+            }) ||
+            !window.AudioManager ||
+            typeof window.AudioManager.isScopeRequestCurrent !== 'function' ||
+            !window.AudioManager.isScopeRequestCurrent(
+                safeScope,
+                safeRequestId,
+                runtime.sessionData.userUid
+            )
+        ) {
+            return false;
+        }
+
+        runtime.ownedAudioScope = safeScope;
+        runtime.audioScopeRequestId = safeRequestId;
+        return true;
+    }
+
+    bindDungeonLifecycle() {
+        const runtime = this.dungeonRuntime;
+        if (!runtime || runtime.lifecycleBound) return !!runtime;
+        if (!this.events || typeof this.events.once !== 'function') return false;
+
+        const shutdownEvent = Phaser.Scenes.Events.SHUTDOWN;
+        const destroyEvent = Phaser.Scenes.Events.DESTROY;
+
+        runtime.shutdownEventHandler = () => {
+            this.handleDungeonLifecycleEvent('shutdown');
+        };
+        runtime.destroyEventHandler = () => {
+            this.handleDungeonLifecycleEvent('destroy');
+        };
+
+        this.events.once(shutdownEvent, runtime.shutdownEventHandler);
+        this.events.once(destroyEvent, runtime.destroyEventHandler);
+        runtime.lifecycleBound = true;
+        return true;
+    }
+
+    unbindDungeonLifecycle() {
+        const runtime = this.dungeonRuntime;
+        if (!runtime || !runtime.lifecycleBound || !this.events) return;
+
+        try {
+            if (typeof this.events.off === 'function') {
+                if (runtime.shutdownEventHandler) {
+                    this.events.off(
+                        Phaser.Scenes.Events.SHUTDOWN,
+                        runtime.shutdownEventHandler
+                    );
+                }
+                if (runtime.destroyEventHandler) {
+                    this.events.off(
+                        Phaser.Scenes.Events.DESTROY,
+                        runtime.destroyEventHandler
+                    );
+                }
+            }
+        } catch (_) {}
+
+        runtime.lifecycleBound = false;
+        runtime.shutdownEventHandler = null;
+        runtime.destroyEventHandler = null;
+    }
+
+    handleDungeonLifecycleEvent(eventName) {
+        const runtime = this.dungeonRuntime;
+        if (!runtime) return;
+
+        const sessionData = runtime.sessionData
+            ? { ...runtime.sessionData }
+            : null;
+        const manager = window.DungeonSessionManager;
+        const managerCleanupPending = !!(
+            manager &&
+            manager.state &&
+            manager.state.cleanupPromise
+        );
+
+        this.unbindDungeonLifecycle();
+
+        const shutdownPromise = this.shutdownDungeonSession({
+            reason: `phaser-scene-${String(eventName || 'shutdown')}`,
+            sessionId: sessionData ? sessionData.sessionId : '',
+            userUid: sessionData ? sessionData.userUid : ''
+        });
+
+        void Promise.resolve(shutdownPromise)
+            .catch(err => {
+                console.warn('[BaseDungeonScene] Phaser lifecycle 清理失敗：', err);
+            })
+            .then(() => {
+                if (managerCleanupPending) return;
+                if (!manager || !manager.state || manager.state.cleanupPromise) return;
+                if (!sessionData || !this.isDungeonSessionCurrent()) return;
+
+                return this.requestDungeonAbort(
+                    'unexpected-dungeon-scene-shutdown',
+                    {
+                        restoreWorld: true,
+                        restoreAudio: true
+                    }
+                );
+            })
+            .catch(err => {
+                console.warn('[BaseDungeonScene] 非預期 Scene 停止後中止 Session 失敗：', err);
+            });
+    }
+
+    shutdownDungeonSession({
+        reason = 'dungeon-scene-shutdown',
+        sessionId = '',
+        userUid = ''
+    } = {}) {
+        const runtime = this.dungeonRuntime;
+        if (!runtime) {
+            return Promise.resolve({
+                ok: false,
+                reason: 'dungeon-runtime-unavailable'
+            });
+        }
+
+        if (runtime.shutdownPromise) {
+            if (Number(runtime.shutdownCallbackDepth || 0) > 0) {
+                return Promise.resolve({
+                    ok: true,
+                    reentrant: true,
+                    cleanupPending: true
+                });
+            }
+            return runtime.shutdownPromise;
+        }
+
+        if (runtime.shutdownCompleted) {
+            return Promise.resolve({
+                ok: true,
+                alreadyCompleted: true,
+                reason: String(reason || 'dungeon-scene-shutdown')
+            });
+        }
+
+        const sessionData = runtime.sessionData;
+        const safeSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
+        const safeUserUid = typeof userUid === 'string' ? userUid.trim() : '';
+
+        if (
+            !sessionData ||
+            (safeSessionId && safeSessionId !== sessionData.sessionId) ||
+            (safeUserUid && safeUserUid !== sessionData.userUid)
+        ) {
+            return Promise.resolve({
+                ok: false,
+                reason: 'shutdown-session-mismatch',
+                skipped: true
+            });
+        }
+
+        const safeReason = String(reason || 'dungeon-scene-shutdown');
+        runtime.ready = false;
+        runtime.shutdownStarted = true;
+
+        this.safeDungeonCheckpoint('dungeon-base-cleanup-start', {
+            targetScene: this.getDungeonSceneKey(),
+            note: safeReason
+        });
+
+        let resolveShutdown = null;
+        const shutdownPromise = new Promise(resolve => {
+            resolveShutdown = resolve;
+        });
+        runtime.shutdownPromise = shutdownPromise;
+
+        void Promise.resolve().then(async () => {
+            const cleanupErrors = [];
+            const cleanupTaskResults = [];
+            let audioScopeResult = null;
+            let textureScopeResult = null;
+            let finalResult = null;
+
+            try {
+                runtime.shutdownCallbackDepth = Number(runtime.shutdownCallbackDepth || 0) + 1;
+
+                try {
+                    await Promise.resolve(this.onDungeonShutdown(
+                        this.createDungeonHookContext({ reason: safeReason })
+                    ));
+                } catch (err) {
+                    cleanupErrors.push({
+                        key: 'onDungeonShutdown',
+                        message: err && err.message ? String(err.message) : ''
+                    });
+                    console.warn('[BaseDungeonScene] onDungeonShutdown 清理失敗，將繼續其他清理：', err);
+                } finally {
+                    runtime.shutdownCallbackDepth = Math.max(
+                        0,
+                        Number(runtime.shutdownCallbackDepth || 0) - 1
+                    );
+                }
+
+                const cleanupEntries = runtime.cleanupTasks instanceof Map
+                    ? Array.from(runtime.cleanupTasks.entries()).reverse()
+                    : [];
+
+                if (runtime.cleanupTasks instanceof Map) {
+                    runtime.cleanupTasks.clear();
+                }
+
+                for (let i = 0; i < cleanupEntries.length; i++) {
+                    const [key, callback] = cleanupEntries[i];
+                    runtime.shutdownCallbackDepth = Number(runtime.shutdownCallbackDepth || 0) + 1;
+
+                    try {
+                        await Promise.resolve(callback({
+                            reason: safeReason,
+                            sessionId: sessionData.sessionId,
+                            userUid: sessionData.userUid,
+                            scene: this
+                        }));
+                        cleanupTaskResults.push({ key: key, ok: true });
+                    } catch (err) {
+                        cleanupTaskResults.push({ key: key, ok: false });
+                        cleanupErrors.push({
+                            key: key,
+                            message: err && err.message ? String(err.message) : ''
+                        });
+                        console.warn(`[BaseDungeonScene] cleanup task 失敗，已繼續處理：${key}`, err);
+                    } finally {
+                        runtime.shutdownCallbackDepth = Math.max(
+                            0,
+                            Number(runtime.shutdownCallbackDepth || 0) - 1
+                        );
+                    }
+                }
+
+                if (
+                    runtime.ownedAudioScope &&
+                    runtime.audioScopeRequestId !== null &&
+                    window.AudioManager &&
+                    typeof window.AudioManager.isScopeRequestCurrent === 'function' &&
+                    typeof window.AudioManager.unloadScope === 'function' &&
+                    window.AudioManager.isScopeRequestCurrent(
+                        runtime.ownedAudioScope,
+                        runtime.audioScopeRequestId,
+                        sessionData.userUid
+                    )
+                ) {
+                    try {
+                        audioScopeResult = await window.AudioManager.unloadScope(
+                            runtime.ownedAudioScope,
+                            {
+                                scene: this
+                            }
+                        );
+
+                        if (audioScopeResult && audioScopeResult.ok === false) {
+                            cleanupErrors.push({
+                                key: 'audio-scope',
+                                message: String(
+                                    audioScopeResult.reason ||
+                                    'audio-scope-unload-failed'
+                                )
+                            });
+                        }
+                    } catch (err) {
+                        cleanupErrors.push({
+                            key: 'audio-scope',
+                            message: err && err.message ? String(err.message) : ''
+                        });
+                        console.warn('[BaseDungeonScene] Audio Scope 卸載失敗，將繼續 Texture 清理：', err);
+                    }
+                }
+
+                if (
+                    runtime.ownedTextureScope &&
+                    runtime.textureScopeRequestId !== null &&
+                    window.TextureAssetManager &&
+                    typeof window.TextureAssetManager.isScopeRequestCurrent === 'function' &&
+                    typeof window.TextureAssetManager.unloadScope === 'function' &&
+                    window.TextureAssetManager.isScopeRequestCurrent(
+                        runtime.ownedTextureScope,
+                        runtime.textureScopeRequestId,
+                        sessionData.userUid
+                    )
+                ) {
+                    try {
+                        textureScopeResult = await window.TextureAssetManager.unloadScope(
+                            runtime.ownedTextureScope,
+                            {
+                                scene: this,
+                                reason: safeReason
+                            }
+                        );
+
+                        if (textureScopeResult && textureScopeResult.ok === false) {
+                            cleanupErrors.push({
+                                key: 'texture-scope',
+                                message: String(
+                                    textureScopeResult.reason ||
+                                    'texture-scope-unload-failed'
+                                )
+                            });
+                        }
+                    } catch (err) {
+                        cleanupErrors.push({
+                            key: 'texture-scope',
+                            message: err && err.message ? String(err.message) : ''
+                        });
+                        console.warn('[BaseDungeonScene] Texture Scope 卸載失敗，已完成其他清理：', err);
+                    }
+                }
+
+                finalResult = {
+                    ok: cleanupErrors.length === 0,
+                    reason: safeReason,
+                    sessionId: sessionData.sessionId,
+                    cleanupTaskResults: cleanupTaskResults,
+                    cleanupErrors: cleanupErrors,
+                    audioScopeResult: audioScopeResult,
+                    textureScopeResult: textureScopeResult
+                };
+            } catch (err) {
+                console.warn('[BaseDungeonScene] shutdownDungeonSession 發生未預期例外：', err);
+                finalResult = {
+                    ok: false,
+                    reason: safeReason,
+                    sessionId: sessionData.sessionId,
+                    cleanupTaskResults: cleanupTaskResults,
+                    cleanupErrors: cleanupErrors.concat([{
+                        key: 'shutdown-exception',
+                        message: err && err.message ? String(err.message) : ''
+                    }]),
+                    audioScopeResult: audioScopeResult,
+                    textureScopeResult: textureScopeResult,
+                    cleanupException: true
+                };
+            } finally {
+                if (runtime.cleanupTasks instanceof Map) {
+                    runtime.cleanupTasks.clear();
+                }
+
+                runtime.ownedAudioScope = null;
+                runtime.audioScopeRequestId = null;
+                runtime.ownedTextureScope = null;
+                runtime.textureScopeRequestId = null;
+                runtime.ready = false;
+                runtime.shutdownCallbackDepth = 0;
+                runtime.shutdownCompleted = true;
+
+                this.safeDungeonCheckpoint('dungeon-base-cleanup-complete', {
+                    targetScene: this.getDungeonSceneKey(),
+                    note: safeReason
+                }, true);
+
+                if (runtime.shutdownPromise === shutdownPromise) {
+                    runtime.shutdownPromise = null;
+                }
+
+                resolveShutdown(finalResult || {
+                    ok: false,
+                    reason: safeReason,
+                    sessionId: sessionData.sessionId,
+                    cleanupException: true
+                });
+            }
+        });
+
+        return shutdownPromise;
+    }
+
+    getDungeonSceneAudit() {
+        const runtime = this.dungeonRuntime || {};
+        const sessionData = runtime.sessionData
+            ? { ...runtime.sessionData }
+            : null;
+        const catalogEntry = runtime.catalogEntry
+            ? { ...runtime.catalogEntry }
+            : null;
+
+        return {
+            version: 1,
+            time: Date.now(),
+            sceneKey: this.getDungeonSceneKey(),
+            initialized: runtime.initialized === true,
+            bootStarted: runtime.bootStarted === true,
+            bootCompleted: runtime.bootCompleted === true,
+            ready: runtime.ready === true,
+            bootFailure: runtime.bootFailure
+                ? { ...runtime.bootFailure }
+                : null,
+            fatalErrorReported: runtime.fatalErrorReported === true,
+            shutdownStarted: runtime.shutdownStarted === true,
+            shutdownCompleted: runtime.shutdownCompleted === true,
+            shutdownPending: !!runtime.shutdownPromise,
+            sessionData: sessionData,
+            catalogEntry: catalogEntry,
+            sessionCurrent: this.isDungeonSessionCurrent(),
+            ownedTextureScope: runtime.ownedTextureScope || null,
+            textureScopeRequestId: Number.isFinite(
+                Number(runtime.textureScopeRequestId)
+            )
+                ? Number(runtime.textureScopeRequestId)
+                : null,
+            ownedAudioScope: runtime.ownedAudioScope || null,
+            audioScopeRequestId: Number.isFinite(
+                Number(runtime.audioScopeRequestId)
+            )
+                ? Number(runtime.audioScopeRequestId)
+                : null,
+            cleanupTaskCount: runtime.cleanupTasks instanceof Map
+                ? runtime.cleanupTasks.size
+                : 0
+        };
+    }
+
+    async onDungeonCreate(_context) {}
+
+    onDungeonUpdate(_time, _delta, _context) {}
+
+    async onDungeonShutdown(_context) {}
+
+    static auditFoundation() {
+        const requiredPrototypeMethods = [
+            'init',
+            'create',
+            'update',
+            'validateDungeonSessionContext',
+            'isDungeonSessionCurrent',
+            'isDungeonSessionReady',
+            'getDungeonBootFailure',
+            'getDungeonSceneAudit',
+            'registerDungeonCleanup',
+            'unregisterDungeonCleanup',
+            'requestDungeonExit',
+            'requestDungeonAbort',
+            'shutdownDungeonSession',
+            'onDungeonCreate',
+            'onDungeonUpdate',
+            'onDungeonShutdown'
+        ];
+        const missingPrototypeMethods = requiredPrototypeMethods.filter(
+            methodName => (
+                typeof BaseDungeonScene.prototype[methodName] !== 'function'
+            )
+        );
+        const game = window.GameLogic && window.GameLogic.phaserGame
+            ? window.GameLogic.phaserGame
+            : null;
+        let registeredSceneKeys = [];
+
+        try {
+            registeredSceneKeys = game && game.scene && game.scene.keys
+                ? Object.keys(game.scene.keys)
+                : [];
+        } catch (_) {
+            registeredSceneKeys = [];
+        }
+
+        return {
+            version: 1,
+            time: Date.now(),
+            classReady: missingPrototypeMethods.length === 0,
+            registeredAsScene:
+                registeredSceneKeys.indexOf('BaseDungeonScene') !== -1,
+            registeredSceneKeys: registeredSceneKeys,
+            requiredPrototypeMethods: requiredPrototypeMethods.slice(),
+            missingPrototypeMethods: missingPrototypeMethods
+        };
+    }
+}
+
+window.BaseDungeonScene = BaseDungeonScene;
+// ====== 第四階段 4-3：BaseDungeonScene 標準生命週期＋單一清理接口結束 ======
+
 class MainScene extends Phaser.Scene {
     constructor() { super('MainScene'); }
     create() {
