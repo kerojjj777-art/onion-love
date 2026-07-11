@@ -675,6 +675,739 @@ window.auditTextureAssetScopes = function() {
     return report;
 };
 // ====== 第三階段 3-1：副本 Texture 靜態資源表＋唯讀診斷工具結束 ======
+// ====== 第三階段 3-2：Texture 按需載入與白名單卸載相容層 ======
+window.TextureAssetManager = {
+    state: {
+        loadingByKey: {},
+        scopeRequestIds: {},
+        activeScopes: {},
+        scopeUserUids: {},
+        unloadingByScope: {}
+    },
+
+    unloadableScopes: Object.freeze({
+        'solo-cleaning': true
+    }),
+
+    getGame() {
+        return window.GameLogic && window.GameLogic.phaserGame
+            ? window.GameLogic.phaserGame
+            : null;
+    },
+
+    getScene(sceneOrKey = null) {
+        if (
+            sceneOrKey &&
+            typeof sceneOrKey === 'object' &&
+            sceneOrKey.load &&
+            sceneOrKey.textures
+        ) {
+            return sceneOrKey;
+        }
+
+        const game = this.getGame();
+        if (!game || !game.scene) return null;
+
+        if (typeof sceneOrKey === 'string') {
+            try {
+                return game.scene.getScene(sceneOrKey) || null;
+            } catch (_) {
+                return null;
+            }
+        }
+
+        try {
+            const mainScene = game.scene.getScene('MainScene');
+            if (mainScene && mainScene.load && mainScene.textures) return mainScene;
+        } catch (_) {}
+
+        try {
+            const activeScenes = game.scene.getScenes ? (game.scene.getScenes(true) || []) : [];
+            for (let i = 0; i < activeScenes.length; i++) {
+                const scene = activeScenes[i];
+                if (scene && scene.load && scene.textures) return scene;
+            }
+        } catch (_) {}
+
+        return null;
+    },
+
+    getTextureManager(sceneOrKey = null) {
+        const scene = this.getScene(sceneOrKey);
+        if (scene && scene.textures) return scene.textures;
+
+        const game = this.getGame();
+        return game && game.textures ? game.textures : null;
+    },
+
+    getScopeAssets(scope) {
+        const safeScope = typeof scope === 'string' ? scope : '';
+        const assets = safeScope && TEXTURE_ASSET_SCOPES[safeScope]
+            ? TEXTURE_ASSET_SCOPES[safeScope]
+            : null;
+
+        return Array.isArray(assets) ? assets.slice() : [];
+    },
+
+    getAsset(key) {
+        const safeKey = typeof key === 'string' ? key : '';
+        if (!safeKey) return null;
+
+        const scopes = Object.keys(TEXTURE_ASSET_SCOPES);
+        for (let i = 0; i < scopes.length; i++) {
+            const assets = TEXTURE_ASSET_SCOPES[scopes[i]] || [];
+            const asset = assets.find(item => item && item.key === safeKey);
+            if (asset) return asset;
+        }
+
+        return null;
+    },
+
+    isLoaded(key, sceneOrKey = null) {
+        const manager = this.getTextureManager(sceneOrKey);
+        if (!key || !manager || typeof manager.exists !== 'function') return false;
+
+        try {
+            return manager.exists(key);
+        } catch (_) {
+            return false;
+        }
+    },
+
+    isLoaderRunning(loader) {
+        try {
+            return !!(
+                loader &&
+                typeof loader.isLoading === 'function' &&
+                loader.isLoading()
+            );
+        } catch (_) {
+            return false;
+        }
+    },
+
+    beginScopeRequest(scope, options = {}) {
+        const safeScope = typeof scope === 'string' ? scope : '';
+        if (!safeScope || !TEXTURE_ASSET_SCOPES[safeScope]) return null;
+
+        const currentId = Number(this.state.scopeRequestIds[safeScope] || 0);
+        const nextId = currentId + 1;
+        const currentUid = window.GameLogic && window.GameLogic.currentUser
+            ? window.GameLogic.currentUser.uid
+            : null;
+
+        this.state.scopeRequestIds[safeScope] = nextId;
+        this.state.activeScopes[safeScope] = true;
+        this.state.scopeUserUids[safeScope] = options.userUid || currentUid || null;
+
+        return nextId;
+    },
+
+    invalidateScopeRequest(scope, options = {}) {
+        const safeScope = typeof scope === 'string' ? scope : '';
+        if (!safeScope || !TEXTURE_ASSET_SCOPES[safeScope]) return null;
+
+        const currentId = Number(this.state.scopeRequestIds[safeScope] || 0);
+        const nextId = currentId + 1;
+
+        this.state.scopeRequestIds[safeScope] = nextId;
+        this.state.activeScopes[safeScope] = false;
+        this.state.scopeUserUids[safeScope] = null;
+
+        if (options.cancelLoads !== false) {
+            this.cancelScopeLoadWatchers(safeScope, options.reason || 'scope-invalidated');
+        }
+
+        return nextId;
+    },
+
+    isScopeRequestCurrent(scope, requestId, userUid = null) {
+        const safeScope = typeof scope === 'string' ? scope : '';
+        if (!safeScope || !TEXTURE_ASSET_SCOPES[safeScope]) return false;
+        if (this.state.activeScopes[safeScope] !== true) return false;
+        if (Number(this.state.scopeRequestIds[safeScope] || 0) !== Number(requestId)) return false;
+
+        const expectedUid = this.state.scopeUserUids[safeScope] || null;
+        const currentUid = window.GameLogic && window.GameLogic.currentUser
+            ? window.GameLogic.currentUser.uid
+            : null;
+
+        if (expectedUid && currentUid !== expectedUid) return false;
+        if (userUid && currentUid !== userUid) return false;
+
+        return true;
+    },
+
+    cancelScopeLoadWatchers(scope, reason = 'scope-invalidated') {
+        const safeScope = typeof scope === 'string' ? scope : '';
+        const assets = this.getScopeAssets(safeScope);
+
+        assets.forEach(asset => {
+            const record = asset && this.state.loadingByKey[asset.key]
+                ? this.state.loadingByKey[asset.key]
+                : null;
+
+            if (
+                record &&
+                record.scope === safeScope &&
+                typeof record.cancelWatch === 'function'
+            ) {
+                record.cancelWatch(reason);
+            }
+        });
+    },
+
+    loadAsset(assetOrKey, options = {}) {
+        const asset = typeof assetOrKey === 'string'
+            ? this.getAsset(assetOrKey)
+            : assetOrKey;
+
+        if (!asset || !asset.key) {
+            return Promise.resolve({
+                ok: false,
+                reason: 'unknown-key',
+                key: typeof assetOrKey === 'string' ? assetOrKey : ''
+            });
+        }
+
+        if (asset.type === 'generated') {
+            return Promise.resolve({
+                ok: this.isLoaded(asset.key, options.scene || null),
+                reason: this.isLoaded(asset.key, options.scene || null)
+                    ? null
+                    : 'generated-texture-missing',
+                key: asset.key
+            });
+        }
+
+        const scene = this.getScene(options.scene || null);
+
+        if (this.isLoaded(asset.key, scene)) {
+            return Promise.resolve({
+                ok: true,
+                alreadyLoaded: true,
+                loadedNow: false,
+                key: asset.key
+            });
+        }
+
+        const existingRecord = this.state.loadingByKey[asset.key];
+        if (existingRecord && existingRecord.promise) {
+            return existingRecord.promise;
+        }
+
+        if (!scene || !scene.load || !scene.textures) {
+            return Promise.resolve({
+                ok: false,
+                reason: 'missing-scene-loader',
+                key: asset.key
+            });
+        }
+
+        const loader = scene.load;
+        const fileType = asset.type === 'spritesheet' ? 'spritesheet' : 'image';
+        const completeEventName = `filecomplete-${fileType}-${asset.key}`;
+        const manager = this;
+        const startedAt = Date.now();
+        let resolvePromise = null;
+
+        const record = {
+            key: asset.key,
+            scope: asset.scope || '',
+            scene: scene,
+            loader: loader,
+            promise: null,
+            settled: false,
+            polling: false,
+            timeoutId: null,
+            pollId: null,
+            onFileComplete: null,
+            onLoadError: null,
+            finish: null,
+            cancelWatch: null
+        };
+
+        const detachListeners = () => {
+            try {
+                if (loader && typeof loader.off === 'function') {
+                    if (record.onFileComplete) loader.off(completeEventName, record.onFileComplete);
+                    if (record.onLoadError) loader.off('loaderror', record.onLoadError);
+                }
+            } catch (_) {}
+
+            record.onFileComplete = null;
+            record.onLoadError = null;
+
+            if (record.timeoutId) {
+                clearTimeout(record.timeoutId);
+                record.timeoutId = null;
+            }
+        };
+
+        record.finish = (result) => {
+            if (record.settled) return;
+            record.settled = true;
+
+            detachListeners();
+
+            if (record.pollId) {
+                clearTimeout(record.pollId);
+                record.pollId = null;
+            }
+
+            if (manager.state.loadingByKey[asset.key] === record) {
+                delete manager.state.loadingByKey[asset.key];
+            }
+
+            resolvePromise(Object.assign({
+                key: asset.key
+            }, result || {}));
+        };
+
+        record.cancelWatch = (reason = 'scope-invalidated') => {
+            if (record.settled || record.polling) return;
+            record.polling = true;
+            detachListeners();
+
+            const poll = () => {
+                record.pollId = null;
+                if (record.settled) return;
+
+                if (manager.isLoaded(asset.key, scene)) {
+                    record.finish({
+                        ok: true,
+                        loadedNow: true,
+                        canceledWatch: true,
+                        reason: null
+                    });
+                    return;
+                }
+
+                const loaderRunning = manager.isLoaderRunning(loader);
+                const timedOut = Date.now() - startedAt >= 25000;
+
+                if (!loaderRunning || timedOut) {
+                    record.finish({
+                        ok: false,
+                        canceledWatch: true,
+                        reason: timedOut ? 'load-timeout' : reason
+                    });
+                    return;
+                }
+
+                record.pollId = setTimeout(poll, 50);
+            };
+
+            poll();
+        };
+
+        record.promise = new Promise(resolve => {
+            resolvePromise = resolve;
+        });
+
+        this.state.loadingByKey[asset.key] = record;
+
+        record.onFileComplete = () => {
+            const loaded = manager.isLoaded(asset.key, scene);
+            record.finish({
+                ok: loaded,
+                loadedNow: loaded,
+                reason: loaded ? null : 'texture-missing-after-load'
+            });
+        };
+
+        record.onLoadError = file => {
+            if (!file || file.key !== asset.key) return;
+            record.finish({
+                ok: false,
+                loadedNow: false,
+                reason: 'load-failed'
+            });
+        };
+
+        try {
+            if (typeof loader.on === 'function') {
+                loader.on(completeEventName, record.onFileComplete);
+                loader.on('loaderror', record.onLoadError);
+            }
+
+            record.timeoutId = setTimeout(() => {
+                if (manager.isLoaded(asset.key, scene)) {
+                    record.finish({
+                        ok: true,
+                        loadedNow: true,
+                        reason: null
+                    });
+                    return;
+                }
+
+                record.cancelWatch('load-timeout');
+            }, 25000);
+
+            if (asset.type === 'spritesheet') {
+                const frameWidth = Number(asset.frameWidth);
+                const frameHeight = Number(asset.frameHeight);
+
+                if (!Number.isFinite(frameWidth) || !Number.isFinite(frameHeight)) {
+                    record.finish({
+                        ok: false,
+                        reason: 'invalid-frame-size'
+                    });
+                    return record.promise;
+                }
+
+                loader.spritesheet(asset.key, asset.file, {
+                    frameWidth: frameWidth,
+                    frameHeight: frameHeight
+                });
+            } else {
+                loader.image(asset.key, asset.file);
+            }
+
+            if (!this.isLoaderRunning(loader) && typeof loader.start === 'function') {
+                loader.start();
+            }
+        } catch (err) {
+            record.finish({
+                ok: false,
+                reason: 'loader-exception',
+                error: err
+            });
+        }
+
+        return record.promise;
+    },
+
+    async loadScope(scope, options = {}) {
+        const safeScope = typeof scope === 'string' ? scope : '';
+        const assets = this.getScopeAssets(safeScope);
+
+        if (!safeScope || assets.length === 0) {
+            return {
+                ok: false,
+                reason: 'unknown-scope',
+                scope: safeScope,
+                requestId: null,
+                loadedKeys: [],
+                alreadyLoadedKeys: [],
+                failedKeys: [],
+                stale: false
+            };
+        }
+
+        const currentUid = window.GameLogic && window.GameLogic.currentUser
+            ? window.GameLogic.currentUser.uid
+            : null;
+        const userUid = options.userUid || this.state.scopeUserUids[safeScope] || currentUid || null;
+        const hasProvidedRequestId = options.requestId !== undefined && options.requestId !== null;
+        const requestId = hasProvidedRequestId
+            ? Number(options.requestId)
+            : this.beginScopeRequest(safeScope, {
+                userUid: userUid
+            });
+
+        if (
+            requestId === null ||
+            (
+                hasProvidedRequestId &&
+                !this.isScopeRequestCurrent(safeScope, requestId, userUid)
+            )
+        ) {
+            return {
+                ok: false,
+                reason: 'stale-scope',
+                scope: safeScope,
+                requestId: requestId,
+                loadedKeys: [],
+                alreadyLoadedKeys: [],
+                failedKeys: assets.map(asset => asset.key),
+                stale: true
+            };
+        }
+
+        const settled = await Promise.allSettled(
+            assets.map(asset => this.loadAsset(asset, {
+                scene: options.scene || null
+            }))
+        );
+
+        const results = settled.map((item, index) => {
+            if (item.status === 'fulfilled') {
+                return Object.assign({
+                    key: assets[index].key
+                }, item.value || {});
+            }
+
+            return {
+                ok: false,
+                key: assets[index].key,
+                reason: 'load-rejected',
+                error: item.reason
+            };
+        });
+
+        const loadedKeys = assets
+            .map(asset => asset.key)
+            .filter(key => this.isLoaded(key, options.scene || null));
+        const alreadyLoadedKeys = results
+            .filter(result => result && result.ok && result.alreadyLoaded)
+            .map(result => result.key);
+        const failedKeys = assets
+            .map(asset => asset.key)
+            .filter(key => loadedKeys.indexOf(key) === -1);
+        const current = this.isScopeRequestCurrent(safeScope, requestId, userUid);
+
+        return {
+            ok: current && failedKeys.length === 0 && loadedKeys.length === assets.length,
+            reason: failedKeys.length > 0
+                ? 'scope-load-incomplete'
+                : (current ? null : 'stale-scope'),
+            scope: safeScope,
+            requestId: requestId,
+            loadedKeys: loadedKeys,
+            alreadyLoadedKeys: alreadyLoadedKeys,
+            failedKeys: failedKeys,
+            stale: !current,
+            results: results
+        };
+    },
+
+    waitForLoaderIdle(loader, timeoutMs = 25000) {
+        const safeTimeout = Math.max(1000, Math.min(30000, Number(timeoutMs || 25000)));
+
+        return new Promise(resolve => {
+            const startedAt = Date.now();
+            let timerId = null;
+
+            const finish = result => {
+                if (timerId) {
+                    clearTimeout(timerId);
+                    timerId = null;
+                }
+                resolve(result);
+            };
+
+            const check = () => {
+                timerId = null;
+
+                if (!this.isLoaderRunning(loader)) {
+                    finish(true);
+                    return;
+                }
+
+                if (Date.now() - startedAt >= safeTimeout) {
+                    finish(false);
+                    return;
+                }
+
+                timerId = setTimeout(check, 50);
+            };
+
+            check();
+        });
+    },
+
+    waitForCleanupTurn() {
+        return new Promise(resolve => {
+            let settled = false;
+            let rafId = null;
+            let timeoutId = null;
+
+            const finish = () => {
+                if (settled) return;
+                settled = true;
+
+                if (rafId !== null && typeof cancelAnimationFrame === 'function') {
+                    try { cancelAnimationFrame(rafId); } catch (_) {}
+                }
+
+                if (timeoutId !== null) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+
+                resolve();
+            };
+
+            if (
+                typeof document !== 'undefined' &&
+                !document.hidden &&
+                typeof requestAnimationFrame === 'function'
+            ) {
+                rafId = requestAnimationFrame(finish);
+                timeoutId = setTimeout(finish, 120);
+            } else {
+                timeoutId = setTimeout(finish, 0);
+            }
+        });
+    },
+
+    unloadScope(scope, options = {}) {
+        const safeScope = typeof scope === 'string' ? scope : '';
+        const assets = this.getScopeAssets(safeScope);
+
+        if (!safeScope || assets.length === 0) {
+            return Promise.resolve({
+                ok: false,
+                reason: 'unknown-scope',
+                scope: safeScope,
+                removedKeys: [],
+                failedKeys: [],
+                stale: false
+            });
+        }
+
+        if (safeScope === 'protected-shared' || this.unloadableScopes[safeScope] !== true) {
+            return Promise.resolve({
+                ok: false,
+                reason: 'protected-or-non-unloadable-scope',
+                scope: safeScope,
+                removedKeys: [],
+                failedKeys: [],
+                stale: false
+            });
+        }
+
+        const expectedRequestId = options.invalidate === false
+            ? Number(
+                options.expectedRequestId !== undefined && options.expectedRequestId !== null
+                    ? options.expectedRequestId
+                    : (this.state.scopeRequestIds[safeScope] || 0)
+            )
+            : this.invalidateScopeRequest(safeScope, {
+                cancelLoads: true,
+                reason: options.reason || 'scope-unload'
+            });
+
+        const existingUnload = this.state.unloadingByScope[safeScope];
+        if (
+            existingUnload &&
+            Number(existingUnload.expectedRequestId) === Number(expectedRequestId) &&
+            existingUnload.promise
+        ) {
+            return existingUnload.promise;
+        }
+
+        const unloadPromise = (async () => {
+            this.cancelScopeLoadWatchers(safeScope, options.reason || 'scope-unload');
+
+            const pendingRecords = assets
+                .map(asset => this.state.loadingByKey[asset.key])
+                .filter(record => record && record.promise);
+
+            if (pendingRecords.length > 0) {
+                await Promise.allSettled(
+                    pendingRecords.map(record => record.promise)
+                );
+            }
+
+            const scene = this.getScene(options.scene || null);
+            const loader = scene && scene.load ? scene.load : null;
+            const loaderIdle = await this.waitForLoaderIdle(loader, 25000);
+
+            await this.waitForCleanupTurn();
+
+            if (
+                this.state.activeScopes[safeScope] === true ||
+                Number(this.state.scopeRequestIds[safeScope] || 0) !== Number(expectedRequestId)
+            ) {
+                return {
+                    ok: true,
+                    reason: 'newer-scope-request-active',
+                    scope: safeScope,
+                    removedKeys: [],
+                    failedKeys: [],
+                    stale: true
+                };
+            }
+
+            if (!loaderIdle && this.isLoaderRunning(loader)) {
+                return {
+                    ok: false,
+                    reason: 'loader-still-running',
+                    scope: safeScope,
+                    removedKeys: [],
+                    failedKeys: assets.map(asset => asset.key),
+                    stale: false
+                };
+            }
+
+            const textureManager = this.getTextureManager(scene);
+            if (!textureManager || typeof textureManager.remove !== 'function') {
+                return {
+                    ok: false,
+                    reason: 'texture-manager-unavailable',
+                    scope: safeScope,
+                    removedKeys: [],
+                    failedKeys: assets.map(asset => asset.key),
+                    stale: false
+                };
+            }
+
+            const removedKeys = [];
+            const failedKeys = [];
+
+            for (let i = 0; i < assets.length; i++) {
+                if (
+                    this.state.activeScopes[safeScope] === true ||
+                    Number(this.state.scopeRequestIds[safeScope] || 0) !== Number(expectedRequestId)
+                ) {
+                    return {
+                        ok: true,
+                        reason: 'newer-scope-request-active',
+                        scope: safeScope,
+                        removedKeys: removedKeys,
+                        failedKeys: failedKeys,
+                        stale: true
+                    };
+                }
+
+                const key = assets[i].key;
+                if (!this.isLoaded(key, scene)) continue;
+
+                try {
+                    textureManager.remove(key);
+                } catch (err) {
+                    console.warn(`[TextureAssetManager] Texture 卸載失敗，已略過：${key}`, err);
+                }
+
+                if (this.isLoaded(key, scene)) {
+                    failedKeys.push(key);
+                } else {
+                    removedKeys.push(key);
+                }
+            }
+
+            this.state.activeScopes[safeScope] = false;
+            this.state.scopeUserUids[safeScope] = null;
+
+            return {
+                ok: failedKeys.length === 0,
+                reason: failedKeys.length === 0 ? null : 'texture-remove-incomplete',
+                scope: safeScope,
+                removedKeys: removedKeys,
+                failedKeys: failedKeys,
+                stale: false
+            };
+        })();
+
+        const unloadRecord = {
+            expectedRequestId: expectedRequestId,
+            promise: unloadPromise
+        };
+        this.state.unloadingByScope[safeScope] = unloadRecord;
+
+        const clearUnloadRecord = () => {
+            if (this.state.unloadingByScope[safeScope] === unloadRecord) {
+                delete this.state.unloadingByScope[safeScope];
+            }
+        };
+
+        void unloadPromise.then(clearUnloadRecord, clearUnloadRecord);
+        return unloadPromise;
+    }
+};
+// ====== 第三階段 3-2：Texture 按需載入與白名單卸載相容層結束 ======
 // ====== 第二階段 2-2：Phaser BGM AudioManager 相容層 ======
 window.AudioManager = {
     state: {
@@ -16105,13 +16838,59 @@ onAuthStateChanged(auth, async (user) => {
         }
         listenToChat(); listenToMemories();
     } else {
+        const logoutGame = window.GameLogic && window.GameLogic.phaserGame
+            ? window.GameLogic.phaserGame
+            : null;
+        const logoutScene = logoutGame && logoutGame.scene
+            ? logoutGame.scene.getScene('MainScene')
+            : null;
+        const logoutCleaningState = logoutScene && logoutScene.soloCleaningRoom
+            ? logoutScene.soloCleaningRoom
+            : null;
+        const logoutCleaningTexturesLoaded = window.getLoadedTextureCountForScope
+            ? window.getLoadedTextureCountForScope('solo-cleaning')
+            : 0;
+
+        if (
+            logoutScene &&
+            logoutScene.clearSoloCleaningRoom &&
+            (
+                logoutCleaningTexturesLoaded > 0 ||
+                (
+                    logoutCleaningState &&
+                    (
+                        logoutCleaningState.active ||
+                        logoutCleaningState.paid ||
+                        logoutCleaningState.paymentPending ||
+                        logoutCleaningState.tutorialActive ||
+                        logoutCleaningState.textureScopeLoading ||
+                        logoutCleaningState.textureScopeReady ||
+                        logoutCleaningState.textureScopeUnloadPending
+                    )
+                )
+            )
+        ) {
+            try {
+                logoutScene.clearSoloCleaningRoom(true);
+            } catch (err) {
+                console.warn('[登出] 大掃除清理失敗，改由 Texture 白名單保險卸載：', err);
+                if (window.TextureAssetManager && window.TextureAssetManager.unloadScope) {
+                    void window.TextureAssetManager.unloadScope('solo-cleaning', {
+                        scene: logoutScene,
+                        reason: 'logout-fallback'
+                    });
+                }
+            }
+        } else if (window.TextureAssetManager && window.TextureAssetManager.unloadScope) {
+            void window.TextureAssetManager.unloadScope('solo-cleaning', {
+                scene: logoutScene,
+                reason: 'logout'
+            });
+        }
+
         if (window.AudioManager) {
-            const game = window.GameLogic && window.GameLogic.phaserGame
-                ? window.GameLogic.phaserGame
-                : null;
-            const scene = game && game.scene
-                ? game.scene.getScene('MainScene')
-                : null;
+            const game = logoutGame;
+            const scene = logoutScene;
 
             ['partyroom', 'shrine', 'solo-cleaning', 'solo-rocket', 'solo-rocket-shop'].forEach(scope => {
                 if (window.AudioManager.unloadScope) {
@@ -16405,11 +17184,31 @@ window.clearAllModals = function() {
             const ms = window.GameLogic.phaserGame.scene.getScene('MainScene');
             if (ms && ms.closeSoloChickenMenu) ms.closeSoloChickenMenu();
 
+            const cleaningState = ms && ms.soloCleaningRoom
+                ? ms.soloCleaningRoom
+                : null;
+            const cleaningTexturesLoaded = window.getLoadedTextureCountForScope
+                ? window.getLoadedTextureCountForScope('solo-cleaning')
+                : 0;
+
             if (
                 ms &&
                 ms.clearSoloCleaningRoom &&
-                ms.soloCleaningRoom &&
-                ms.soloCleaningRoom.active
+                (
+                    cleaningTexturesLoaded > 0 ||
+                    (
+                        cleaningState &&
+                        (
+                            cleaningState.active ||
+                            cleaningState.paid ||
+                            cleaningState.paymentPending ||
+                            cleaningState.tutorialActive ||
+                            cleaningState.textureScopeLoading ||
+                            cleaningState.textureScopeReady ||
+                            cleaningState.textureScopeUnloadPending
+                        )
+                    )
+                )
             ) {
                 ms.clearSoloCleaningRoom(true);
             }
@@ -17043,11 +17842,8 @@ class BootScene extends Phaser.Scene {
         this.load.audio('sleep-onion-bao-got-money', 'sleep-onion-bao-got-money.mp3');
         this.load.image('hall-screen-in-list', 'hall-screen-in-list.png');
         this.load.image('hall-screen', 'hall-screen.png'); // 改為靜態圖
-        // 獨樂雞與火箭巡航素材。火箭素材若缺失，後續會用 fallback，避免黑屏。
+        // 獨樂雞與火箭巡航素材。大掃除三張專屬 Texture 改由 TextureAssetManager 按需載入。
         this.load.image('solochicken', 'me_play_cock.png');
-        this.load.image('solo-cleaning-room-npc-onion1', 'solo-cleaning-room-npc-onion1.png');
-        this.load.image('solo-cleaning-room-npc-onion2', 'solo-cleaning-room-npc-onion2.png');
-        this.load.image('solo-cleaning-room-washbasin', 'solo-cleaning-room-washbasin.png');
         this.load.image('solo-rocket-bg', 'solo-rocket-bg.png');
         this.load.image('rocket-onion-player', 'rocket-onion-player.png');
         this.load.image('solo-rocket-moon-rabbit', 'solo-rocket-moon-rabbit.png');
@@ -19967,6 +20763,42 @@ if (!data.scoreHandled && data.attacker) {
         document.addEventListener('visibilitychange', this.handleVisibilityMimiWalk);
 
         this.events.once('shutdown', () => {
+            const shutdownCleaningState = this.soloCleaningRoom || null;
+            const shutdownCleaningTexturesLoaded = window.getLoadedTextureCountForScope
+                ? window.getLoadedTextureCountForScope('solo-cleaning')
+                : 0;
+
+            if (
+                this.clearSoloCleaningRoom &&
+                (
+                    shutdownCleaningTexturesLoaded > 0 ||
+                    (
+                        shutdownCleaningState &&
+                        (
+                            shutdownCleaningState.active ||
+                            shutdownCleaningState.paid ||
+                            shutdownCleaningState.paymentPending ||
+                            shutdownCleaningState.tutorialActive ||
+                            shutdownCleaningState.textureScopeLoading ||
+                            shutdownCleaningState.textureScopeReady ||
+                            shutdownCleaningState.textureScopeUnloadPending
+                        )
+                    )
+                )
+            ) {
+                try {
+                    this.clearSoloCleaningRoom(true);
+                } catch (err) {
+                    console.warn('[大掃除] shutdown 清理失敗，改由 Texture 白名單保險卸載：', err);
+                    if (window.TextureAssetManager && window.TextureAssetManager.unloadScope) {
+                        void window.TextureAssetManager.unloadScope('solo-cleaning', {
+                            scene: this,
+                            reason: 'main-scene-shutdown-fallback'
+                        });
+                    }
+                }
+            }
+
             if (window.AudioManager && window.AudioManager.unloadScope) {
                 const cleanupScopes = [];
 
@@ -20073,6 +20905,41 @@ if (!data.scoreHandled && data.attacker) {
         });
 
         this.events.once('destroy', () => {
+            try {
+                const destroyCleaningState = this.soloCleaningRoom || null;
+                const destroyCleaningTexturesLoaded = window.getLoadedTextureCountForScope
+                    ? window.getLoadedTextureCountForScope('solo-cleaning')
+                    : 0;
+
+                if (
+                    this.clearSoloCleaningRoom &&
+                    (
+                        destroyCleaningTexturesLoaded > 0 ||
+                        (
+                            destroyCleaningState &&
+                            (
+                                destroyCleaningState.active ||
+                                destroyCleaningState.paid ||
+                                destroyCleaningState.paymentPending ||
+                                destroyCleaningState.tutorialActive ||
+                                destroyCleaningState.textureScopeLoading ||
+                                destroyCleaningState.textureScopeReady ||
+                                destroyCleaningState.textureScopeUnloadPending
+                            )
+                        )
+                    )
+                ) {
+                    this.clearSoloCleaningRoom(true);
+                } else if (window.TextureAssetManager && window.TextureAssetManager.unloadScope) {
+                    void window.TextureAssetManager.unloadScope('solo-cleaning', {
+                        scene: this,
+                        reason: 'main-scene-destroy'
+                    });
+                }
+            } catch (err) {
+                console.warn('[大掃除] destroy 階段清理失敗，已略過：', err);
+            }
+
             try {
                 if (this.clearMoonBunBuffFx) this.clearMoonBunBuffFx(false);
                 if (this.clearMoonStaffBlessing) this.clearMoonStaffBlessing();
@@ -21231,6 +22098,11 @@ if (!data.scoreHandled && data.attacker) {
                 active: false,
                 paid: false,
                 paymentPending: false,
+                textureScopeRequestId: null,
+                textureScopeLoading: false,
+                textureScopeReady: false,
+                textureScopeUserUid: null,
+                textureScopeUnloadPending: false,
                 tutorialActive: false,
                 tutorialStartPending: false,
                 inputLocked: true,
@@ -21325,6 +22197,11 @@ if (!data.scoreHandled && data.attacker) {
         if (!Array.isArray(this.soloCleaningRoom.soloOutageObjects)) this.soloCleaningRoom.soloOutageObjects = [];
         if (!Array.isArray(this.soloCleaningRoom.soloResultObjects)) this.soloCleaningRoom.soloResultObjects = [];
         if (!Array.isArray(this.soloCleaningRoom.soloOutageGlows)) this.soloCleaningRoom.soloOutageGlows = [];
+        if (!Object.prototype.hasOwnProperty.call(this.soloCleaningRoom, 'textureScopeRequestId')) this.soloCleaningRoom.textureScopeRequestId = null;
+        if (!Object.prototype.hasOwnProperty.call(this.soloCleaningRoom, 'textureScopeLoading')) this.soloCleaningRoom.textureScopeLoading = false;
+        if (!Object.prototype.hasOwnProperty.call(this.soloCleaningRoom, 'textureScopeReady')) this.soloCleaningRoom.textureScopeReady = false;
+        if (!Object.prototype.hasOwnProperty.call(this.soloCleaningRoom, 'textureScopeUserUid')) this.soloCleaningRoom.textureScopeUserUid = null;
+        if (!Object.prototype.hasOwnProperty.call(this.soloCleaningRoom, 'textureScopeUnloadPending')) this.soloCleaningRoom.textureScopeUnloadPending = false;
         if (!this.soloCleaningRoom.soloPlayerFacing || typeof this.soloCleaningRoom.soloPlayerFacing !== 'object') this.soloCleaningRoom.soloPlayerFacing = { x: 0, y: 1 };
         if (!this.soloCleaningRoom.soloActionButtonMode) this.soloCleaningRoom.soloActionButtonMode = 'clean';
         if (!Number.isFinite(Number(this.soloCleaningRoom.soloPlayerSpeed))) this.soloCleaningRoom.soloPlayerSpeed = 324;
@@ -21380,6 +22257,74 @@ if (!data.scoreHandled && data.attacker) {
         const uid = window.GameLogic.currentUser && window.GameLogic.currentUser.uid
             ? window.GameLogic.currentUser.uid
             : null;
+        const textureManager = window.TextureAssetManager || null;
+        let requestId = null;
+
+        const isSceneUsable = () => !!(
+            this.sys &&
+            this.sys.isActive &&
+            this.sys.isActive() &&
+            window.GameLogic &&
+            !window.GameLogic.sceneSwitchInProgress &&
+            window.GameLogic.currentUser &&
+            window.GameLogic.currentUser.uid === uid
+        );
+
+        const isTextureRequestCurrent = () => !!(
+            textureManager &&
+            requestId !== null &&
+            state.textureScopeRequestId === requestId &&
+            state.textureScopeUserUid === uid &&
+            textureManager.isScopeRequestCurrent('solo-cleaning', requestId, uid)
+        );
+
+        const mayShowNotice = () => !!(
+            isSceneUsable() &&
+            (
+                state.textureScopeRequestId === requestId ||
+                state.textureScopeRequestId === null
+            )
+        );
+
+        const unloadTextureScope = async (reason = 'payment-aborted') => {
+            if (!textureManager) return null;
+
+            let cleanupRequestId = null;
+
+            if (
+                requestId !== null &&
+                state.textureScopeRequestId === requestId
+            ) {
+                cleanupRequestId = textureManager.invalidateScopeRequest('solo-cleaning', {
+                    cancelLoads: true,
+                    reason: reason
+                });
+
+                state.textureScopeRequestId = null;
+                state.textureScopeLoading = false;
+                state.textureScopeReady = false;
+                state.textureScopeUserUid = null;
+                state.textureScopeUnloadPending = true;
+            } else {
+                cleanupRequestId = Number(textureManager.state.scopeRequestIds['solo-cleaning'] || 0);
+            }
+
+            const result = await textureManager.unloadScope('solo-cleaning', {
+                scene: this,
+                invalidate: false,
+                expectedRequestId: cleanupRequestId,
+                reason: reason
+            });
+
+            if (
+                textureManager.state.activeScopes['solo-cleaning'] !== true &&
+                state.textureScopeRequestId === null
+            ) {
+                state.textureScopeUnloadPending = false;
+            }
+
+            return result;
+        };
 
         if (!uid) {
             state.paymentPending = false;
@@ -21391,58 +22336,173 @@ if (!data.scoreHandled && data.attacker) {
             return;
         }
 
+        if (!textureManager) {
+            state.paymentPending = false;
+            this.openSoloCleaningRoomPaymentConfirm(cost, {
+                mode: 'notice',
+                title: '素材系統尚未就緒',
+                body: '大掃除素材系統尚未就緒，沒有扣除馬德幣，請稍後再試。'
+            });
+            return;
+        }
+
+        requestId = textureManager.beginScopeRequest('solo-cleaning', {
+            userUid: uid
+        });
+
+        if (requestId === null) {
+            state.paymentPending = false;
+            this.openSoloCleaningRoomPaymentConfirm(cost, {
+                mode: 'notice',
+                title: '素材設定異常',
+                body: '大掃除素材設定異常，沒有扣除馬德幣，請稍後再試。'
+            });
+            return;
+        }
+
+        state.textureScopeRequestId = requestId;
+        state.textureScopeLoading = true;
+        state.textureScopeReady = false;
+        state.textureScopeUserUid = uid;
+        state.textureScopeUnloadPending = false;
+
+        if (window.recordPwaRiskCheckpoint) {
+            window.recordPwaRiskCheckpoint('solo-cleaning-texture-load-start');
+        }
+
         try {
+            const loadResult = await textureManager.loadScope('solo-cleaning', {
+                scene: this,
+                requestId: requestId,
+                userUid: uid
+            });
+            const textureAudit = window.getTextureScopeAudit
+                ? window.getTextureScopeAudit('solo-cleaning', {
+                    textureManager: this.textures
+                })
+                : null;
+            const texturesReady = !!(
+                loadResult &&
+                loadResult.ok &&
+                !loadResult.stale &&
+                textureAudit &&
+                textureAudit.missingCount === 0 &&
+                textureAudit.loadedCount === textureAudit.expectedCount
+            );
+
+            if (!texturesReady || !isSceneUsable() || !isTextureRequestCurrent()) {
+                if (window.completePwaRiskCheckpoint) {
+                    window.completePwaRiskCheckpoint('solo-cleaning-texture-load-failed', {
+                        note: loadResult && loadResult.reason
+                            ? loadResult.reason
+                            : 'texture-scope-not-ready'
+                    });
+                }
+
+                await unloadTextureScope('texture-load-failed');
+
+                if (mayShowNotice()) {
+                    this.openSoloCleaningRoomPaymentConfirm(cost, {
+                        mode: 'notice',
+                        title: '大掃除素材載入失敗',
+                        body: '大掃除素材載入失敗，沒有扣除馬德幣，請稍後再試。'
+                    });
+                }
+                return;
+            }
+
+            state.textureScopeLoading = false;
+            state.textureScopeReady = true;
+
+            if (window.completePwaRiskCheckpoint) {
+                window.completePwaRiskCheckpoint('solo-cleaning-texture-load-complete');
+            }
+
             const coinSnap = await get(ref(window.GameLogic.db, `users/${uid}/coins`));
+
+            if (!isSceneUsable() || !isTextureRequestCurrent()) {
+                await unloadTextureScope('payment-state-stale-before-coin-check');
+                return;
+            }
+
             const latestCoinsRaw = coinSnap.val();
             const latestCoins = Number(latestCoinsRaw || 0);
 
             if (!Number.isFinite(latestCoins)) {
                 console.warn('[大掃除] coins 資料異常：', latestCoinsRaw);
-                this.openSoloCleaningRoomPaymentConfirm(cost, {
-                    mode: 'notice',
-                    title: '馬德幣資料異常',
-                    body: '目前無法確認你的馬德幣資料，請稍後再試。'
-                });
+                await unloadTextureScope('coins-data-invalid');
+
+                if (mayShowNotice()) {
+                    this.openSoloCleaningRoomPaymentConfirm(cost, {
+                        mode: 'notice',
+                        title: '馬德幣資料異常',
+                        body: '目前無法確認你的馬德幣資料，請稍後再試。'
+                    });
+                }
                 return;
             }
 
             if (latestCoins < cost) {
                 window.GameLogic.myProfile.coins = latestCoins;
                 this.syncSoloCleaningRoomCoinUi(latestCoins);
-                this.openSoloCleaningRoomPaymentConfirm(cost, {
-                    mode: 'notice',
-                    title: '馬德幣不足',
-                    body: `馬德幣不足，還不能開始大掃除喔！\n大掃除需要 ${cost} 馬德幣。\n你目前持有 ${latestCoins} 馬德幣。`
-                });
+                await unloadTextureScope('coins-insufficient');
+
+                if (mayShowNotice()) {
+                    this.openSoloCleaningRoomPaymentConfirm(cost, {
+                        mode: 'notice',
+                        title: '馬德幣不足',
+                        body: `馬德幣不足，還不能開始大掃除喔！\n大掃除需要 ${cost} 馬德幣。\n你目前持有 ${latestCoins} 馬德幣。`
+                    });
+                }
+                return;
+            }
+
+            if (!isSceneUsable() || !isTextureRequestCurrent()) {
+                await unloadTextureScope('payment-state-stale-before-deduction');
                 return;
             }
 
             const newCoins = latestCoins - cost;
             await update(ref(window.GameLogic.db, `users/${uid}`), { coins: newCoins });
 
+            if (!isSceneUsable() || !isTextureRequestCurrent()) {
+                await unloadTextureScope('payment-state-stale-after-deduction');
+                return;
+            }
+
             window.GameLogic.myProfile.coins = newCoins;
             this.syncSoloCleaningRoomCoinUi(newCoins);
             state.paid = true;
             state.active = false;
-            console.log('[大掃除] 已支付 50 馬德幣，入口已開啟。');
+            state.textureScopeLoading = false;
+            state.textureScopeReady = true;
+            console.log('[大掃除] 素材已就緒並支付 50 馬德幣，入口已開啟。');
 
-            // 第 2-1 修正：扣款成功後要先解除付款鎖，否則 showSoloCleaningRoomTutorial() 會因 paymentPending 仍為 true 而直接 return。
             state.paymentPending = false;
             this.closeSoloCleaningRoomPaymentConfirm();
             this.closeSoloChickenMenu();
             this.showSoloCleaningRoomTutorial();
         } catch (err) {
-            console.warn('[大掃除] 扣款失敗，已阻擋進入副本：', err);
-            this.openSoloCleaningRoomPaymentConfirm(cost, {
-                mode: 'notice',
-                title: '扣款失敗',
-                body: '扣款失敗，請稍後再試。'
-            });
+            console.warn('[大掃除] 素材載入或扣款失敗，已阻擋進入副本：', err);
+            await unloadTextureScope('payment-exception');
+
+            if (mayShowNotice()) {
+                this.openSoloCleaningRoomPaymentConfirm(cost, {
+                    mode: 'notice',
+                    title: '啟動失敗',
+                    body: '大掃除啟動失敗，請重新確認馬德幣餘額後再試。'
+                });
+            }
         } finally {
-            state.paymentPending = false;
+            if (
+                requestId === null ||
+                state.textureScopeRequestId === requestId ||
+                state.textureScopeRequestId === null
+            ) {
+                state.paymentPending = false;
+            }
         }
     }
-
     syncSoloCleaningRoomCoinUi(coins) {
         const val = Math.max(0, Math.floor(Number(coins || 0)));
         if (window.GameLogic && window.GameLogic.myProfile) window.GameLogic.myProfile.coins = val;
@@ -21669,10 +22729,14 @@ if (!data.scoreHandled && data.attacker) {
 
     showSoloCleaningRoomTutorial() {
         const state = this.getSoloCleaningRoomState();
-        if (state.active || state.paymentPending) return;
+        if (
+            state.active ||
+            state.paymentPending ||
+            !state.paid ||
+            !state.textureScopeReady
+        ) return;
 
         this.clearSoloCleaningRoomTutorial();
-        state.paid = true;
         state.tutorialActive = true;
         state.tutorialStartPending = false;
         state.inputLocked = true;
@@ -21826,10 +22890,124 @@ if (!data.scoreHandled && data.attacker) {
         container.add([fullBlocker, panel, title, body, btnGlow, btnBg, btnText, startHit]);
     }
 
-    beginSoloCleaningRoomAfterTutorial() {
+    async beginSoloCleaningRoomAfterTutorial() {
         const state = this.getSoloCleaningRoomState();
-        if (state.active) return;
+        if (state.active || state.textureScopeLoading) return;
 
+        const textureManager = window.TextureAssetManager || null;
+        const uid = window.GameLogic.currentUser && window.GameLogic.currentUser.uid
+            ? window.GameLogic.currentUser.uid
+            : null;
+        const requestId = state.textureScopeRequestId;
+
+        const sceneUsable = () => !!(
+            this.sys &&
+            this.sys.isActive &&
+            this.sys.isActive() &&
+            window.GameLogic &&
+            !window.GameLogic.sceneSwitchInProgress &&
+            window.GameLogic.currentUser &&
+            window.GameLogic.currentUser.uid === uid
+        );
+
+        const requestCurrent = () => !!(
+            textureManager &&
+            uid &&
+            requestId !== null &&
+            state.textureScopeUserUid === uid &&
+            textureManager.isScopeRequestCurrent('solo-cleaning', requestId, uid)
+        );
+
+        if (!state.paid || !textureManager || !requestCurrent() || !sceneUsable()) {
+            state.tutorialStartPending = false;
+            console.warn('[大掃除] 說明頁啟動檢查失敗，已阻擋未授權進場。');
+            return;
+        }
+
+        let textureAudit = window.getTextureScopeAudit
+            ? window.getTextureScopeAudit('solo-cleaning', {
+                textureManager: this.textures
+            })
+            : null;
+
+        if (
+            !textureAudit ||
+            textureAudit.missingCount > 0 ||
+            textureAudit.loadedCount !== textureAudit.expectedCount
+        ) {
+            state.textureScopeLoading = true;
+            state.textureScopeReady = false;
+
+            const reloadResult = await textureManager.loadScope('solo-cleaning', {
+                scene: this,
+                requestId: requestId,
+                userUid: uid
+            });
+
+            state.textureScopeLoading = false;
+
+            textureAudit = window.getTextureScopeAudit
+                ? window.getTextureScopeAudit('solo-cleaning', {
+                    textureManager: this.textures
+                })
+                : null;
+
+            const reloadReady = !!(
+                reloadResult &&
+                reloadResult.ok &&
+                !reloadResult.stale &&
+                requestCurrent() &&
+                sceneUsable() &&
+                textureAudit &&
+                textureAudit.missingCount === 0 &&
+                textureAudit.loadedCount === textureAudit.expectedCount
+            );
+
+            if (!reloadReady) {
+                state.textureScopeReady = false;
+                state.tutorialStartPending = false;
+
+                const cleanupRequestId = textureManager.invalidateScopeRequest('solo-cleaning', {
+                    cancelLoads: true,
+                    reason: 'tutorial-reload-failed'
+                });
+
+                state.textureScopeRequestId = null;
+                state.textureScopeUserUid = null;
+                state.textureScopeUnloadPending = true;
+
+                await textureManager.unloadScope('solo-cleaning', {
+                    scene: this,
+                    invalidate: false,
+                    expectedRequestId: cleanupRequestId,
+                    reason: 'tutorial-reload-failed'
+                });
+
+                if (sceneUsable() && state.paid) {
+                    const retryRequestId = textureManager.beginScopeRequest('solo-cleaning', {
+                        userUid: uid
+                    });
+
+                    state.textureScopeRequestId = retryRequestId;
+                    state.textureScopeUserUid = uid;
+                    state.textureScopeUnloadPending = false;
+                }
+
+                if (sceneUsable()) {
+                    alert('大掃除素材重新載入失敗，請再按一次「開始大掃除！」重試。');
+                }
+                return;
+            }
+
+            state.textureScopeReady = true;
+        }
+
+        if (!requestCurrent() || !sceneUsable()) {
+            state.tutorialStartPending = false;
+            return;
+        }
+
+        state.textureScopeReady = true;
         this.clearSoloCleaningRoomTutorial();
         this.startSoloCleaningRoom();
     }
@@ -22243,6 +23421,41 @@ if (!data.scoreHandled && data.attacker) {
 
     startSoloCleaningRoom() {
         const state = this.getSoloCleaningRoomState();
+        const textureManager = window.TextureAssetManager || null;
+        const textureAudit = window.getTextureScopeAudit
+            ? window.getTextureScopeAudit('solo-cleaning', {
+                textureManager: this.textures
+            })
+            : null;
+        const uid = window.GameLogic.currentUser && window.GameLogic.currentUser.uid
+            ? window.GameLogic.currentUser.uid
+            : null;
+        const textureRequestCurrent = !!(
+            textureManager &&
+            uid &&
+            state.textureScopeRequestId !== null &&
+            state.textureScopeUserUid === uid &&
+            textureManager.isScopeRequestCurrent(
+                'solo-cleaning',
+                state.textureScopeRequestId,
+                uid
+            )
+        );
+
+        if (
+            !state.paid ||
+            !state.textureScopeReady ||
+            !textureRequestCurrent ||
+            !textureAudit ||
+            textureAudit.missingCount > 0 ||
+            textureAudit.loadedCount !== textureAudit.expectedCount
+        ) {
+            state.tutorialStartPending = false;
+            state.inputLocked = true;
+            console.warn('[大掃除] Texture 未完整就緒，已阻擋建立副本物件。');
+            alert('大掃除素材尚未準備完成，已阻擋進場，請稍後再試。');
+            return;
+        }
 
         if (!this.localPlayer || !this.localPlayer.sprite) {
             console.warn('[大掃除] 找不到本機玩家，已恢復大廳介面。');
@@ -24928,6 +26141,20 @@ if (!data.scoreHandled && data.attacker) {
 
     clearSoloCleaningRoom(skipMusicResume = false) {
         const state = this.getSoloCleaningRoomState();
+        const textureManager = window.TextureAssetManager || null;
+        const textureCleanupRequestId = textureManager
+            ? textureManager.invalidateScopeRequest('solo-cleaning', {
+                cancelLoads: true,
+                reason: 'solo-cleaning-clear'
+            })
+            : null;
+
+        state.inputLocked = true;
+        state.textureScopeRequestId = null;
+        state.textureScopeLoading = false;
+        state.textureScopeReady = false;
+        state.textureScopeUserUid = null;
+        state.textureScopeUnloadPending = textureCleanupRequestId !== null;
 
         this.clearSoloCleaningRoomTutorial();
         this.clearSoloCleaningRoomGameplayObjects(true);
@@ -25077,6 +26304,39 @@ if (!data.scoreHandled && data.attacker) {
         state.soloJoystickHandlers = null;
         state.bgm = null;
         window.GameLogic.soloCleaningRoomActive = false;
+
+        if (textureManager && textureCleanupRequestId !== null) {
+            void textureManager.unloadScope('solo-cleaning', {
+                scene: this,
+                invalidate: false,
+                expectedRequestId: textureCleanupRequestId,
+                reason: 'solo-cleaning-clear'
+            }).then(result => {
+                if (
+                    textureManager.state.activeScopes['solo-cleaning'] !== true &&
+                    state.textureScopeRequestId === null
+                ) {
+                    state.textureScopeUnloadPending = false;
+                }
+
+                if (result && !result.stale && window.completePwaRiskCheckpoint) {
+                    window.completePwaRiskCheckpoint('solo-cleaning-texture-unload-complete', {
+                        note: result.ok ? 'removed' : (result.reason || 'remove-failed')
+                    });
+                }
+
+                if (result && !result.ok && !result.stale) {
+                    console.warn('[大掃除] Texture 卸載未完整完成：', result);
+                }
+            }).catch(err => {
+                if (state.textureScopeRequestId === null) {
+                    state.textureScopeUnloadPending = false;
+                }
+                console.warn('[大掃除] Texture 卸載失敗，已略過：', err);
+            });
+        } else {
+            state.textureScopeUnloadPending = false;
+        }
     }
 
     confirmStartSoloRocketCruise() {
